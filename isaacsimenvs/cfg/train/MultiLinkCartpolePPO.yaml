@@ -1,0 +1,101 @@
+# Multi-link cartpole rl_games PPO config.
+#
+# Plain MLP — no LSTM, no asymmetric critic. The env sets state_space=0, so there is
+# deliberately no `central_value_config` here: the padded observation already carries
+# everything (segment angles, velocities and lengths) that a critic would need.
+#
+# Keep the network architecture identical across every stage of an experiment. Stage
+# transfer works by restoring these weights into the next stage's run
+# (`--checkpoint <stage_N>.pth --checkpoint_load_mode weights`), which only holds if the
+# shapes match — and they only match because the observation is padded to geometry.n_max.
+
+params:
+  seed: 42
+
+  env:
+    clip_observations: 10.0   # matches env.obs.clamp_abs_observations
+    clip_actions: 1.0
+
+  algo:
+    name: a2c_continuous
+
+  model:
+    name: continuous_a2c_logstd
+
+  network:
+    name: actor_critic
+    separate: False
+    space:
+      continuous:
+        mu_activation: None
+        sigma_activation: None
+        mu_init:
+          name: default
+        sigma_init:
+          name: const_initializer
+          val: 0
+        fixed_sigma: 'fixed'   # our fork needs a string ('fixed' | 'coef_cond' | 'obs_cond'), not bool
+    mlp:
+      units: [256, 128, 64]
+      activation: elu
+      d2rl: False
+      initializer:
+        name: default
+      regularizer:
+        name: None
+
+  load_checkpoint: False
+  load_path: ''
+
+  config:
+    # Must start with `<int>_` — our vendored rl_games parses policy_idx from the prefix.
+    name: 0_multilink_cartpole
+    full_experiment_name: ${.name}
+    env_name: rlgpu
+    device: 'cuda:0'
+    device_name: 'cuda:0'
+    multi_gpu: False
+    ppo: True
+    mixed_precision: False
+    normalize_input: True
+    normalize_value: True
+    value_bootstrap: True
+    normalize_advantage: True
+    reward_shaper:
+      scale_value: 1.0
+    num_actors: ${....env.scene.num_envs}
+    gamma: 0.99
+    tau: 0.95
+    learning_rate: 3e-4
+    lr_schedule: adaptive
+    schedule_type: standard
+    kl_threshold: 0.016
+    score_to_win: 1000000
+    max_epochs: 1000
+    save_best_after: 50
+    save_frequency: 100
+    print_stats: True
+    grad_norm: 1.0
+    entropy_coef: 0.0
+    truncate_grads: True
+    e_clip: 0.2
+    # num_actors * horizon_length must be divisible by minibatch_size:
+    # 4096 * 16 = 65536 = 4 x 16384. Override both when running with fewer envs, e.g.
+    # `env.scene.num_envs=64 agent.params.config.minibatch_size=256`.
+    minibatch_size: 16384
+    mini_epochs: 4
+    critic_coef: 2.0
+    clip_value: True
+    horizon_length: 16
+    seq_length: 16
+    bounds_loss_coef: 0.0001
+
+    # Required by our vendored rl_games fork (a2c_common.py does an unguarded
+    # .startswith on expl_type). PPO stays "none".
+    expl_type: none
+    use_others_experience: none
+
+    player:
+      deterministic: True
+      games_num: 1000
+      print_stats: False

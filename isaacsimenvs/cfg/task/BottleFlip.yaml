@@ -1,0 +1,135 @@
+# Bottle flip — task overlay.
+#
+# Focused on purpose. BottleFlipEnvCfg subclasses PlayEnvCfg, so everything not listed
+# here (sim, physx, robot, action pipeline, obs_list/state_list, domain randomisation,
+# reset noise) already comes from play2perfect's Python defaults — and must keep coming
+# from there, because those defaults are what make play2perfect checkpoints loadable.
+# Only override a play field here if you have decided to break that compatibility.
+#
+# Difficulty d in [0, 1], per env, resampled every episode:
+#   fill_fraction      lerp(fill_fraction_easy, fill_fraction_hard, d)
+#   required_turns     lerp(required_turns_easy, required_turns_hard, d)
+#   upright_tolerance  lerp(upright_tolerance_deg_easy, ..._hard, d)
+#   settle_speed       lerp(settle_speed_easy, settle_speed_hard, d)
+# Bottle *shape* is fixed per env at spawn from the USD pool — it is a per-stage knob,
+# widened by editing bottle_height_range / bottle_aspect_ratio_range between stages.
+
+episode_length_s: 6.0
+
+scene:
+  num_envs: 8192
+  env_spacing: 1.2
+  # Both must stay false for MultiUsdFileCfg to spawn per-env distinct bottle USDs.
+  replicate_physics: false
+  clone_in_fabric: false
+
+# -----------------------------------------------------------------------------
+# assets — bottle pool + fill model
+# -----------------------------------------------------------------------------
+assets:
+  robot_urdf: "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
+  table_urdf: "assets/urdf/table_narrow.urdf"
+
+  object_name: "bottle"
+  num_bottle_variants: 32
+  bottle_height_range: [0.18, 0.26]
+  bottle_aspect_ratio_range: [2.5, 4.0]   # height / diameter
+  bottle_wall_thickness: 0.002
+  bottle_shell_density: 950.0
+  bottle_liquid_density: 1000.0
+
+  nominal_fill_fraction: 0.35
+  # fill_fraction_easy sits near the centre-of-mass minimum (~0.24 for the default
+  # bottle). Going *lower* raises the CoM again and makes the task harder, not easier —
+  # see generate_bottle.bottle_inertial_properties.
+  fill_fraction_easy: 0.25
+  fill_fraction_hard: 0.95
+  runtime_fill: true
+
+  modify_asset_frictions: true
+  robot_friction: 0.5
+  finger_tip_friction: 1.5
+  object_friction: 0.5
+  table_friction: 0.5
+
+# -----------------------------------------------------------------------------
+# bottle_flip — task geometry
+# -----------------------------------------------------------------------------
+bottle_flip:
+  release_distance: 0.08
+  landing_z_margin: 0.02
+  landing_xy_range: [0.10, 0.10]
+
+# -----------------------------------------------------------------------------
+# reward
+# -----------------------------------------------------------------------------
+reward:
+  # Play's goal-reaching terms are inert here; the flip's own terms replace them.
+  keypoint_rew_scale: 0.0
+  reach_goal_bonus: 0.0
+
+  # Inherited reach/lift stages — the ones a play2perfect checkpoint arrives already
+  # knowing how to solve.
+  lifting_rew_scale: 20.0
+  lifting_bonus: 300.0
+  lifting_bonus_threshold: 0.15
+  distance_delta_rew_scale: 50.0
+
+  # Flip stages.
+  spin_rew_scale: 400.0
+  upright_rew_scale: 5.0
+  landing_bonus: 500.0
+  success_bonus: 1500.0
+
+  kuka_actions_penalty_scale: 0.03
+  hand_actions_penalty_scale: 0.003
+
+# -----------------------------------------------------------------------------
+# termination
+# -----------------------------------------------------------------------------
+termination:
+  required_turns_easy: 0.0
+  required_turns_hard: 1.0
+  upright_tolerance_deg_easy: 30.0
+  upright_tolerance_deg_hard: 10.0
+  settle_speed_easy: 0.30
+  settle_speed_hard: 0.05
+  settle_ang_speed_ratio: 10.0
+  terminate_settle_steps: 15
+  fall_below_table: 0.15
+
+  success_steps: 10
+  max_consecutive_successes: 1
+
+# -----------------------------------------------------------------------------
+# curriculum
+# -----------------------------------------------------------------------------
+# Experiment arms (see experiments/run_curriculum.sh):
+#   arm A (curriculum): mode=adaptive, init_range=[0.0, 0.15]
+#   arm B (control)   : enabled=false           # every env at difficulty 1.0
+#   eval (both arms)  : eval_difficulty=1.0     # identical scoring conditions
+curriculum:
+  enabled: true
+  mode: adaptive
+  difficulty_dim: 1
+  init_range: [0.0, 0.15]
+  final_range: [0.0, 1.0]
+  resample_on_reset: true
+
+  anneal_steps: 400000
+
+  adapt_interval: 3000
+  # Lower than the cartpole's 0.7: a contact-rich task will not clear that early on, and
+  # a curriculum that never advances is a fixed easy task with extra machinery.
+  adapt_success_threshold: 0.5
+  adapt_min_episodes: 64
+  adapt_step: 0.05
+  adapt_allow_regress: true
+  adapt_regress_ratio: 0.4
+
+  # Anneal the dense in-flight uprightness shaping away as the task gets hard, so the
+  # final policy is scored on landings rather than on looking upright mid-air.
+  reward_schedule:
+    upright: [1.0, 0.3]
+
+  eval_difficulty: null

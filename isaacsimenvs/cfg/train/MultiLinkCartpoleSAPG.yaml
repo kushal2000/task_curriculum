@@ -1,0 +1,124 @@
+# Multi-link cartpole rl_games SAPG config.
+#
+# Same network as MultiLinkCartpolePPO.yaml. SAPG is not a separate algorithm — it is
+# this same a2c_continuous with a population overlay:
+#
+#   expl_coef_block_size    splits num_actors into blocks, each with its own entropy
+#                           bonus (linspace 0.5 -> 0.0, scaled by expl_reward_coef_scale).
+#                           The LAST block has coefficient 0 and is the "leader", i.e.
+#                           the exploitation policy that gets evaluated.
+#   use_others_experience   'lf' = leader-follower: the leader also learns from the
+#                           explorers' off-policy data.
+#   fixed_sigma: coef_cond  one sigma parameter per block, selected by the block id.
+#
+# num_actors % expl_coef_block_size == 0 is asserted in a2c_common.py. Here
+# 4096 / 1024 = 4 blocks.
+#
+# The exploration coefficient is *appended* to the observation by the fork
+# (`input_shape = obs_shape[0] + 1`, `coef_id_idx = obs_shape[0]`), so the env does not
+# need to reserve a slot and no real observation dimension is overwritten.
+#
+# Reporting caveat: with mixed_expl the fork sets
+# `ignore_env_boundary = num_actors - expl_coef_block_size` (3072 here), so every
+# episode metric — including `episode_final/success` and the `curriculum/*` scalars —
+# is reported from the leader block only. Which is the right policy to score, but it
+# means logged success comes from 1024 envs, not 4096.
+#
+# Note also that `curriculum.record_episode_success` counts *all* envs, not just the
+# leader. That does not matter here because these runs pin difficulty
+# (`curriculum.mode=fixed`), but an adaptive SAPG run would be paced by the explorers'
+# lower success rate. Worth fixing via `_curriculum_eligible_mask` before running one.
+
+params:
+  seed: 42
+
+  env:
+    clip_observations: 10.0   # matches env.obs.clamp_abs_observations
+    clip_actions: 1.0
+
+  algo:
+    name: a2c_continuous
+
+  model:
+    name: continuous_a2c_logstd
+
+  network:
+    name: actor_critic
+    separate: False
+    space:
+      continuous:
+        mu_activation: None
+        sigma_activation: None
+        mu_init:
+          name: default
+        sigma_init:
+          name: const_initializer
+          val: 0
+        fixed_sigma: coef_cond    # SAPG requires coef_cond (not 'fixed')
+    mlp:
+      units: [256, 128, 64]
+      activation: elu
+      d2rl: False
+      initializer:
+        name: default
+      regularizer:
+        name: None
+
+  load_checkpoint: False
+  load_path: ''
+
+  config:
+    # Must start with `<int>_` — our vendored rl_games parses policy_idx from the prefix.
+    name: 0_multilink_cartpole_sapg
+    full_experiment_name: ${.name}
+    env_name: rlgpu
+    device: 'cuda:0'
+    device_name: 'cuda:0'
+    multi_gpu: False
+    ppo: True
+    mixed_precision: False
+    normalize_input: True
+    normalize_value: True
+    value_bootstrap: True
+    normalize_advantage: True
+    reward_shaper:
+      scale_value: 1.0
+    num_actors: ${....env.scene.num_envs}
+    gamma: 0.99
+    tau: 0.95
+    learning_rate: 3e-4
+    lr_schedule: adaptive
+    schedule_type: standard
+    kl_threshold: 0.016
+    score_to_win: 1000000
+    max_epochs: 1000
+    save_best_after: 50
+    save_frequency: 100
+    print_stats: True
+    grad_norm: 1.0
+    entropy_coef: 0.0
+    truncate_grads: True
+    e_clip: 0.2
+    # num_minibatches = horizon_length * num_actors // minibatch_size = 65536 // 16384 = 4.
+    # Shrink both together when running with fewer envs.
+    minibatch_size: 16384
+    mini_epochs: 4
+    critic_coef: 2.0
+    clip_value: True
+    horizon_length: 16
+    seq_length: 16
+    bounds_loss_coef: 0.0001
+
+    # === SAPG ===
+    use_others_experience: lf
+    off_policy_ratio: 1.0
+    expl_type: mixed_expl_learn_param
+    expl_reward_type: entropy
+    expl_reward_coef_embd_size: 32
+    expl_reward_coef_scale: 0.002
+    expl_coef_block_size: 1024
+
+    player:
+      deterministic: True
+      games_num: 1000
+      print_stats: False

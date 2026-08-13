@@ -1,0 +1,144 @@
+# Multi-link cartpole — task overlay.
+#
+# Sits between MultiLinkCartpoleEnvCfg's Python defaults and the Hydra CLI. Section
+# names mirror the configclass fields exactly.
+#
+# The difficulty scalar d in [0, 1] controls two things per env, per episode:
+#   - how many pole joints stay free:  n_active = 1 + round(d * (n_max - 1))
+#   - how far from upright it starts:  lerp(pole_angle_range_easy, ..._hard, d)
+# Everything else — total pole length, mass, inertia — is held constant, so the only
+# thing the curriculum varies is how many unactuated DOF one actuator must stabilise.
+
+# -----------------------------------------------------------------------------
+# DirectRLEnvCfg top-level
+# -----------------------------------------------------------------------------
+decimation: 2
+episode_length_s: 8.0
+action_space: 1
+state_space: 0
+# observation_space is computed in MultiLinkCartpoleEnv.__init__ from
+# geometry.n_max + obs.include_segment_lengths. Do not set it here.
+
+# -----------------------------------------------------------------------------
+# sim — 60 Hz policy control, 120 Hz physics
+# -----------------------------------------------------------------------------
+sim:
+  dt: 0.00833333333   # 1/120
+  render_interval: 2
+  gravity: [0.0, 0.0, -9.81]
+  physx:
+    solver_type: 1                     # TGS
+    min_position_iteration_count: 8
+    max_position_iteration_count: 8
+    min_velocity_iteration_count: 1
+    max_velocity_iteration_count: 1
+
+# -----------------------------------------------------------------------------
+# scene — one identical articulation per env, so the fast clone path is usable
+# -----------------------------------------------------------------------------
+scene:
+  num_envs: 4096
+  env_spacing: 4.0
+  replicate_physics: true
+  clone_in_fabric: true
+
+# -----------------------------------------------------------------------------
+# geometry
+# -----------------------------------------------------------------------------
+geometry:
+  # n_max sets the observation width. Changing it between stages breaks checkpoint
+  # transfer, which is the whole point of the padded obs — keep it fixed for an
+  # entire experiment and vary difficulty instead.
+  n_max: 4
+  link_lengths: [0.25, 0.25, 0.25, 0.25]   # total 1.0 m; must have n_max entries
+
+  rail_length: 6.0
+  cart_size: [0.3, 0.2, 0.15]
+  cart_mass: 1.0
+  pole_radius: 0.02
+  pole_density: 800.0
+  pole_joint_damping: 0.0
+
+  # A locked joint is meant to read as a rigid weld. The narrow position limit is a
+  # solver constraint and does most of the work; the stiff PD keeps it centred so the
+  # constraint is not permanently saturated. Set use_joint_limit_lock=false to measure
+  # how much the constraint is actually contributing.
+  lock_stiffness: 100000.0
+  lock_damping: 1000.0
+  lock_limit_rad: 0.001
+  use_joint_limit_lock: true
+
+  sim_position_iterations: 8
+  sim_velocity_iterations: 1
+
+# -----------------------------------------------------------------------------
+# action
+# -----------------------------------------------------------------------------
+action:
+  action_scale: 100.0   # [N] on the cart
+
+# -----------------------------------------------------------------------------
+# obs
+# -----------------------------------------------------------------------------
+obs:
+  include_segment_lengths: true
+  clamp_abs_observations: 10.0
+  normalize_cart_pos: true
+
+# -----------------------------------------------------------------------------
+# reward
+# -----------------------------------------------------------------------------
+reward:
+  alive: 1.0
+  terminated: -2.0
+  upright: 2.0
+  cart_pos: -0.05
+  cart_vel: -0.01
+  pole_vel: -0.005
+  action_rate: -0.001
+
+# -----------------------------------------------------------------------------
+# reset
+# -----------------------------------------------------------------------------
+reset:
+  cart_pos_range: [-0.2, 0.2]
+  cart_vel_range: [-0.05, 0.05]
+  pole_angle_range_easy: 0.02
+  pole_angle_range_hard: 0.20
+  pole_vel_range: 0.05
+
+# -----------------------------------------------------------------------------
+# termination
+# -----------------------------------------------------------------------------
+termination:
+  max_cart_pos: 2.8
+  fall_height_frac: 0.4
+  success_height_frac: 0.85
+  success_min_upright_frac: 0.8
+
+# -----------------------------------------------------------------------------
+# curriculum
+# -----------------------------------------------------------------------------
+# This block is what the experiment arms differ in. See experiments/run_curriculum.sh:
+#   arm A (curriculum): mode=adaptive, init_range=[0.0, 0.15], final_range=[0.0, 1.0]
+#   arm B (control)   : enabled=false                # every env at difficulty 1.0
+#   eval (both arms)  : eval_difficulty=1.0          # identical scoring conditions
+curriculum:
+  enabled: true
+  mode: adaptive
+  difficulty_dim: 1
+  init_range: [0.0, 0.15]
+  final_range: [0.0, 1.0]
+  resample_on_reset: true
+
+  anneal_steps: 200000
+
+  adapt_interval: 2000
+  adapt_success_threshold: 0.7
+  adapt_min_episodes: 64
+  adapt_step: 0.05
+  adapt_allow_regress: true
+  adapt_regress_ratio: 0.4
+
+  reward_schedule: {}
+  eval_difficulty: null
