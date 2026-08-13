@@ -52,7 +52,21 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Under sbatch, SLURM copies the batch script into /var/spool/slurmd, so BASH_SOURCE no
+# longer points into the repo — resolving REPO_ROOT from it lands in the spool dir.
+# Prefer SLURM_SUBMIT_DIR, fall back to BASH_SOURCE for direct invocation, and verify.
+if [[ -z "${REPO_ROOT:-}" ]]; then
+  if [[ -n "${SLURM_SUBMIT_DIR:-}" && -f "$SLURM_SUBMIT_DIR/isaacsimenvs/train.py" ]]; then
+    REPO_ROOT="$SLURM_SUBMIT_DIR"
+  else
+    REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  fi
+fi
+if [[ ! -f "$REPO_ROOT/isaacsimenvs/train.py" ]]; then
+  echo "REPO_ROOT=$REPO_ROOT does not contain isaacsimenvs/train.py." >&2
+  echo "Submit from the repo root, or pass REPO_ROOT=/path/to/task_curriculum." >&2
+  exit 1
+fi
 cd "$REPO_ROOT"
 
 PYTHON="${PYTHON:-$REPO_ROOT/.venv_isaacsim/bin/python}"

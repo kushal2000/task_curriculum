@@ -29,7 +29,15 @@ set -euo pipefail
 TASK_NAME="${1:-MultiLinkCartpole}"
 SEED="${2:-42}"
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Under sbatch the batch script is copied to /var/spool/slurmd, so BASH_SOURCE does not
+# resolve into the repo; prefer SLURM_SUBMIT_DIR when it looks right.
+if [[ -z "${REPO_ROOT:-}" ]]; then
+  if [[ -n "${SLURM_SUBMIT_DIR:-}" && -f "$SLURM_SUBMIT_DIR/isaacsimenvs/train.py" ]]; then
+    REPO_ROOT="$SLURM_SUBMIT_DIR"
+  else
+    REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  fi
+fi
 PYTHON="${PYTHON:-$REPO_ROOT/.venv_isaacsim/bin/python}"
 TRAIN="$REPO_ROOT/isaacsimenvs/train.py"
 
