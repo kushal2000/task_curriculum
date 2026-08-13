@@ -9,6 +9,11 @@ cd "$REPO_ROOT"
 VENV=".venv_isaacsim"
 PY="$VENV/bin/python"
 
+# Importing isaaclab bootstraps the Kit kernel, which prompts for the EULA on a TTY and
+# dies with "EOF when reading a line" without one. The verify step at the bottom needs
+# this, and so does every non-interactive launch afterwards.
+export OMNI_KIT_ACCEPT_EULA=YES
+
 step () { echo; echo "=== $* ==="; date '+%H:%M:%S'; }
 
 step "uv venv (python 3.11)"
