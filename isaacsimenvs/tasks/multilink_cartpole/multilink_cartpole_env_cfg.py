@@ -115,6 +115,27 @@ class ObsCfg:
     """
 
     include_segment_lengths: bool = True
+    """Per-segment lengths, in the segment frame, zero past the active count."""
+
+    include_free_mask: bool = True
+    """Multi-hot over the `n_max` pole joints: 1 = free, 0 = welded. In the *joint*
+    frame, not the segment frame.
+
+    Informationally this duplicates `include_segment_lengths` — the two are bijective
+    (128 masks <-> 128 length vectors at n_max=8, verified), and both are 8 wide, so
+    neither is cheaper. They differ in what the network has to do with them:
+
+      mask     the structural variable directly; binary, so easy to key on, but the
+               policy must learn to turn it into the lengths that actually drive the
+               dynamics (inertia ~ mL^2, gravity torque ~ mgL/2)
+      lengths  the physical quantity itself, and — the reason it is still on by default
+               — it keeps its meaning if `geometry.link_lengths` changes between
+               curriculum stages, whereas a given mask silently means a different
+               morphology once the base link lengths move
+
+    Both on is a superset and costs 8 dims. For the pure multi-hot encoding set
+    `include_segment_lengths=false`."""
+
     clamp_abs_observations: float = 10.0
     normalize_cart_pos: bool = True
     """Divide cart position by half the rail length, so it lands in [-1, 1]."""

@@ -69,6 +69,20 @@ class CurriculumCfg:
     """Mean episode success over the window required to make the task harder."""
 
     adapt_min_episodes: int = 64
+
+    score_last_n_envs: int | None = None
+    """Count only the last N envs when scoring episodes for adaptation.
+
+    Exists for SAPG. The fork partitions `num_actors` into exploration blocks with
+    entropy bonuses on a linspace from 0.5 down to 0, and the *last* block — coefficient
+    0 — is the leader, i.e. the exploitation policy. It also sets
+    `ignore_env_boundary = num_actors - expl_coef_block_size`, so every metric it reports
+    already comes from that block alone.
+
+    Without this, the curriculum would pace itself on the mean over all blocks, and the
+    deliberately-noisy explorers would hold it back — the curriculum would advance more
+    slowly than the policy being evaluated actually warrants. Set it to
+    `expl_coef_block_size` for a SAPG run; leave None for PPO."""
     """Don't adapt on a handful of episodes — the success estimate would be noise."""
 
     adapt_step: float = 0.05
@@ -80,6 +94,23 @@ class CurriculumCfg:
     ratchets past what the policy can hold."""
 
     adapt_regress_ratio: float = 0.4
+
+    advance_lo_with_hi: bool = False
+    """How the range moves when `adaptive` advances it.
+
+    False (default) — only `range_hi` grows, so envs sample a widening *mixture*:
+        after two advances the batch spans everything from the easiest instance up to
+        the current frontier. Easy instances never disappear, which is what stops the
+        policy forgetting them.
+
+    True — `range_lo` follows `range_hi`, so the whole batch steps to the new
+        difficulty together: a staircase rather than a widening fan. This is the literal
+        "advance n when the threshold is hit" reading. It concentrates all the samples
+        on the current rung, which learns that rung faster, at the cost of no longer
+        rehearsing the earlier ones — the usual forgetting trade.
+
+    With the cartpole's `n = 1 + round(d * (n_max - 1))`, setting
+    `adapt_step = 1 / (n_max - 1)` makes each advance move exactly one link."""
 
     # ------------------------------------------------------------------
     # Reward shaping schedule

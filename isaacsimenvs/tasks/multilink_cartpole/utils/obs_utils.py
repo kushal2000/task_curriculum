@@ -26,7 +26,11 @@ __all__ = [
 
 def compute_obs_dim(cfg) -> int:
     """Policy observation width implied by the config. Called before `DirectRLEnv.__init__`."""
-    per_segment = 3 if cfg.obs.include_segment_lengths else 2
+    per_segment = 2  # angle + angular velocity
+    if cfg.obs.include_segment_lengths:
+        per_segment += 1
+    if cfg.obs.include_free_mask:
+        per_segment += 1
     return 2 + per_segment * cfg.geometry.n_max
 
 
@@ -45,7 +49,11 @@ def compute_state_dim(cfg) -> int:
     `expl_type` is a `mixed_expl*` variant, so a task with no critic observation raises
     `KeyError: 'states'` the moment SAPG training starts.
     """
-    return compute_obs_dim(cfg) + 3 * cfg.geometry.n_max
+    n_max = cfg.geometry.n_max
+    extra = 2 * n_max  # raw joint angles + velocities
+    if not cfg.obs.include_free_mask:
+        extra += n_max  # the mask, only if the actor is not already getting it
+    return compute_obs_dim(cfg) + extra
 
 
 def compute_intermediate_values(env) -> None:
@@ -76,21 +84,18 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     parts = [cart_pos.unsqueeze(1), cart_vel.unsqueeze(1), env._seg_angles, env._seg_ang_vels]
     if obs_cfg.include_segment_lengths:
         parts.append(env._seg_lengths)
+    if obs_cfg.include_free_mask:
+        parts.append(env._free_mask.float())
 
     obs = torch.cat(parts, dim=-1)
 
-    # Privileged critic view: the policy observation plus the *raw* joint state and the
-    # free/locked mask. See `compute_state_dim` for why this exists (and why SAPG cannot
-    # run without it).
-    state = torch.cat(
-        [
-            obs,
-            env._free_mask.float(),
-            joint_pos[:, env._pole_dof_ids],
-            joint_vel[:, env._pole_dof_ids],
-        ],
-        dim=-1,
-    )
+    # Privileged critic view: the policy observation plus the *raw* joint state. The
+    # free mask is appended only when the actor does not already have it, so the two
+    # never carry a duplicated slice. See `compute_state_dim`.
+    extra = [joint_pos[:, env._pole_dof_ids], joint_vel[:, env._pole_dof_ids]]
+    if not obs_cfg.include_free_mask:
+        extra.insert(0, env._free_mask.float())
+    state = torch.cat([obs, *extra], dim=-1)
 
     if obs_cfg.clamp_abs_observations > 0.0:
         clamp = obs_cfg.clamp_abs_observations

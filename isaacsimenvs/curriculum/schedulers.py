@@ -60,6 +60,7 @@ def step_adaptive(
     step: float,
     allow_regress: bool,
     regress_ratio: float,
+    advance_lo_with_hi: bool = False,
     **_unused,
 ) -> tuple[float, float]:
     """Advance only on demonstrated competence; optionally back off on collapse.
@@ -78,7 +79,13 @@ def step_adaptive(
 
     # Never shrink below where we started, never grow past the configured ceiling.
     hi = _clamp(hi, init_range[1], final_range[1])
-    return lo, float(hi)
+    if advance_lo_with_hi:
+        # Staircase: the whole batch steps to the new rung instead of fanning out over
+        # everything up to it. Keep the band width the range started with so a
+        # deliberately non-degenerate init_range stays non-degenerate.
+        width = init_range[1] - init_range[0]
+        lo = _clamp(hi - width, final_range[0], hi)
+    return float(lo), float(hi)
 
 
 STEP_FNS = {

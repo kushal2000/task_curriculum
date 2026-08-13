@@ -96,6 +96,16 @@ SEED="${SEED:-42}"
 #   rl_games_sapg_small_cfg_entry_point  same settings, MLP [256,128,64], no LSTM
 AGENT="${AGENT:-rl_games_sapg_cfg_entry_point}"
 TAG="${TAG:-}"
+
+# fixed    : one run per entry in LINKS, difficulty pinned so n is constant (baselines)
+# adaptive : ONE run that starts at n=1 and advances n by one link every time the
+#            leader block's success rate clears ADAPT_THRESHOLD
+CURRICULUM_MODE="${CURRICULUM_MODE:-fixed}"
+ADAPT_THRESHOLD="${ADAPT_THRESHOLD:-0.7}"
+ADAPT_INTERVAL="${ADAPT_INTERVAL:-2000}"
+ADAPT_MIN_EPISODES="${ADAPT_MIN_EPISODES:-2000}"
+# SAPG's leader block; the curriculum scores only these envs (see score_last_n_envs).
+LEADER_BLOCK="${LEADER_BLOCK:-4096}"
 NUM_ENVS="${NUM_ENVS:-24576}"
 MAX_EPOCHS="${MAX_EPOCHS:-1500}"
 LINKS="${LINKS:-1 2 4 8}"
@@ -143,16 +153,52 @@ print(0.0 if n_max <= 1 else (n - 1) / (n_max - 1))
 PY
 }
 
-for N in $LINKS; do
-  if (( N < 1 || N > N_MAX )); then
-    echo "skipping n=$N: outside [1, $N_MAX]" >&2
-    continue
+if [[ "$CURRICULUM_MODE" == "adaptive" ]]; then
+  # One adaptive run. adapt_step = 1/(n_max-1) makes each advance worth exactly one
+  # link, and advance_lo_with_hi collapses the band so the whole batch steps together
+  # rather than fanning out over every easier n.
+  STEP_PER_LINK="$("$PYTHON" -c "print(1.0/($N_MAX-1))")"
+  RUN_LIST="adaptive"
+else
+  RUN_LIST="$LINKS"
+fi
+
+for N in $RUN_LIST; do
+  if [[ "$CURRICULUM_MODE" == "adaptive" ]]; then
+    RUN="adaptive"
+    CURRICULUM_ARGS=(
+      "env.curriculum.enabled=true"
+      "env.curriculum.mode=adaptive"
+      "env.curriculum.init_range=[0.0,0.0]"
+      "env.curriculum.final_range=[0.0,1.0]"
+      "env.curriculum.adapt_step=$STEP_PER_LINK"
+      "env.curriculum.advance_lo_with_hi=true"
+      "env.curriculum.adapt_success_threshold=$ADAPT_THRESHOLD"
+      "env.curriculum.adapt_interval=$ADAPT_INTERVAL"
+      "env.curriculum.adapt_min_episodes=$ADAPT_MIN_EPISODES"
+      "env.curriculum.score_last_n_envs=$LEADER_BLOCK"
+    )
+    echo "=============================================================="
+    echo "  SAPG cartpole :: ADAPTIVE  n: 1 -> $N_MAX  (+1 link per advance)"
+    echo "  threshold=${ADAPT_THRESHOLD}  interval=${ADAPT_INTERVAL}  seed=${SEED}"
+    echo "=============================================================="
+  else
+    if (( N < 1 || N > N_MAX )); then
+      echo "skipping n=$N: outside [1, $N_MAX]" >&2
+      continue
+    fi
+    D="$(difficulty_for "$N")"
+    RUN="n${N}"
+    CURRICULUM_ARGS=(
+      "env.curriculum.enabled=true"
+      "env.curriculum.mode=fixed"
+      "env.curriculum.init_range=[$D,$D]"
+      "env.curriculum.final_range=[$D,$D]"
+    )
+    echo "=============================================================="
+    echo "  SAPG cartpole :: ${N} link(s)   difficulty=${D}   seed=${SEED}"
+    echo "=============================================================="
   fi
-  D="$(difficulty_for "$N")"
-  RUN="n${N}"
-  echo "=============================================================="
-  echo "  SAPG cartpole :: ${N} link(s)   difficulty=${D}   seed=${SEED}"
-  echo "=============================================================="
 
   WANDB_ARGS=()
   if [[ -n "${WANDB_PROJECT:-}" ]]; then
@@ -160,7 +206,7 @@ for N in $LINKS; do
       --wandb_activate
       --wandb_project "$WANDB_PROJECT"
       --wandb_group "cartpole_sapg${TAG}_s${SEED}"
-      --wandb_name "cartpole_sapg${TAG}_n${N}_s${SEED}"
+      --wandb_name "cartpole_sapg${TAG}_${RUN}_s${SEED}"
     )
   fi
 
@@ -173,19 +219,16 @@ for N in $LINKS; do
     "env.scene.num_envs=$NUM_ENVS" \
     "env.geometry.n_max=$N_MAX" \
     "env.geometry.link_lengths=$LINK_LENGTHS" \
-    "env.curriculum.enabled=true" \
-    "env.curriculum.mode=fixed" \
-    "env.curriculum.init_range=[$D,$D]" \
-    "env.curriculum.final_range=[$D,$D]" \
+    "${CURRICULUM_ARGS[@]}" \
     "agent.params.seed=$SEED" \
-    "agent.params.config.name=0_cartpole_sapg${TAG}_n${N}" \
+    "agent.params.config.name=0_cartpole_sapg${TAG}_${RUN}" \
     "agent.params.config.max_epochs=$MAX_EPOCHS" \
     --capture_viewer \
     --capture_viewer_len "$VIEWER_LEN" \
     --capture_viewer_interval "$VIEWER_INTERVAL" \
     2>&1 | tee "$OUT_ROOT/${RUN}.log"
 
-  echo "finished n=$N -> $OUT_ROOT/$RUN"
+  echo "finished $RUN -> $OUT_ROOT/$RUN"
 done
 
 echo

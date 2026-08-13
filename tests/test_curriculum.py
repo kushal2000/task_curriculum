@@ -83,3 +83,36 @@ def test_adaptive_can_be_told_not_to_regress(schedulers):
 
 def test_every_mode_is_reachable_from_the_registry(schedulers):
     assert set(schedulers.STEP_FNS) == {"fixed", "linear", "adaptive"}
+
+
+def test_adaptive_staircase_advances_the_whole_band(schedulers):
+    """`advance_lo_with_hi` steps lo and hi together — the literal "advance n" mode."""
+    opts = {**ADAPT, "init_range": (0.0, 0.0), "advance_lo_with_hi": True}
+    lo, hi = 0.0, 0.0
+    for _ in range(3):
+        lo, hi = schedulers.step_adaptive(lo, hi, success_rate=1.0, num_episodes=100, **opts)
+    assert lo == pytest.approx(hi), "staircase must keep the band collapsed"
+    assert hi == pytest.approx(0.15)
+
+
+def test_adaptive_default_widens_instead_of_stepping(schedulers):
+    """Default keeps lo pinned, so easy instances stay in the batch."""
+    lo, hi = 0.0, 0.2
+    for _ in range(3):
+        lo, hi = schedulers.step_adaptive(lo, hi, success_rate=1.0, num_episodes=100, **ADAPT)
+    assert lo == pytest.approx(0.0)
+    assert hi == pytest.approx(0.35)
+
+
+def test_one_link_per_advance_with_matched_step(schedulers):
+    """adapt_step = 1/(n_max-1) makes each advance worth exactly one link."""
+    n_max = 8
+    opts = {**ADAPT, "init_range": (0.0, 0.0), "final_range": (0.0, 1.0),
+            "step": 1.0 / (n_max - 1), "advance_lo_with_hi": True}
+    lo, hi = 0.0, 0.0
+    seen = [1 + round(hi * (n_max - 1))]
+    for _ in range(9):  # more advances than rungs, to check the ceiling holds
+        lo, hi = schedulers.step_adaptive(lo, hi, success_rate=1.0, num_episodes=100, **opts)
+        seen.append(1 + round(hi * (n_max - 1)))
+    assert seen[:8] == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert seen[-1] == 8, "must saturate at n_max, not overshoot"

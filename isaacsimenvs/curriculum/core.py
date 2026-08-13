@@ -91,6 +91,17 @@ def record_episode_success(env, env_ids: torch.Tensor, success: torch.Tensor) ->
 
     success = success.float().reshape(-1)
 
+    # SAPG: score only the leader block, matching what rl_games itself reports. See
+    # `CurriculumCfg.score_last_n_envs`.
+    keep_n = env.cfg.curriculum.score_last_n_envs
+    if keep_n is not None and keep_n > 0:
+        first_scored = env.num_envs - int(keep_n)
+        leader = env_ids >= first_scored
+        env_ids = env_ids[leader]
+        success = success[leader]
+        if env_ids.numel() == 0:
+            return
+
     # Honour play2perfect's opt-in narrowing hooks: a task may declare that only some
     # envs should steer the curriculum (e.g. only the insertion-goal envs).
     if hasattr(env, "_curriculum_eligible_mask"):
@@ -138,6 +149,7 @@ def update_curriculum(env) -> None:
         step=cfg.adapt_step,
         allow_regress=cfg.adapt_allow_regress,
         regress_ratio=cfg.adapt_regress_ratio,
+        advance_lo_with_hi=cfg.advance_lo_with_hi,
     )
 
     env._curr_last_update = env._curr_frame
