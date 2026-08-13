@@ -116,6 +116,9 @@ ADAPT_INTERVAL="${ADAPT_INTERVAL:-2000}"
 ADAPT_MIN_EPISODES="${ADAPT_MIN_EPISODES:-2000}"
 # SAPG's leader block; the curriculum scores only these envs (see score_last_n_envs).
 LEADER_BLOCK="${LEADER_BLOCK:-4096}"
+# Ceiling on the mixture support: envs sample n ~ U{1..MIX_MAX_N}. Defaults to N_MAX.
+# Use it for partial-support controls, e.g. MIX_MAX_N=3 trains on n in {1,2,3} only.
+MIX_MAX_N="${MIX_MAX_N:-0}"
 NUM_ENVS="${NUM_ENVS:-24576}"
 MAX_EPOCHS="${MAX_EPOCHS:-1500}"
 LINKS="${LINKS:-1 2 4 8}"
@@ -177,18 +180,24 @@ for N in $RUN_LIST; do
     # difficulty_levels=N_MAX puts the grid exactly on the integer link counts, so each
     # n is drawn equally often. advance_lo_with_hi stays false so range_lo is pinned at
     # 0 and the support GROWS instead of stepping.
+    # Ceiling difficulty for the requested max n. (X-1)/(n_max-1) lands exactly on the
+    # grid point that difficulty_levels puts at n = X.
+    [[ "$MIX_MAX_N" == "0" ]] && MIX_MAX_N="$N_MAX"
+    MIX_CEIL="$("$PYTHON" -c "print(($MIX_MAX_N-1)/($N_MAX-1))")"
     if [[ "$CURRICULUM_MODE" == "mixture" ]]; then
       MIX_MODE=adaptive; MIX_INIT="[0.0,0.0]"
     else
-      MIX_MODE=fixed;    MIX_INIT="[0.0,1.0]"   # full support from step 0
+      MIX_MODE=fixed;    MIX_INIT="[0.0,$MIX_CEIL]"   # full support from step 0
     fi
+    # Name the run by its ceiling so partial-support controls do not collide.
+    [[ "$MIX_MAX_N" != "$N_MAX" ]] && RUN="${CURRICULUM_MODE}_n${MIX_MAX_N}"
     CURRICULUM_ARGS=(
       "env.curriculum.enabled=true"
       "env.curriculum.mode=$MIX_MODE"
       "env.curriculum.difficulty_levels=$N_MAX"
       "env.curriculum.advance_lo_with_hi=false"
       "env.curriculum.init_range=$MIX_INIT"
-      "env.curriculum.final_range=[0.0,1.0]"
+      "env.curriculum.final_range=[0.0,$MIX_CEIL]"
       "env.curriculum.adapt_step=$STEP_PER_LINK"
       "env.curriculum.adapt_success_threshold=$ADAPT_THRESHOLD"
       "env.curriculum.adapt_interval=$ADAPT_INTERVAL"
@@ -197,9 +206,9 @@ for N in $RUN_LIST; do
     )
     echo "=============================================================="
     if [[ "$CURRICULUM_MODE" == "mixture" ]]; then
-      echo "  SAPG cartpole :: MIXTURE  n ~ U{1..X}, X grows 1 -> $N_MAX"
+      echo "  SAPG cartpole :: MIXTURE  n ~ U{1..X}, X grows 1 -> $MIX_MAX_N"
     else
-      echo "  SAPG cartpole :: MIXTURE CONTROL  n ~ U{1..$N_MAX} from step 0"
+      echo "  SAPG cartpole :: MIXTURE CONTROL  n ~ U{1..$MIX_MAX_N} from step 0"
     fi
     echo "  threshold=${ADAPT_THRESHOLD}  interval=${ADAPT_INTERVAL}  seed=${SEED}"
     echo "=============================================================="
@@ -209,7 +218,7 @@ for N in $RUN_LIST; do
       "env.curriculum.enabled=true"
       "env.curriculum.mode=adaptive"
       "env.curriculum.init_range=[0.0,0.0]"
-      "env.curriculum.final_range=[0.0,1.0]"
+      "env.curriculum.final_range=[0.0,$MIX_CEIL]"
       "env.curriculum.adapt_step=$STEP_PER_LINK"
       "env.curriculum.advance_lo_with_hi=true"
       "env.curriculum.adapt_success_threshold=$ADAPT_THRESHOLD"
