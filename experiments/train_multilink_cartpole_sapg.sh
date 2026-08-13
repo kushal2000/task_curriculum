@@ -97,9 +97,19 @@ SEED="${SEED:-42}"
 AGENT="${AGENT:-rl_games_sapg_cfg_entry_point}"
 TAG="${TAG:-}"
 
-# fixed    : one run per entry in LINKS, difficulty pinned so n is constant (baselines)
-# adaptive : ONE run that starts at n=1 and advances n by one link every time the
-#            leader block's success rate clears ADAPT_THRESHOLD
+# fixed           : one run per entry in LINKS, difficulty pinned (the n=1/2/4/8 baselines)
+# adaptive        : ONE run, staircase. Starts at n=1 and advances by one link each time
+#                   the leader block clears ADAPT_THRESHOLD. The whole batch moves to the
+#                   new rung, so earlier ns leave the distribution entirely.
+# mixture         : ONE run, growing support. Envs sample UNIFORMLY over n in 1..X, and a
+#                   successful check widens X by one. Earlier ns are retained and
+#                   rehearsed forever.
+# mixture_control : the no-curriculum control for `mixture` -- X is pinned at n_max from
+#                   step 0, so envs sample uniformly over 1..n_max the whole run.
+#
+# mixture vs mixture_control is the cleanly-posed curriculum experiment: both arms end on
+# the SAME final distribution (uniform over 1..n_max) and are scored the same way; the
+# only difference is whether the support grows or is there from the start.
 CURRICULUM_MODE="${CURRICULUM_MODE:-fixed}"
 ADAPT_THRESHOLD="${ADAPT_THRESHOLD:-0.7}"
 ADAPT_INTERVAL="${ADAPT_INTERVAL:-2000}"
@@ -153,18 +163,47 @@ print(0.0 if n_max <= 1 else (n - 1) / (n_max - 1))
 PY
 }
 
-if [[ "$CURRICULUM_MODE" == "adaptive" ]]; then
-  # One adaptive run. adapt_step = 1/(n_max-1) makes each advance worth exactly one
-  # link, and advance_lo_with_hi collapses the band so the whole batch steps together
-  # rather than fanning out over every easier n.
-  STEP_PER_LINK="$("$PYTHON" -c "print(1.0/($N_MAX-1))")"
-  RUN_LIST="adaptive"
-else
-  RUN_LIST="$LINKS"
-fi
+STEP_PER_LINK="$("$PYTHON" -c "print(1.0/($N_MAX-1))")"
+case "$CURRICULUM_MODE" in
+  adaptive)        RUN_LIST="adaptive" ;;
+  mixture)         RUN_LIST="mixture" ;;
+  mixture_control) RUN_LIST="mixture_control" ;;
+  *)               RUN_LIST="$LINKS" ;;
+esac
 
 for N in $RUN_LIST; do
-  if [[ "$CURRICULUM_MODE" == "adaptive" ]]; then
+  if [[ "$CURRICULUM_MODE" == "mixture" || "$CURRICULUM_MODE" == "mixture_control" ]]; then
+    RUN="$CURRICULUM_MODE"
+    # difficulty_levels=N_MAX puts the grid exactly on the integer link counts, so each
+    # n is drawn equally often. advance_lo_with_hi stays false so range_lo is pinned at
+    # 0 and the support GROWS instead of stepping.
+    if [[ "$CURRICULUM_MODE" == "mixture" ]]; then
+      MIX_MODE=adaptive; MIX_INIT="[0.0,0.0]"
+    else
+      MIX_MODE=fixed;    MIX_INIT="[0.0,1.0]"   # full support from step 0
+    fi
+    CURRICULUM_ARGS=(
+      "env.curriculum.enabled=true"
+      "env.curriculum.mode=$MIX_MODE"
+      "env.curriculum.difficulty_levels=$N_MAX"
+      "env.curriculum.advance_lo_with_hi=false"
+      "env.curriculum.init_range=$MIX_INIT"
+      "env.curriculum.final_range=[0.0,1.0]"
+      "env.curriculum.adapt_step=$STEP_PER_LINK"
+      "env.curriculum.adapt_success_threshold=$ADAPT_THRESHOLD"
+      "env.curriculum.adapt_interval=$ADAPT_INTERVAL"
+      "env.curriculum.adapt_min_episodes=$ADAPT_MIN_EPISODES"
+      "env.curriculum.score_last_n_envs=$LEADER_BLOCK"
+    )
+    echo "=============================================================="
+    if [[ "$CURRICULUM_MODE" == "mixture" ]]; then
+      echo "  SAPG cartpole :: MIXTURE  n ~ U{1..X}, X grows 1 -> $N_MAX"
+    else
+      echo "  SAPG cartpole :: MIXTURE CONTROL  n ~ U{1..$N_MAX} from step 0"
+    fi
+    echo "  threshold=${ADAPT_THRESHOLD}  interval=${ADAPT_INTERVAL}  seed=${SEED}"
+    echo "=============================================================="
+  elif [[ "$CURRICULUM_MODE" == "adaptive" ]]; then
     RUN="adaptive"
     CURRICULUM_ARGS=(
       "env.curriculum.enabled=true"

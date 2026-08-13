@@ -48,6 +48,23 @@ class CurriculumCfg:
     final_range: tuple[float, float] = (0.0, 1.0)
     """Difficulty range the curriculum is allowed to grow to."""
 
+    difficulty_levels: int = 0
+    """Snap sampled difficulty to a uniform grid of this many levels over [0, 1].
+    0 (default) samples continuously.
+
+    Set it when the task's difficulty is really discrete, so that every level is drawn
+    equally often. The cartpole maps `n = 1 + round(d * (n_max - 1))`, so sampling `d`
+    continuously over `[lo, hi]` and rounding gives the *interior* levels a bucket of
+    width `1/(n_max-1)` but the two endpoints only half that — n=1 and n=X would each
+    appear about half as often as every n in between. With
+    `difficulty_levels = n_max` the grid lands exactly on the integer link counts and
+    each is equally likely.
+
+    Combined with `advance_lo_with_hi=false` this gives "sample all problems from
+    1..X, uniformly", where X is the current frontier: the batch is an even mix of
+    every morphology unlocked so far, and advancing widens the mix rather than
+    replacing it."""
+
     resample_on_reset: bool = True
     """Redraw a terminating env's difficulty at every reset. When False, each env keeps
     the difficulty it was first assigned — useful for ablations that want a static mix."""

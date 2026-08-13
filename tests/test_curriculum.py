@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import pytest
 
+from conftest import REPO_ROOT  # noqa: E402  pytest puts tests/ on sys.path
+
 INIT = (0.0, 0.2)
 FINAL = (0.0, 1.0)
 
@@ -116,3 +118,78 @@ def test_one_link_per_advance_with_matched_step(schedulers):
         seen.append(1 + round(hi * (n_max - 1)))
     assert seen[:8] == [1, 2, 3, 4, 5, 6, 7, 8]
     assert seen[-1] == 8, "must saturate at n_max, not overshoot"
+
+
+# --- discrete difficulty levels -------------------------------------------------
+
+class _FakeCfg:
+    def __init__(self, **kw):
+        self.enabled = True; self.eval_difficulty = -1.0; self.resample_on_reset = True
+        self.difficulty_dim = 1; self.difficulty_levels = 0
+        self.final_range = (0.0, 1.0); self.score_last_n_envs = 0
+        self.__dict__.update(kw)
+
+
+class _FakeEnv:
+    """Minimal stand-in so sample_difficulty can be exercised without Kit."""
+    def __init__(self, n, lo, hi, **cfgkw):
+        torch = pytest.importorskip("torch")
+        self.num_envs = n; self.device = "cpu"
+        self._difficulty = torch.zeros(n, 1)
+        self._curr_lo, self._curr_hi = lo, hi
+        self.cfg = type("C", (), {"curriculum": _FakeCfg(**cfgkw)})()
+
+
+def _levels_seen(env, core, n_max=8):
+    torch = pytest.importorskip("torch")
+    core.sample_difficulty(env, torch.arange(env.num_envs))
+    d = env._difficulty[:, 0]
+    return (1 + torch.round(d * (n_max - 1)).long())
+
+
+@pytest.fixture(scope="session")
+def core():
+    import sys, types
+    # core imports .schedulers relatively; give it a package to live in.
+    from conftest import load_module
+    pkg = types.ModuleType("curric"); pkg.__path__ = [str(REPO_ROOT / "isaacsimenvs/curriculum")]
+    sys.modules["curric"] = pkg
+    load_module("isaacsimenvs/curriculum/schedulers.py", "curric.schedulers")
+    return load_module("isaacsimenvs/curriculum/core.py", "curric.core")
+
+
+def test_discrete_levels_hit_every_integer_n(core):
+    torch = pytest.importorskip("torch")
+    env = _FakeEnv(20_000, 0.0, 1.0, difficulty_levels=8)
+    n = _levels_seen(env, core)
+    assert sorted(n.unique().tolist()) == [1, 2, 3, 4, 5, 6, 7, 8]
+
+
+def test_discrete_levels_are_uniform_including_endpoints(core):
+    """Continuous sampling + rounding halves the weight of n=1 and n=X; the grid must not."""
+    torch = pytest.importorskip("torch")
+    env = _FakeEnv(80_000, 0.0, 1.0, difficulty_levels=8)
+    n = _levels_seen(env, core)
+    frac = [(n == k).float().mean().item() for k in range(1, 9)]
+    for f in frac:
+        assert abs(f - 1 / 8) < 0.01, f"non-uniform: {[round(x,4) for x in frac]}"
+
+
+def test_discrete_levels_respect_the_frontier(core):
+    """Only levels up to the current range_hi are drawn — this is the "1..X" mixture."""
+    torch = pytest.importorskip("torch")
+    for x in (1, 2, 4, 8):
+        hi = (x - 1) / 7
+        env = _FakeEnv(20_000, 0.0, hi, difficulty_levels=8)
+        n = _levels_seen(env, core)
+        assert sorted(n.unique().tolist()) == list(range(1, x + 1)), f"X={x}"
+
+
+def test_continuous_sampling_underweights_the_endpoints(core):
+    """Documents why difficulty_levels exists at all."""
+    torch = pytest.importorskip("torch")
+    env = _FakeEnv(80_000, 0.0, 1.0, difficulty_levels=0)
+    n = _levels_seen(env, core)
+    frac = [(n == k).float().mean().item() for k in range(1, 9)]
+    assert frac[0] < 0.6 * frac[3], "endpoint should be about half-weight without the grid"
+    assert frac[-1] < 0.6 * frac[3]

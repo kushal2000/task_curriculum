@@ -71,6 +71,22 @@ def sample_difficulty(env, env_ids: torch.Tensor) -> None:
             env._difficulty[env_ids] = float(cfg.final_range[1])
         return
 
+    levels = int(cfg.difficulty_levels)
+    if levels > 1:
+        # Discrete difficulty: draw uniformly from the grid points currently unlocked,
+        # so every level is equally likely. See `CurriculumCfg.difficulty_levels` for
+        # why continuous sampling under-weights the two endpoints.
+        grid = torch.linspace(0.0, 1.0, levels, device=env.device)
+        eps = 0.5 / (levels - 1)  # half a grid spacing of tolerance
+        unlocked = grid[(grid >= env._curr_lo - eps) & (grid <= env._curr_hi + eps)]
+        if unlocked.numel() == 0:  # degenerate range — fall back to the nearest point
+            unlocked = grid[(grid - env._curr_hi).abs().argmin()].reshape(1)
+        idx = torch.randint(
+            unlocked.numel(), (env_ids.numel(), cfg.difficulty_dim), device=env.device
+        )
+        env._difficulty[env_ids] = unlocked[idx]
+        return
+
     env._difficulty[env_ids] = (
         torch.rand(env_ids.numel(), cfg.difficulty_dim, device=env.device)
         * (env._curr_hi - env._curr_lo)
