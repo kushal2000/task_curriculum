@@ -119,6 +119,15 @@ LEADER_BLOCK="${LEADER_BLOCK:-4096}"
 # Ceiling on the mixture support: envs sample n ~ U{1..MIX_MAX_N}. Defaults to N_MAX.
 # Use it for partial-support controls, e.g. MIX_MAX_N=3 trains on n in {1,2,3} only.
 MIX_MAX_N="${MIX_MAX_N:-0}"
+# Strictly monotonic by default: the support only ever grows.
+#
+# This matters most for `mixture`, where success is averaged over n ~ U{1..X}. Widening
+# X pulls harder levels into that average, so the mean falls even when the policy has
+# not got worse at any individual n -- and a low-enough mean would trip the regress
+# branch and shrink X for a reason that is purely an artifact of the metric. Regression
+# is defensible for the `adaptive` staircase (which scores only the current rung) but
+# not here.
+ALLOW_REGRESS="${ALLOW_REGRESS:-false}"
 NUM_ENVS="${NUM_ENVS:-24576}"
 MAX_EPOCHS="${MAX_EPOCHS:-1500}"
 LINKS="${LINKS:-1 2 4 8}"
@@ -203,6 +212,7 @@ for N in $RUN_LIST; do
       "env.curriculum.adapt_interval=$ADAPT_INTERVAL"
       "env.curriculum.adapt_min_episodes=$ADAPT_MIN_EPISODES"
       "env.curriculum.score_last_n_envs=$LEADER_BLOCK"
+      "env.curriculum.adapt_allow_regress=$ALLOW_REGRESS"
     )
     echo "=============================================================="
     if [[ "$CURRICULUM_MODE" == "mixture" ]]; then
@@ -225,6 +235,7 @@ for N in $RUN_LIST; do
       "env.curriculum.adapt_interval=$ADAPT_INTERVAL"
       "env.curriculum.adapt_min_episodes=$ADAPT_MIN_EPISODES"
       "env.curriculum.score_last_n_envs=$LEADER_BLOCK"
+      "env.curriculum.adapt_allow_regress=$ALLOW_REGRESS"
     )
     echo "=============================================================="
     echo "  SAPG cartpole :: ADAPTIVE  n: 1 -> $N_MAX  (+1 link per advance)"
