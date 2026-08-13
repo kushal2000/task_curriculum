@@ -1,0 +1,134 @@
+# Multi-link cartpole SAPG — SMALL network ablation.
+#
+# Identical to MultiLinkCartpoleSAPG.yaml in EVERY respect except the network:
+#
+#     MLP [1024,1024,512,512] + LSTM(1024)  ->  MLP [256,128,64], no recurrence
+#     (same change applied to central_value_config)
+#
+# Optimiser, batch sizes, SAPG block size, reward shaping and clipping are deliberately
+# left untouched so this is a clean architecture ablation and not a joint retune.
+#
+# Motivation, measured on the first array (969118) at num_envs=24576:
+#   n=1 link   physics alone 1,090k sps   end-to-end 224k sps
+#   n=8 links  physics alone   768k sps   end-to-end 144k sps
+# i.e. roughly 80% of wall-clock went to the network, not the simulator. A 26-dim
+# observation and a 1-dim action do not obviously need an LSTM(1024) over a 4x1024 MLP —
+# play2perfect needs that capacity for a 29-DOF hand with keypoint observations.
+#
+# Two things this ablation answers: how much throughput the big net actually costs, and
+# whether it buys anything in final performance. Note it is NOT checkpoint-compatible
+# with the large-net runs — different shapes — so it cannot seed a staged-curriculum arm
+# started from those.
+
+params:
+  seed: 42
+
+  env:
+    clip_observations: 10.0   # matches env.obs.clamp_abs_observations
+    clip_actions: 1.0
+
+  algo:
+    name: a2c_continuous
+
+  model:
+    name: continuous_a2c_logstd
+
+  network:
+    name: actor_critic
+    separate: False
+    space:
+      continuous:
+        mu_activation: None
+        sigma_activation: None
+        mu_init:
+          name: default
+        sigma_init:
+          name: const_initializer
+          val: 0
+        fixed_sigma: coef_cond    # SAPG requires coef_cond (not 'fixed')
+    mlp:
+      units: [256, 128, 64]
+      activation: elu
+      d2rl: False
+      initializer:
+        name: default
+      regularizer:
+        name: None
+
+  load_checkpoint: False
+  load_path: ''
+
+  config:
+    # Must start with `<int>_` — our vendored rl_games parses policy_idx from the prefix.
+    name: 0_multilink_cartpole_sapg_small
+    full_experiment_name: ${.name}
+    env_name: rlgpu
+    device: 'cuda:0'
+    device_name: 'cuda:0'
+    multi_gpu: False
+    ppo: True
+    mixed_precision: True
+    normalize_input: True
+    normalize_value: True
+    value_bootstrap: True
+    normalize_advantage: True
+    reward_shaper:
+      scale_value: 1.0
+    num_actors: ${....env.scene.num_envs}
+    gamma: 0.99
+    tau: 0.95
+    learning_rate: 1e-4
+    lr_schedule: adaptive
+    schedule_type: standard
+    kl_threshold: 0.016
+    score_to_win: 1000000
+    max_epochs: 1000000
+    save_best_after: 100
+    save_frequency: 3000
+    print_stats: True
+    grad_norm: 1.0
+    entropy_coef: 0.0
+    truncate_grads: True
+    e_clip: 0.1
+    minibatch_size: 98304
+    mini_epochs: 2
+    critic_coef: 4.0
+    clip_value: True
+    horizon_length: 16
+    seq_length: 16
+    bounds_loss_coef: 0.0001
+
+    # Asymmetric critic (stateList > obsList)
+    central_value_config:
+      minibatch_size: 98304
+      mini_epochs: 2
+      learning_rate: 1e-4
+      kl_threshold: 0.016
+      clip_value: True
+      normalize_input: True
+      truncate_grads: True
+      network:
+        name: actor_critic
+        central_value: True
+        mlp:
+          units: [256, 128, 64]
+          activation: elu
+          d2rl: False
+          initializer:
+            name: default
+          regularizer:
+            name: None
+
+    # === SAPG ===
+    use_others_experience: lf
+    off_policy_ratio: 1.0
+    expl_type: mixed_expl_learn_param
+    expl_reward_type: entropy
+    expl_reward_coef_embd_size: 32
+    expl_reward_coef_scale: 0.002
+    expl_coef_block_size: 4096
+
+    player:
+      deterministic: False
+      games_num: 100000
+      print_stats: False

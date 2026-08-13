@@ -5,8 +5,10 @@ Registers ``Isaacsimenvs-MultiLinkCartpole-Direct-v0`` for the DirectRLEnv train
 Entry points:
 - ``env_cfg_entry_point``           → MultiLinkCartpoleEnvCfg (typed defaults in code)
 - ``env_cfg_yaml_entry_point``      → cfg/task/MultiLinkCartpole.yaml overlay
-- ``rl_games_cfg_entry_point``      → cfg/train/MultiLinkCartpolePPO.yaml (baseline)
-- ``rl_games_sapg_cfg_entry_point`` → cfg/train/MultiLinkCartpoleSAPG.yaml
+- ``rl_games_cfg_entry_point``            → cfg/train/MultiLinkCartpolePPO.yaml (baseline)
+- ``rl_games_sapg_cfg_entry_point``       → cfg/train/MultiLinkCartpoleSAPG.yaml
+- ``rl_games_sapg_small_cfg_entry_point`` → cfg/train/MultiLinkCartpoleSAPGSmall.yaml
+  (same SAPG settings, MLP [256,128,64] and no LSTM — the architecture ablation)
 """
 
 from __future__ import annotations
@@ -35,5 +37,8 @@ gym.register(
         "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "MultiLinkCartpole.yaml"),
         "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "MultiLinkCartpolePPO.yaml"),
         "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "MultiLinkCartpoleSAPG.yaml"),
+        "rl_games_sapg_small_cfg_entry_point": str(
+            _CFG_DIR / "train" / "MultiLinkCartpoleSAPGSmall.yaml"
+        ),
     },
 )

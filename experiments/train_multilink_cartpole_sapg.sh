@@ -61,6 +61,10 @@
 #   export OMNI_KIT_ACCEPT_EULA=YES
 #   [WANDB_PROJECT=task_curriculum] [SEED=42] [MAX_EPOCHS=1500] [LINKS="1 2 4 8"] \
 #     experiments/train_multilink_cartpole_sapg.sh
+#
+# Small-network ablation (see MultiLinkCartpoleSAPGSmall.yaml):
+#   AGENT=rl_games_sapg_small_cfg_entry_point TAG=_small \
+#     sbatch --array=0-3 experiments/train_multilink_cartpole_sapg.sh
 
 set -euo pipefail
 
@@ -86,11 +90,17 @@ TRAIN="$REPO_ROOT/isaacsimenvs/train.py"
 TASK_ID="Isaacsimenvs-MultiLinkCartpole-Direct-v0"
 
 SEED="${SEED:-42}"
+# Which rl_games config to train against, and a suffix keeping its runs separate from
+# other arrays' (output dir, wandb group, wandb run name, checkpoint name).
+#   rl_games_sapg_cfg_entry_point        play2perfect hyperparams, LSTM(1024)+4xMLP
+#   rl_games_sapg_small_cfg_entry_point  same settings, MLP [256,128,64], no LSTM
+AGENT="${AGENT:-rl_games_sapg_cfg_entry_point}"
+TAG="${TAG:-}"
 NUM_ENVS="${NUM_ENVS:-24576}"
 MAX_EPOCHS="${MAX_EPOCHS:-1500}"
 LINKS="${LINKS:-1 2 4 8}"
 N_MAX="${N_MAX:-8}"
-OUT_ROOT="${OUT_ROOT:-$REPO_ROOT/experiments/runs/cartpole_sapg_s${SEED}}"
+OUT_ROOT="${OUT_ROOT:-$REPO_ROOT/experiments/runs/cartpole_sapg${TAG}_s${SEED}}"
 
 # Under `--array`, each task trains exactly one link count so the four run in parallel
 # on four separate GPU allocations.
@@ -149,14 +159,14 @@ for N in $LINKS; do
     WANDB_ARGS=(
       --wandb_activate
       --wandb_project "$WANDB_PROJECT"
-      --wandb_group "cartpole_sapg_s${SEED}"
-      --wandb_name "cartpole_sapg_n${N}_s${SEED}"
+      --wandb_group "cartpole_sapg${TAG}_s${SEED}"
+      --wandb_name "cartpole_sapg${TAG}_n${N}_s${SEED}"
     )
   fi
 
   "$PYTHON" "$TRAIN" \
     --task "$TASK_ID" \
-    --agent rl_games_sapg_cfg_entry_point \
+    --agent "$AGENT" \
     --headless \
     "${WANDB_ARGS[@]}" \
     "hydra.run.dir=$OUT_ROOT/$RUN" \
@@ -168,7 +178,7 @@ for N in $LINKS; do
     "env.curriculum.init_range=[$D,$D]" \
     "env.curriculum.final_range=[$D,$D]" \
     "agent.params.seed=$SEED" \
-    "agent.params.config.name=0_cartpole_sapg_n${N}" \
+    "agent.params.config.name=0_cartpole_sapg${TAG}_n${N}" \
     "agent.params.config.max_epochs=$MAX_EPOCHS" \
     --capture_viewer \
     --capture_viewer_len "$VIEWER_LEN" \
