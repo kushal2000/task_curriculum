@@ -194,8 +194,11 @@ class MultiLinkCartpoleEnvCfg(DirectRLEnvCfg):
     episode_length_s: float = 8.0
 
     action_space: int = 1
-    observation_space: int = 14  # placeholder; recomputed in `MultiLinkCartpoleEnv.__init__`
-    state_space: int = 0
+    # Both are placeholders; recomputed from `geometry.n_max` in
+    # `MultiLinkCartpoleEnv.__init__`. `state_space` must stay > 0 — SAPG's
+    # `env_reset` indexes `obs['states']` unconditionally.
+    observation_space: int = 14
+    state_space: int = 26
 
     sim: SimulationCfg = SimulationCfg(
         dt=1.0 / 120.0,

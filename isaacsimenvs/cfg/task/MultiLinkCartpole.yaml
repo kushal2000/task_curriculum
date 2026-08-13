@@ -15,9 +15,9 @@
 decimation: 2
 episode_length_s: 8.0
 action_space: 1
-state_space: 0
-# observation_space is computed in MultiLinkCartpoleEnv.__init__ from
-# geometry.n_max + obs.include_segment_lengths. Do not set it here.
+# observation_space and state_space are both computed in
+# MultiLinkCartpoleEnv.__init__ from geometry.n_max. Do not set them here.
+# state_space must stay > 0: SAPG's env_reset indexes obs['states'] unconditionally.
 
 # -----------------------------------------------------------------------------
 # sim — 60 Hz policy control, 120 Hz physics

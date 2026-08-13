@@ -16,13 +16,36 @@ import torch
 
 from .difficulty_math import active_mask, segment_kinematics
 
-__all__ = ["compute_obs_dim", "compute_intermediate_values", "build_observations"]
+__all__ = [
+    "compute_obs_dim",
+    "compute_state_dim",
+    "compute_intermediate_values",
+    "build_observations",
+]
 
 
 def compute_obs_dim(cfg) -> int:
-    """Observation width implied by the config. Called before `DirectRLEnv.__init__`."""
+    """Policy observation width implied by the config. Called before `DirectRLEnv.__init__`."""
     per_segment = 3 if cfg.obs.include_segment_lengths else 2
     return 2 + per_segment * cfg.geometry.n_max
+
+
+def compute_state_dim(cfg) -> int:
+    """Critic observation width: the policy view plus privileged morphology.
+
+    The critic additionally sees the raw per-joint angles and velocities (unmasked, all
+    `n_max` of them) and the free/locked mask — i.e. exactly which joints are welded this
+    episode. The actor only ever sees the folded per-*segment* view, so this is genuine
+    asymmetry rather than a padded copy: the critic can tell a locked joint from a free
+    one held near zero, which is the main thing that makes value estimation hard here.
+
+    A non-zero `state_space` is also a hard requirement for SAPG. The vendored fork's
+    `a2c_common.env_reset` does an unconditional
+    `obs['states'] = cat([obs['states'], intr_reward_coef_embd])` whenever
+    `expl_type` is a `mixed_expl*` variant, so a task with no critic observation raises
+    `KeyError: 'states'` the moment SAPG training starts.
+    """
+    return compute_obs_dim(cfg) + 3 * cfg.geometry.n_max
 
 
 def compute_intermediate_values(env) -> None:
@@ -55,6 +78,22 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         parts.append(env._seg_lengths)
 
     obs = torch.cat(parts, dim=-1)
+
+    # Privileged critic view: the policy observation plus the *raw* joint state and the
+    # free/locked mask. See `compute_state_dim` for why this exists (and why SAPG cannot
+    # run without it).
+    state = torch.cat(
+        [
+            obs,
+            env._free_mask.float(),
+            joint_pos[:, env._pole_dof_ids],
+            joint_vel[:, env._pole_dof_ids],
+        ],
+        dim=-1,
+    )
+
     if obs_cfg.clamp_abs_observations > 0.0:
-        obs = obs.clamp(-obs_cfg.clamp_abs_observations, obs_cfg.clamp_abs_observations)
-    return {"policy": obs}
+        clamp = obs_cfg.clamp_abs_observations
+        obs = obs.clamp(-clamp, clamp)
+        state = state.clamp(-clamp, clamp)
+    return {"policy": obs, "critic": state}

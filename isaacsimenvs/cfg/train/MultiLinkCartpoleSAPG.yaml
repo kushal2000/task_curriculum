@@ -109,6 +109,32 @@ params:
     seq_length: 16
     bounds_loss_coef: 0.0001
 
+    # Asymmetric critic. Required, not optional: with a mixed_expl exploration type the
+    # fork's `a2c_common.env_reset` does an unconditional
+    # `obs['states'] = cat([obs['states'], intr_reward_coef_embd])`, so SAPG on a task
+    # with state_space=0 dies with KeyError: 'states'.
+    # The env's critic observation adds the raw joint state and the free/locked mask on
+    # top of the policy view — see obs_utils.compute_state_dim.
+    central_value_config:
+      minibatch_size: 16384
+      mini_epochs: 4
+      learning_rate: 3e-4
+      kl_threshold: 0.016
+      clip_value: True
+      normalize_input: True
+      truncate_grads: True
+      network:
+        name: actor_critic
+        central_value: True
+        mlp:
+          units: [256, 128, 64]
+          activation: elu
+          d2rl: False
+          initializer:
+            name: default
+          regularizer:
+            name: None
+
     # === SAPG ===
     use_others_experience: lf
     off_policy_ratio: 1.0

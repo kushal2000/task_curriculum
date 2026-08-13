@@ -20,7 +20,12 @@ from isaacsimenvs.curriculum import allocate_curriculum_buffers, update_curricul
 
 from .multilink_cartpole_env_cfg import MultiLinkCartpoleEnvCfg
 from .utils.logging_utils import log_step_metrics
-from .utils.obs_utils import build_observations, compute_intermediate_values, compute_obs_dim
+from .utils.obs_utils import (
+    build_observations,
+    compute_intermediate_values,
+    compute_obs_dim,
+    compute_state_dim,
+)
 from .utils.reset_utils import allocate_state_buffers, apply_difficulty, reset_env_state
 from .utils.reward_utils import compute_rewards
 from .utils.scene_utils import setup_scene
@@ -35,9 +40,10 @@ class MultiLinkCartpoleEnv(DirectRLEnv):
     def __init__(
         self, cfg: MultiLinkCartpoleEnvCfg, render_mode: str | None = None, **kwargs
     ) -> None:
-        # Width is derived from n_max before DirectRLEnv (and then rl_games) reads the
-        # configclass, so `n_max` is the only place the observation size is declared.
+        # Widths are derived from n_max before DirectRLEnv (and then rl_games) reads the
+        # configclass, so `n_max` is the only place observation size is declared.
         cfg.observation_space = compute_obs_dim(cfg)
+        cfg.state_space = compute_state_dim(cfg)
 
         super().__init__(cfg, render_mode, **kwargs)  # runs _setup_scene
 

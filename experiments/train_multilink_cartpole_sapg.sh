@@ -1,9 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=cartpole_sapg
-#SBATCH --output=experiments/runs/slurm_%j.out
+#SBATCH --partition=portal
+#SBATCH --output=/share/portal/kk837/task_curriculum/experiments/runs/slurm_%j.out
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=12
+#SBATCH --mem=100G
 #SBATCH --time=24:00:00
 #
 # Train SAPG policies for the multi-link cartpole at 1, 2, 4 and 8 free links.
