@@ -1,33 +1,32 @@
 # Multi-link cartpole rl_games SAPG config.
 #
-# Same network as MultiLinkCartpolePPO.yaml. SAPG is not a separate algorithm — it is
-# this same a2c_continuous with a population overlay:
+# Hyperparameters mirror PlaySAPG.yaml (play2perfect's SAPG runs) as requested:
+# LSTM(units=1024, layers=1, before_mlp, layer_norm) over 4xMLP [1024,1024,512,512],
+# lr 1e-4 adaptive with kl_threshold 0.016, e_clip 0.1, mini_epochs 2, critic_coef 4.0,
+# mixed_precision, horizon 16, minibatch 98304, expl_coef_block_size 4096.
 #
-#   expl_coef_block_size    splits num_actors into blocks, each with its own entropy
-#                           bonus (linspace 0.5 -> 0.0, scaled by expl_reward_coef_scale).
-#                           The LAST block has coefficient 0 and is the "leader", i.e.
-#                           the exploitation policy that gets evaluated.
-#   use_others_experience   'lf' = leader-follower: the leader also learns from the
-#                           explorers' off-policy data.
-#   fixed_sigma: coef_cond  one sigma parameter per block, selected by the block id.
+# Two deliberate departures from PlaySAPG:
 #
-# num_actors % expl_coef_block_size == 0 is asserted in a2c_common.py. Here
-# 4096 / 1024 = 4 blocks.
+#  1. reward_shaper.scale_value: 1.0 (play uses 0.01). Play's rewards are O(100-1000)
+#     -- keypoint_rew_scale 200, lifting_bonus 300, reach_goal_bonus 1000 -- so it scales
+#     them down hard. Cartpole rewards are O(1) (alive 1.0, upright 2.0), and 0.01 would
+#     shrink the advantage signal to noise. This is task scale, not a tuning preference.
 #
-# The exploration coefficient is *appended* to the observation by the fork
-# (`input_shape = obs_shape[0] + 1`, `coef_id_idx = obs_shape[0]`), so the env does not
-# need to reserve a slot and no real observation dimension is overwritten.
+#  2. central_value_config input is the cartpole's own critic observation (policy view +
+#     raw unmasked joint state + free/locked mask), not play's asymmetric hand state.
+#
+# Sizing: at num_envs=24576, batch = 16 x 24576 = 393216 and minibatch 98304 gives 4
+# minibatches; expl_coef_block_size 4096 gives 6 SAPG blocks. The RNN path also asserts
+# (horizon_length * num_actors // num_minibatches) %% seq_length == 0 -> 98304 %% 16 == 0.
+#
+# Worth knowing: this network is very large for a 26-dim observation and a 1-dim action.
+# It is what was asked for and it will train, but if these runs look compute-bound rather
+# than sample-bound, the MLP width is the first thing to cut.
 #
 # Reporting caveat: with mixed_expl the fork sets
-# `ignore_env_boundary = num_actors - expl_coef_block_size` (3072 here), so every
-# episode metric — including `episode_final/success` and the `curriculum/*` scalars —
-# is reported from the leader block only. Which is the right policy to score, but it
-# means logged success comes from 1024 envs, not 4096.
-#
-# Note also that `curriculum.record_episode_success` counts *all* envs, not just the
-# leader. That does not matter here because these runs pin difficulty
-# (`curriculum.mode=fixed`), but an adaptive SAPG run would be paced by the explorers'
-# lower success rate. Worth fixing via `_curriculum_eligible_mask` before running one.
+# ignore_env_boundary = num_actors - expl_coef_block_size, so every episode metric --
+# including episode_final/success and the curriculum/* scalars -- comes from the leader
+# block only (the last 4096 envs, exploration coefficient 0).
 
 params:
   seed: 42
@@ -56,13 +55,19 @@ params:
           val: 0
         fixed_sigma: coef_cond    # SAPG requires coef_cond (not 'fixed')
     mlp:
-      units: [256, 128, 64]
+      units: [1024, 1024, 512, 512]
       activation: elu
       d2rl: False
       initializer:
         name: default
       regularizer:
         name: None
+    rnn:
+      name: lstm
+      units: 1024
+      layers: 1
+      before_mlp: True
+      layer_norm: True
 
   load_checkpoint: False
   load_path: ''
@@ -76,7 +81,7 @@ params:
     device_name: 'cuda:0'
     multi_gpu: False
     ppo: True
-    mixed_precision: False
+    mixed_precision: True
     normalize_input: True
     normalize_value: True
     value_bootstrap: True
@@ -86,39 +91,32 @@ params:
     num_actors: ${....env.scene.num_envs}
     gamma: 0.99
     tau: 0.95
-    learning_rate: 3e-4
+    learning_rate: 1e-4
     lr_schedule: adaptive
     schedule_type: standard
     kl_threshold: 0.016
     score_to_win: 1000000
-    max_epochs: 1000
-    save_best_after: 50
-    save_frequency: 100
+    max_epochs: 1000000
+    save_best_after: 100
+    save_frequency: 3000
     print_stats: True
     grad_norm: 1.0
     entropy_coef: 0.0
     truncate_grads: True
-    e_clip: 0.2
-    # num_minibatches = horizon_length * num_actors // minibatch_size = 65536 // 16384 = 4.
-    # Shrink both together when running with fewer envs.
-    minibatch_size: 16384
-    mini_epochs: 4
-    critic_coef: 2.0
+    e_clip: 0.1
+    minibatch_size: 98304
+    mini_epochs: 2
+    critic_coef: 4.0
     clip_value: True
     horizon_length: 16
     seq_length: 16
     bounds_loss_coef: 0.0001
 
-    # Asymmetric critic. Required, not optional: with a mixed_expl exploration type the
-    # fork's `a2c_common.env_reset` does an unconditional
-    # `obs['states'] = cat([obs['states'], intr_reward_coef_embd])`, so SAPG on a task
-    # with state_space=0 dies with KeyError: 'states'.
-    # The env's critic observation adds the raw joint state and the free/locked mask on
-    # top of the policy view — see obs_utils.compute_state_dim.
+    # Asymmetric critic (stateList > obsList)
     central_value_config:
-      minibatch_size: 16384
-      mini_epochs: 4
-      learning_rate: 3e-4
+      minibatch_size: 98304
+      mini_epochs: 2
+      learning_rate: 1e-4
       kl_threshold: 0.016
       clip_value: True
       normalize_input: True
@@ -127,7 +125,7 @@ params:
         name: actor_critic
         central_value: True
         mlp:
-          units: [256, 128, 64]
+          units: [1024, 1024, 512, 512]
           activation: elu
           d2rl: False
           initializer:
@@ -142,9 +140,9 @@ params:
     expl_reward_type: entropy
     expl_reward_coef_embd_size: 32
     expl_reward_coef_scale: 0.002
-    expl_coef_block_size: 1024
+    expl_coef_block_size: 4096
 
     player:
-      deterministic: True
-      games_num: 1000
+      deterministic: False
+      games_num: 100000
       print_stats: False

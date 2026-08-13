@@ -5,7 +5,7 @@
 #SBATCH --output=/share/portal/kk837/task_curriculum/experiments/runs/slurm_%A_%a.out
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=12
-#SBATCH --mem=100G
+#SBATCH --mem=200G
 #SBATCH --time=24:00:00
 #
 # Train SAPG policies for the multi-link cartpole at 1, 2, 4 and 8 free links.
@@ -86,7 +86,7 @@ TRAIN="$REPO_ROOT/isaacsimenvs/train.py"
 TASK_ID="Isaacsimenvs-MultiLinkCartpole-Direct-v0"
 
 SEED="${SEED:-42}"
-NUM_ENVS="${NUM_ENVS:-4096}"
+NUM_ENVS="${NUM_ENVS:-24576}"
 MAX_EPOCHS="${MAX_EPOCHS:-1500}"
 LINKS="${LINKS:-1 2 4 8}"
 N_MAX="${N_MAX:-8}"
@@ -106,6 +106,12 @@ fi
 
 # 8 links x 0.125 m = 1.0 m total, identical at every free-joint count.
 LINK_LENGTHS="${LINK_LENGTHS:-[0.125,0.125,0.125,0.125,0.125,0.125,0.125,0.125]}"
+
+# Interactive HTML viewer, logged to wandb as `interactive_viewer`. Pose-only: it reads
+# one env's joint vector per step and never touches a camera or the RTX renderer, so
+# unlike --capture_video it does not need --enable_cameras and costs ~nothing.
+VIEWER_LEN="${VIEWER_LEN:-300}"
+VIEWER_INTERVAL="${VIEWER_INTERVAL:-2000}"
 
 export OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}"
 # Keep the Omniverse shader cache off NFS; the first Kit boot builds RTX shaders and
@@ -164,6 +170,9 @@ for N in $LINKS; do
     "agent.params.seed=$SEED" \
     "agent.params.config.name=0_cartpole_sapg_n${N}" \
     "agent.params.config.max_epochs=$MAX_EPOCHS" \
+    --capture_viewer \
+    --capture_viewer_len "$VIEWER_LEN" \
+    --capture_viewer_interval "$VIEWER_INTERVAL" \
     2>&1 | tee "$OUT_ROOT/${RUN}.log"
 
   echo "finished n=$N -> $OUT_ROOT/$RUN"

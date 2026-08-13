@@ -128,6 +128,10 @@ def setup_scene(env) -> None:
         pole_density=geom.pole_density,
         pole_joint_damping=geom.pole_joint_damping,
     )
+    # Kept so the pose viewer can embed this exact URDF in its HTML. The geometry is
+    # primitives only, so the browser needs no mesh files and the page stays
+    # self-contained — unlike play's robot, which must fetch STLs from GitHub raw.
+    env._cartpole_urdf_path = str(urdf_path)
     _log(t0, f"generated URDF with {geom.n_max} pole links (total {sum(geom.link_lengths):.3f} m)")
 
     usd_path = convert_cartpole_urdf_to_usd(urdf_path, Path(env._tmp_asset_dir) / "usd")

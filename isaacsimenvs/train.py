@@ -33,13 +33,28 @@ import math
 import os
 import sys
 
-# Tasks whose scene is play2perfect's Kuka + Sharpa setup, and which the pose viewer can
-# therefore render. Checked by substring so task ids stay the single source of truth.
-_POSE_VIEWER_TASKS = ("Play", "BottleFlip")
+# Which interactive-viewer wrapper a task needs. Both render into the same three.js page
+# (utils/interactive_viewer/index.template.html) and log it with wandb.Html; they differ
+# only in what geometry they hand the browser.
+#
+#   Play / BottleFlip  the Kuka + SHARPA robot, whose STL meshes the browser must fetch
+#                      from GitHub raw (hence --capture_viewer_github_raw_base)
+#   MultiLinkCartpole  primitives only, so the URDF is embedded and the page needs no
+#                      network at all
+#
+# Matched by substring so the registered task ids stay the single source of truth.
+_POSE_VIEWERS = {
+    "MultiLinkCartpole": "isaacsimenvs.tasks.multilink_cartpole.pose_viewer:CartpolePoseViewerWrapper",
+    "BottleFlip": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",
+    "Play": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",
+}
 
 
-def _supports_pose_viewer(task_id: str) -> bool:
-    return any(name in task_id for name in _POSE_VIEWER_TASKS)
+def _pose_viewer_target(task_id: str) -> str | None:
+    for name, target in _POSE_VIEWERS.items():
+        if name in task_id:
+            return target
+    return None
 
 
 def main() -> None:
@@ -161,30 +176,35 @@ def main() -> None:
                 disable_logger=True,
             )
 
-        # The pose viewer renders the Kuka + Sharpa robot from its URDF, so it only
-        # applies to the play-derived tasks. Tasks with their own articulation (the
-        # cartpole) have nothing for it to draw.
-        if args_cli.capture_viewer and not _supports_pose_viewer(args_cli.task):
-            print(
-                f"[train] --capture_viewer ignored: {args_cli.task} is not a "
-                "play-derived task and has no robot URDF for the viewer to render.",
-                flush=True,
-            )
-        elif args_cli.capture_viewer:
+        if args_cli.capture_viewer:
             from pathlib import Path
 
-            from isaacsimenvs.tasks.play.pose_viewer import PlayPoseViewerWrapper
+            target = _pose_viewer_target(args_cli.task)
+            if target is None:
+                print(
+                    f"[train] --capture_viewer ignored: no viewer registered for "
+                    f"{args_cli.task} (see _POSE_VIEWERS in train.py).",
+                    flush=True,
+                )
+            else:
+                module_name, _, class_name = target.partition(":")
+                import importlib
 
-            env = PlayPoseViewerWrapper(
-                env,
-                output_dir=Path(hydra_run_dir) / "interactive_viewer",
-                capture_len=args_cli.capture_viewer_len,
-                capture_interval=args_cli.capture_viewer_interval,
-                env_id=args_cli.capture_viewer_env_id,
-                wandb_key=args_cli.capture_viewer_wandb_key,
-                github_raw_base=args_cli.capture_viewer_github_raw_base,
-                url_check=args_cli.capture_viewer_url_check,
-            )
+                viewer_cls = getattr(importlib.import_module(module_name), class_name)
+                viewer_kwargs = dict(
+                    output_dir=Path(hydra_run_dir) / "interactive_viewer",
+                    capture_len=args_cli.capture_viewer_len,
+                    capture_interval=args_cli.capture_viewer_interval,
+                    env_id=args_cli.capture_viewer_env_id,
+                    wandb_key=args_cli.capture_viewer_wandb_key,
+                )
+                # Only the robot viewer has to fetch meshes over the network; the
+                # cartpole's URDF is primitives and gets embedded, so it takes neither
+                # of these.
+                if "play.pose_viewer" in module_name:
+                    viewer_kwargs["github_raw_base"] = args_cli.capture_viewer_github_raw_base
+                    viewer_kwargs["url_check"] = args_cli.capture_viewer_url_check
+                env = viewer_cls(env, **viewer_kwargs)
 
         # Clip bounds live in the rl_games YAML (params.env.*). Default to
         # +inf if absent so a task without clip YAML just runs unbounded —
