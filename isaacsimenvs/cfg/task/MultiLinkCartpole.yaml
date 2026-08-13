@@ -82,6 +82,7 @@ action:
 # -----------------------------------------------------------------------------
 obs:
   include_segment_lengths: true
+  include_free_mask: true      # multi-hot over the n_max pole joints (1 = free)
   clamp_abs_observations: 10.0
   normalize_cart_pos: true
 
@@ -141,4 +142,4 @@ curriculum:
   adapt_regress_ratio: 0.4
 
   reward_schedule: {}
-  eval_difficulty: null
+  eval_difficulty: -1.0

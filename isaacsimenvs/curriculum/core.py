@@ -60,7 +60,7 @@ def sample_difficulty(env, env_ids: torch.Tensor) -> None:
     if env_ids.numel() == 0:
         return
 
-    if cfg.eval_difficulty is not None:
+    if cfg.eval_difficulty >= 0.0:
         env._difficulty[env_ids] = float(cfg.eval_difficulty)
         return
 
@@ -93,8 +93,8 @@ def record_episode_success(env, env_ids: torch.Tensor, success: torch.Tensor) ->
 
     # SAPG: score only the leader block, matching what rl_games itself reports. See
     # `CurriculumCfg.score_last_n_envs`.
-    keep_n = env.cfg.curriculum.score_last_n_envs
-    if keep_n is not None and keep_n > 0:
+    keep_n = int(env.cfg.curriculum.score_last_n_envs)
+    if keep_n > 0:
         first_scored = env.num_envs - int(keep_n)
         leader = env_ids >= first_scored
         env_ids = env_ids[leader]
@@ -119,7 +119,7 @@ def update_curriculum(env) -> None:
     cfg = env.cfg.curriculum
     env._curr_frame += 1
 
-    if not cfg.enabled or cfg.eval_difficulty is not None or cfg.mode == "fixed":
+    if not cfg.enabled or cfg.eval_difficulty >= 0.0 or cfg.mode == "fixed":
         return
 
     if env._curr_frame - env._curr_last_update < cfg.adapt_interval:

@@ -132,4 +132,4 @@ curriculum:
   reward_schedule:
     upright: [1.0, 0.3]
 
-  eval_difficulty: null
+  eval_difficulty: -1.0

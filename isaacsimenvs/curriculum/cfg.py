@@ -70,8 +70,14 @@ class CurriculumCfg:
 
     adapt_min_episodes: int = 64
 
-    score_last_n_envs: int | None = None
-    """Count only the last N envs when scoring episodes for adaptation.
+    score_last_n_envs: int = 0
+    """Count only the last N envs when scoring episodes for adaptation. 0 = all envs.
+
+    Deliberately 0 rather than None: Isaac Lab's `update_class_from_dict` validates an
+    override against the *default value's* runtime type, so a field defaulting to None
+    is `NoneType` and rejects any int from the Hydra CLI with
+    "Incorrect type under namespace". Optional-typed config fields are only settable
+    from YAML, never from the command line.
 
     Exists for SAPG. The fork partitions `num_actors` into exploration blocks with
     entropy bonuses on a linspace from 0.5 down to 0, and the *last* block — coefficient
@@ -125,10 +131,14 @@ class CurriculumCfg:
     # ------------------------------------------------------------------
     # Eval
     # ------------------------------------------------------------------
-    eval_difficulty: float | None = None
-    """When set, every env is pinned to this difficulty and no adaptation happens —
+    eval_difficulty: float = -1.0
+    """When >= 0, every env is pinned to this difficulty and no adaptation happens —
     the counterpart of play2perfect's `eval_success_tolerance`. Set it for eval runs so
-    both experiment arms are scored on identical task instances."""
+    both experiment arms are scored on identical task instances.
+
+    Negative (not None) for the same reason as `score_last_n_envs`: a None default makes
+    the field unsettable from the Hydra CLI, and `experiments/run_curriculum.sh` sets
+    exactly this field on the command line for its eval arm."""
 
 
 __all__ = ["CurriculumCfg"]
