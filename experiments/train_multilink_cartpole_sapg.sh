@@ -1,7 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=cartpole_sapg
 #SBATCH --partition=portal
-#SBATCH --output=/share/portal/kk837/task_curriculum/experiments/runs/slurm_%j.out
+#SBATCH --exclude=portal-compute-01
+#SBATCH --output=/share/portal/kk837/task_curriculum/experiments/runs/slurm_%A_%a.out
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=100G
@@ -9,10 +10,21 @@
 #
 # Train SAPG policies for the multi-link cartpole at 1, 2, 4 and 8 free links.
 #
-# Runs directly (`experiments/train_multilink_cartpole_sapg.sh`) or under SLURM
-# (`sbatch experiments/train_multilink_cartpole_sapg.sh`). Either way the four runs go
-# SEQUENTIALLY: booting a second Kit process on a GPU that already has one can crash the
-# one that is starting (docs/isaacsim_installation.md, Gotchas).
+# Three ways to run it:
+#
+#   sbatch --array=0-3 experiments/train_multilink_cartpole_sapg.sh
+#       One SLURM job per link count, running in PARALLEL. Each array task gets its own
+#       GPU allocation, so the "one Kit process per GPU" rule
+#       (docs/isaacsim_installation.md, Gotchas) is satisfied by SLURM rather than by
+#       serialising. This is the intended way — it is ~4x faster than the alternatives.
+#
+#   sbatch experiments/train_multilink_cartpole_sapg.sh
+#       A single job that walks the four link counts sequentially on one GPU.
+#
+#   experiments/train_multilink_cartpole_sapg.sh
+#       Same sequential walk, in the foreground, on whatever GPU you already hold.
+#
+# The array index maps into LINKS: 0->1 link, 1->2 links, 2->4 links, 3->8 links.
 #
 # --------------------------------------------------------------------------------
 # Why all four runs use n_max=8 rather than n_max=1/2/4/8
@@ -79,6 +91,18 @@ MAX_EPOCHS="${MAX_EPOCHS:-1500}"
 LINKS="${LINKS:-1 2 4 8}"
 N_MAX="${N_MAX:-8}"
 OUT_ROOT="${OUT_ROOT:-$REPO_ROOT/experiments/runs/cartpole_sapg_s${SEED}}"
+
+# Under `--array`, each task trains exactly one link count so the four run in parallel
+# on four separate GPU allocations.
+if [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]]; then
+  read -r -a _ALL_LINKS <<< "$LINKS"
+  if (( SLURM_ARRAY_TASK_ID >= ${#_ALL_LINKS[@]} )); then
+    echo "array index $SLURM_ARRAY_TASK_ID exceeds LINKS='$LINKS'; nothing to do." >&2
+    exit 0
+  fi
+  LINKS="${_ALL_LINKS[$SLURM_ARRAY_TASK_ID]}"
+  echo "array task $SLURM_ARRAY_TASK_ID -> ${LINKS} link(s)"
+fi
 
 # 8 links x 0.125 m = 1.0 m total, identical at every free-joint count.
 LINK_LENGTHS="${LINK_LENGTHS:-[0.125,0.125,0.125,0.125,0.125,0.125,0.125,0.125]}"
