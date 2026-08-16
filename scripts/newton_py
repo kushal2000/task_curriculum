@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Run the Newton venv's Python with the C++ runtime it needs.
+#
+#   scripts/newton_py -m isaacsimenvs.eval.episodes --task Isaacsimenvs-PlayNewton-Direct-v0 ...
+#
+# WHY THIS EXISTS
+#
+# `.venv_isaaclab3` was created from `/share/apps/software/anaconda3/bin/python3.12`, and an
+# anaconda base interpreter carries its own `libstdc++.so.6` on the loader path. That copy
+# predates GLIBCXX_3.4.30, which `omni.client` requires:
+#
+#   ImportError: .../anaconda3/lib/libstdc++.so.6: version `GLIBCXX_3.4.30' not found
+#               (required by .../site-packages/omni/client/libomniclient.so)
+#
+# It surfaces in a thoroughly misleading place. Nothing in this project imports `omni.client`
+# directly; Isaac Lab reaches it from `check_file_path` while resolving the *ground plane*, whose
+# default `GroundPlaneCfg` points at a remote Nucleus URL. So a missing C++ symbol presents as a
+# USD asset failing to resolve, several layers from the cause.
+#
+# LD_LIBRARY_PATH does not fix it -- anaconda's lib dir is on the interpreter's RPATH and wins.
+# LD_PRELOAD does, by binding the system libstdc++ (GLIBCXX_3.4.32 on this box) first.
+#
+# The clean fix is to rebuild the venv against a non-anaconda interpreter, e.g.
+# `uv venv .venv_isaaclab3 --python 3.12 --python-preference only-managed`, which makes this
+# wrapper unnecessary. That costs a full reinstall, so it is deliberately deferred; if the venv is
+# ever rebuilt, prefer that and delete this file.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${ROOT}/.venv_isaaclab3/bin/python"
+SYS_LIBSTDCXX="${SYS_LIBSTDCXX:-/usr/lib/x86_64-linux-gnu/libstdc++.so.6}"
+
+[[ -x "${PY}" ]] || { echo "missing ${PY} (run scripts/install_isaaclab3.sh)" >&2; exit 1; }
+
+if [[ -f "${SYS_LIBSTDCXX}" ]]; then
+  export LD_PRELOAD="${SYS_LIBSTDCXX}${LD_PRELOAD:+:${LD_PRELOAD}}"
+else
+  echo "warning: ${SYS_LIBSTDCXX} not found; omni.client may fail to import" >&2
+fi
+
+export OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}"
+exec "${PY}" "$@"

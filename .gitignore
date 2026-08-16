@@ -28,12 +28,21 @@ experiments/runs/
 pretrained_policy/
 pretrained_assembly/
 
+# Baked URDF->USD cache: written under .venv_isaacsim, read by the kit-less Newton venv.
+# Regenerate with `python -m isaacsimenvs.newton.usd_cache --populate`.
+.usd_cache/
+
+# Third-party source checkouts (Isaac Lab 3.0 for the Newton backend).
+# Not a submodule by choice: the pinned SHA lives in scripts/install_isaaclab3.sh, so the
+# checkout is reproducible without carrying submodule machinery in the repo.
+third_party/
+
 # Pytest
 .pytest_cache/
 
-# Large media — ignore stray videos but keep the docs teaser
+# Large media. Renders live under videos/ (ignored above) and are reproducible from
+# `isaacsimenvs/eval/render_newton.py`, so none of them belong in history.
 *.mp4
-!docs/media/*.mp4
 
 # OS / editor
 .DS_Store

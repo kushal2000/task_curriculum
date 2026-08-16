@@ -7,7 +7,10 @@ name = "task-curriculum"
 version = "0.1.0"
 description = "Does curriculum learning beat from-scratch RL? Two difficulty-parameterised Isaac Sim environments and the scaffolding to A/B it."
 readme = "README.md"
-requires-python = ">=3.10,<3.12"
+# Upper bound raised from <3.12 for the Newton backend: Isaac Lab 3.0 requires Python 3.12,
+# and the same source tree is editable-installed into both venvs (.venv_isaacsim on 3.11,
+# .venv_isaaclab3 on 3.12) so that one copy of the task and eval code serves both.
+requires-python = ">=3.10,<3.13"
 license = { text = "MIT" }
 authors = [
     { name = "Kushal Kedia", email = "kk837@cornell.edu" },

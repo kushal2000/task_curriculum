@@ -7,7 +7,9 @@ name = "rl_games"
 version = "1.6.1"
 description = ""
 readme = "README.md"
-requires-python = ">=3.7.1,<3.12"
+# Upper bound raised from <3.12 so this fork installs into the Python 3.12 Isaac Lab 3.0 venv
+# as well as the 3.11 Isaac Sim one. Same source tree, two editable installs.
+requires-python = ">=3.7.1,<3.13"
 authors = [
     { name = "Denys Makoviichuk", email = "trrrrr97@gmail.com" },
     { name = "Viktor Makoviichuk", email = "victor.makoviychuk@gmail.com" },
