@@ -14,13 +14,28 @@ Entry points:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import gymnasium as gym
 
-from .multilink_cartpole_env import MultiLinkCartpoleEnv
-from .multilink_cartpole_env_cfg import MultiLinkCartpoleEnvCfg
+if TYPE_CHECKING:
+    from .multilink_cartpole_env import MultiLinkCartpoleEnv
+    from .multilink_cartpole_env_cfg import MultiLinkCartpoleEnvCfg
 
 __all__ = ["MultiLinkCartpoleEnv", "MultiLinkCartpoleEnvCfg"]
+
+
+def __getattr__(name: str):
+    """Deferred class import; see the note in ``isaacsimenvs/tasks/play/__init__.py``."""
+    if name == "MultiLinkCartpoleEnv":
+        from .multilink_cartpole_env import MultiLinkCartpoleEnv
+
+        return MultiLinkCartpoleEnv
+    if name == "MultiLinkCartpoleEnvCfg":
+        from .multilink_cartpole_env_cfg import MultiLinkCartpoleEnvCfg
+
+        return MultiLinkCartpoleEnvCfg
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 _CFG_DIR = Path(__file__).resolve().parents[2] / "cfg"
 
