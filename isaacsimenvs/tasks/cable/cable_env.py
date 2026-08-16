@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import torch
 
-from isaacsimenvs.newton import compat
+from isaacsimenvs.newton import compat, patches
 from isaacsimenvs.tasks.play_newton.play_newton_env import PlayNewtonEnv
 
 from .cable_env_cfg import CableEnvCfg
@@ -88,6 +88,10 @@ class CableEnv(PlayNewtonEnv):
             init_state=CableObjectCfg.InitialStateCfg(
                 pos=(0.0, 0.0, self._cable_spawn_height())
             ),
+        )
+
+        patches.install_cable_damping(
+            linear_kd=c.linear_damping, angular_kd=c.angular_damping
         )
 
         self._neutralise_rigid_object()

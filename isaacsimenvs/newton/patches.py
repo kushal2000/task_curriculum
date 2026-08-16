@@ -2351,3 +2351,94 @@ def install_mesh_collisions(scene_utils, *, segments: int = _CAPSULE_SEGMENTS,
 
     meshified._meshified = True
     scene_utils.generate_handle_head_urdfs = meshified
+
+
+# ============================================================================
+# Cable joint damping (Newton)
+# ============================================================================
+#
+# `CableMaterialCfg` exposes stiffness but **no damping at all**, while
+# `ModelBuilder.add_joint_cable` takes eight parameters -- stretch/shear/bend/twist stiffness
+# *and* damping -- each defaulting to 0.0 when unset (newton builder.py:5223-5236). A cable
+# authored through USD therefore runs completely undamped.
+#
+# That is survivable for a 12-segment cable and not for a 2-segment one, where the whole bend
+# response is concentrated in a single hinge: measured peak speed 39.3 m/s against 4.8 m/s for
+# 12 segments at the same thickness.
+#
+# Damping is not free -- newton-physics/newton#2557 reports that high VBD cable damping visibly
+# changes a catenary's shape, i.e. it costs apparent stiffness -- so this is a knob to sweep,
+# not to max out.
+
+
+def install_cable_damping(
+    *,
+    linear_kd: float = 0.0,
+    angular_kd: float = 0.0,
+    label_pattern: str = "Cable",
+) -> bool:
+    """Set cable joint damping before the model is finalized. Idempotent.
+
+    Args:
+        linear_kd: stretch and shear damping [N.s/m].
+        angular_kd: bend and twist damping [N.m.s/rad].
+        label_pattern: substring identifying the cable's joints by label.
+
+    Returns:
+        Whether the hook was installed.
+    """
+    if linear_kd <= 0.0 and angular_kd <= 0.0:
+        return False
+    try:
+        from isaaclab_newton.physics.newton_manager import NewtonManager
+    except Exception:
+        return False
+    if getattr(NewtonManager, "_cable_damping_patch", False):
+        return False
+
+    original = NewtonManager._prepare_builder_for_finalize
+
+    def _prepare(cls_or_builder, builder=None):
+        b = builder if builder is not None else cls_or_builder
+        if builder is None:
+            original(b)
+        else:
+            original(cls_or_builder, b)
+        _apply_cable_damping(b, linear_kd, angular_kd, label_pattern)
+
+    NewtonManager._prepare_builder_for_finalize = _prepare
+    NewtonManager._cable_damping_patch = True
+    return True
+
+
+def _apply_cable_damping(builder, linear_kd: float, angular_kd: float, pattern: str) -> None:
+    """Write ``joint_target_kd`` on the cable's DOFs.
+
+    A cable joint carries its linear DOFs (stretch, then shear) before its angular ones (bend,
+    then twist), matching ``add_joint_cable``'s axis order. Reports what it touched rather than
+    failing soft -- a damping patch that silently matched nothing would look exactly like damping
+    that does not help.
+    """
+    labels = list(getattr(builder, "joint_label", []))
+    dof_dims = list(getattr(builder, "joint_dof_dim", []))
+    target_kd = builder.joint_target_kd
+
+    dof_start = 0
+    touched_lin = touched_ang = 0
+    for joint_idx, label in enumerate(labels):
+        dims = dof_dims[joint_idx] if joint_idx < len(dof_dims) else None
+        n_lin, n_ang = (dims[0], dims[1]) if dims is not None else (0, 0)
+        if pattern in str(label):
+            for k in range(n_lin):
+                target_kd[dof_start + k] = linear_kd
+                touched_lin += 1
+            for k in range(n_ang):
+                target_kd[dof_start + n_lin + k] = angular_kd
+                touched_ang += 1
+        dof_start += n_lin + n_ang
+
+    print(
+        f"[cable_damping] linear_kd={linear_kd} on {touched_lin} DOFs, "
+        f"angular_kd={angular_kd} on {touched_ang} DOFs",
+        flush=True,
+    )

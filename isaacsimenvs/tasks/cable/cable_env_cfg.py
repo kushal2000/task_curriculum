@@ -75,6 +75,23 @@ class CableCfg:
     ``scale * seg_len / (pi r^2)`` and bend as ``scale * seg_len / (0.25 pi r^4)``, so the
     authored numbers stay physically meaningful as segment count or thickness change."""
 
+    linear_damping: float = 0.0
+    """Cable stretch/shear damping [N.s/m]. `CableMaterialCfg` exposes no damping, so this is
+    applied to the model before finalize; unset, all four damping terms default to 0.0 and the
+    cable runs completely undamped."""
+
+    angular_damping: float = 0.0
+    """Cable bend/twist damping [N.m.s/rad]. The lever that matters for few-segment cables, where
+    the whole bend response concentrates in one hinge. Not free: newton#2557 reports high VBD
+    cable damping visibly changing a catenary's shape, i.e. costing apparent stiffness."""
+
+    proxy_mode: str = "lagged"
+    """Proxy transfer mode: ``lagged`` or ``staggered``. Lagged uses one-step-old state across the
+    coupling, a standard instability source."""
+
+    coupler_iterations: int = 1
+    """Outer coupled-solver iterations. More tightens convergence between the two entries."""
+
     # --- coupling -------------------------------------------------------------------------
     vbd_iterations: int = 10
     rigid_body_particle_contact_buffer_size: int = 1024
@@ -261,10 +278,11 @@ class CableCfg:
                     destination="cable",
                     bodies=proxy_bodies,
                     mass_scale=self.mass_scale,
+                    mode=self.proxy_mode,
                     collide_interval=self.collide_interval,
                 )
             ],
-            iterations=1,
+            iterations=self.coupler_iterations,
             model_cfg=NewtonModelCfg(
                 soft_contact_ke=self.soft_contact_ke,
                 soft_contact_mu=self.soft_contact_mu,

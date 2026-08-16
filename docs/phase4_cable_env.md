@@ -270,6 +270,59 @@ cable runs the coupled MJWarp+VBD one, so `cable_30mm` vs `rod_30mm_rigid` isola
 *and* the coupling together. A rod the policy still cannot grasp would rule deformability out; a
 rod it can grasp would need the coupling ruled out separately before crediting deformability.
 
+## Tuning the 2-segment cable: damping + iterations, and why single draws misled
+
+The 2-segment cable is intermittently unstable — peak speed ~67 m/s against 4.8 for 12 segments.
+Two knobs were never being set at all: `CableMaterialCfg` exposes stiffness but **no damping**,
+while `ModelBuilder.add_joint_cable` takes eight parameters (stretch/shear/bend/twist, stiffness
+*and* damping), each defaulting to 0.0. So the cable ran completely undamped.
+`patches.install_cable_damping` writes `joint_target_kd` before finalize, since the USD path
+cannot carry it.
+
+**Three runs per config**, peak speed, 4 envs x 250 steps:
+
+| config | runs | mean | worst |
+|---|---|---:|---:|
+| baseline | 75.3 / 61.7 / 64.5 | 67 | 75 |
+| `angular_damping=1.0` | 29.0 / 4.48 / 7.16 | 13.5 | 29 |
+| `vbd_iterations=40` | 5.27 / 78.3 / 21.3 | 35 | 78 |
+| **`angular_damping=1.0` + `vbd_iterations=20`** | 5.01 / 11.08 / 4.48 | **6.9** | **11.1** |
+
+**Recommended: `angular_damping=1.0` with `vbd_iterations=20`.** Best mean and best worst case, and
+cheaper than 40 iterations. Worst case is the figure that matters for a config whose failure is
+intermittent, and only the combination has no excursion into the baseline range.
+
+Not defaults, deliberately: damping changes the cable's physics (newton#2557 — high VBD cable
+damping visibly alters a catenary's shape), so applying it to the 12-segment configuration would
+invalidate the results recorded above without re-validation.
+
+### What did not work
+
+* `proxy_mode="staggered"` instead of `lagged` — 36.3, inside the baseline band.
+* `coupler_iterations` 1 -> 4 — **109**, worse than baseline. Re-exchanging state between two
+  only-approximately-converged entries amplifies rather than settles. Note the contrast with the
+  *inner* VBD iterations, which do help.
+* `cable_substeps` 4 -> 8 — 22.4, mild, and the most expensive of the three.
+* `angular_damping=10.0` — 54.7, no better than none. The response is U-shaped: damping stiff
+  relative to the timestep overshoots and injects energy itself.
+* `linear_damping` on top of angular — no gain. The instability is a bending mode at a single
+  hinge; span deviation was already 0.0000, so stretch was never the problem.
+
+### A methodology note, learned the hard way here
+
+The first pass ran one draw per config and produced a clean story: damping 0.1 -> 1.0 -> 10.0
+tracing a U, and iterations 10 -> 20 -> 40 falling monotonically 39-99 -> 9.98 -> 3.57. Both curves
+were reported, and the monotonic one was used to argue that iterations was the better lever.
+
+Repeats destroyed that. `vbd_iterations=40` re-ran at 78.3 — indistinguishable from broken — and
+its apparent monotonicity was three single samples from a distribution wide enough to produce it by
+chance. The baseline itself had drawn 39.3 once and 61-75 on three later runs.
+
+The underlying finding is that these knobs shift the *probability* of an excursion rather than
+removing its cause, which fits the geometry: one hinge carrying the entire bend response, at a
+timestep where a stiff hinge is marginal. **No solver tuning found here makes 2 segments genuinely
+sound**, and the 12-segment cable remains the configuration to prefer.
+
 ## Also open: the orphaned rigid tool
 
 `setup_scene` still spawns the procedural handle+head tool. Once `env.object` points at the cable,
