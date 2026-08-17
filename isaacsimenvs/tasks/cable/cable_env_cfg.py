@@ -242,7 +242,7 @@ class CableCfg:
             solver_cfg=solver,
             collision_cfg=NewtonCollisionPipelineCfg(
                 rigid_contact_max=newton_cfg.rigid_contact_max,
-                max_triangle_pairs=newton_cfg.resolve_max_triangle_pairs(num_envs),
+                max_triangle_pairs=self.triangle_pair_budget(newton_cfg, num_envs),
             ),
             default_shape_cfg=NewtonShapeCfg(),
             num_substeps=newton_cfg.num_substeps,
@@ -253,6 +253,18 @@ class CableCfg:
             use_cuda_graph=bool(self.rigid_rod and not self.keep_cable_for_coupling),
             deterministic_mode=newton_cfg.deterministic_mode,
         )
+
+    def triangle_pair_budget(self, newton_cfg, num_envs: int) -> int:
+        """Triangle-pair budget for this cable at ``num_envs``.
+
+        The budget is GLOBAL and must scale with *scene geometry* as well as env count. A
+        24-segment cable overflowed a correctly env-scaled 4,194,304 within a few hundred steps of
+        manipulation -- twice the segments is roughly twice the collision geometry -- so the env
+        count alone is not enough. The 1.5x headroom covers the transient peak when the hand closes
+        around the cable, which is when the count spikes.
+        """
+        base = newton_cfg.resolve_max_triangle_pairs(num_envs)
+        return int(base * max(1.0, self.segments / 12.0) * 1.5)
 
     def build_solver(self, newton_cfg, num_envs: int = 1):
         """Return a ``CouplerProxyCfg`` pairing MJWarp (robot) with VBD (cable).
@@ -362,7 +374,7 @@ class CableCfg:
                     # (0.12 -> 14.28 goals/episode).
                     collision_pipeline=NewtonCollisionPipelineCfg(
                         rigid_contact_max=newton_cfg.rigid_contact_max,
-                        max_triangle_pairs=newton_cfg.resolve_max_triangle_pairs(num_envs),
+                        max_triangle_pairs=self.triangle_pair_budget(newton_cfg, num_envs),
                     ),
                 )
             ],

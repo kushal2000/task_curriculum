@@ -27,7 +27,11 @@ import statistics
 import sys
 from pathlib import Path
 
-from isaacsimenvs.newton.contact_guard import assert_no_buffer_overflow
+from isaacsimenvs.newton.contact_guard import (
+    assert_no_buffer_overflow,
+    capture_fd_output,
+    raise_if_overflowed,
+)
 from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
 
 DEFAULT_CHECKPOINT = "/share/portal/kk837/simtoolreal/pretrained_policy/model.pth"
@@ -190,6 +194,11 @@ def main() -> None:
         contributed = torch.zeros(num_envs, dtype=torch.bool, device=device)
         reason = {name: torch.zeros(num_envs, dtype=torch.bool, device=device) for name in REASONS}
 
+        capture = None
+        if not args_cli.allow_overflow:
+            capture_cm = capture_fd_output()
+            capture = capture_cm.__enter__()
+
         step = 0
         while step < args_cli.max_steps and not bool(contributed.all()):
             action = player.get_action(obs["policy"], deterministic=True)
@@ -222,6 +231,12 @@ def main() -> None:
                 player.reset_rnn(ended.nonzero(as_tuple=True)[0])
 
             step += 1
+
+            # The warm-up check steps with zero actions and cannot see contacts that only appear
+            # once the hand closes on the object: a 24-segment cable passed it, then overflowed for
+            # hundreds of steps. So poll the captured fd during the rollout too.
+            if capture is not None and step % 200 == 0:
+                raise_if_overflowed(capture(), num_envs, f"the rollout (step {step})")
             if step % 500 == 0:
                 print(
                     f"[episodes] step {step}: {int(contributed.sum())}/{num_envs} envs done",
@@ -229,6 +244,12 @@ def main() -> None:
                 )
 
         ejected = max_obj_z > REACH_M
+        if capture is not None:
+            captured = capture()
+            capture_cm.__exit__(None, None, None)
+            raise_if_overflowed(captured, num_envs, "the rollout")
+            sys.stdout.write(captured)
+
         done_mask = contributed.cpu()
         goals_l = goals.cpu()[done_mask].tolist()
         length_l = length.cpu()[done_mask].tolist()

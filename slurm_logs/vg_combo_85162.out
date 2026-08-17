@@ -8,3 +8,5 @@
 [grid] --- g_c_all : env.cable.angular_damping=20.0 env.cable.vbd_iterations=80 env.cable.cable_substeps=2 env.cable.bend_stiffness_scale=2.0 env.cable.linear_damping=10.0
 [g_c_all] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.312, "p50": 0.226, "p90": 0.705, "p99": 2.025, "max": 10.397, "non_finite": 0, "goals_scored": 0, "lifted": 1}
 [grid] --- g_c_all_i160 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=160 env.cable.cable_substeps=2 env.cable.bend_stiffness_scale=2.0 env.cable.linear_damping=10.0
+[g_c_all_i160] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.408, "p50": 0.224, "p90": 0.909, "p99": 2.793, "max": 4.617, "non_finite": 0, "goals_scored": 0, "lifted": 1}
+[grid] group=combo done

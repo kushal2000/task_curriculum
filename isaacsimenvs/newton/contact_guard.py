@@ -25,7 +25,12 @@ import re
 import tempfile
 from contextlib import contextmanager
 
-__all__ = ["capture_fd_output", "assert_no_buffer_overflow", "OVERFLOW_PATTERN"]
+__all__ = [
+    "capture_fd_output",
+    "assert_no_buffer_overflow",
+    "raise_if_overflowed",
+    "OVERFLOW_PATTERN",
+]
 
 
 #: Matched against captured fd-1 text. Deliberately broad: an overflow that is not caught here is
@@ -73,12 +78,33 @@ def capture_fd_output():
             os.close(saved_err)
 
 
+def raise_if_overflowed(captured: str, num_envs: int, where: str) -> None:
+    """Raise if ``captured`` contains an overflow warning."""
+    hits = [ln.strip() for ln in captured.splitlines() if OVERFLOW_PATTERN.search(ln)]
+    if not hits:
+        return
+    unique = list(dict.fromkeys(hits))[:6]
+    raise RuntimeError(
+        f"Newton reported a contact-buffer overflow at num_envs={num_envs} during {where} "
+        f"({len(hits)} warnings). Contacts are being dropped and every number from this run would "
+        f"be measured on a scene where the hand cannot fully feel the object."
+        f"\n\n  " + "\n  ".join(unique) + "\n\n"
+        "Buffer budgets in Newton are GLOBAL, not per-env, so they must scale with num_envs AND "
+        "with scene geometry -- a 24-segment cable generates far more triangle pairs than a "
+        "12-segment one at the same env count. Check that the sized budget reaches the solver: a "
+        "coupled scene builds a separate CollisionPipeline per proxy, and that one defaults to "
+        "max_triangle_pairs=1e6 regardless of NewtonCfg.collision_cfg."
+    )
+
+
 def assert_no_buffer_overflow(env, steps: int = 20, action=None) -> None:
     """Step ``env`` briefly with fd output captured; raise if a buffer overflowed.
 
-    Run this once after ``reset`` and before any measurement. Overflow depends on environment
-    count and scene geometry, so it either happens in the first handful of steps or does not
-    happen at all -- there is no need to police the whole rollout.
+    A warm-up check only. **It is not sufficient on its own**: it steps with zero actions, so the
+    hand is not touching the object and the contact count is at its lowest. A 24-segment cable
+    passed this check and then overflowed for hundreds of steps once the policy started
+    manipulating. Use `capture_fd_output` around the whole rollout as well -- see
+    `eval/episodes.py`.
 
     Raises:
         RuntimeError: with the offending lines, the env count, and the usual cause.
@@ -96,18 +122,4 @@ def assert_no_buffer_overflow(env, steps: int = 20, action=None) -> None:
             env.step(action)
         captured = read_so_far()
 
-    hits = [ln.strip() for ln in captured.splitlines() if OVERFLOW_PATTERN.search(ln)]
-    if not hits:
-        return
-
-    unique = list(dict.fromkeys(hits))[:6]
-    raise RuntimeError(
-        f"Newton reported a contact-buffer overflow at num_envs={inner.num_envs} "
-        f"({len(hits)} warnings in {steps} steps). Contacts are being dropped and every number "
-        f"from this run would be measured on a scene where the hand cannot fully feel the object."
-        f"\n\n  " + "\n  ".join(unique) + "\n\n"
-        "Buffer budgets in Newton are GLOBAL, not per-env, so they must scale with num_envs. "
-        "Check that the sized budget actually reaches the solver: a coupled scene builds a "
-        "separate CollisionPipeline per proxy, and that one defaults to max_triangle_pairs=1e6 "
-        "regardless of what NewtonCfg.collision_cfg says."
-    )
+    raise_if_overflowed(captured, inner.num_envs, f"a {steps}-step warm-up")
