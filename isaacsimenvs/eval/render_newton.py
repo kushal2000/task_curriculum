@@ -112,10 +112,13 @@ def _goal_overlay(viewer, inner, world: int):
         # depth z-fight into black stripes, which is what the first render showed. A few
         # millimetres is far below the success tolerance, so it misleads about nothing.
         ghost[:, 2] += GHOST_LIFT
+        import numpy as np
+
+        gi = np.asarray(inner.folded_half_topology(), dtype="int32").reshape(-1, 3)
         viewer.log_mesh(
             "goal_sheet",
             _pts(ghost),
-            wp.array(inner.folded_half_topology(), dtype=wp.int32, device=dev),
+            wp.array(_double_sided(gi), dtype=wp.int32, device=dev),
             backface_culling=False,
             color=GOAL_SHEET_COLOR,
         )
@@ -183,6 +186,85 @@ HALF_COLORS = {
 }
 
 
+def _hud_lines(inner, world: int, step: int):
+    """Per-frame numbers to stamp on the video, or ``None`` for a task with no fold.
+
+    The point is that a video and a metric should not be able to disagree without it being
+    visible. A clip captioned only with a goal count cannot show whether the policy came close, and
+    "0 goals" looks identical whether the fold error was 0.041 or 0.41 -- which is exactly the
+    ambiguity that made several of today's renders unreadable.
+
+    Returns ``(lines, within)`` where ``within`` is True when both success conditions hold, so the
+    caller can colour the readout.
+    """
+    if not hasattr(inner, "fold_error"):
+        return None
+
+    c = inner.cfg.cloth
+    err = float(inner.fold_error()[world])
+    fp = float(inner.footprint_ratio()[world])
+    tol, max_fp = float(c.keypoint_tolerance), float(c.max_folded_footprint)
+    within = err < tol and fp < max_fp
+    return (
+        [
+            f"step      {step:4d}",
+            f"fold err  {err:6.3f} m  (tol {tol:.3f})",
+            f"footprint {fp:6.3f}    (max {max_fp:.3f})",
+            f"goals     {int(inner._successes[world].item())}",
+        ],
+        within,
+    )
+
+
+def _stamp_hud(image, lines, within: bool):
+    """Draw ``lines`` into the top-right corner of an RGB frame, in place-ish.
+
+    Monospaced and right-aligned so the digits do not jitter between frames, on a translucent
+    plate so it stays readable over both the pale table and the dark background.
+    """
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFont
+
+    img = Image.fromarray(image)
+    draw = ImageDraw.Draw(img, "RGBA")
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 17)
+    except OSError:
+        font = ImageFont.load_default()
+
+    pad, lh = 10, 21
+    widths = [draw.textlength(t, font=font) for t in lines]
+    box_w = int(max(widths)) + 2 * pad
+    box_h = lh * len(lines) + 2 * pad - 4
+    x0 = img.width - box_w - 12
+    draw.rectangle([x0, 12, x0 + box_w, 12 + box_h], fill=(0, 0, 0, 130))
+
+    # Left-aligned inside the plate: right-aligning each line independently makes the short ones
+    # ("step", "goals") slide about between frames. Monospace keeps the digits from jittering.
+    colour = (120, 255, 150, 255) if within else (255, 255, 255, 255)
+    for i, text in enumerate(lines):
+        draw.text((x0 + pad, 12 + pad + i * lh - 2), text, font=font, fill=colour)
+    return np.asarray(img)
+
+
+def _double_sided(tris):
+    """Each triangle plus its mirror, so a surface is lit from both sides.
+
+    A cloth is a *surface*: there is no inside, and it flips and curls freely. The viewer logs it
+    with ``backface_culling=False`` and no normals, so a triangle seen from behind shades unlit --
+    solid black. That is what the hard black wedges in the renders were: the underside of the sheet
+    after it turns over during the drop, not a shadow and not the goal marker (confirmed by
+    rendering with the goal disabled, where the black survived unchanged).
+
+    Appending a reversed copy of every triangle gives each one a twin facing the other way, so
+    whichever side faces the camera is lit. Doubles the drawn triangle count; this is the render
+    path only and never touches what the solver reads.
+    """
+    import numpy as np
+
+    return np.concatenate([tris, tris[:, ::-1]], axis=0).flatten()
+
+
 def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
     """Draw only the filmed world's deformable surface.
 
@@ -229,16 +311,22 @@ def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
         base = int(np.argmax(mine))  # first particle of this world; env indices are world-local
         moving = set((inner._moving_idx + base).tolist())
         stationary = set((inner._stationary_idx + base).tolist())
-        in_mv = np.isin(mytri, list(moving)).all(axis=1)
-        in_st = np.isin(mytri, list(stationary)).all(axis=1)
-        masks = {"moving": in_mv, "stationary": in_st, "crease": ~(in_mv | in_st)}
+        # Assign by MAJORITY vertex, not by "all three". `half_indices` excludes the hinge row from
+        # both halves, so an all-three test leaves every triangle touching that row unclassified --
+        # 32 of 128, a quarter of the sheet, drawn as a third colour. That reads as three stripes
+        # rather than two halves and buries the thing the picture exists to show. Majority puts
+        # every triangle in one half or the other, so the sheet is two colours split at the crease.
+        mv_hits = np.isin(mytri, list(moving)).sum(axis=1)
+        st_hits = np.isin(mytri, list(stationary)).sum(axis=1)
+        in_mv = mv_hits >= st_hits
+        masks = {"moving": in_mv, "stationary": ~in_mv}
         for name, m in masks.items():
             if m.any():
                 groups[name] = wp.array(
-                    mytri[m].flatten(), dtype=wp.int32, device=tri.device
+                    _double_sided(mytri[m]), dtype=wp.int32, device=tri.device
                 )
     if not groups:
-        groups["all"] = wp.array(mytri.flatten(), dtype=wp.int32, device=tri.device)
+        groups["all"] = wp.array(_double_sided(mytri), dtype=wp.int32, device=tri.device)
 
     def _log_triangles(self, state, _groups=groups):
         points = self._apply_layer_transform_to_points(state.particle_q)
@@ -389,6 +477,17 @@ def main() -> None:
         "--no_goal", action="store_true", help="do not render the goal marker at all"
     )
     parser.add_argument(
+        "--no_hud",
+        action="store_true",
+        help="do not stamp the per-frame fold-error readout on the video",
+    )
+    parser.add_argument(
+        "--no_shadows",
+        action="store_true",
+        help="disable the viewer's shadow pass. A thin sheet casts a hard-edged shadow that reads "
+        "as a black patch of geometry beside it; turning shadows off tells you which it is.",
+    )
+    parser.add_argument(
         "--goal_keypoints",
         action="store_true",
         help="additionally draw the keypoints and per-keypoint error that define success",
@@ -438,6 +537,13 @@ def main() -> None:
         viewer.show_static = True
         if not args.no_goal:
             _reveal_goal_viz(NewtonManager.get_model())
+        if args.no_shadows:
+            renderer = getattr(viewer, "renderer", None)
+            if renderer is not None and hasattr(renderer, "draw_shadows"):
+                renderer.draw_shadows = False
+                print("[render] shadows disabled", flush=True)
+            else:
+                print("[render] viewer exposes no shadow toggle; shadows left on", flush=True)
         viewer.set_model(NewtonManager.get_model())
         viewer.set_visible_worlds([args.world])
         _restrict_triangles_to_world(viewer, NewtonManager.get_model(), args.world, inner)
@@ -508,7 +614,11 @@ def main() -> None:
                 image = (np.clip(image, 0.0, 1.0) * 255).astype(np.uint8)
             # ViewerGL already returns top-down rows, so no vertical flip -- adding one puts the
             # ground plane at the top of the frame. Just drop the alpha channel.
-            writer.append_data(np.ascontiguousarray(image[:, :, :3]))
+            image = np.ascontiguousarray(image[:, :, :3])
+            hud = _hud_lines(inner, args.world, step) if not args.no_hud else None
+            if hud is not None:
+                image = _stamp_hud(image, hud[0], hud[1])
+            writer.append_data(image)
             frames += 1
 
             if frames % 50 == 0:

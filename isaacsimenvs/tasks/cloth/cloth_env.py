@@ -293,6 +293,26 @@ class ClothEnv(PlayNewtonEnv):
         mv_rest = rest[self._moving_idx]
         self._mv_rest_offset = mv_rest[:, ax] - crease_local
         self._mv_rest_lateral = mv_rest[:, 1 - ax]
+
+        # Where each particle belongs after the fold, expressed once in the sheet's REST frame:
+        # reflect across the crease, then lift by one thickness onto the stationary half. At
+        # runtime this is carried onto the sheet's live pose by the stationary half's own rigid
+        # frame, which is what makes the target follow the cloth when it is rotated as well as
+        # when it is translated.
+        def _folded_rest(sel: torch.Tensor) -> torch.Tensor:
+            f = rest[sel].clone()
+            f[:, ax] = 2.0 * crease_local - f[:, ax]
+            f[:, 2] = f[:, 2] + c.thickness
+            return f
+
+        self._mv_folded_rest = _folded_rest(self._moving_idx)
+        self._kp_folded_rest = _folded_rest(self._kp_idx_t)
+        st_rest = rest[torch.tensor(
+            half_indices(c.resolution, c.fold_axis, positive=False),
+            device=self.device, dtype=torch.long,
+        )]
+        self._st_rest_centroid = st_rest.mean(dim=0)
+        self._st_rest_centred = st_rest - self._st_rest_centroid
         self._fold_targets_xy = t.unsqueeze(0) + self.scene.env_origins.unsqueeze(1)
         self._stationary_idx = torch.tensor(
             half_indices(c.resolution, c.fold_axis, positive=False),
@@ -309,37 +329,60 @@ class ClothEnv(PlayNewtonEnv):
         the pretrained tool policy -- which has never seen cloth -- scored 19 "folds" in 31 envs
         that way, with zero falls. It was sliding the sheet, not folding it.
 
-        So the fold is defined against the sheet's own current configuration:
+        So the fold is defined in the sheet's REST frame -- each keypoint reflected across the
+        crease and lifted one thickness onto the stationary half -- and then carried onto the
+        stationary half's CURRENT rigid frame, fitted from its particles.
 
-        * the crease is the stationary half's current inboard edge, so it travels with the sheet
-        * each target is its keypoint's rest offset reflected about that crease
-        * the height is the stationary half's current mean plus two thicknesses
-
-        Every term moves with the sheet, so a rigid translation leaves the error unchanged and only
-        an actual fold reduces it.
+        That frame is the whole point. Translating or rotating the cloth moves the target with it,
+        so neither can reduce the error; only actually folding the flap can. An earlier version got
+        this half right -- the fold-axis coordinate tracked the live crease, but the lateral one
+        stayed pinned to the spawn position, so a rotated sheet was scored against an axis-aligned
+        target and a genuine fold could read as a failure.
         """
-        parts = self._particles_w()
-        ax = 0 if self.cfg.cloth.fold_axis == "x" else 1
 
-        stationary = parts[:, self._stationary_idx, :]
-        crease = self._crease_w(parts, ax)
-        stationary_z = stationary[:, :, 2].mean(dim=1)                  # (N,)
+        # Carried onto the stationary half's CURRENT rigid frame, so the target follows the sheet
+        # through rotation as well as translation. The rest-frame definition already encodes both
+        # the reflection across the crease and the one-thickness lift onto the stationary half --
+        # one thickness, not two, because particle centres are what both sides measure and a flap
+        # resting on the half sits exactly one particle diameter above it.
+        return self._folded_w(self._kp_folded_rest)
 
-        targets = self._particles_w()[:, self._kp_idx_t, :].clone()
-        # Reflect the keypoint's REST offset from the crease -- rest, not current, or a keypoint
-        # already at the target would define its own target and the error would read zero.
-        targets[:, :, ax] = crease.unsqueeze(1) - self._kp_rest_offset.unsqueeze(0)
-        targets[:, :, 1 - ax] = (
-            self._kp_rest_lateral.unsqueeze(0) + self.scene.env_origins[:, 1 - ax].unsqueeze(1)
-        )
-        # ONE thickness, not two. Particle centres are what these targets and `stationary_z` both
-        # measure, and a flap resting on the stationary half sits exactly one particle DIAMETER --
-        # i.e. one `thickness` -- above it. `2 * thickness` put the target a full sheet-thickness
-        # into the air: 30 mm of pure height error at `thickness=0.03`, against a 40 mm tolerance,
-        # so a geometrically perfect fold could not score. It is also why the marker floats above
-        # the sheet in the renders.
-        targets[:, :, 2] = (stationary_z + self.cfg.cloth.thickness).unsqueeze(1)
-        return targets
+    def _stationary_frame(self, parts: torch.Tensor):
+        """Rigid transform taking the stationary half's REST pose to its CURRENT pose.
+
+        Returns ``(R, centroid)`` with ``R`` of shape ``(N, 3, 3)``.
+
+        This is what makes the fold target follow the sheet through a *rotation*, not just a
+        translation. The previous construction set the fold-axis coordinate from the live crease but
+        pinned the lateral coordinate to ``rest_lateral + env_origin`` -- the spawn position -- so
+        once the hand turned the cloth the target stayed axis-aligned while the sheet rotated under
+        it. On screen the goal appeared beside the stationary half and turned ninety degrees away
+        from it; in the metric it meant a genuinely folded but rotated sheet scored as unfolded.
+        """
+        cur = parts[:, self._stationary_idx, :]
+        centroid = cur.mean(dim=1)
+        q = cur - centroid.unsqueeze(1)
+        h = torch.einsum("ki,nkj->nij", self._st_rest_centred, q)
+        # Ridge, determinant correction and an identity fallback, for the same reasons as the
+        # corner fit in the adapter: a crumpled half can drive this rank deficient, and a NaN or a
+        # mirrored frame here would silently corrupt every target.
+        h = h + 1e-8 * torch.eye(3, device=h.device, dtype=h.dtype).unsqueeze(0)
+        u, _, vh = torch.linalg.svd(h)
+        v = vh.transpose(-2, -1)
+        d = torch.ones((cur.shape[0], 3), device=cur.device, dtype=cur.dtype)
+        d[:, 2] = torch.linalg.det(v @ u.transpose(-2, -1))
+        r = v @ torch.diag_embed(d) @ u.transpose(-2, -1)
+        bad = ~torch.isfinite(r).all(dim=-1).all(dim=-1)
+        if bool(bad.any()):
+            r = r.clone()
+            r[bad] = torch.eye(3, device=r.device, dtype=r.dtype)
+        return r, centroid
+
+    def _folded_w(self, folded_rest: torch.Tensor) -> torch.Tensor:
+        """Carry rest-frame folded positions onto the sheet's live pose. ``(N, M, 3)``."""
+        r, centroid = self._stationary_frame(self._particles_w())
+        local = folded_rest - self._st_rest_centroid
+        return torch.einsum("nij,mj->nmi", r, local) + centroid.unsqueeze(1)
 
     def _crease_w(self, parts: torch.Tensor, ax: int) -> torch.Tensor:
         """``(num_envs,)`` current position of the hinge line along the fold axis.
@@ -367,19 +410,11 @@ class ClothEnv(PlayNewtonEnv):
         folded cloth is a *surface*, and no rigid marker can depict one -- a hammer, a box and a
         flat mesh all read as some kind of slab, because ``goal_viz`` is a rigid body with a single
         pose and a single shape. The renderer can log an arbitrary mesh, so it does.
-        """
-        parts = self._particles_w()
-        ax = 0 if self.cfg.cloth.fold_axis == "x" else 1
-        stationary = parts[:, self._stationary_idx, :]
-        crease = self._crease_w(parts, ax)
-        stationary_z = stationary[:, :, 2].mean(dim=1)
 
-        out = parts[:, self._moving_idx, :].clone()
-        out[:, :, ax] = crease.unsqueeze(1) - self._mv_rest_offset.unsqueeze(0)
-        out[:, :, 1 - ax] = (
-            self._mv_rest_lateral.unsqueeze(0) + self.scene.env_origins[:, 1 - ax].unsqueeze(1)
-        )
-        out[:, :, 2] = (stationary_z + self.cfg.cloth.thickness).unsqueeze(1)
+        Shares :meth:`_folded_w` with the scored targets, so the drawing cannot drift from the
+        criterion -- the ghost is the goal, over every particle instead of over four keypoints.
+        """
+        out = self._folded_w(self._mv_folded_rest)
         return out
 
     def folded_half_topology(self) -> list[int]:

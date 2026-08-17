@@ -192,6 +192,11 @@ def main() -> None:
         lifted = torch.zeros(num_envs, dtype=torch.bool, device=device)
         max_obj_z = torch.full((num_envs,), -1e9, device=device)
         contributed = torch.zeros(num_envs, dtype=torch.bool, device=device)
+        # Fold diagnostics, only for an env that defines a fold (duck-typed, so the cable and play
+        # tasks are untouched).
+        _has_fold = hasattr(inner, "fold_error") and hasattr(inner, "footprint_ratio")
+        best_fold_err = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
+        best_footprint = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
         reason = {name: torch.zeros(num_envs, dtype=torch.bool, device=device) for name in REASONS}
 
         # Capture fd 1/2 across the rollout so kernel-level overflow warnings are visible. The
@@ -217,6 +222,19 @@ def main() -> None:
               obj_z = (inner.object.data.root_pos_w - inner.scene.env_origins)[:, 2]
               max_obj_z = torch.where(~contributed, torch.maximum(max_obj_z, obj_z), max_obj_z)
               steps_alive += (~contributed).long()
+
+              # How CLOSE did it get? A pass/fail goal count cannot tell "nowhere near" from "just
+              # outside the tolerance", and those imply completely different next steps. Tracked
+              # only while the env is on its first episode, like every other statistic here.
+              if best_fold_err is not None:
+                  fe = inner.fold_error()
+                  best_fold_err = torch.where(
+                      ~contributed, torch.minimum(best_fold_err, fe), best_fold_err
+                  )
+                  fp = inner.footprint_ratio()
+                  best_footprint = torch.where(
+                      ~contributed, torch.minimum(best_footprint, fp), best_footprint
+                  )
 
               done = (terminated.bool() | truncated.bool()) & ~contributed
               if bool(done.any()):
@@ -306,6 +324,27 @@ def main() -> None:
             "per_env_goals": goals.cpu().tolist(),
             "per_env_length": length.cpu().tolist(),
         }
+
+        if best_fold_err is not None:
+            fe = best_fold_err.cpu()
+            fp = best_footprint.cpu()
+            tol = float(inner.cfg.cloth.keypoint_tolerance)
+            result["fold"] = {
+                "keypoint_tolerance": tol,
+                "max_folded_footprint": float(inner.cfg.cloth.max_folded_footprint),
+                # Best (minimum) over the episode, per env: the closest the policy ever came.
+                "best_fold_err": [round(float(v), 4) for v in fe],
+                "best_footprint": [round(float(v), 4) for v in fp],
+                "best_fold_err_mean": round(float(fe.mean()), 4),
+                "best_fold_err_min": round(float(fe.min()), 4),
+                "envs_within_tolerance": int((fe < tol).sum()),
+                # A fold has to satisfy BOTH conditions at once; these counts are per-condition and
+                # over the whole episode, so they are an upper bound on how close it came, not
+                # evidence that both held on the same step.
+                "envs_within_footprint": int(
+                    (fp < float(inner.cfg.cloth.max_folded_footprint)).sum()
+                ),
+            }
 
         summary = result["completed"]
         print("\n" + "=" * 72)
