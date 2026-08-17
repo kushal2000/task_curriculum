@@ -420,6 +420,37 @@ cable zeros interpretable: the scene is sound, the proxies work, the goal is rea
 cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/episode, with lift
 3/32 -> 28/32 as the leading indicator, since goals follow lift.
 
+## The reference: what a *working* manipulation looks like
+
+Peak speed was used as a stability metric here for a long time against a badly chosen anchor --
+4.81 m/s, which was itself a *cable* measurement. The right reference is a rigid manipuland that the
+policy actually succeeds with. `isaacsimenvs/eval/velocity_stats` measures the distribution, 16 envs
+x 600 steps:
+
+| object | mean | p50 | p90 | p99 | **max** | goals |
+|---|---:|---:|---:|---:|---:|---:|
+| rigid rod, coupled cable scene | 0.124 | 0.082 | 0.276 | 0.654 | **1.68** | 75 |
+| rigid tool, `PlayNewton` | 0.126 | 0.080 | 0.289 | 0.654 | **1.31** | 65 |
+
+**A successful manipulation peaks near 1.3-1.7 m/s with p99 at 0.65.** Against that:
+
+| cable config | peak |
+|---|---:|
+| damping 20 + 120 iters (calmest found) | 3.92 |
+| damping 5 + 60 iters | 5.40 |
+| stock (damping 1, 20 iters) | 8.61 |
+| damping 5 + 60 iters + 8 substeps | 15.5 |
+| `rigid_contact_k_start=1e4` | 39.9 |
+
+**Every cable configuration measured is violently unstable by this standard** -- the calmest is still
+2.3x the rigid baseline's *maximum* and ~6x its p99. This reframes the whole sweep below: those runs
+were not measuring how well a policy grasps a cable, they were measuring a solver that never
+integrates the cable calmly, so most of the negative results say little about deformability.
+
+Percentiles matter, not just the max: a successful rollout legitimately contains fast motion
+(carry, score, new goal sampled far away, accelerate). It is the *whole distribution* sitting an
+order of magnitude high that identifies a solver problem.
+
 ## Best result: 6 goals on a cable (64 envs, supports + AVBD contact ramp)
 
 `docs/results/n64_k3.json` -- 64 envs, 60 mm support gap, `rigid_contact_k_start=1.0e3`:

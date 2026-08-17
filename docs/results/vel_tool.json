@@ -1,0 +1,13 @@
+{
+  "task": "Isaacsimenvs-PlayNewton-Direct-v0",
+  "num_envs": 16,
+  "steps": 600,
+  "mean": 0.126,
+  "p50": 0.08,
+  "p90": 0.289,
+  "p99": 0.654,
+  "max": 1.308,
+  "non_finite": 0,
+  "goals_scored": 65,
+  "lifted": 12
+}
