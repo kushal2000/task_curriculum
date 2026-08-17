@@ -235,6 +235,25 @@ class ClothEnv(PlayNewtonEnv):
         """
         return (self.cloth_keypoints_w() - self._fold_targets_w).norm(dim=-1).amax(dim=-1)
 
+    def _sync_observed_keypoints(self) -> None:
+        """Make the OBSERVED keypoints the sheet's real particle positions.
+
+        The task builds its keypoints as ``centroid + _keypoint_offsets`` with the manipuland's
+        orientation (identity here). Setting the offsets to the sheet's actual deviation from its
+        centroid therefore makes the observed keypoints *exactly* the tracked particles -- so the
+        policy sees the half's deformation, not a synthetic box around it. The 140-dim layout is
+        untouched.
+
+        The goal keypoints come out right too, because of how the keypoints were chosen: all four
+        sit on the far edge and share one ``x``, so reflecting them across the midline is the same
+        as translating in ``x``. ``goal_centroid + offsets`` therefore lands on the fold targets
+        rather than merely near them. Pick keypoints off that edge and this stops holding.
+        """
+        kp = self.object.keypoints_w()                      # (N, K, 3), real particles
+        offsets = kp - kp.mean(dim=1, keepdim=True)
+        self._keypoint_offsets[:] = offsets
+        self._keypoint_offsets_fixed[:] = offsets
+
     def _drive_goal_marker(self) -> None:
         """Point `goal_viz` at the fold target, so the OBSERVED goal is the fold.
 
@@ -247,6 +266,12 @@ class ClothEnv(PlayNewtonEnv):
         pose[:, :3] = centre
         pose[:, 3] = 1.0  # identity wxyz, matching the manipuland's orientation convention here
         self.goal_viz.write_root_pose_to_sim(pose)
+
+    def _get_observations(self):
+        # Offsets must be current *before* the task reads them, or the observation lags the sheet
+        # by one step.
+        self._sync_observed_keypoints()
+        return super()._get_observations()
 
     def _get_dones(self):
         """Terminate on a completed fold, on the sheet leaving the table, or on timeout.

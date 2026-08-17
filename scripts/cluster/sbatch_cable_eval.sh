@@ -38,7 +38,7 @@ echo "[job] tag=$TAG num_envs=$NUM_ENVS host=$(hostname) gpu=${CUDA_VISIBLE_DEVI
 echo "[job] overrides: $*"
 
 scripts/newton_py -m isaacsimenvs.eval.episodes \
-    --task Isaacsimenvs-Cable-Direct-v0 \
+    --task "${TASK:-Isaacsimenvs-Cable-Direct-v0}" \
     --num_envs "$NUM_ENVS" \
     --num_assets_per_type 1 \
     --single_variant \
