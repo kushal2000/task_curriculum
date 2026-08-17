@@ -115,13 +115,16 @@ def _goal_overlay(viewer, inner, world: int):
         import numpy as np
 
         gi = np.asarray(inner.folded_half_topology(), dtype="int32").reshape(-1, 3)
-        viewer.log_mesh(
-            "goal_sheet",
-            _pts(ghost),
-            wp.array(_double_sided(gi), dtype=wp.int32, device=dev),
-            backface_culling=False,
-            color=GOAL_SHEET_COLOR,
-        )
+        # Two meshes, not one double-sided mesh: see `_flip` -- merging the windings zeroes the
+        # vertex normals and the sheet renders black.
+        for suffix, idx in (("", gi.flatten()), ("_back", _flip(gi))):
+            viewer.log_mesh(
+                f"goal_sheet{suffix}",
+                _pts(ghost),
+                wp.array(idx, dtype=wp.int32, device=dev),
+                backface_culling=False,
+                color=GOAL_SHEET_COLOR,
+            )
         return
 
     viewer.log_points("goal_kp", _pts(g), radii=0.012, colors=_col(GOAL_KP_COLOR, len(g)))
@@ -247,6 +250,20 @@ def _stamp_hud(image, lines, within: bool):
     return np.asarray(img)
 
 
+def _flip(tris):
+    """Reversed winding, as a flat index list.
+
+    Used to log a SECOND mesh rather than to extend the first. Appending mirrored triangles into
+    one mesh looks equivalent and is not: `log_mesh` derives per-vertex normals from winding, and
+    the mirrored copy shares the same vertices, so +n and -n average to exactly zero. The surface
+    then has no normal and shades solid black -- which is what "double-siding" actually did here,
+    trading an unlit back face for a zero-normal one and leaving the picture unchanged.
+    """
+    import numpy as np
+
+    return np.asarray(tris)[:, ::-1].flatten()
+
+
 def _double_sided(tris):
     """Each triangle plus its mirror, so a surface is lit from both sides.
 
@@ -322,11 +339,13 @@ def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
         masks = {"moving": in_mv, "stationary": ~in_mv}
         for name, m in masks.items():
             if m.any():
-                groups[name] = wp.array(
-                    _double_sided(mytri[m]), dtype=wp.int32, device=tri.device
+                groups[name] = wp.array(mytri[m].flatten(), dtype=wp.int32, device=tri.device)
+                groups[name + ":back"] = wp.array(
+                    _flip(mytri[m]), dtype=wp.int32, device=tri.device
                 )
     if not groups:
-        groups["all"] = wp.array(_double_sided(mytri), dtype=wp.int32, device=tri.device)
+        groups["all"] = wp.array(mytri.flatten(), dtype=wp.int32, device=tri.device)
+        groups["all:back"] = wp.array(_flip(mytri), dtype=wp.int32, device=tri.device)
 
     def _log_triangles(self, state, _groups=groups):
         points = self._apply_layer_transform_to_points(state.particle_q)
@@ -338,7 +357,9 @@ def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
                 indices,
                 hidden=hidden,
                 backface_culling=False,
-                color=HALF_COLORS.get(name),
+                # ":back" is the same half logged with reversed winding, so it takes the same
+                # colour -- the two together make the surface read identically from either side.
+                color=HALF_COLORS.get(name.split(":")[0]),
             )
 
     viewer._log_triangles = types.MethodType(_log_triangles, viewer)
@@ -348,6 +369,39 @@ def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
         f"{int(keep.sum())}/{len(keep)} triangles ({split})",
         flush=True,
     )
+
+
+def _hide_goal_viz(model) -> int:
+    """Clear every render flag on the goal marker's shapes.
+
+    ``--no_goal`` used to mean only "skip `_reveal_goal_viz`", i.e. do not ADD the VISIBLE flag.
+    That is not the same as hiding it. The cable's capsule marker imported with
+    ``shape_flags == 0`` and so happened to stay invisible, but the cloth's marker is a
+    ``UsdGeom.Mesh`` and imports already drawable under ``show_collision=True`` -- so it rendered
+    regardless, as an unlit black plate the size of the folded half, sitting on the table.
+
+    That black slab survived every control render, including the ones meant to prove it was NOT
+    the goal marker, because those controls passed ``--no_goal`` and believed it. Clearing the
+    flags makes the option mean what it says.
+    """
+    import warp as wp
+
+    if getattr(model, "shape_flags", None) is None:
+        return 0
+    labels = [str(x) for x in model.body_label]
+    shape_body = model.shape_body.numpy()
+    flags = model.shape_flags.numpy().copy()
+    n = 0
+    for shape_idx, body_idx in enumerate(shape_body):
+        label = labels[body_idx] if 0 <= body_idx < len(labels) else ""
+        if "GoalViz" in label and flags[shape_idx]:
+            flags[shape_idx] = 0
+            n += 1
+    model.shape_flags = wp.array(
+        flags, dtype=model.shape_flags.dtype, device=model.shape_flags.device
+    )
+    print(f"[render] hid {n} goal-marker shapes", flush=True)
+    return n
 
 
 def newton_shape_flags():
@@ -429,6 +483,27 @@ def _colorize(model, args) -> None:
     model.shape_color = wp.array(colors, dtype=model.shape_color.dtype, device=model.shape_color.device)
     print(f"[render] colorized shapes: {counts}", flush=True)
 
+    # Anything the rules above skipped is drawn in whatever colour it imported with, and an
+    # unrecognised dark shape sitting on the table is indistinguishable from a physics artefact.
+    # Report the strays with their flags, so "what is that black slab" is answered by the log
+    # rather than by guessing at pixels -- three wrong guesses so far (shadow, back faces, goal
+    # marker), each disproved by an experiment that a single print would have made unnecessary.
+    flags = model.shape_flags.numpy() if getattr(model, "shape_flags", None) is not None else None
+    strays: dict[str, list[int]] = {}
+    for shape_idx, body_idx in enumerate(shape_body):
+        label = labels[body_idx] if 0 <= body_idx < len(labels) else "<none>"
+        if any(k in label for k in ("Cable", "Table", "GoalViz", "Robot", "/Rod")):
+            continue
+        root = "/".join(str(label).split("/")[:5]) or "<none>"
+        strays.setdefault(root, []).append(int(flags[shape_idx]) if flags is not None else -1)
+    for root, fl in strays.items():
+        drawn = sum(1 for f in fl if f) if flags is not None else len(fl)
+        print(
+            f"[render] unclassified shapes under {root!r}: {len(fl)} "
+            f"({drawn} with a non-zero shape flag, i.e. drawn)",
+            flush=True,
+        )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render the policy on Newton to a video.")
@@ -475,6 +550,12 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=Path("videos/play_newton.mp4"))
     parser.add_argument(
         "--no_goal", action="store_true", help="do not render the goal marker at all"
+    )
+    parser.add_argument(
+        "--no_cloth",
+        action="store_true",
+        help="hide the deformable surface entirely. With --no_goal this leaves only rigid shapes, "
+        "which isolates whether an unexplained artefact belongs to the cloth or to the scene.",
     )
     parser.add_argument(
         "--no_hud",
@@ -535,18 +616,29 @@ def main() -> None:
         # See the module docstring: the robot's colliders are not flagged visible.
         viewer.show_collision = True
         viewer.show_static = True
-        if not args.no_goal:
+        if args.no_goal:
+            _hide_goal_viz(NewtonManager.get_model())
+        else:
             _reveal_goal_viz(NewtonManager.get_model())
+        viewer.set_model(NewtonManager.get_model())
+        viewer.set_visible_worlds([args.world])
+        _restrict_triangles_to_world(viewer, NewtonManager.get_model(), args.world, inner)
+
+        # AFTER `set_model`, which rebuilds renderer state and silently reverts this. Setting it
+        # before printed "shadows disabled" while shadows kept rendering, so the test that was
+        # supposed to identify a black patch proved nothing -- and I read its result as evidence.
+        if args.no_cloth:
+            viewer.show_triangles = False
+            print("[render] deformable surface hidden", flush=True)
         if args.no_shadows:
             renderer = getattr(viewer, "renderer", None)
             if renderer is not None and hasattr(renderer, "draw_shadows"):
                 renderer.draw_shadows = False
-                print("[render] shadows disabled", flush=True)
+                print(
+                    f"[render] shadows disabled (draw_shadows={renderer.draw_shadows})", flush=True
+                )
             else:
                 print("[render] viewer exposes no shadow toggle; shadows left on", flush=True)
-        viewer.set_model(NewtonManager.get_model())
-        viewer.set_visible_worlds([args.world])
-        _restrict_triangles_to_world(viewer, NewtonManager.get_model(), args.world, inner)
         _colorize(NewtonManager.get_model(), args)
 
         origin = inner.scene.env_origins[args.world].detach().cpu().numpy()
