@@ -20,6 +20,7 @@ train_dir/
 outputs/
 wandb/
 videos/
+!videos/README.md          # the guide to the folder is not media
 evals/
 runs/
 experiments/runs/

@@ -1,0 +1,15 @@
+{
+  "num_envs": 32,
+  "with_policy": false,
+  "timed_steps": 200,
+  "elapsed_s": 92.15,
+  "ms_per_step": 460.748,
+  "policy_steps_per_s": 2.17,
+  "env_steps_per_s": 69.5,
+  "build_s": 11.0,
+  "gpu_mem_gb": 0.02,
+  "segments": 12,
+  "substeps": 2,
+  "vbd_iterations": 80,
+  "proxy_mode": "staggered"
+}

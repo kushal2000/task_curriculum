@@ -337,7 +337,14 @@ def main() -> None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         writer = imageio.get_writer(args.out, fps=args.fps, macro_block_size=None)
         frames = 0
-        goals_at_start = int(inner._successes[args.world].item())
+        # `_successes` is zeroed when an episode terminates, so an end-minus-start read reports
+        # ~0 for any env whose episode ended mid-render -- which is every *scoring* env, since
+        # scoring extends episodes past a short render. That made six consecutive renders of
+        # 2-to-6-goal episodes all caption "scored ~0 goals". Accumulate positive deltas instead,
+        # which survives the reset. (`episodes.py` avoids this by snapshotting
+        # `extras["episode_final"]` at the termination step.)
+        goals_seen = 0
+        prev_successes = int(inner._successes[args.world].item())
 
         for step in range(args.steps):
             if player is None:
@@ -347,6 +354,11 @@ def main() -> None:
             else:
                 action = player.get_action(obs["policy"], deterministic=True)
             obs, _rew, terminated, truncated, _extras = env.step(action.to(inner.device))
+
+            now = int(inner._successes[args.world].item())
+            if now > prev_successes:
+                goals_seen += now - prev_successes
+            prev_successes = now
 
             done = (terminated.bool() | truncated.bool())
             if player is not None and bool(done.any()):
@@ -377,7 +389,7 @@ def main() -> None:
                 )
 
         writer.close()
-        goals = int(inner._successes[args.world].item()) - goals_at_start
+        goals = goals_seen
         size_mb = args.out.stat().st_size / 1e6
         print(
             f"\n[render] wrote {args.out} ({frames} frames, {size_mb:.1f} MB, "
