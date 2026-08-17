@@ -33,6 +33,38 @@ import torch
 __all__ = ["ClothAsRigidObject"]
 
 
+def _mat_to_wxyz(r: torch.Tensor) -> torch.Tensor:
+    """Rotation matrices ``(N, 3, 3)`` to wxyz quaternions, via the trace formulation.
+
+    Uses the largest-diagonal branch rather than the naive trace form, which loses precision (and
+    can divide by ~0) when the rotation approaches 180 degrees -- exactly the case a completed fold
+    produces.
+    """
+    n = r.shape[0]
+    q = torch.zeros((n, 4), device=r.device, dtype=r.dtype)
+    trace = r[:, 0, 0] + r[:, 1, 1] + r[:, 2, 2]
+
+    big = trace > 0
+    if bool(big.any()):
+        sq = torch.sqrt(trace[big] + 1.0) * 2.0
+        q[big, 0] = 0.25 * sq
+        q[big, 1] = (r[big, 2, 1] - r[big, 1, 2]) / sq
+        q[big, 2] = (r[big, 0, 2] - r[big, 2, 0]) / sq
+        q[big, 3] = (r[big, 1, 0] - r[big, 0, 1]) / sq
+    rest = ~big
+    for i in range(3):
+        j, k = (i + 1) % 3, (i + 2) % 3
+        sel = rest & (r[:, i, i] >= r[:, j, j]) & (r[:, i, i] >= r[:, k, k])
+        if not bool(sel.any()):
+            continue
+        sq = torch.sqrt(1.0 + r[sel, i, i] - r[sel, j, j] - r[sel, k, k]) * 2.0
+        q[sel, 0] = (r[sel, k, j] - r[sel, j, k]) / sq
+        q[sel, 1 + i] = 0.25 * sq
+        q[sel, 1 + j] = (r[sel, j, i] + r[sel, i, j]) / sq
+        q[sel, 1 + k] = (r[sel, k, i] + r[sel, i, k]) / sq
+    return torch.nn.functional.normalize(q, dim=-1)
+
+
 def _to_torch(value):
     """Isaac Lab 3.0 hands back warp-backed ProxyArrays; the task code wants torch."""
     return value.torch if hasattr(value, "torch") else value
@@ -48,6 +80,8 @@ class ClothAsRigidObject:
         num_envs: int,
         rest_local: list,
         keypoint_idx: list[int],
+        corner_idx: list[int],
+        corner_rest: list,
         spawn_z: float,
         mass: float,
         device,
@@ -57,6 +91,8 @@ class ClothAsRigidObject:
         self._device = device
         self._rest_local = torch.tensor(rest_local, device=device, dtype=torch.float32)
         self._kp_idx = torch.tensor(keypoint_idx, device=device, dtype=torch.long)
+        self._corner_idx = torch.tensor(corner_idx, device=device, dtype=torch.long)
+        self._corner_rest = torch.tensor(corner_rest, device=device, dtype=torch.float32)
         self._spawn_z = float(spawn_z)
         self._mass = float(mass)
         self.data = _ClothData(self)
@@ -69,6 +105,24 @@ class ClothAsRigidObject:
 
     def _velocities(self) -> torch.Tensor:
         return _to_torch(self._cloth.data.nodal_vel_w).view(self._num_envs, -1, 3)
+
+    def fit_rotation_wxyz(self) -> torch.Tensor:
+        """Least-squares rotation from rest corners to current corners, as wxyz. ``(N, 4)``."""
+        cur = self._particles()[:, self._corner_idx, :]                 # (N, 4, 3)
+        q = cur - cur.mean(dim=1, keepdim=True)                         # centred current
+        p = self._corner_rest - self._corner_rest.mean(dim=0, keepdim=True)  # centred rest (4, 3)
+
+        # H = P^T Q, then R = V diag(1, 1, det(VU^T)) U^T. The determinant term forbids a
+        # reflection: without it a badly deformed patch can fit an improper "rotation", which is a
+        # mirror -- and a mirrored frame fed to a policy is worse than a wrong one.
+        h = torch.einsum("ki,nkj->nij", p, q)
+        u, _, vh = torch.linalg.svd(h)
+        v = vh.transpose(-2, -1)
+        det = torch.linalg.det(v @ u.transpose(-2, -1))
+        d = torch.ones((cur.shape[0], 3), device=cur.device)
+        d[:, 2] = det
+        r = v @ torch.diag_embed(d) @ u.transpose(-2, -1)               # (N, 3, 3)
+        return _mat_to_wxyz(r)
 
     def keypoints_w(self) -> torch.Tensor:
         """``(num_envs, K, 3)`` tracked keypoints on the moving half."""
@@ -142,10 +196,18 @@ class _ClothData:
 
     @property
     def root_quat_w(self) -> torch.Tensor:
-        """Identity (wxyz). See the module docstring: a fitted frame would be noise."""
-        q = torch.zeros((self._owner._num_envs, 4), device=self._owner._device)
-        q[:, 0] = 1.0
-        return q
+        """Orientation of the moving half, fitted from its four corners (wxyz).
+
+        Kabsch: the least-squares rotation taking the corners' REST offsets to their CURRENT
+        offsets. Four corners span an area, so the fit is well-posed -- four points along one edge
+        would be collinear and leave rotation about that edge undetermined, which is why this
+        previously returned identity.
+
+        A fold is then a rigid transform of the half (180 degrees about the crease), so the task's
+        own keypoint machinery -- ``centroid + R * rest_offsets`` -- produces meaningful goal
+        keypoints without any special-casing.
+        """
+        return self._owner.fit_rotation_wxyz()
 
     @property
     def root_lin_vel_w(self) -> torch.Tensor:

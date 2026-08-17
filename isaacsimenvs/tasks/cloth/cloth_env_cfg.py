@@ -113,6 +113,16 @@ class ClothCfg:
     """Tracked keypoints on the moving half. Four matches the task's existing keypoint machinery
     and is the minimum that pins a folded flap's position *and* orientation."""
 
+    max_folded_footprint: float = 0.65
+    """Largest sheet extent along the fold axis, as a fraction of ``size``, that still counts as
+    folded.
+
+    A second condition on success, independent of keypoint distance. A perfect fold gives ~0.5; an
+    unfolded sheet gives 1.0. Keypoint proximity alone proved insufficient: a rigid slide scored
+    "folds" because the targets were world-fixed, and after that was corrected a *crumpled* sheet
+    still scored transiently by putting four keypoints near their targets. 0.65 leaves room for a
+    real fold's drape while excluding anything close to flat."""
+
     keypoint_tolerance: float = 0.04
     """Per-keypoint distance for success [m]. Deliberately looser than the cable's 1.5 cm: a
     folded flap settles wherever the drape puts it, and demanding rigid-body precision from a

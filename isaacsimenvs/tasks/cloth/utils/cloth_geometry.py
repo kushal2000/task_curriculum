@@ -62,6 +62,30 @@ def half_indices(resolution: int, axis: str = "x", positive: bool = True) -> lis
     return out
 
 
+def corner_indices(resolution: int, axis: str = "x") -> list[int]:
+    """The four corners of the MOVING half, ordered crease-near then crease-far.
+
+    Corners rather than points along one edge: four points spanning an area determine a rotation,
+    whereas four collinear points on the far edge are degenerate about their own axis and cannot.
+    That degeneracy is why the orientation was previously reported as identity.
+
+    Order is fixed -- (near-left, near-right, far-left, far-right) -- so a rotation fit against the
+    rest corners compares like with like.
+    """
+    if axis not in ("x", "y"):
+        raise ValueError(f"axis must be 'x' or 'y', got {axis!r}")
+    mid = resolution // 2          # first row/column strictly past the crease
+    far = resolution - 1
+    lo, hi = 0, resolution - 1
+
+    def vid(i: int, j: int) -> int:
+        return i * resolution + j
+
+    if axis == "x":
+        return [vid(mid, lo), vid(mid, hi), vid(far, lo), vid(far, hi)]
+    return [vid(lo, mid), vid(hi, mid), vid(lo, far), vid(hi, far)]
+
+
 def keypoint_indices(resolution: int, axis: str = "x", count: int = 4) -> list[int]:
     """``count`` vertex indices spread over the moving half.
 

@@ -20,6 +20,7 @@ from isaacsimenvs.newton import patches
 from isaacsimenvs.tasks.cloth.cloth_env_cfg import ClothEnvCfg
 from isaacsimenvs.tasks.cloth.utils.cloth_adapter import ClothAsRigidObject
 from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
+    corner_indices,
     folded_targets,
     grid_mesh,
     half_indices,
@@ -61,7 +62,9 @@ class ClothEnv(PlayNewtonEnv):
         c = self.cfg.cloth
         verts, indices = grid_mesh(c.size, c.resolution)
         self._cloth_rest_local = verts
-        self._cloth_kp_idx = keypoint_indices(c.resolution, c.fold_axis, c.num_keypoints)
+        # Corners of the moving half, not points along one edge: four points spanning an area
+        # determine a rotation; four collinear points do not.
+        self._cloth_kp_idx = corner_indices(c.resolution, c.fold_axis)
 
         # The inherited rigid tool is still spawned by `setup_scene` -- the asset pipeline, USD
         # cache and `object_scales` observation are all built around it. Make it inert, or it is a
@@ -137,6 +140,8 @@ class ClothEnv(PlayNewtonEnv):
             # which it did, at 1.06 m instead of 0.53 m.
             rest_local=verts,
             keypoint_idx=self._cloth_kp_idx,
+            corner_idx=self._cloth_kp_idx,
+            corner_rest=[verts[i] for i in self._cloth_kp_idx],
             spawn_z=spawn_z,
             mass=area_density * c.size * c.size,
             device=self.device,
@@ -211,7 +216,17 @@ class ClothEnv(PlayNewtonEnv):
         local = folded_targets(self._cloth_rest_local, self._cloth_kp_idx, c.fold_axis, lift)
 
         t = torch.tensor(local, device=self.device, dtype=torch.float32)  # (K, 3)
-        # x/y only: the height is read from the settled sheet in `fold_targets_w`, not assumed.
+        # Rest geometry only. `fold_targets_w` combines these with the sheet's CURRENT crease, so
+        # the criterion is translation-invariant.
+        self._kp_idx_t = torch.tensor(self._cloth_kp_idx, device=self.device, dtype=torch.long)
+        rest = torch.tensor(self._cloth_rest_local, device=self.device, dtype=torch.float32)
+        corners = rest[self._kp_idx_t]
+        self._corner_rest_offsets = corners - corners.mean(dim=0, keepdim=True)
+        ax = 0 if c.fold_axis == "x" else 1
+        kp_rest = rest[self._kp_idx_t]                       # (K, 3) local
+        crease_local = rest[:, ax].max() - c.size / 2.0      # crease at the sheet's midline (=0)
+        self._kp_rest_offset = kp_rest[:, ax] - crease_local  # distance past the crease
+        self._kp_rest_lateral = kp_rest[:, 1 - ax]
         self._fold_targets_xy = t.unsqueeze(0) + self.scene.env_origins.unsqueeze(1)
         self._stationary_idx = torch.tensor(
             half_indices(c.resolution, c.fold_axis, positive=False),
@@ -220,21 +235,38 @@ class ClothEnv(PlayNewtonEnv):
         self._kp_idx_t = torch.tensor(self._cloth_kp_idx, device=self.device, dtype=torch.long)
 
     def fold_targets_w(self) -> torch.Tensor:
-        """``(num_envs, K, 3)`` fold targets, with height read from the sheet itself.
+        """``(num_envs, K, 3)`` fold targets, defined RELATIVE TO THE SHEET, not to the world.
 
-        A fold means "mirrored in x/y, resting on top of the stationary half". The x/y half is
-        fixed geometry, but the **height is not knowable in advance**: the sheet is dropped and
-        settles wherever the table and its own thickness put it. Deriving the target z from the
-        *spawn* height put the targets ~33 mm below anything the cloth could reach -- a teleported,
-        physically perfect fold measured 0.0355 error against a 0.04 tolerance, i.e. passing only
-        by luck.
+        **A fixed world target cannot tell a fold from a slide.** With targets pinned at the rest
+        sheet's mirrored position, simply pushing the whole sheet half its width in ``-x`` puts the
+        moving half exactly where the targets are, and a flat sheet's height matches too. Measured:
+        the pretrained tool policy -- which has never seen cloth -- scored 19 "folds" in 31 envs
+        that way, with zero falls. It was sliding the sheet, not folding it.
 
-        So the height comes from the stationary half's current position plus two sheet thicknesses
-        (the stationary layer and the folded one). That is robust to the settle height, to table
-        thickness, and to any future change in either.
+        So the fold is defined against the sheet's own current configuration:
+
+        * the crease is the stationary half's current inboard edge, so it travels with the sheet
+        * each target is its keypoint's rest offset reflected about that crease
+        * the height is the stationary half's current mean plus two thicknesses
+
+        Every term moves with the sheet, so a rigid translation leaves the error unchanged and only
+        an actual fold reduces it.
         """
-        stationary_z = self._particles_w()[:, self._stationary_idx, 2].mean(dim=1)  # (N,)
-        targets = self._fold_targets_xy.clone()                                     # (N, K, 3)
+        parts = self._particles_w()
+        ax = 0 if self.cfg.cloth.fold_axis == "x" else 1
+
+        stationary = parts[:, self._stationary_idx, :]
+        # Crease: the inboard extreme of the stationary half, which is the hinge itself.
+        crease = stationary[:, :, ax].amax(dim=1)                       # (N,)
+        stationary_z = stationary[:, :, 2].mean(dim=1)                  # (N,)
+
+        targets = self._particles_w()[:, self._kp_idx_t, :].clone()
+        # Reflect the keypoint's REST offset from the crease -- rest, not current, or a keypoint
+        # already at the target would define its own target and the error would read zero.
+        targets[:, :, ax] = crease.unsqueeze(1) - self._kp_rest_offset.unsqueeze(0)
+        targets[:, :, 1 - ax] = (
+            self._kp_rest_lateral.unsqueeze(0) + self.scene.env_origins[:, 1 - ax].unsqueeze(1)
+        )
         targets[:, :, 2] = (stationary_z + 2.0 * self.cfg.cloth.thickness).unsqueeze(1)
         return targets
 
@@ -256,23 +288,21 @@ class ClothEnv(PlayNewtonEnv):
         return (self.cloth_keypoints_w() - self.fold_targets_w()).norm(dim=-1).amax(dim=-1)
 
     def _sync_observed_keypoints(self) -> None:
-        """Make the OBSERVED keypoints the sheet's real particle positions.
+        """Pin the keypoint offsets to the moving half's REST corners.
 
-        The task builds its keypoints as ``centroid + _keypoint_offsets`` with the manipuland's
-        orientation (identity here). Setting the offsets to the sheet's actual deviation from its
-        centroid therefore makes the observed keypoints *exactly* the tracked particles -- so the
-        policy sees the half's deformation, not a synthetic box around it. The 140-dim layout is
-        untouched.
+        With a fitted rotation available, the task's own machinery does the right thing:
+        ``obj_kp = centroid + R * rest_offsets`` tracks the real corners, and
+        ``goal_kp = goal_centroid + R_goal * rest_offsets`` is the *folded* configuration.
 
-        The goal keypoints come out right too, because of how the keypoints were chosen: all four
-        sit on the far edge and share one ``x``, so reflecting them across the midline is the same
-        as translating in ``x``. ``goal_centroid + offsets`` therefore lands on the fold targets
-        rather than merely near them. Pick keypoints off that edge and this stops holding.
+        The previous version set the offsets to the sheet's live deviation, which made the object
+        keypoints exact but silently destroyed the goal: with one shared offsets array,
+        ``obj_kp - goal_kp`` collapses to ``obj_centroid - goal_centroid`` repeated four times, so
+        the policy saw where the goal centroid was and nothing about its shape. Rest offsets plus a
+        real rotation keep both halves of the comparison meaningful.
         """
-        kp = self.object.keypoints_w()                      # (N, K, 3), real particles
-        offsets = kp - kp.mean(dim=1, keepdim=True)
-        self._keypoint_offsets[:] = offsets
-        self._keypoint_offsets_fixed[:] = offsets
+        rest = self._corner_rest_offsets.unsqueeze(0).expand(self.num_envs, -1, -1)
+        self._keypoint_offsets[:] = rest
+        self._keypoint_offsets_fixed[:] = rest
 
     def _drive_goal_marker(self) -> None:
         """Point `goal_viz` at the fold target, so the OBSERVED goal is the fold.
@@ -284,7 +314,15 @@ class ClothEnv(PlayNewtonEnv):
         centre = self.fold_targets_w().mean(dim=1)  # (num_envs, 3)
         pose = torch.zeros((self.num_envs, 7), device=self.device)
         pose[:, :3] = centre
-        pose[:, 3] = 1.0  # identity wxyz, matching the manipuland's orientation convention here
+        # Folded ORIENTATION, not just position: a fold rotates the half 180 degrees about the
+        # crease line. With the manipuland's orientation now fitted from its corners, the task's
+        # keypoint machinery turns this into the folded corner positions -- so `keypoints_rel_goal`
+        # finally describes a fold rather than a translation.
+        #
+        # The crease runs along the axis perpendicular to `fold_axis`, so a fold about an x-normal
+        # crease is a 180-degree rotation about y (and vice versa).
+        pose[:, 3] = 0.0                                        # w = cos(pi/2) = 0
+        pose[:, 4 + (1 if self.cfg.cloth.fold_axis == "x" else 0)] = 1.0   # sin(pi/2) about y or x
         self.goal_viz.write_root_pose_to_sim(pose)
 
     def _get_observations(self):
@@ -292,6 +330,23 @@ class ClothEnv(PlayNewtonEnv):
         # by one step.
         self._sync_observed_keypoints()
         return super()._get_observations()
+
+    def footprint_ratio(self) -> torch.Tensor:
+        """Sheet extent along the fold axis, as a fraction of its unfolded size.
+
+        A fold halves the footprint; a slide or a crumple does not necessarily. Keypoint proximity
+        alone cannot tell those apart -- a dragged, crumpled sheet put keypoints near their targets
+        and scored, which is why this exists as a second, independent condition.
+        """
+        ax = 0 if self.cfg.cloth.fold_axis == "x" else 1
+        coord = self._particles_w()[:, :, ax]
+        return (coord.amax(dim=1) - coord.amin(dim=1)) / self.cfg.cloth.size
+
+    def is_folded(self) -> torch.Tensor:
+        """Both conditions: keypoints on target AND the footprint halved."""
+        return (self.fold_error() < self.cfg.cloth.keypoint_tolerance) & (
+            self.footprint_ratio() < self.cfg.cloth.max_folded_footprint
+        )
 
     def _get_dones(self):
         """Terminate on a completed fold, on the sheet leaving the table, or on timeout.
@@ -302,7 +357,7 @@ class ClothEnv(PlayNewtonEnv):
         """
         terminated, truncated = super()._get_dones()
 
-        folded = self.fold_error() < self.cfg.cloth.keypoint_tolerance
+        folded = self.is_folded()
         # Held for `success_steps`, matching the task's own criterion: a sheet passing through the
         # target on its way elsewhere is not a fold.
         self._fold_hold = torch.where(folded, self._fold_hold + 1, torch.zeros_like(self._fold_hold))
