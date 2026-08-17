@@ -11,6 +11,9 @@ Three things this measures carefully, because each will silently corrupt the fig
   allocator growth. Timing them reports a number several times too slow.
 * **CUDA is synchronised** around the timed region. Without it the host races ahead of the device
   and the measurement times queue submission rather than simulation.
+* **Contact-buffer overflow is fatal here, not a warning.** An overflowing scene drops contacts,
+  and contacts it does not process are work it does not do -- so overflow makes throughput look
+  *better*. A benchmark that ignores it reports an inflated number for a scene that is also wrong.
 * **Policy inference is separated from stepping.** ``--with_policy`` includes it; by default the
   actions are zeros, isolating the simulator. A training loop pays both, so both are useful, but
   conflating them hides which one is the bottleneck.
@@ -22,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -50,6 +54,7 @@ def main() -> None:
 
     import isaacsimenvs  # noqa: F401
     from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
+    from isaacsimenvs.newton.contact_guard import capture_fd_output, raise_if_overflowed
     from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
 
     @hydra_task_config_with_yaml("Isaacsimenvs-Cable-Direct-v0", "")
@@ -88,15 +93,54 @@ def main() -> None:
 
         # Warp kernel compilation, CUDA graph capture and allocator growth all land in the first
         # steps; timing them would report a number several times too slow.
-        for _ in range(args_cli.warmup):
-            obs = step_once(obs)
+        #
+        # Both warm-up and the timed region run inside the fd capture: overflow warnings come from
+        # a kernel writing to fd 1, and an overflowing scene would report inflated throughput
+        # because dropped contacts are work not done.
+        with capture_fd_output() as read_so_far:
+            try:
+                for _ in range(args_cli.warmup):
+                    obs = step_once(obs)
 
-        torch.cuda.synchronize()
-        t0 = time.perf_counter()
-        for _ in range(args_cli.steps):
-            obs = step_once(obs)
-        torch.cuda.synchronize()
-        elapsed = time.perf_counter() - t0
+                torch.cuda.synchronize()
+                t0 = time.perf_counter()
+                for _ in range(args_cli.steps):
+                    obs = step_once(obs)
+                torch.cuda.synchronize()
+                elapsed = time.perf_counter() - t0
+            finally:
+                captured = read_so_far()
+        sys.stdout.write(captured)
+        raise_if_overflowed(captured, inner.num_envs, "the throughput benchmark")
+
+        # torch.cuda.max_memory_allocated only sees PyTorch's allocator, and Newton/Warp allocate
+        # outside it -- it reported 0.01 GB for a run using several GB, which is worse than no
+        # number at all. Read the device instead, and take peak RSS for host memory.
+        import resource
+        import subprocess
+
+        def _gpu_used_gb() -> float:
+            try:
+                vis = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")[0].strip()
+                out = subprocess.run(
+                    ["nvidia-smi", "--query-compute-apps=pid,used_memory",
+                     "--format=csv,noheader,nounits"],
+                    capture_output=True, text=True, timeout=20,
+                ).stdout
+                mine = str(os.getpid())
+                for line in out.splitlines():
+                    pid, mb = (x.strip() for x in line.split(","))
+                    if pid == mine:
+                        return round(int(mb) / 1024, 2)
+                # Fall back to total device usage if this process is not listed (MIG, permissions).
+                tot = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                    capture_output=True, text=True, timeout=20,
+                ).stdout.splitlines()
+                idx = int(vis) if vis.isdigit() and int(vis) < len(tot) else 0
+                return round(int(tot[idx].strip()) / 1024, 2)
+            except Exception:
+                return -1.0
 
         policy_sps = args_cli.steps / elapsed
         result = {
@@ -108,7 +152,11 @@ def main() -> None:
             "policy_steps_per_s": round(policy_sps, 2),
             "env_steps_per_s": round(policy_sps * inner.num_envs, 1),
             "build_s": round(build_s, 1),
-            "gpu_mem_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2),
+            "gpu_mem_gb": _gpu_used_gb(),
+            "gpu_mem_torch_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2),
+            "cpu_peak_rss_gb": round(
+                resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2
+            ),
             "segments": int(inner.cfg.cable.segments),
             "substeps": int(inner.cfg.cable.cable_substeps),
             "vbd_iterations": int(inner.cfg.cable.vbd_iterations),

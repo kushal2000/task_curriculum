@@ -1,7 +1,7 @@
 #!/bin/bash
-# Cable-task simulation throughput at 16 environments.
+# Cable-task simulation throughput at 4096 environments.
 #
-#   sbatch scripts/cluster/throughput/tput_0016.sbatch
+#   sbatch scripts/cluster/throughput/tput_04096.sbatch
 #
 # One file per environment count so each run is a fixed, readable artifact: the env count, the
 # step budget and the resource request are all visible in the file that produced the number,
@@ -14,12 +14,12 @@
 # like an env-count effect if you do not check the hostname. It is not: per-step cost is constant
 # in env count on any given node.
 
-#SBATCH --job-name=tput_16
+#SBATCH --job-name=tput_4096
 #SBATCH --partition=portal
-#SBATCH --time=01:30:00
+#SBATCH --time=03:00:00
 #SBATCH --gres=gpu:nvidia_rtx_6000_ada_generation:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=48G
+#SBATCH --mem=400G
 #SBATCH --output=/share/portal/kk837/task_curriculum/slurm_logs/%x_%j.out
 #SBATCH --error=/share/portal/kk837/task_curriculum/slurm_logs/%x_%j.out
 
@@ -30,15 +30,15 @@ mkdir -p slurm_logs docs/results
 export OMNI_KIT_ACCEPT_EULA=YES
 export PYTHONUNBUFFERED=1
 
-echo "[tput] num_envs=16 host=$(hostname) gpu=${CUDA_VISIBLE_DEVICES:-unset}"
+echo "[tput] num_envs=4096 host=$(hostname) gpu=${CUDA_VISIBLE_DEVICES:-unset}"
 
 scripts/newton_py -m isaacsimenvs.eval.throughput \
-    --num_envs 16 \
-    --steps 200 \
-    --warmup 60 \
+    --num_envs 4096 \
+    --steps 100 \
+    --warmup 40 \
     --num_assets_per_type 1 \
-    --out docs/results/tput_16.json \
+    --out docs/results/tput_4096.json \
     'env.assets.handle_head_types=[hammer]' \
     env.cable.thickness=0.03
 
-echo "[tput] num_envs=16 exit=$?"
+echo "[tput] num_envs=4096 exit=$?"

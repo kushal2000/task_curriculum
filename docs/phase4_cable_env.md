@@ -631,6 +631,40 @@ Screening wants **many configs at few envs**; goal counts want the opposite. 39 
 3.22 at 4 envs and 8.61 at 8 -- so cross-env-count comparisons are invalid, which is why the rigid
 reference was re-run at 4 envs before any of the above was concluded.
 
+## Throughput: linear to 2048 envs, then memory-bound
+
+`isaacsimenvs/eval/throughput.py`, one job per env count under `scripts/cluster/throughput/`.
+RTX 6000 Ada, sim only (zero actions), warm-up excluded, CUDA synchronised, **overflow asserted**.
+
+| envs | ms/step | env-steps/s | GPU GB | CPU GB |
+|---:|---:|---:|---:|---:|
+| 1 | 402 | 2.5 | 2.56 | 2.15 |
+| 4 | 401 | 10.0 | 2.56 | 2.11 |
+| 16 | 401 | 39.9 | 2.59 | 2.13 |
+| 64 | 408 | 157 | - | - |
+| 512 | 455 | 1,125 | 11.10 | 2.78 |
+| **2048** | **408** | **5,019** | 37.98 | 5.93 |
+| 4096 | - | **OOM** | >49 | - |
+
+**Per-step cost is constant from 1 to 2048 envs**, so throughput is exactly linear
+(2.45 policy-steps/s x n) and the GPU never saturates on compute. The ceiling is **memory**:
+~2.5 GB fixed plus ~17 MB/env, which predicts the observed OOM at 4096 and a hard limit near
+2,700 envs (~6,600 env-steps/s) on a 49 GB card.
+
+**Overflow is fatal in this benchmark, deliberately.** Dropped contacts are work the solver skips,
+so an overflowing scene reports *higher* throughput while being physically wrong. Zero overflows
+were recorded at any env count.
+
+### Two measurement traps hit here
+
+* **`torch.cuda.max_memory_allocated` reported 0.01 GB** for a run using 38 GB -- Newton and Warp
+  allocate outside PyTorch's allocator. The GPU figure now comes from `nvidia-smi` for this PID.
+* **Mixed cluster hardware looked like an env-count effect.** An unpinned sweep put a third of its
+  runs on an RTX A6000 (~630 ms/step) and the rest on RTX 6000 Ada (~402-455 ms), producing an
+  apparent "n=4 is slow" and "1024 is slower than 2048". Grouping by hostname showed each node
+  constant to ~2% across all env counts. The sbatch files now pin
+  `--gres=gpu:nvidia_rtx_6000_ada_generation:1`.
+
 ## Read the metric carefully: episodes are not fixed-length
 
 `termination_utils.py:51` zeroes `episode_length_buf` on every goal, so the 600-step deadline
