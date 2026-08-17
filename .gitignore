@@ -49,3 +49,6 @@ third_party/
 *.swp
 .idea/
 .vscode/
+
+# SLURM job logs: large, regenerable, and one per run
+slurm_logs/

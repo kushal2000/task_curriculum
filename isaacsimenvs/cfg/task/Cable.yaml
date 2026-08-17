@@ -208,6 +208,10 @@ cable:
   # Measured best, 4 of 5 seeds scoring 5 goals in one episode. This YAML overrides the dataclass
   # defaults, so changing CableCfg alone silently does nothing -- the first attempt at these values
   # left this block stale and scored 0 goals against the sweep's 16.
+  pose_axis: pca                         # principal axis of the segment cloud, not first-to-last:
+                                         # the span vector degenerates as the cable bends, which is
+                                         # exactly while it is held. 3 of 4 seeds score >=5 in one
+                                         # episode (max 7) vs span's ceiling of 5 over five seeds
   proxy_mode: staggered                  # THE load-bearing value: 7-21 goals vs lagged's 4-5,
                                          # falls 13-15/64 vs ~46. The coupling, not the cable.
   linear_damping: 10.0

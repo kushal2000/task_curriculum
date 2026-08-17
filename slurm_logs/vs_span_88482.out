@@ -1,4 +1,0 @@
-##### segments=12 #####
-RESULT peak|v|=   2.894 m/s   worst span dev=0.0030 m (rest 0.2750)   NaN at step None   lifted=4/8
-##### segments=24 #####
-RESULT peak|v|=   4.174 m/s   worst span dev=0.0467 m (rest 0.2875)   NaN at step None   lifted=8/8

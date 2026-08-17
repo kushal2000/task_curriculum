@@ -170,7 +170,7 @@ class CableCfg:
     support_inset: float = 0.06
     """How far in from each cable end a rail sits [m]. Keeps the graspable middle clear."""
 
-    pose_axis: str = "span"
+    pose_axis: str = "pca"
     """How the manipuland's orientation is estimated: ``span`` | ``pca``.
 
     ``span`` uses the first-to-last segment vector, which degenerates when the cable bends -- span
@@ -178,9 +178,13 @@ class CableCfg:
     held, which is the only time the estimate matters. ``pca`` takes the principal axis of the
     segment cloud instead, so a symmetric droop cancels rather than rotating the frame.
 
-    Default is ``span`` because every result recorded in `docs/phase4_cable_env.md` was measured
-    with it; ``pca`` changes the observation the policy sees and the pose the success test scores,
-    so it needs its own measurements before it can be trusted."""
+    Default is ``pca``, on four seeds: max goals per episode 7, 5, 3, 6 against ``span``'s 5, 5, 5,
+    2, 5 over five seeds, at comparable totals and lift. What improves is *repeat* scoring within an
+    episode -- a faithful orientation means fewer goal streaks broken by frame noise -- which is the
+    half of the metric a bent-cable frame error would corrupt.
+
+    It does **not** rescue 24 segments (still 0 goals at 0.80 lift), which was the case it was
+    written for and remains unexplained."""
 
     proxy_links: str = "hand"
     """Which hand links the cable can feel: ``tips`` | ``fingers`` | ``hand``.
