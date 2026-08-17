@@ -94,6 +94,16 @@ class CableCfg:
 
     # --- coupling -------------------------------------------------------------------------
     vbd_iterations: int = 10
+    rigid_contact_k_start: float = 1.0e2
+    """AVBD contact-stiffness ramp start for body-body contacts inside the VBD entry.
+
+    Distinct from ``soft_contact_ke``, which is the *proxy* contact. The cable is a chain of rigid
+    bodies (``mesh_edge_body_N``), so hand-vs-cable is a body-body contact and this is the stiffness
+    that governs it. The VBD solver uses augmented-Lagrangian hard constraints for those by default
+    (``rigid_contact_hard=True``, already on), and this sets where the penalty ramp begins.
+
+    Default matches ``VBDSolverCfg``, so setting it is opt-in and changes nothing otherwise."""
+
     rigid_body_particle_contact_buffer_size: int = 1024
     rigid_body_contact_buffer_size: int = 4096
     """Body-BODY contact buffer. A Newton cable is bodies and joints, not particles, so this is
@@ -262,6 +272,7 @@ class CableCfg:
         @configclass
         class _VBDWithBodyBuffer(VBDSolverCfg):
             rigid_body_contact_buffer_size: int = self.rigid_body_contact_buffer_size
+            rigid_contact_k_start: float = self.rigid_contact_k_start
 
         rigid_bodies = [r"/World/envs/env_.*/Robot"]
         if self.rigid_rod:

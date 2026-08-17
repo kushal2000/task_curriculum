@@ -420,6 +420,43 @@ cable zeros interpretable: the scene is sound, the proxies work, the goal is rea
 cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/episode, with lift
 3/32 -> 28/32 as the leading indicator, since goals follow lift.
 
+## Best result: 6 goals on a cable (64 envs, supports + AVBD contact ramp)
+
+`docs/results/n64_k3.json` -- 64 envs, 60 mm support gap, `rigid_contact_k_start=1.0e3`:
+**6 goals across 5 distinct envs**, one episode scoring 2, lift 44/64, zero ejected, zero censored.
+
+Two things got there, and it is worth keeping them separate.
+
+**Clearance made goals possible at all** (see below): 0 goals in 22 unsupported configurations,
+goals in every supported one.
+
+**The AVBD contact ramp is the only physics parameter that separated from noise.** Same envs, same
+supports; the ramp is the only difference:
+
+| run | `rigid_contact_k_start` | goals/ep | goals |
+|---|---:|---:|---:|
+| `n64_plain` | 1.0e2 (default) | 0.0312 | 2 / 64 |
+| `n64_k3` | 1.0e3 | **0.0938** | **6 / 64** |
+| `b_k1e4` | 1.0e4 | **0.1250** | 4 / 32 |
+
+A 3-4x rate increase over default, reproduced at two settings and two env counts. It matters
+because it is a *different contact path* from `soft_contact_ke`: the cable is a chain of rigid
+bodies (`mesh_edge_body_N`), so hand-vs-cable is a body-body contact governed by the VBD solver's
+augmented-Lagrangian constraints, not by the proxy's soft contact. Sweeping `soft_contact_ke` over
+three decades did nothing; one decade of the right parameter tripled the rate.
+
+Found from a Newton release note, not from the config: `VBDSolverCfg` exposes
+`rigid_contact_k_start` but `CableCfg` never set it.
+
+**What did not separate from noise**, all at 32 envs with supports (goal counts 0-3, mutually
+indistinguishable): support gap 20/40/60/80 mm, flat-topped vs round supports, wide vs narrow
+stance, friction x4, density x10, bend stiffness x100. Lift sits at 19-22/32 across all of them.
+
+**The open gap.** Lift is ~68% but goals/episode is ~0.09, and the rigid rod scores 9.05. Envs pick
+the cable up and lose it before reaching the goal pose, so *transport*, not grasp acquisition, is
+what remains. `max_steps=6000` does not help, because episodes end in `fall` (~70%) rather than
+being truncated.
+
 ## Clearance is the answer: the first goals scored on a cable
 
 **A cable lying flush on a table gives the fingers nowhere to close.** That is the whole thing.

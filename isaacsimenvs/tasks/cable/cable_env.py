@@ -311,22 +311,24 @@ class CableEnv(PlayNewtonEnv):
 
         c = self.cfg.cable
         half = 0.5 * c.length - c.support_inset
-        rail_r = 0.5 * c.support_height
         for i, x in enumerate((-half, half)):
             cfg = RigidObjectCfg(
                 prim_path=f"/World/envs/env_.*/Support_{i}",
-                spawn=sim_utils.CapsuleCfg(
-                    radius=rail_r,
-                    height=0.08,
-                    # Across the cable, so the cable bridges the two and the middle stays open.
-                    axis="Y",
+                # Flat-topped, not a capsule. A cable resting on two round rails is laterally
+                # unstable -- it rolls off the convex tops at the first nudge, which showed up as
+                # ~26/32 episodes still ending in `fall` even once clearance was solved. A flat
+                # top cradles it instead.
+                spawn=sim_utils.CuboidCfg(
+                    size=(0.024, 0.09, c.support_height),
                     collision_props=sim_utils.CollisionPropertiesCfg(),
                     rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
                     mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
                     visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.55, 0.55, 0.60)),
                 ),
                 init_state=RigidObjectCfg.InitialStateCfg(
-                    pos=(float(x), 0.0, self._cable_spawn_height() - c.radius + rail_r)
+                    # Box centre sits half its height below the top face the cable rests on.
+                    pos=(float(x), 0.0, self._cable_spawn_height() - c.radius
+                         - 0.5 * c.support_height)
                 ),
             )
             self.scene.rigid_objects[f"support_{i}"] = RigidObject(cfg)
