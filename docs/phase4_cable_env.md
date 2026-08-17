@@ -420,7 +420,38 @@ cable zeros interpretable: the scene is sound, the proxies work, the goal is rea
 cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/episode, with lift
 3/32 -> 28/32 as the leading indicator, since goals follow lift.
 
-## Where the cable ends up: 2-5 goals per 64 envs, max 2-3 per episode
+## Solved by the coupling, not the cable: `proxy_mode=staggered`
+
+**16 goals per 64 envs, with a single episode scoring 5** (`x_stag_0`, env 29, 1124 steps). Flat
+table, **no clearance**, zero contact-buffer overflows, zero ejected, zero censored, peak height
+0.852 m. Falls collapse from ~46/64 to **14/64**, with 50 episodes surviving to timeout.
+
+    proxy_mode=staggered   cable_substeps=2      linear_damping=10
+    angular_damping=20     vbd_iterations=80     bend_stiffness_scale=10.0
+
+Against the best `lagged` configuration's 4-5 total goals and max 2-3 per episode, this is 3x on
+totals and the first episode to score 5 -- far outside the run-to-run spread that made every other
+comparison here unrankable.
+
+**The change is to how the two solvers exchange state, not to the cable.** That is exactly what the
+stability work predicted: VBD iterations did nothing (and hurt past 80), substeps had an optimum at
+*fewer* than default, and coupler iterations made things worse -- three independent signs that
+energy entered through the MJWarp<->VBD exchange rather than the VBD solve. `staggered` reorders
+that exchange.
+
+**This was dismissed early on.** `proxy_mode=staggered` measured 36.3 m/s in the very first
+stability sweep and was written off. That run was on the broken proxy contact pipeline
+(silently dropping contacts) with an unstable base config, so the number meant nothing. It only
+became testable after the pipeline was fixed and the base stabilised -- a reminder that a negative
+result taken on a broken scene is not a negative result.
+
+Related: `collide_interval=2` also helps (9 goals, max 4, at seed 0), and it is the other knob that
+changes exchange frequency rather than cable behaviour.
+
+Staggered + 24 segments lifts **53/64 = 83%**, the highest recorded, though it scored 0 in that
+draw -- worth repeats given the size of the grip advantage.
+
+## Where the cable ends up (lagged coupling): 2-5 goals per 64 envs, max 2-3 per episode
 
 Measured on a clean sim -- flat table, no clearance, overflow guard active, contacts intact.
 Best configuration found (`p_bd05`):
