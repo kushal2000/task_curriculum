@@ -631,6 +631,39 @@ Screening wants **many configs at few envs**; goal counts want the opposite. 39 
 3.22 at 4 envs and 8.61 at 8 -- so cross-env-count comparisons are invalid, which is why the rigid
 reference was re-run at 4 envs before any of the above was concluded.
 
+## Read the metric carefully: episodes are not fixed-length
+
+`termination_utils.py:51` zeroes `episode_length_buf` on every goal, so the 600-step deadline
+restarts each time a goal is scored. Measured episode lengths make this unmistakable:
+
+    0 goals -> length maxes at exactly 600
+    1 goal  -> 748, 785, 867, 948, 1158
+    2 goals -> 799, 942
+    7 goals -> 1826
+
+**Scoring buys more time, so episode length is a function of the goal count.** "goals/episode" is
+therefore a poor label: the quantity is *consecutive successes before a 600-step dry spell*, not a
+rate over a fixed window, and a per-episode count is inflated by the very thing it measures.
+
+Normalising by simulated steps changes one conclusion and not the other:
+
+| config | goals | max/ep | steps | **goals / 1k steps** |
+|---|---:|---:|---:|---:|
+| pca + staggered (s400) | 16 | 6 | 33,450 | **0.478** |
+| staggered + span (s0) | 16 | 5 | 34,289 | 0.467 |
+| pca + staggered (s0) | 16 | 7 | 35,117 | 0.456 |
+| lagged, best stack | 5 | 3 | 17,793 | 0.281 |
+| lagged, plain | 2 | 1 | 27,055 | 0.074 |
+
+* **`staggered` over `lagged` survives normalisation** -- 0.47 vs 0.074, a 6x rate difference. That
+  result is real.
+* **`pca` over `span` does not.** 0.456-0.478 against 0.467 is indistinguishable. PCA episodes
+  reach higher per-episode counts largely *because they run longer*. The "ceiling 5 -> 7" framing
+  recorded above overstates it: the per-episode maximum does improve, but scoring *rate* does not.
+
+Comparisons against the rigid rod (9.05) remain valid, since it was measured under the identical
+protocol.
+
 ## The reference: what a *working* manipulation looks like
 
 Peak speed was used as a stability metric here for a long time against a badly chosen anchor --
