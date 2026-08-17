@@ -387,6 +387,36 @@ removing its cause, which fits the geometry: one hinge carrying the entire bend 
 timestep where a stiff hinge is marginal. **No solver tuning found here makes 2 segments genuinely
 sound**, and the 12-segment cable remains the configuration to prefer.
 
+## The orphaned rigid tool was live the whole time
+
+Spotted in a render, twice: a hammer lying on the floor beside the table in every cable video.
+`_neutralise_rigid_object` exists precisely to prevent that -- its docstring says a stray rigid body
+"can collide with the cable and with the hand, which would quietly corrupt every measurement taken
+here" -- and it was printing **`0 colliders off`**. The loop walked `[prim, *prim.GetChildren()]`,
+one level, while the colliders sit two levels down at `/Object/<mesh>/collisions`. The kinematic pin
+does not survive the Newton import either. So the tool stayed fully dynamic and collidable through
+every cable measurement recorded above.
+
+Fixed by walking the subtree with `Usd.PrimRange` (now `1 prims, 2 colliders off, 1 bodies pinned`),
+and by **raising** if the tool is ever found with no collider disabled -- the failure mode was a
+guard that silently did nothing, so it should be loud rather than absent.
+
+### Does it change the results? No.
+
+| config | tool live | tool inert |
+|---|---|---|
+| 30 mm, 12 seg | 0.0 goals, lift 3/32, fall 30 | 0.0 goals, lift 1/32 (1 ejected), fall 31 |
+| 30 mm, 2 seg | 0.0 goals, lift 4/32, fall 32 | 0.0 goals, lift 1/32, fall 30 |
+
+**Goals stay at exactly 0.0 and terminations stay at ~32 `fall` in every condition**, so the primary
+conclusion is unaffected. Lift fell toward 1/32 in both configs. Each move alone is inside noise at
+n=32, but the same direction in two independent configs is weakly suggestive that the falling tool
+was helping tip the cable on end -- consistent with the pivot reading above. Treat as a mechanism
+worth remembering, not an established effect.
+
+The lesson worth keeping: the bug was visible in every video for as long as videos have existed, and
+was read past because attention was on the cable. `0 colliders off` was printed on every run too.
+
 ## Also open: the orphaned rigid tool
 
 `setup_scene` still spawns the procedural handle+head tool. Once `env.object` points at the cable,

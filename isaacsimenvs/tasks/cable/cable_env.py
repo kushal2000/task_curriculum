@@ -259,23 +259,39 @@ class CableEnv(PlayNewtonEnv):
         Disabling collision and pinning the body kinematic is done on the USD *before* Newton
         imports it, which is the only point at which either can still be changed.
         """
-        from pxr import UsdPhysics
+        from pxr import Usd, UsdPhysics
 
         from isaaclab.sim.utils import find_matching_prims
 
-        disabled = 0
+        # Walk the whole subtree, not just direct children. The colliders sit at
+        # /Object/<mesh>/collisions -- two levels down -- so a one-level loop reported
+        # "0 colliders off" while silently leaving the tool fully collidable. The kinematic
+        # pin below does not survive the Newton import either, so disabling collision is the
+        # only guarantee that this body cannot touch the cable or the hand.
+        colliders = pinned = prims = 0
         for prim in find_matching_prims("/World/envs/env_.*/Object"):
-            for target in [prim, *prim.GetChildren()]:
+            prims += 1
+            for target in Usd.PrimRange(prim):
                 if target.HasAPI(UsdPhysics.CollisionAPI):
                     api = UsdPhysics.CollisionAPI(target)
                     attr = api.GetCollisionEnabledAttr() or api.CreateCollisionEnabledAttr()
                     attr.Set(False)
-                    disabled += 1
-            if prim.HasAPI(UsdPhysics.RigidBodyAPI):
-                body = UsdPhysics.RigidBodyAPI(prim)
-                attr = body.GetKinematicEnabledAttr() or body.CreateKinematicEnabledAttr()
-                attr.Set(True)
-        print(f"[cable] neutralised the inherited rigid tool ({disabled} colliders off)", flush=True)
+                    colliders += 1
+                if target.HasAPI(UsdPhysics.RigidBodyAPI):
+                    body = UsdPhysics.RigidBodyAPI(target)
+                    attr = body.GetKinematicEnabledAttr() or body.CreateKinematicEnabledAttr()
+                    attr.Set(True)
+                    pinned += 1
+        print(
+            f"[cable] neutralised the inherited rigid tool "
+            f"({prims} prims, {colliders} colliders off, {pinned} bodies pinned)",
+            flush=True,
+        )
+        if prims and not colliders:
+            raise RuntimeError(
+                "found the inherited rigid tool but disabled none of its colliders -- it would "
+                "stay live in the scene and corrupt every measurement. Check the prim layout."
+            )
 
     def _cable_spawn_height(self) -> float:
         reset_cfg = self.cfg.reset
