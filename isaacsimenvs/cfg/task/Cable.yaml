@@ -202,13 +202,22 @@ cable:
   thickness: 0.010
   density: 100.0
   stretch_stiffness_scale: 500000.0
-  bend_stiffness_scale: 20.0
+  bend_stiffness_scale: 10.0             # x0.5. Softer BEND helps; softer STRETCH is catastrophic
+                                         # (x0.01 peaks at 94.9 m/s) -- they move opposite ways
 
-  vbd_iterations: 10
+  # Measured best, 4 of 5 seeds scoring 5 goals in one episode. This YAML overrides the dataclass
+  # defaults, so changing CableCfg alone silently does nothing -- the first attempt at these values
+  # left this block stale and scored 0 goals against the sweep's 16.
+  proxy_mode: staggered                  # THE load-bearing value: 7-21 goals vs lagged's 4-5,
+                                         # falls 13-15/64 vs ~46. The coupling, not the cable.
+  linear_damping: 10.0
+  angular_damping: 20.0
+  vbd_iterations: 80
   rigid_body_particle_contact_buffer_size: 1024
   rigid_body_contact_buffer_size: 4096   # body-BODY buffer; VBDSolverCfg does not expose it
-  cable_substeps: 4                      # the fix: a 0.2 g segment cannot absorb the coupled
-                                         # impulse in one step
+  cable_substeps: 2                      # sharp optimum: 1 peaks at 37 m/s, 4/8/16 degrade
+                                         # monotonically. Fewer, larger substeps mean fewer proxy
+                                         # exchanges per step, which is where the energy enters
   mass_scale: 1.0                        # KEEP AT 1.0 — 0.05 is ~500x worse and NaNs the robot
   soft_contact_ke: 8000.0
   soft_contact_mu: 10.0

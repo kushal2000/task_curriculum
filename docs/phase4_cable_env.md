@@ -441,6 +441,11 @@ also strongly positive, which is the same mechanism showing up twice.
     proxy_mode=staggered   cable_substeps=2      linear_damping=10
     angular_damping=20     vbd_iterations=80     bend_stiffness_scale=10.0
 
+These are now the defaults, in **both** `CableCfg` and `cfg/task/Cable.yaml`. The YAML shadows the
+dataclass, so editing `CableCfg` alone silently changes nothing: the first attempt did exactly that
+and scored 0 goals where the sweep scored 16. Verified end to end with no overrides -- 13 goals,
+max 4 per episode, lift 38/64, 13 falls.
+
 Against the best `lagged` configuration's 4-5 total goals and max 2-3 per episode, this is 3x on
 totals and the first episode to score 5 -- far outside the run-to-run spread that made every other
 comparison here unrankable.

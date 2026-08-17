@@ -70,22 +70,36 @@ class CableCfg:
     10 mm cable on a blue table is invisible in a capture."""
 
     stretch_stiffness_scale: float = 5.0e5
-    bend_stiffness_scale: float = 20.0
+    bend_stiffness_scale: float = 10.0
     """Moduli are derived from these per Isaac Lab's own ``scripts/demos/cables.py``: stretch as
     ``scale * seg_len / (pi r^2)`` and bend as ``scale * seg_len / (0.25 pi r^4)``, so the
     authored numbers stay physically meaningful as segment count or thickness change."""
 
-    linear_damping: float = 0.0
+    linear_damping: float = 10.0
     """Cable stretch/shear damping [N.s/m]. `CableMaterialCfg` exposes no damping, so this is
     applied to the model before finalize; unset, all four damping terms default to 0.0 and the
     cable runs completely undamped."""
 
-    angular_damping: float = 0.0
+    angular_damping: float = 20.0
     """Cable bend/twist damping [N.m.s/rad]. The lever that matters for few-segment cables, where
     the whole bend response concentrates in one hinge. Not free: newton#2557 reports high VBD
     cable damping visibly changing a catenary's shape, i.e. costing apparent stiffness."""
 
-    proxy_mode: str = "lagged"
+    proxy_mode: str = "staggered"
+    """How the coupled solver orders the MJWarp <-> VBD state exchange.
+
+    **This is the single most load-bearing value in this config.** `staggered` scores 7-21 goals
+    per 64 envs (4 of 5 seeds reaching 5 in one episode) against `lagged`'s 4-5, and drops falls
+    from ~46/64 to 13-15. The cable is unchanged; only the exchange ordering differs.
+
+    It is the coupling, not the cable, because that is where the energy enters: VBD iterations do
+    nothing and hurt past 80, substeps are optimal at *fewer* than the old default, and coupler
+    iterations make things worse -- three independent signs pointing away from the VBD solve.
+
+    Beware the history: `staggered` was measured at 36.3 m/s in an early sweep and written off for
+    most of a day. That run was on the proxy contact pipeline that silently dropped contacts, with
+    an unstable base config, so the number meant nothing. A negative measured on a broken scene is
+    not a negative."""
     """Proxy transfer mode: ``lagged`` or ``staggered``. Lagged uses one-step-old state across the
     coupling, a standard instability source."""
 
@@ -93,7 +107,7 @@ class CableCfg:
     """Outer coupled-solver iterations. More tightens convergence between the two entries."""
 
     # --- coupling -------------------------------------------------------------------------
-    vbd_iterations: int = 10
+    vbd_iterations: int = 80
     rigid_contact_k_start: float = 1.0e2
     """AVBD contact-stiffness ramp start for body-body contacts inside the VBD entry.
 
@@ -111,7 +125,7 @@ class CableCfg:
     to 64). Declared on the subclass below, which is enough: the solver forwards any cfg field
     whose name matches one of its kwargs."""
 
-    cable_substeps: int = 4
+    cable_substeps: int = 2
     """Substeps run by the *cable entry alone* inside one coupled step.
 
     This is the fix for the defect that made the coupled scene unusable: the VBD entry was
