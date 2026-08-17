@@ -64,27 +64,44 @@ class ClothCfg:
     cable work showed collision geometry is the binding memory cost at scale, and a finer sheet
     buys nothing until folding works at all."""
 
-    start_height: float = 0.15
+    start_height: float = 0.30
     """Spawn height above ``reset.table_reset_z`` [m].
 
-    **``table_reset_z`` is the table's CENTRE, not its surface.** The top is half a table-thickness
-    higher (measured: centre 0.38, half-thickness 0.045, so the surface is at 0.425). A sheet
-    spawned below that starts *inside* the table and is ejected in a single step -- measured at
-    0.39 m it jumped to 1.16 m in one step and reached 51 m by step 80.
+    **The table's collision surface is at ``table_reset_z + 0.150``, not + 0.045.** See
+    ``table_half_thickness``. Everything below is measured with zero actions, so the robot never
+    approaches the sheet and anything it does is spawn behaviour:
 
-    Clearing the surface is necessary but **not sufficient**: spawning in near-contact still kicks
-    the sheet. Measured, settling to a flat rest on the table:
+        0.150  -> spawn 0.5300, surface 0.5298: in contact. EJECTED upward at ~1.7 m/s, peaks at
+                  0.68 by step 10, falls back, settles by step 30 with a 17 mm spread across a
+                  12 mm sheet -- i.e. visibly wrinkled.
+        0.300  -> spawn 0.6800, a genuine 15 cm drop. Falls at exactly g (predicted 0.0340 m over
+                  the first 5 steps, measured 0.0349), lands at 0.5360 and settles PERFECTLY flat
+                  (min = mean = max to four decimals).
 
-        0.010  -> inside the table; 0.39 to 1.16 m in ONE step, 51 m by step 80
-        0.060  -> 15 mm clearance; still kicked, 0.44 -> 0.76 -> 6.8 -> 9.0 m
-        0.150  -> falls and settles at 0.536 m, dead flat, unchanged from step 40 to 80
+    An earlier version of this docstring reported 0.150 as "settles dead flat", which was wrong: it
+    was read after settling and never checked the spread. Every episode was therefore starting with
+    the sheet thrown into the air and landing creased, and that was mis-attributed in turn to
+    thickness, to grid resolution, and to cloth physics.
 
-    So the default is a genuine drop, which is also the convention the cable uses
-    (``cable_start_height: 0.15``). A particle sheet resolving first contact against a proxied
-    surface injects energy; giving it a fall to settle from avoids the impulse entirely."""
+    Values below the surface are worse still, and were correctly diagnosed at the time: at 0.010 the
+    sheet starts inside the table and reaches 51 m by step 80."""
 
-    table_half_thickness: float = 0.045
-    """Half the table top's thickness [m], used only to check ``start_height`` clears it."""
+    table_half_thickness: float = 0.150
+    """Distance from ``reset.table_reset_z`` up to the table's COLLISION surface [m].
+
+    **Measured, not read off the USD.** The visual box is 0.045 half-thick, and that number sat here
+    for a long time -- but the sheet settles with its lowest particles at 0.5360 against a table root
+    of 0.3800, putting the contact surface at 0.5298, i.e. 0.1498 above the root. Confirmed twice
+    from different drop heights, and `Table/box` is the only non-robot collider in the scene, so
+    that is what the cloth is resting on.
+
+    Getting it wrong is not a cosmetic error. At 0.045 the guard below accepted
+    ``start_height = 0.15``, which looked like a 10 cm drop and actually spawned the sheet 0.2 mm
+    above the surface -- effectively in contact. Contact resolution then ejected it upward at
+    ~1.7 m/s at the start of EVERY episode: it flew to 0.68, fell back, and settled visibly
+    wrinkled (17 mm spread across a 12 mm sheet). With a real drop it falls at exactly g and lands
+    perfectly flat (spread 0.0000). The crumpled spawn had been attributed to thickness, to grid
+    resolution, and to cloth physics; it was this."""
 
     # --- material -------------------------------------------------------------------------
     density: float = 100.0

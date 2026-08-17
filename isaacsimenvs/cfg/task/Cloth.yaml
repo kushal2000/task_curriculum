@@ -206,5 +206,9 @@ cloth:
   proxy_mode: staggered                  # the cable result: lagged shakes deformables loose
   substeps: 2
   vbd_iterations: 80
-  start_height: 0.15
-  edge_ke: 0.5                           # 5.0 springs a crease open in 1 step; 0.5 holds 7                     # a DROP, not near-contact: see ClothCfg.start_height
+  # A GENUINE drop. The table's collision surface is at table_reset_z + 0.150, not + 0.045, so the
+  # old 0.15 spawned the sheet 0.2 mm above it -- in contact -- and it was ejected upward at
+  # ~1.7 m/s every single episode. See ClothCfg.start_height.
+  start_height: 0.30
+  table_half_thickness: 0.150            # measured from where the sheet rests, not from the USD box
+  edge_ke: 0.5                           # 5.0 springs a crease open in 1 step; 0.5 holds
