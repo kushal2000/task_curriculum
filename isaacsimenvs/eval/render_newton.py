@@ -39,6 +39,71 @@ SHAPE_COLORS = {
 }
 
 
+#: Overlay colours. Goal keypoints green, object keypoints amber, the error lines between them
+#: fading from amber to green -- so the thing the success test measures is what you see.
+GOAL_KP_COLOR = (0.25, 0.80, 0.45)
+OBJ_KP_COLOR = (1.00, 0.65, 0.10)
+
+
+def _goal_overlay(viewer, inner, world: int):
+    """Draw the goal pose and the keypoint error that defines success.
+
+    `goal_viz` is a visual-only marker with no collision geometry, and the viewer draws collision
+    shapes (`show_collision=True`, without which the robot is invisible) -- so the goal is simply
+    never rendered by the scene walk, whatever colour `_colorize` assigns it. Drawing it in
+    immediate mode is the way to get it on screen.
+
+    Success is not "object near goal point": it is the *max* over per-keypoint distances, held for
+    `success_steps`. So the honest overlay is the keypoints themselves plus the segments whose
+    longest member has to fall under the tolerance -- a single marker at `goal_pos` would hide the
+    orientation half of the criterion entirely.
+    """
+    import warp as wp
+
+    from isaacsimenvs.tasks.play.utils.obs_utils import _keypoints_world
+
+    rew_cfg = inner.cfg.reward
+    offsets = (
+        inner._keypoint_offsets_fixed
+        if rew_cfg.fixed_size_keypoint_reward
+        else inner._keypoint_offsets
+    )
+    # World frame: the viewer draws in world coordinates, and `root_pos_w` is already there.
+    obj_kp = _keypoints_world(
+        inner.object.data.root_pos_w, inner.object.data.root_quat_w, offsets
+    )[world]
+    goal_kp = _keypoints_world(
+        inner.goal_viz.data.root_pos_w, inner.goal_viz.data.root_quat_w, offsets
+    )[world]
+
+    g = goal_kp.detach().cpu().numpy().astype("float32")
+    o = obj_kp.detach().cpu().numpy().astype("float32")
+    dev = getattr(viewer, "device", None)
+
+    # Colours must be per-element arrays here, not a single tuple -- the GL backend calls
+    # `.numpy()` on whatever it is given and a tuple raises inside `_update_vbo`.
+    def _col(rgb, n):
+        return wp.array([rgb] * n, dtype=wp.vec3, device=dev)
+
+    def _pts(arr):
+        return wp.array(arr, dtype=wp.vec3, device=dev)
+
+    viewer.log_points("goal_kp", _pts(g), radii=0.012, colors=_col(GOAL_KP_COLOR, len(g)))
+    viewer.log_points("obj_kp", _pts(o), radii=0.009, colors=_col(OBJ_KP_COLOR, len(o)))
+    viewer.log_lines(
+        "goal_err", _pts(o), _pts(g), colors=_col(GOAL_KP_COLOR, len(g)), width=0.003
+    )
+    # The goal frame itself, as a wireframe quad through the four keypoints.
+    edges = [(0, 1), (1, 2), (2, 3), (3, 0)]
+    viewer.log_lines(
+        "goal_frame",
+        _pts([g[a] for a, _ in edges]),
+        _pts([g[b] for _, b in edges]),
+        colors=_col(GOAL_KP_COLOR, len(edges)),
+        width=0.004,
+    )
+
+
 def _segment_color(index: int, total: int):
     """Hue sweep along the cable: segment 0 red, running through to violet at the far end."""
     import colorsys
@@ -156,6 +221,9 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--out", type=Path, default=Path("videos/play_newton.mp4"))
+    parser.add_argument(
+        "--no_goal", action="store_true", help="skip the goal-pose / keypoint-error overlay"
+    )
     args, hydra_args = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + hydra_args
 
@@ -247,6 +315,8 @@ def main() -> None:
 
             viewer.begin_frame(step * float(inner.step_dt))
             viewer.log_state(NewtonManager._state_0)
+            if not args.no_goal:
+                _goal_overlay(viewer, inner, args.world)
             viewer.end_frame()
 
             image = wp.to_torch(viewer.get_frame()).detach().cpu().numpy()

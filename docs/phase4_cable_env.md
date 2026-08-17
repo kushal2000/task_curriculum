@@ -387,6 +387,27 @@ removing its cause, which fits the geometry: one hinge carrying the entire bend 
 timestep where a stiff hinge is marginal. **No solver tuning found here makes 2 segments genuinely
 sound**, and the 12-segment cable remains the configuration to prefer.
 
+## Rendering the goal
+
+`goal_viz` is a visual-only marker with no collision geometry, and the viewer draws *collision*
+shapes (`show_collision=True`, without which the robot is invisible) -- so the goal was never drawn,
+whatever colour `_colorize` assigned its role. `render_newton._goal_overlay` draws it in immediate
+mode instead (`--no_goal` opts out).
+
+It draws the **keypoints**, not a single pose marker, because that is what the success test actually
+measures: the *max* over per-keypoint distances, held for `success_steps`. A dot at `goal_pos` would
+hide the orientation half of the criterion. Green = goal keypoints plus a wireframe quad through
+them, amber = the object's, thin lines = the per-keypoint error being minimised.
+
+Validated on `Isaacsimenvs-PlayNewton-Direct-v0`, where the policy does score: the green keypoints
+sit directly on the held tool with the error lines collapsed to nearly nothing (env 0, ~5 goals in
+400 steps). On the cable the same overlay shows the goal quad hanging in the air off the table with
+long error lines to a cable that never leaves the surface -- the goal pose requires lifting and
+carrying, which is the step that never happens.
+
+One gotcha: `log_lines`/`log_points` colours must be per-element `wp.array`s, not a single tuple --
+the GL backend calls `.numpy()` on whatever it gets and a tuple raises inside `_update_vbo`.
+
 ## The orphaned rigid tool was live the whole time
 
 Spotted in a render, twice: a hammer lying on the floor beside the table in every cable video.
