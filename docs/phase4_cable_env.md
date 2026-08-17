@@ -387,6 +387,59 @@ removing its cause, which fits the geometry: one hinge carrying the entire bend 
 timestep where a stiff hinge is marginal. **No solver tuning found here makes 2 segments genuinely
 sound**, and the 12-segment cable remains the configuration to prefer.
 
+## The hand could only ever feel the cable with five fingertips
+
+The coupling is proxy-based: the cable is touched **only** by robot links named in
+`CouplerEntryCfg.proxies`, and that list was
+`left_(thumb|index|middle|ring|pinky)_DP` -- the five distal phalanges. The palm and the proximal
+and medial phalanges did not exist as far as the VBD entry was concerned, while the rigid-rod
+control collides with the whole hand through MJWarp. An enclosing grasp was therefore
+*geometrically impossible* for a cable, and that asymmetry sat underneath every cable measurement
+as a precondition rather than a variable.
+
+`CableCfg.proxy_links` now selects `tips` | `fingers` | `hand`, and **defaults to `hand`** (full
+phalanges, palm, thumb/pinky metacarpals). Anything meant to characterise the cable rather than the
+coupling should stay there.
+
+Two traps found while wiring it. The URDF link `left_hand_C_MC` is merged away by the importer and
+matches **no** Newton body -- the palm body is `iiwa14_link_7` (`scene_utils.PALM_BODY_NAME`).
+Naming the URDF link proxied nothing, and because the surrounding alternation still matched the
+thumb/pinky metacarpals, the coupler's own empty-regex guard (`coupler.py:337`, which *does* raise
+on a regex matching zero bodies) never fired. And `bend_stiffness_scale=2000` fails config
+validation: the field is `float`, so the CLI needs `2000.0`.
+
+### The positive control, on the fixed scene
+
+| object | goals/ep | lift | terminations |
+|---|---:|---:|---|
+| **rigid rod** (0.30 m x 30 mm, matched mass) | **9.05 +/- 1.70** (n=21, 11 censored) | **28/32** | fall 6, timeout 15 |
+| cable, same everything | 0.0 | 3/32 | fall 29 |
+
+Same coupled solver, same whole-hand proxies, same harness, same dimensions. This is what makes the
+cable zeros interpretable: the scene is sound, the proxies work, the goal is reachable, and the
+cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/episode, with lift
+3/32 -> 28/32 as the leading indicator, since goals follow lift.
+
+### What moved, and what did not
+
+All at 32 envs, damping 1.0 + 20 VBD iterations, whole-hand proxies:
+
+| config | goals | lift | timeouts |
+|---|---:|---:|---:|
+| `proxy_links=tips` | 0.0 | 0/32 (1 ejected) | 0 |
+| `proxy_links=hand` | 0.0 | 3/32 | 0 |
+| `vbd_iterations=30`, `substeps=8` | 0.0 | 2/32 | 0 |
+| **`soft_contact_ke` x10** | 0.0 | **5/32** | **3** |
+
+Whole-hand proxying did *not* measurably help: 3/32 is inside the 1-4/32 range fingertip-only runs
+produce on repeats. It is kept because it is physically right, not because it scored.
+
+Raw solver fidelity did nothing at all. The only change that altered the *failure mode* was contact
+stiffness: three episodes surviving the full 3000 steps, where every other run had zero. A timeout
+means the cable stayed on the table with the hand engaged. `soft_contact_ke = 8.0e3` against a 30 mm
+cable may simply be too soft to transmit a grasp -- fingers sink instead of gripping -- which would
+present as "the policy cannot grasp cables" while being a contact-model artifact.
+
 ## Rendering the goal
 
 The goal was invisible in every render. It was first worked around with an immediate-mode overlay,

@@ -126,6 +126,23 @@ class CableCfg:
     soft_contact_ke: float = 8.0e3
     soft_contact_mu: float = 10.0
 
+    proxy_links: str = "hand"
+    """Which hand links the cable can feel: ``tips`` | ``fingers`` | ``hand``.
+
+    The coupling is proxy-based, so the cable is touched *only* by the links named here --
+    everything else on the robot does not exist as far as the VBD entry is concerned. This was
+    ``tips`` (the five distal phalanges) for every measurement before 2026-08-16, which meant a
+    cable could only ever be pinched fingertip-to-fingertip, while the rigid-rod control collided
+    with the whole hand through MJWarp. An enclosing grasp was geometrically impossible, so that
+    asymmetry sat underneath every cable result as a *precondition*, not a variable -- and a
+    fingertip-only comparison says more about the coupling than about the cable.
+
+    Hence the default is ``hand``: full phalanges (``_DP``/``_MP``/``_PP``), the palm and the
+    thumb/pinky metacarpals. Keep it there for anything meant to characterise the cable.
+    ``tips``/``fingers`` remain only for reproducing pre-fix runs.
+
+    Measured at 32 envs with no contact-buffer overflow despite ~3x the contact pairs."""
+
     proxy_table: bool = True
     """Route the table through the proxy as a kinematic rigid body.
 
@@ -232,9 +249,27 @@ class CableCfg:
             # would be claimed by the VBD entry, which does not integrate rigid bodies -- the rod
             # then never moves and the observation reports a manipuland frozen at its spawn pose.
             rigid_bodies.append(r"/World/envs/env_.*/Rod")
+        finger_links = {
+            "tips": "DP",
+            "fingers": "DP|MP|PP",
+            "hand": "DP|MP|PP",
+        }
+        if self.proxy_links not in finger_links:
+            raise ValueError(
+                f"proxy_links must be one of {sorted(finger_links)}, got {self.proxy_links!r}"
+            )
         proxy_bodies = [
-            r"/World/envs/env_.*/Robot/left_(thumb|index|middle|ring|pinky)_DP",
+            r"/World/envs/env_.*/Robot/left_(thumb|index|middle|ring|pinky)_"
+            rf"({finger_links[self.proxy_links]})",
         ]
+        if self.proxy_links == "hand":
+            # The palm and the two metacarpals that carry it -- an object resting against the palm
+            # is held by these, not by any phalanx. The palm body is `iiwa14_link_7`
+            # (`scene_utils.PALM_BODY_NAME`): the URDF's `left_hand_C_MC` link is merged away by
+            # the importer and matches *no* body, so naming it here proxies nothing.
+            proxy_bodies.append(
+                r"/World/envs/env_.*/Robot/(iiwa14_link_7|left_thumb_MC|left_pinky_MC)"
+            )
         if self.proxy_table:
             rigid_bodies.append(r"/World/envs/env_.*/Table")
             proxy_bodies.append(r"/World/envs/env_.*/Table")
