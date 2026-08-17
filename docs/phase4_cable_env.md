@@ -420,6 +420,51 @@ cable zeros interpretable: the scene is sound, the proxies work, the goal is rea
 cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/episode, with lift
 3/32 -> 28/32 as the leading indicator, since goals follow lift.
 
+### The full sweep: 22 configurations, zero goals
+
+All at 32 envs, whole-hand proxies, damping 1.0 + 20 VBD iterations unless stated. Rigid-rod
+control on the same scene: **9.05 goals, 28/32 lift**.
+
+| config | falls | timeouts | lift | goals |
+|---|---:|---:|---:|---:|
+| `proxy_links=tips` | 30 | 0 | 0/32 | 0 |
+| `proxy_links=hand` | 29 | 0 | 3/32 | 0 |
+| `vbd_iterations=30`, `substeps=8` | 32 | 0 | 2/32 | 0 |
+| bend x100 | 27 | 1 | 2/32 | 0 |
+| bend x100 + stretch x10 | 22 | 7 | 0/32 | 0 |
+| 2 seg + bend x100 | 25 | 0 | 5/32 | 0 |
+| bend x1000 + stretch x100 | 13 | 18 | 0/32 | 0 |
+| density x10 | 27 | 1 | 2/32 | 0 |
+| density x20 | 26 | 5 | 0/32 | 0 |
+| density x20 + bend x100 | 23 | 4 | 0/32 | 0 |
+| `soft_contact_ke` x10 | 28 | 3 | 5/32 | 0 |
+| `soft_contact_ke` x100 | 32 | 0 | 3/32 | 0 |
+| `soft_contact_ke` x1000 | 29 | 0 | 2/32 | 0 |
+| `ke` x100 + friction x4 | 31 | 0 | 1/32 | 0 |
+| `ke` x100 + density x20 | 26 | 4 | 4/32 | 0 |
+| `ke` x100 + bend x100 | 29 | 1 | 5/32 | 0 |
+| everything combined | 31 | 1 | 1/32 | 0 |
+
+**Best cable lift anywhere is 5/32 against the rod's 28/32, and no configuration scores a single
+goal.**
+
+Three conclusions the table supports:
+
+*Stiffening does not converge to the rigid rod.* Falls drop monotonically (29 -> 27 -> 22 -> 13) and
+timeouts rise (0 -> 1 -> 7 -> 18) as stiffness increases, while lift goes to **zero**. The limit of
+"make the cable rigid" is an inert object the hand cannot move -- not a graspable one. That is a
+statement about the interface: a rigid rod contacts the hand through MJWarp's rigid solver, while a
+cable of any stiffness reaches it only through the proxy's *soft* contact.
+
+*Mass is not the constraint.* 100 -> 1000 -> 2000 kg/m^3 gives 3/32 -> 2/32 -> 0/32.
+
+*Contact stiffness peaks and then declines.* x10 gave 5/32 and the first non-zero timeouts, which
+looked like the start of a trend; x100 and x1000 lost the timeouts entirely and dropped lift to
+3/32 and 2/32. It was the top of a curve read from one draw -- the same single-draw error as the
+damping sweep earlier in this document.
+
+*The levers do not stack.* Everything-combined scores 1/32, worse than several of its parts.
+
 ### What moved, and what did not
 
 All at 32 envs, damping 1.0 + 20 VBD iterations, whole-hand proxies:

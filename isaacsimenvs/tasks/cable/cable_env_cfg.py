@@ -126,6 +126,26 @@ class CableCfg:
     soft_contact_ke: float = 8.0e3
     soft_contact_mu: float = 10.0
 
+    supports: bool = False
+    """Rest the cable on two low rails instead of flat on the table.
+
+    The last untested hypothesis for why no cable is graspable. Every knob that governs how the
+    cable *behaves* -- bend and stretch stiffness, density, contact stiffness and friction, solver
+    iterations and substeps -- has been swept and none produces a single goal, while a rigid rod of
+    the same size and mass scores ~9 on the identical scene. What none of them change is the
+    *geometry of the grasp*: a cable lying flush on a table presents no gap to close fingers
+    around, at any diameter or stiffness, so the hand can only press down on it.
+
+    The rails sit under the cable's ends and leave the middle span clear, so there is somewhere to
+    put the fingers. They are proxied like the table -- an unproxied support would let the cable
+    sink straight through, and the run would read as "clearance did not help"."""
+
+    support_height: float = 0.04
+    """Gap under the middle span [m]. Wants to exceed a fingertip radius to be worth anything."""
+
+    support_inset: float = 0.06
+    """How far in from each cable end a rail sits [m]. Keeps the graspable middle clear."""
+
     proxy_links: str = "hand"
     """Which hand links the cable can feel: ``tips`` | ``fingers`` | ``hand``.
 
@@ -273,6 +293,11 @@ class CableCfg:
         if self.proxy_table:
             rigid_bodies.append(r"/World/envs/env_.*/Table")
             proxy_bodies.append(r"/World/envs/env_.*/Table")
+        if self.supports:
+            # Both lists: the rails must exist to MJWarp *and* be felt by the VBD entry. Geometry
+            # alone is not contact in this coupling -- see `proxy_links`.
+            rigid_bodies.append(r"/World/envs/env_.*/Support_.*")
+            proxy_bodies.append(r"/World/envs/env_.*/Support_.*")
 
         return CouplerProxyCfg(
             entries=[

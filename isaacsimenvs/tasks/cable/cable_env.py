@@ -96,6 +96,8 @@ class CableEnv(PlayNewtonEnv):
 
         self._neutralise_rigid_object()
         self._reshape_goal_marker()
+        if c.supports:
+            self._install_supports()
 
         if c.rigid_rod:
             self._install_rigid_rod()
@@ -294,6 +296,46 @@ class CableEnv(PlayNewtonEnv):
                 "stay live in the scene and corrupt every measurement. Check the prim layout."
             )
 
+    def _install_supports(self) -> None:
+        """Two static rails under the cable's ends, leaving the middle span clear.
+
+        Kinematic so they never move, and registered in *both* the MJWarp rigid entry and the
+        proxy set (see ``CableCfg.supports``) -- a rail the VBD entry cannot feel is a rail the
+        cable falls through.
+
+        The cable spawns at ``support_height`` above its usual rest so it lands on the rails
+        rather than inside them; ``_describe_cable`` after reset is the check that it actually did.
+        """
+        import isaaclab.sim as sim_utils
+        from isaaclab.assets import RigidObject, RigidObjectCfg
+
+        c = self.cfg.cable
+        half = 0.5 * c.length - c.support_inset
+        rail_r = 0.5 * c.support_height
+        for i, x in enumerate((-half, half)):
+            cfg = RigidObjectCfg(
+                prim_path=f"/World/envs/env_.*/Support_{i}",
+                spawn=sim_utils.CapsuleCfg(
+                    radius=rail_r,
+                    height=0.08,
+                    # Across the cable, so the cable bridges the two and the middle stays open.
+                    axis="Y",
+                    collision_props=sim_utils.CollisionPropertiesCfg(),
+                    rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+                    mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
+                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.55, 0.55, 0.60)),
+                ),
+                init_state=RigidObjectCfg.InitialStateCfg(
+                    pos=(float(x), 0.0, self._cable_spawn_height() - c.radius + rail_r)
+                ),
+            )
+            self.scene.rigid_objects[f"support_{i}"] = RigidObject(cfg)
+        print(
+            f"[cable] supports: 2 rails at x=+/-{half:.3f} m, "
+            f"{c.support_height * 1e3:.0f} mm clearance under the middle span",
+            flush=True,
+        )
+
     def _reshape_goal_marker(self) -> None:
         """Give the goal marker the cable's shape instead of the tool's.
 
@@ -344,7 +386,11 @@ class CableEnv(PlayNewtonEnv):
 
     def _cable_spawn_height(self) -> float:
         reset_cfg = self.cfg.reset
-        return float(reset_cfg.table_reset_z) + float(self.cfg.cable_start_height)
+        h = float(reset_cfg.table_reset_z) + float(self.cfg.cable_start_height)
+        if self.cfg.cable.supports:
+            # Sit on top of the rails rather than inside them.
+            h += float(self.cfg.cable.support_height)
+        return h
 
 
 def _describe_cable(env: CableEnv) -> dict:
