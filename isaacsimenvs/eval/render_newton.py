@@ -46,17 +46,12 @@ OBJ_KP_COLOR = (1.00, 0.65, 0.10)
 
 
 def _goal_overlay(viewer, inner, world: int):
-    """Draw the goal pose and the keypoint error that defines success.
+    """Draw the keypoints and per-keypoint error that define success (`--goal_keypoints`).
 
-    `goal_viz` is a visual-only marker with no collision geometry, and the viewer draws collision
-    shapes (`show_collision=True`, without which the robot is invisible) -- so the goal is simply
-    never rendered by the scene walk, whatever colour `_colorize` assigns it. Drawing it in
-    immediate mode is the way to get it on screen.
+    Secondary to `_reveal_goal_viz`, which renders the task's own goal marker and is the default.
+    This adds what the marker cannot show: success is the *max* over per-keypoint distances held
+    for `success_steps`, so the quantity actually being thresholded is these segment lengths.
 
-    Success is not "object near goal point": it is the *max* over per-keypoint distances, held for
-    `success_steps`. So the honest overlay is the keypoints themselves plus the segments whose
-    longest member has to fall under the tolerance -- a single marker at `goal_pos` would hide the
-    orientation half of the criterion entirely.
     """
     import warp as wp
 
@@ -102,6 +97,46 @@ def _goal_overlay(viewer, inner, world: int):
         colors=_col(GOAL_KP_COLOR, len(edges)),
         width=0.004,
     )
+
+
+def _reveal_goal_viz(model) -> int:
+    """Make the goal marker's own shapes render, instead of drawing a stand-in over the top.
+
+    The marker is already in the Newton model -- `_colorize` finds and colours its shapes -- but
+    they import with `shape_flags == 0`: neither VISIBLE nor COLLIDE_SHAPES. The viewer draws
+    collide-flagged shapes (`show_collision=True`) and visible ones, so a shape with neither is
+    silently skipped. Setting VISIBLE is the whole fix; collision is already off, which is exactly
+    what a goal marker wants -- it must not push the manipuland around.
+
+    Preferred over an immediate-mode overlay because it is the marker the task itself maintains:
+    it tracks the goal in every world without the render path re-deriving anything, so what is on
+    screen cannot drift from what the env believes the goal is.
+    """
+    import warp as wp
+
+    if getattr(model, "shape_flags", None) is None:
+        return 0
+    labels = [str(x) for x in model.body_label]
+    shape_body = model.shape_body.numpy()
+    flags = model.shape_flags.numpy().copy()
+    visible = int(newton_shape_flags().VISIBLE)
+    n = 0
+    for shape_idx, body_idx in enumerate(shape_body):
+        label = labels[body_idx] if 0 <= body_idx < len(labels) else ""
+        if "GoalViz" in label:
+            flags[shape_idx] = int(flags[shape_idx]) | visible
+            n += 1
+    model.shape_flags = wp.array(
+        flags, dtype=model.shape_flags.dtype, device=model.shape_flags.device
+    )
+    print(f"[render] revealed {n} goal-marker shapes", flush=True)
+    return n
+
+
+def newton_shape_flags():
+    import newton
+
+    return newton.ShapeFlags
 
 
 def _segment_color(index: int, total: int):
@@ -222,7 +257,12 @@ def main() -> None:
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--out", type=Path, default=Path("videos/play_newton.mp4"))
     parser.add_argument(
-        "--no_goal", action="store_true", help="skip the goal-pose / keypoint-error overlay"
+        "--no_goal", action="store_true", help="do not render the goal marker at all"
+    )
+    parser.add_argument(
+        "--goal_keypoints",
+        action="store_true",
+        help="additionally draw the keypoints and per-keypoint error that define success",
     )
     args, hydra_args = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + hydra_args
@@ -267,6 +307,8 @@ def main() -> None:
         # See the module docstring: the robot's colliders are not flagged visible.
         viewer.show_collision = True
         viewer.show_static = True
+        if not args.no_goal:
+            _reveal_goal_viz(NewtonManager.get_model())
         viewer.set_model(NewtonManager.get_model())
         viewer.set_visible_worlds([args.world])
         _colorize(NewtonManager.get_model(), args)
@@ -315,7 +357,7 @@ def main() -> None:
 
             viewer.begin_frame(step * float(inner.step_dt))
             viewer.log_state(NewtonManager._state_0)
-            if not args.no_goal:
+            if args.goal_keypoints:
                 _goal_overlay(viewer, inner, args.world)
             viewer.end_frame()
 

@@ -389,24 +389,35 @@ sound**, and the 12-segment cable remains the configuration to prefer.
 
 ## Rendering the goal
 
-`goal_viz` is a visual-only marker with no collision geometry, and the viewer draws *collision*
-shapes (`show_collision=True`, without which the robot is invisible) -- so the goal was never drawn,
-whatever colour `_colorize` assigned its role. `render_newton._goal_overlay` draws it in immediate
-mode instead (`--no_goal` opts out).
+The goal was invisible in every render. It was first worked around with an immediate-mode overlay,
+which was the wrong instinct: **the marker is already in the scene.** `_colorize` finds and colours
+its shapes (`goal: 8`), and they import with `shape_flags == 0` -- neither VISIBLE nor
+COLLIDE_SHAPES. The viewer draws collide-flagged shapes (`show_collision=True`) and visible ones, so
+a shape with neither is silently skipped. Robot shapes are `flags=6`: collide set, visible clear.
 
-It draws the **keypoints**, not a single pose marker, because that is what the success test actually
-measures: the *max* over per-keypoint distances, held for `success_steps`. A dot at `goal_pos` would
-hide the orientation half of the criterion. Green = goal keypoints plus a wireframe quad through
-them, amber = the object's, thin lines = the per-keypoint error being minimised.
+`_reveal_goal_viz` sets VISIBLE on those shapes and nothing else. Collision is already off, which is
+exactly what a goal marker wants -- it must not push the manipuland around -- and the task already
+writes the marker's pose every step, so it tracks the goal in every world with no re-derivation in
+the render path. What is on screen therefore cannot drift from what the env believes the goal is,
+which a stand-in overlay cannot guarantee. This is the default; `--no_goal` turns it off.
 
-Validated on `Isaacsimenvs-PlayNewton-Direct-v0`, where the policy does score: the green keypoints
-sit directly on the held tool with the error lines collapsed to nearly nothing (env 0, ~5 goals in
-400 steps). On the cable the same overlay shows the goal quad hanging in the air off the table with
-long error lines to a cable that never leaves the surface -- the goal pose requires lifting and
-carrying, which is the step that never happens.
+**Caveat:** the marker carries the *tool's* geometry, since `goal_viz` spawns from the tool asset.
+In the cable env it draws a hammer-shaped ghost while the manipuland is a cable. Correct as a pose
+indicator -- and the success keypoints come from `object_scale`, not the marker mesh -- but the
+shape is misleading, and a cable-shaped marker would be an improvement.
 
-One gotcha: `log_lines`/`log_points` colours must be per-element `wp.array`s, not a single tuple --
-the GL backend calls `.numpy()` on whatever it gets and a tuple raises inside `_update_vbo`.
+`--goal_keypoints` additionally draws what the marker cannot: success is the *max* over per-keypoint
+distances held for `success_steps`, so the quantity actually thresholded is those segment lengths.
+Green goal keypoints and wireframe quad, amber object keypoints, lines for the error.
+
+Validated on `Isaacsimenvs-PlayNewton-Direct-v0`, where the policy scores: the green marker lands on
+the held tool and the keypoint error lines collapse to nearly nothing. On the cable the marker hangs
+in the air off the table while the cable never leaves the surface -- the goal requires lift and
+carry, and the grasp that would start it never happens.
+
+Gotcha for the overlay path: `log_lines`/`log_points` colours must be per-element `wp.array`s, not a
+single tuple -- the GL backend calls `.numpy()` on whatever it gets and a tuple raises in
+`_update_vbo`.
 
 ## The orphaned rigid tool was live the whole time
 
