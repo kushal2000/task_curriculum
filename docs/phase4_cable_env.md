@@ -422,9 +422,21 @@ cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/
 
 ## Solved by the coupling, not the cable: `proxy_mode=staggered`
 
-**16 goals per 64 envs, with a single episode scoring 5** (`x_stag_0`, env 29, 1124 steps). Flat
-table, **no clearance**, zero contact-buffer overflows, zero ejected, zero censored, peak height
-0.852 m. Falls collapse from ~46/64 to **14/64**, with 50 episodes surviving to timeout.
+**Four of five seeds reach 5 goals in a single episode.** Flat table, **no clearance**, zero
+contact-buffer overflows, zero ejected, zero censored.
+
+| seed | total goals | max/episode | lift | falls |
+|---|---:|---:|---:|---:|
+| 0 | 16 | **5** | 34/64 | 14 |
+| 100 | **21** | **5** | 33/64 | 15 |
+| 200 | 11 | **5** | 32/64 | 13 |
+| 300 | 7 | 2 | 36/64 | 14 |
+| 400 | 13 | **5** | 38/64 | 13 |
+
+Totals 7-21 (mean ~14) against the best `lagged` config's 4-5, and falls collapse from ~46/64 to a
+consistent **13-15/64** with ~50 episodes surviving to timeout. `collide_interval=2` on top gives
+19 goals, max 4 -- the other knob that changes exchange *frequency* rather than cable behaviour,
+also strongly positive, which is the same mechanism showing up twice.
 
     proxy_mode=staggered   cable_substeps=2      linear_damping=10
     angular_damping=20     vbd_iterations=80     bend_stiffness_scale=10.0

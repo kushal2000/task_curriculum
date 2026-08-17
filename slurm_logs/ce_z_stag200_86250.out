@@ -166,3 +166,17 @@ RunningMeanStd:  (140,)
   return _orig(value, *args, **kwargs)
 /share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
   value = getattr(object.__getattribute__(self, "_wrapped"), name)
+[episodes] step 500: 12/64 envs done
+[episodes] step 1000: 61/64 envs done
+
+========================================================================
+Isaacsimenvs-Cable-Direct-v0  |  64 envs  |  first episode per env
+goals/episode = 0.1719 +/- 0.0871   (n=64, censored=0)
+lift fraction = 0.5
+termination   = {'fall': 13, 'max_successes': 0, 'hand_far': 1, 'timeout': 50}
+mean ep length= 558.6 steps
+========================================================================
+
+[episodes] wrote docs/results/z_stag_200.json
+[2026-08-17 03:57:06,317][isaaclab.sim.simulation_context][INFO] - SimulationContext cleared
+[job] tag=z_stag_200 exit=0
