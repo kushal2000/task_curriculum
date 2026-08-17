@@ -631,6 +631,55 @@ Screening wants **many configs at few envs**; goal counts want the opposite. 39 
 3.22 at 4 envs and 8.61 at 8 -- so cross-env-count comparisons are invalid, which is why the rigid
 reference was re-run at 4 envs before any of the above was concluded.
 
+## Multi-GPU: linear, and synchronisation costs ~5%
+
+A Newton env instance runs on **one** GPU -- it cannot span devices. Isaac Lab's multi-GPU support
+is data-parallel: `app_launcher.py:1094-1115` reads `LOCAL_RANK`, binds `cuda:{rank}`, and sets
+`multi_gpu = False` for each process. So "multi-GPU" means N independent simulations syncing
+gradients, for PhysX and Newton alike.
+
+**Free-running (upper bound -- ranks never wait for each other):**
+
+| GPUs | envs/GPU | total env-steps/s | per-rank | scaling |
+|---:|---:|---:|---|---:|
+| 1 | 1024 | 2,541 | [2541] | 1.00x |
+| 2 | 1024 | 5,050 | [2528, 2521] | 1.99x |
+| 4 | 1024 | 10,117 | [2552, 2535, 2525, 2505] | 3.98x |
+| 4 | 2560 | 21,573 | [5435, 5366, 5398, 5374] | 4.00x |
+
+**With real gradient sync** (`torchrun`, 8 MB all-reduce every 16 steps, `OMP_NUM_THREADS`
+divided by world size as Isaac Lab does):
+
+| config | 4-GPU total | vs free-running |
+|---|---:|---:|
+| free-running, 2048/GPU | ~20,076 | - |
+| **DDP, all-reduce every 16 steps** | **19,155** | **-4.6%** |
+
+Rank spread is 423-431 ms (1.9%), so most of that 4.6% is the all-reduce itself rather than
+waiting on stragglers. Every free-running figure above is therefore an upper bound roughly 5% high
+for real RL.
+
+### Two device-binding traps
+
+* **`torchrun` sets `LOCAL_RANK` but not `CUDA_VISIBLE_DEVICES`.** A program that takes its device
+  from a config file puts *every* rank on `cuda:0`; here that surfaced as
+  `Failed to allocate 3221225472 bytes on device 'cuda:0'`, which reads as an out-of-memory
+  problem rather than a binding one. `throughput.py` now honours `LOCAL_RANK` and logs the bind.
+* **`torchrun` is not on `PATH`** (it lives in the venv) and must run *through* `scripts/newton_py`
+  so workers inherit its `LD_PRELOAD`. Invoking it bare gives exit 127.
+
+### Projection for this cluster
+
+| GPUs | envs/GPU | total envs | synced sps |
+|---:|---:|---:|---:|
+| 4 | 2048 | 8,192 | 19,155 (measured) |
+| 8 | 2048 | 16,384 | ~38,300 |
+| 8 | 2500 | 20,000 | ~45,600 |
+
+**~45k env-steps/s at 20k envs** is the realistic training figure on 8 x RTX 6000 Ada (48 GB).
+Reaching 24k envs needs 3,000/GPU = 54 GB, which does not fit; an RTX PRO 6000 Blackwell (96 GB)
+would hold ~5,300 envs/GPU.
+
 ## Throughput: linear to 2048 envs, then memory-bound
 
 `isaacsimenvs/eval/throughput.py`, one job per env count under `scripts/cluster/throughput/`.
@@ -644,6 +693,8 @@ RTX 6000 Ada, sim only (zero actions), warm-up excluded, CUDA synchronised, **ov
 | 64 | 408 | 157 | - | - |
 | 512 | 455 | 1,125 | 11.10 | 2.78 |
 | **2048** | **408** | **5,019** | 37.98 | 5.93 |
+| **2500** | **418** | **5,974** | 43.99 | 6.82 |
+| 2816 | - | **OOM** | >49 | - |
 | 4096 | - | **OOM** | >49 | - |
 
 **Per-step cost is constant from 1 to 2048 envs**, so throughput is exactly linear

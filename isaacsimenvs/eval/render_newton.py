@@ -390,7 +390,10 @@ def main() -> None:
 
         writer.close()
         goals = goals_seen
-        size_mb = args.out.stat().st_size / 1e6
+        # Tolerate the file having been moved or removed between the write and this stat: the
+        # size is a nicety, and crashing here discards the goal count -- which is the one number
+        # the render exists to report.
+        size_mb = args.out.stat().st_size / 1e6 if args.out.exists() else float("nan")
         print(
             f"\n[render] wrote {args.out} ({frames} frames, {size_mb:.1f} MB, "
             f"{frames / args.fps:.1f}s)  env_{args.world} scored ~{goals} goals",

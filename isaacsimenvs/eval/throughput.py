@@ -38,6 +38,17 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=60, help="untimed steps first")
     parser.add_argument("--num_assets_per_type", type=int, default=1)
     parser.add_argument("--with_policy", action="store_true", help="include policy inference")
+    parser.add_argument(
+        "--sync_every",
+        type=int,
+        default=0,
+        help="If >0 and torchrun-launched, all-reduce a policy-sized gradient buffer every N "
+        "steps, so the figure includes the straggler wait and interconnect cost that real "
+        "distributed RL pays. 0 measures pure simulation (an upper bound).",
+    )
+    parser.add_argument(
+        "--grad_mb", type=float, default=8.0, help="all-reduce payload, ~policy gradient size"
+    )
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument(
         "--checkpoint", default="/share/portal/kk837/simtoolreal/pretrained_policy/model.pth"
@@ -59,6 +70,20 @@ def main() -> None:
 
     @hydra_task_config_with_yaml("Isaacsimenvs-Cable-Direct-v0", "")
     def run(env_cfg, agent_cfg):
+        # Under torchrun each rank must bind its own device. torchrun sets LOCAL_RANK and expects
+        # the program to honour it -- it does NOT set CUDA_VISIBLE_DEVICES. Without this every rank
+        # defaults to cuda:0, so one GPU receives world_size x num_envs and dies in Warp's
+        # allocator, which reads as an out-of-memory bug rather than a device-binding one.
+        local_rank = int(os.environ.get("LOCAL_RANK", "-1"))
+        if local_rank >= 0:
+            import torch as _torch
+
+            if local_rank < _torch.cuda.device_count():
+                dev = f"cuda:{local_rank}"
+                env_cfg.sim.device = dev
+                _torch.cuda.set_device(local_rank)
+                print(f"[tput] rank {local_rank} bound to {dev}", flush=True)
+
         env_cfg.scene.num_envs = args_cli.num_envs
         env_cfg.assets.num_assets_per_type = args_cli.num_assets_per_type
         disable_randomization(env_cfg)
@@ -83,6 +108,25 @@ def main() -> None:
                 num_actions=int(inner.cfg.action_space),
             )
 
+        # Optional distributed sync. Without this the ranks never wait for each other, so the
+        # aggregate is an upper bound: real RL blocks on the slowest rank at every gradient
+        # all-reduce, and pays interconnect time for the payload.
+        dist_group = None
+        grad_buf = None
+        if args_cli.sync_every > 0 and os.environ.get("WORLD_SIZE"):
+            import torch.distributed as dist
+
+            if not dist.is_initialized():
+                dist.init_process_group(backend="nccl")
+            dist_group = dist
+            n_floats = int(args_cli.grad_mb * 2**20 / 4)
+            grad_buf = torch.randn(n_floats, device=device)
+            print(
+                f"[tput] distributed: rank {dist.get_rank()}/{dist.get_world_size()}, "
+                f"all-reduce {args_cli.grad_mb} MB every {args_cli.sync_every} steps",
+                flush=True,
+            )
+
         zeros = torch.zeros((inner.num_envs, int(inner.cfg.action_space)), device=device)
         obs, _ = env.reset()
 
@@ -104,8 +148,11 @@ def main() -> None:
 
                 torch.cuda.synchronize()
                 t0 = time.perf_counter()
-                for _ in range(args_cli.steps):
+                for i in range(args_cli.steps):
                     obs = step_once(obs)
+                    if dist_group is not None and (i + 1) % args_cli.sync_every == 0:
+                        # Blocks until every rank arrives: this is the straggler wait.
+                        dist_group.all_reduce(grad_buf)
                 torch.cuda.synchronize()
                 elapsed = time.perf_counter() - t0
             finally:

@@ -21,7 +21,7 @@ set -uo pipefail
 WORLD="$1"; STEPS="$2"; shift 2
 
 cd /share/portal/kk837/task_curriculum
-mkdir -p slurm_logs videos
+mkdir -p slurm_logs videos/07_replays_final_config
 
 export OMNI_KIT_ACCEPT_EULA=YES
 export PYTHONUNBUFFERED=1
@@ -34,7 +34,7 @@ xvfb-run -a scripts/newton_py -m isaacsimenvs.eval.render_newton \
     --seed "${SEED:-0}" \
     --stride "${STRIDE:-3}" \
     --num_assets_per_type 1 \
-    --out "videos/cable_w${WORLD}_s${SEED:-0}.mp4" \
+    --out "videos/07_replays_final_config/cable_w${WORLD}_s${SEED:-0}.mp4" \
     'env.assets.handle_head_types=[hammer]' \
     env.cable.thickness=0.03 \
     "$@"
