@@ -420,6 +420,35 @@ cable zeros interpretable: the scene is sound, the proxies work, the goal is rea
 cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/episode, with lift
 3/32 -> 28/32 as the leading indicator, since goals follow lift.
 
+## Open defect: the pose estimator degenerates exactly when the cable is held
+
+`CableAsRigidObject.root_quat_w` derives the manipuland's orientation from **one vector** -- first
+segment to last (`_frame_from_span(pos[:, -1] - pos[:, 0])`). That is well-conditioned only while
+the cable stays straight.
+
+| segments | worst span deviation | % of rest | lifted |
+|---:|---:|---:|---:|
+| 12 | 0.0030 m | **1.1%** | 4/8 |
+| 24 | 0.0467 m | **16.2%** | **8/8** |
+
+A 24-segment cable lifts in **every** env and droops 16% in the hand -- so the first-to-last vector
+stops describing it precisely when it is being manipulated. Success needs keypoints (built from
+position *and orientation*) within 1.5 cm of the goal for 10 consecutive steps, so a degraded
+orientation makes scoring impossible however good the grasp is.
+
+That resolves the 24-segment paradox: highest lift measured anywhere (73-80% at 64 envs, 8/8 here),
+the **calmest** dynamics of any config (max 1.94 vs 2.84 for 12 segments), and **zero goals**. The
+earlier explanation in this document -- "more segments means more exchange traffic, so transport
+degrades" -- is **wrong**; its excursions are smaller, not larger.
+
+It also qualifies the headline result: goals come from the 12-segment config partly because it
+stays straight enough for a one-axis frame to work, not necessarily because it is grasped better.
+Lift says the opposite.
+
+**Fix**: an estimator that survives bending -- PCA over segment positions for the principal axis,
+or a frame from the segments actually in the hand. This is a defect in the adapter, not a physics
+limitation, and it affects any deformable manipuland in this task.
+
 ## Solved by the coupling, not the cable: `proxy_mode=staggered`
 
 **Four of five seeds reach 5 goals in a single episode.** Flat table, **no clearance**, zero
