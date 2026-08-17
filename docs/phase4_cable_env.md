@@ -270,6 +270,57 @@ cable runs the coupled MJWarp+VBD one, so `cable_30mm` vs `rod_30mm_rigid` isola
 *and* the coupling together. A rod the policy still cannot grasp would rule deformability out; a
 rod it can grasp would need the coupling ruled out separately before crediting deformability.
 
+## Does damping unlock goals? No -- and an ejection guard the harness was missing
+
+Scoring the damped configurations (32 envs, hammer, single variant) answers the obvious follow-up
+to the tuning above: stabilising the cable does not make it graspable.
+
+| config | goals/ep | lift (guarded) | ejected | terminations |
+|---|---:|---:|---:|---|
+| 30 mm, 12 seg, damped | 0.0 | 3/32 | 0 | fall 30, hand_far 2 |
+| 30 mm, 2 seg, damped | 0.0 | 4/32 | 0 | fall 32 |
+
+**Goals remain exactly zero**, with the identical failure mode, while peak speed improved ~6x. The
+one alternative reading of the earlier cable results -- that they failed because the simulation was
+poor rather than because cables are hard to grasp -- is now tested and rejected.
+
+### The guard, and why the lift numbers needed one
+
+`lift_fraction` was reading `_lifted_object`, which `reward_utils.lifting_reward` computes as
+`(z_lift > threshold) | prev_lifted` -- **latched, with no upper bound**. An ejected cable therefore
+sets it permanently True and reports as a lift. The plan called for a workspace-bound check and the
+harness never had one; `episodes.py` now records per-env `max_obj_z` and classifies anything above
+`REACH_M = 1.40` (iiwa14 extended plus hand) as ejected, reporting guarded and unguarded fractions
+separately.
+
+Applied to the config most likely to be flattered by the bug -- 2 segments, the one with known
+velocity excursions -- it **vindicated** the number instead: 0 ejected, and the four lifts sit at
+0.815 / 0.781 / 0.768 / 0.763 m against a 0.63 m table, i.e. 13-19 cm of real clearance.
+
+One 12-segment env reached **1.221 m**, which passes the 1.40 bound but is 59 cm above the table and
+should be treated as unclassified rather than as a lift -- `REACH` catches gross ejection, not a
+vigorous toss.
+
+`termination_reasons` counts *reasons*, not episodes: the `done_*` flags are not mutually exclusive,
+so an env tripping two on its final step is counted twice and the totals can exceed n. This is why
+one run read `fall 30 + hand_far 3 = 33` on 32 envs.
+
+### What the height distribution actually shows
+
+The informative statistic was one not being looked for. **28 of 32 envs (12 seg) have `max_obj_z`
+pinned at exactly the 0.63 m table height** -- the cable was never displaced upward at all -- yet
+every episode terminated in `fall`. The policy pushes the cable sideways off the table without ever
+getting underneath it.
+
+That is a sharper failure than "cables do not work", and it is consistent with the one live
+untested hypothesis: a cable lying flat offers no clearance to close fingers around, at any
+diameter. It predicts a raised-support arrangement would be graspable, which remains the next
+experiment worth running.
+
+Do not read the 4/32 vs 3/32 difference between segment counts as an effect. At n=32 that is well
+inside noise (Fisher exact ~0.35), and the same 12-segment config drew 1/32 on one run and 3/32 on
+the next.
+
 ## Tuning the 2-segment cable: damping + iterations, and why single draws misled
 
 The 2-segment cable is intermittently unstable — peak speed ~67 m/s against 4.8 for 12 segments.

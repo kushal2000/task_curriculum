@@ -37,6 +37,12 @@ DEFAULT_POLICY_CFG = "/share/portal/kk837/simtoolreal/pretrained_policy/config.y
 # parity.
 REASONS = ("fall", "max_successes", "hand_far", "timeout")
 
+# iiwa14 fully extended plus the hand. An object above this is not being held -- it has been
+# ejected by a solver blow-up. The distinction matters because `_lifted_object` latches on
+# `z > threshold` with no upper bound (reward_utils.lifting_reward), so an ejection sets it
+# permanently True and reads as the hoped-for result. Deformable objects are where this bites.
+REACH_M = 1.40
+
 
 def _summarise(goals: list[int], lengths: list[int]) -> dict:
     n = len(goals)
@@ -165,6 +171,7 @@ def main() -> None:
         length = torch.zeros(num_envs, dtype=torch.long, device=device)
         steps_alive = torch.zeros(num_envs, dtype=torch.long, device=device)
         lifted = torch.zeros(num_envs, dtype=torch.bool, device=device)
+        max_obj_z = torch.full((num_envs,), -1e9, device=device)
         contributed = torch.zeros(num_envs, dtype=torch.bool, device=device)
         reason = {name: torch.zeros(num_envs, dtype=torch.bool, device=device) for name in REASONS}
 
@@ -177,6 +184,8 @@ def main() -> None:
             # stepping until the others catch up, and counting those later lifts would report a
             # statistic about a set of episodes that no other number here describes.
             lifted |= inner._lifted_object.bool() & ~contributed
+            obj_z = (inner.object.data.root_pos_w - inner.scene.env_origins)[:, 2]
+            max_obj_z = torch.where(~contributed, torch.maximum(max_obj_z, obj_z), max_obj_z)
             steps_alive += (~contributed).long()
 
             done = (terminated.bool() | truncated.bool()) & ~contributed
@@ -204,6 +213,7 @@ def main() -> None:
                     flush=True,
                 )
 
+        ejected = max_obj_z > REACH_M
         done_mask = contributed.cpu()
         goals_l = goals.cpu()[done_mask].tolist()
         length_l = length.cpu()[done_mask].tolist()
@@ -233,7 +243,12 @@ def main() -> None:
             "completed": _summarise(goals_l, length_l),
             "lower_bound_including_censored": _summarise(lb_goals, length_l or [0]),
             "censored": censored,
-            "lift_fraction": round(float(lifted.float().mean()), 4),
+            "lift_fraction": round(float((lifted & ~ejected).float().mean()), 4),
+            "lift_fraction_unguarded": round(float(lifted.float().mean()), 4),
+            "ejected": int(ejected.sum()),
+            "max_obj_z": [round(float(v), 3) for v in max_obj_z.cpu()],
+            # Flags are not mutually exclusive -- an env can trip several on its final step,
+            # so these count reasons, not episodes, and may sum above n.
             "termination_reasons": {
                 name: int(reason[name].cpu()[done_mask].sum()) for name in REASONS
             },
@@ -248,7 +263,9 @@ def main() -> None:
             f"goals/episode = {summary.get('mean_goals_per_episode')} "
             f"+/- {summary.get('sem')}   (n={summary.get('n')}, censored={censored})"
         )
-        print(f"lift fraction = {result['lift_fraction']}")
+        print(f"lift fraction = {result['lift_fraction']}"
+              + (f"   (unguarded {result['lift_fraction_unguarded']}, "
+                 f"{result['ejected']} ejected above {REACH_M} m)" if int(ejected.sum()) else ""))
         print(f"termination   = {result['termination_reasons']}")
         print(f"mean ep length= {summary.get('mean_episode_length')} steps")
         if censored:
