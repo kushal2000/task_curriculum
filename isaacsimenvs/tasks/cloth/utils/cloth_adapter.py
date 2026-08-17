@@ -62,7 +62,8 @@ def _mat_to_wxyz(r: torch.Tensor) -> torch.Tensor:
         q[sel, 1 + i] = 0.25 * sq
         q[sel, 1 + j] = (r[sel, j, i] + r[sel, i, j]) / sq
         q[sel, 1 + k] = (r[sel, k, i] + r[sel, i, k]) / sq
-    return torch.nn.functional.normalize(q, dim=-1)
+    # eps guards a zero-norm quaternion, which a degenerate fit can produce.
+    return torch.nn.functional.normalize(q, dim=-1, eps=1e-12)
 
 
 def _to_torch(value):
@@ -116,13 +117,28 @@ class ClothAsRigidObject:
         # reflection: without it a badly deformed patch can fit an improper "rotation", which is a
         # mirror -- and a mirrored frame fed to a policy is worse than a wrong one.
         h = torch.einsum("ki,nkj->nij", p, q)
+        # A crumpled patch can drive the corners toward collinear or coincident, leaving H rank
+        # deficient. The SVD then returns an arbitrary rotation and the quaternion can normalise
+        # to NaN, which reaches the policy as a non-finite observation and surfaces far away as
+        # "normal expects all elements of std >= 0.0" from the action sampler. Ridge the diagonal
+        # so a degenerate patch degrades to identity instead of to NaN.
+        h = h + 1e-8 * torch.eye(3, device=h.device, dtype=h.dtype).unsqueeze(0)
         u, _, vh = torch.linalg.svd(h)
         v = vh.transpose(-2, -1)
         det = torch.linalg.det(v @ u.transpose(-2, -1))
         d = torch.ones((cur.shape[0], 3), device=cur.device)
         d[:, 2] = det
         r = v @ torch.diag_embed(d) @ u.transpose(-2, -1)               # (N, 3, 3)
-        return _mat_to_wxyz(r)
+        quat = _mat_to_wxyz(r)
+
+        # Last line of defence: never hand a non-finite orientation to the policy. An identity
+        # fallback is wrong but bounded; a NaN poisons the whole observation vector and kills the
+        # run several layers away from the cause.
+        bad = ~torch.isfinite(quat).all(dim=-1)
+        if bool(bad.any()):
+            quat = quat.clone()
+            quat[bad] = torch.tensor([1.0, 0.0, 0.0, 0.0], device=quat.device, dtype=quat.dtype)
+        return quat
 
     def keypoints_w(self) -> torch.Tensor:
         """``(num_envs, K, 3)`` tracked keypoints on the moving half."""

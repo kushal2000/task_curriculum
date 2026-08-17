@@ -133,6 +133,62 @@ def _reveal_goal_viz(model) -> int:
     return n
 
 
+def _restrict_triangles_to_world(viewer, model, world: int) -> None:
+    """Draw only the filmed world's deformable surface.
+
+    ``set_visible_worlds`` filters *rigid shapes* only -- the viewer's ``_log_triangles`` logs
+    ``state.particle_q`` and ``model.tri_indices`` wholesale, with no world mask anywhere in that
+    path (`newton/_src/viewer/viewer.py:2725`). So on a deformable task every environment's sheet is
+    drawn while every environment's table and robot is hidden, and the result reads as one robot
+    surrounded by loose cloths floating over the floor. That is a viewer limitation, not a physics
+    fault -- but it is indistinguishable from a physics fault in a video.
+
+    The fix keeps all particle positions (the mesh indexes into that array, so it must stay whole)
+    and narrows the drawn triangles to those whose vertices belong to the filmed world. Membership
+    comes from ``model.particle_world``, the per-particle world index Newton already builds
+    (`newton/_src/sim/builder.py:1226`) -- not from ``world * particle_count // world_count``, which
+    would silently mis-slice if the worlds ever held different particle counts.
+
+    Patched on the **viewer**, not the model: ``model.tri_indices`` is what the VBD solver reads for
+    its elastic forces, so rewriting it there would silently change the physics to make a picture
+    look right -- the exact trade this project keeps refusing to make.
+    """
+    import types
+
+    import numpy as np
+    import warp as wp
+
+    tri = getattr(model, "tri_indices", None)
+    owner = getattr(model, "particle_world", None)
+    if tri is None or model.tri_count == 0 or model.world_count <= 1 or owner is None:
+        return
+
+    mine = np.asarray(owner.numpy()) == world
+    idx = tri.numpy()
+    keep = mine[idx].all(axis=1)
+    if not keep.any():
+        print("[render] triangle world filter matched nothing; leaving all worlds drawn", flush=True)
+        return
+    kept = wp.array(idx[keep].flatten(), dtype=wp.int32, device=tri.device)
+
+    def _log_triangles(self, state, _indices=kept):
+        points = self._apply_layer_transform_to_points(state.particle_q)
+        self.log_mesh(
+            self._qualify("/model/triangles"),
+            points,
+            _indices,
+            hidden=not self.show_triangles or self._layer_force_hidden(),
+            backface_culling=False,
+        )
+
+    viewer._log_triangles = types.MethodType(_log_triangles, viewer)
+    print(
+        f"[render] deformable surface limited to world {world}: "
+        f"{int(keep.sum())}/{len(keep)} triangles",
+        flush=True,
+    )
+
+
 def newton_shape_flags():
     import newton
 
@@ -311,6 +367,7 @@ def main() -> None:
             _reveal_goal_viz(NewtonManager.get_model())
         viewer.set_model(NewtonManager.get_model())
         viewer.set_visible_worlds([args.world])
+        _restrict_triangles_to_world(viewer, NewtonManager.get_model(), args.world)
         _colorize(NewtonManager.get_model(), args)
 
         origin = inner.scene.env_origins[args.world].detach().cpu().numpy()

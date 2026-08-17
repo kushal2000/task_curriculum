@@ -55,6 +55,13 @@ class ClothEnv(PlayNewtonEnv):
 
     def _install_cloth(self) -> None:
         """Author the sheet and register it as a deformable, in place of the rigid tool."""
+        # Re-validate here, not only in `ClothCfg.__post_init__`. Hydra constructs the dataclass
+        # with its DEFAULTS -- which is when `__post_init__` runs and passes -- and only then
+        # assigns the CLI overrides onto the instance. So `env.cloth.thickness=0.03` walks straight
+        # past the thickness/spacing guard: it ran against thickness 0.012 and never saw 0.03.
+        # That is how a 30 mm radius ended up on a 12.5 mm grid, every particle overlapping its
+        # neighbours, which the solver expresses as instability rather than as a config error.
+        self.cfg.cloth._check_thickness()
         from isaaclab.assets import DeformableObject, DeformableObjectCfg
         from isaaclab.sim.utils import find_matching_prims
         from pxr import Sdf, UsdGeom, UsdShade
@@ -71,6 +78,7 @@ class ClothEnv(PlayNewtonEnv):
         # live rigid body loose in the scene. (On the cable task this was visible for hours as a
         # hammer lying on the floor beside the table.)
         self._neutralise_rigid_object()
+        self._reshape_goal_marker()
 
         prim_path = "/World/envs/env_.*/Cloth"
         spawn_z = float(self.cfg.reset.table_reset_z) + c.start_height
@@ -207,6 +215,58 @@ class ClothEnv(PlayNewtonEnv):
                 "stay live and corrupt every measurement. Check the prim layout."
             )
 
+    def _reshape_goal_marker(self) -> None:
+        """Give the goal marker the folded half's shape instead of the tool's.
+
+        ``goal_viz`` spawns from the same procedural handle+head USD as the manipuland, so the cloth
+        task renders a hammer-shaped ghost for a goal that is a folded sheet. The marker *pose* is
+        already correct and success is scored on keypoints, not on this mesh -- but the render is
+        the only thing a person actually looks at, and a hammer standing in for a fold invites
+        exactly the wrong reading. The same defect on the cable task cost hours.
+
+        Swaps the tool geometry for a thin slab the size of the moving half. ``collisionEnabled``
+        stays false so the marker can never touch the sheet;
+        ``render_newton._reveal_goal_viz`` draws it by setting the VISIBLE flag, which does not
+        require a collider.
+        """
+        from pxr import Gf, Usd, UsdGeom, UsdPhysics
+
+        from isaaclab.sim.utils import find_matching_prims
+
+        c = self.cfg.cloth
+        # The folded flap covers half the sheet along the fold axis and its full width across.
+        along, across = 0.5 * float(c.size), float(c.size)
+        size = (
+            (along, across, float(c.thickness))
+            if c.fold_axis == "x"
+            else (across, along, float(c.thickness))
+        )
+
+        marked = 0
+        for prim in find_matching_prims("/World/envs/env_.*/GoalViz"):
+            stage = prim.GetStage()
+            # The rigid body sits on a child (`.../GoalViz/object_root`), not the GoalViz root.
+            # Deactivating that child would remove the body the physics view resolves, so keep the
+            # body and replace only the geometry beneath it.
+            body = next(
+                (d for d in Usd.PrimRange(prim) if d.HasAPI(UsdPhysics.RigidBodyAPI)), prim
+            )
+            for child in body.GetChildren():
+                child.SetActive(False)
+            slab = UsdGeom.Cube.Define(stage, body.GetPath().AppendChild("cloth_marker"))
+            # A unit cube scaled per-axis: `Cube` has one size attribute, so the rectangular
+            # footprint has to come from the xform scale.
+            slab.CreateSizeAttr(1.0)
+            UsdGeom.Xformable(slab.GetPrim()).AddScaleOp().Set(Gf.Vec3f(*size))
+            UsdPhysics.CollisionAPI.Apply(slab.GetPrim()).CreateCollisionEnabledAttr(False)
+            marked += 1
+
+        print(
+            f"[cloth] goal marker reshaped on {marked} prims "
+            f"(slab {size[0]:.3f} x {size[1]:.3f} x {size[2]:.3f} m)",
+            flush=True,
+        )
+
     # ------------------------------------------------------------------ the fold
 
     def _init_fold_targets(self) -> None:
@@ -329,7 +389,35 @@ class ClothEnv(PlayNewtonEnv):
         # Offsets must be current *before* the task reads them, or the observation lags the sheet
         # by one step.
         self._sync_observed_keypoints()
-        return super()._get_observations()
+        obs = super()._get_observations()
+        self._assert_finite(obs)
+        return obs
+
+    def _assert_finite(self, obs) -> None:
+        """Fail at the source when any part of the observation goes non-finite.
+
+        A NaN anywhere in the 140-dim vector reaches the policy, propagates through the network and
+        surfaces as ``normal expects all elements of std >= 0.0`` from the action sampler -- a
+        message that names the sampler and says nothing about the cloth. Guarding the *rotation fit*
+        was not enough, because that only covered one of several ways a blown-up sheet produces
+        NaN. This reports which quantity went bad first, so the next fix is aimed rather than
+        guessed.
+        """
+        parts = {
+            "particles": self._particles_w(),
+            "velocities": self.object._velocities(),
+            "quat": self.object.data.root_quat_w,
+            "obs": obs["policy"],
+        }
+        for name, tensor in parts.items():
+            bad = ~torch.isfinite(tensor.reshape(tensor.shape[0], -1)).all(dim=-1)
+            if bool(bad.any()):
+                ids = torch.nonzero(bad).flatten().tolist()
+                raise RuntimeError(
+                    f"cloth: non-finite {name} in envs {ids[:8]}"
+                    f"{'...' if len(ids) > 8 else ''} ({len(ids)}/{self.num_envs}) "
+                    f"at step {int(self.episode_length_buf.max().item())}"
+                )
 
     def footprint_ratio(self) -> torch.Tensor:
         """Sheet extent along the fold axis, as a fraction of its unfolded size.
