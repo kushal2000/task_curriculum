@@ -1,0 +1,47 @@
+[job] tag=rep_all_3 num_envs=64 host=portal-compute-02.cs.cornell.edu gpu=0
+[job] overrides: env.cable.thickness=0.03 env.cable.angular_damping=20.0 env.cable.vbd_iterations=80 env.cable.cable_substeps=2 env.cable.linear_damping=10.0 env.cable.bend_stiffness_scale=2.0 env.seed=300
+[episodes] running kit-less (no Isaac Sim runtime): AppLauncher requires the full Isaac Sim runtime. Install Isaac Sim or avoid constructing AppLauncher in a kitless process.
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.cable.cable_env_cfg:CableEnvCfg
+/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py:91: Hydra15MigrationWarning: The version_base parameter is deprecated and will be removed in Hydra 1.5.
+Omit the version_base parameter to use the current Hydra defaults.
+  @hydra.main(config_path=None, config_name=short_name, version_base="1.3")
+Error executing job with overrides: ['env.assets.handle_head_types=[hammer]', 'env.cable.thickness=0.03', 'env.cable.angular_damping=20.0', 'env.cable.vbd_iterations=80', 'env.cable.cable_substeps=2', 'env.cable.linear_damping=10.0', 'env.cable.bend_stiffness_scale=2.0', 'env.seed=300']
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/eval/episodes.py", line 341, in <module>
+    main()
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/eval/episodes.py", line 330, in main
+    run()
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py", line 108, in wrapper
+    hydra_main()
+  File "/share/portal/kk837/task_curriculum/.venv_isaaclab3/lib/python3.12/site-packages/hydra/main.py", line 73, in decorated_main
+    _run_hydra(
+  File "/share/portal/kk837/task_curriculum/.venv_isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 388, in _run_hydra
+    _run_app(
+  File "/share/portal/kk837/task_curriculum/.venv_isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 451, in _run_app
+    run_and_report(
+  File "/share/portal/kk837/task_curriculum/.venv_isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 222, in run_and_report
+    raise ex
+  File "/share/portal/kk837/task_curriculum/.venv_isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 219, in run_and_report
+    return func()
+           ^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv_isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 452, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv_isaaclab3/lib/python3.12/site-packages/hydra/_internal/hydra.py", line 189, in run
+    _ = ret.return_value
+        ^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv_isaaclab3/lib/python3.12/site-packages/hydra/core/utils.py", line 413, in return_value
+    raise self._return_value
+  File "/share/portal/kk837/task_curriculum/.venv_isaaclab3/lib/python3.12/site-packages/hydra/core/utils.py", line 176, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py", line 99, in hydra_main
+    env_cfg.from_dict(resolved["env"])
+  File "/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab/isaaclab/utils/configclass.py", line 153, in _update_class_from_dict
+    update_class_from_dict(obj, data, _ns="")
+  File "/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab/isaaclab/utils/dict.py", line 167, in update_class_from_dict
+    raise ValueError(
+ValueError: [Config]: Incorrect type under namespace: /seed. Expected: <class 'NoneType'>, Received: <class 'int'>.
+[job] tag=rep_all_3 exit=1

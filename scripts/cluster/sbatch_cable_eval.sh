@@ -43,6 +43,7 @@ scripts/newton_py -m isaacsimenvs.eval.episodes \
     --num_assets_per_type 1 \
     --single_variant \
     --max_steps "$MAX_STEPS" \
+    --seed "${SEED:-0}" \
     --out "docs/results/${TAG}.json" \
     'env.assets.handle_head_types=[hammer]' \
     "$@"

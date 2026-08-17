@@ -8,3 +8,5 @@
 [grid] --- g_d20i320 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=320
 [g_d20i320] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.665, "p50": 0.414, "p90": 1.635, "p99": 3.135, "max": 3.547, "non_finite": 0, "goals_scored": 0, "lifted": 0}
 [grid] --- g_d20i640 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=640
+[g_d20i640] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.41, "p50": 0.272, "p90": 0.856, "p99": 2.622, "max": 3.337, "non_finite": 0, "goals_scored": 0, "lifted": 1}
+[grid] group=iter done

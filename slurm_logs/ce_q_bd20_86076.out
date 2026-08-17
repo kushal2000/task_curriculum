@@ -1,49 +1,49 @@
-[job] tag=v_seg24 num_envs=64 host=portal-compute-02.cs.cornell.edu gpu=0
-[job] overrides: env.cable.thickness=0.03 env.cable.segments=24 env.cable.cable_substeps=2 env.cable.linear_damping=10.0 env.cable.angular_damping=20.0 env.cable.vbd_iterations=80
+[job] tag=q_bd20 num_envs=64 host=portal-compute-02.cs.cornell.edu gpu=0
+[job] overrides: env.cable.thickness=0.03 env.cable.angular_damping=20.0 env.cable.vbd_iterations=80 env.cable.cable_substeps=2 env.cable.linear_damping=10.0 env.cable.bend_stiffness_scale=20.0
 [episodes] running kit-less (no Isaac Sim runtime): AppLauncher requires the full Isaac Sim runtime. Install Isaac Sim or avoid constructing AppLauncher in a kitless process.
 [INFO]: Parsing configuration from: isaacsimenvs.tasks.cable.cable_env_cfg:CableEnvCfg
 /share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py:91: Hydra15MigrationWarning: The version_base parameter is deprecated and will be removed in Hydra 1.5.
 Omit the version_base parameter to use the current Hydra defaults.
   @hydra.main(config_path=None, config_name=short_name, version_base="1.3")
 [cable] triangle-pair budget 4,194,304 for num_envs=64
-[2026-08-17 02:46:40,293][isaaclab.envs.common][WARNING] - env_cfg.viewer is deprecated. Set env_cfg.sim.default_visualizer_cfg = KitVisualizerCfg(eye=..., lookat=...) instead. The viewer values have been automatically forwarded for this run.
+[2026-08-17 03:24:50,759][isaaclab.envs.common][WARNING] - env_cfg.viewer is deprecated. Set env_cfg.sim.default_visualizer_cfg = KitVisualizerCfg(eye=..., lookat=...) instead. The viewer values have been automatically forwarded for this run.
 [INFO]: Base environment:
 	Environment device    : cuda:0
 	Environment seed      : 0
 	Physics step-size     : 0.00833333333
 	Rendering step-size   : 0.01666666666
 	Environment step-size : 0.01666666666
-[2026-08-17 02:46:41,576][isaaclab.cloner._fabric_notices][INFO] - libcarb.so unavailable — Fabric notice suspension disabled (Linux x86_64 only)
+[2026-08-17 03:24:51,913][isaaclab.cloner._fabric_notices][INFO] - libcarb.so unavailable — Fabric notice suspension disabled (Linux x86_64 only)
 [scene_utils][+0.00s] setup start num_envs=64 num_assets_per_type=1
 [scene_utils][+0.00s] generated 2 object URDFs
-[scene_utils][+0.50s] resolved baked USDs
+[scene_utils][+0.45s] resolved baked USDs
 [quat_convention] robot init rot (1.0, 0.0, 0.0, 0.0) (wxyz) -> (0.0, 0.0, 0.0, 1.0) (xyzw)
-[2026-08-17 02:46:42,089][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory Articulation.
-[2026-08-17 02:46:42,109][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory RigidObject.
-[2026-08-17 02:46:42,112][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
-[2026-08-17 02:46:42,120][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
-[2026-08-17 02:46:42,128][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
-[scene_utils][+0.55s] spawned robot/table/object/goalviz
+[2026-08-17 03:24:52,377][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory Articulation.
+[2026-08-17 03:24:52,396][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory RigidObject.
+[2026-08-17 03:24:52,398][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-08-17 03:24:52,405][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-08-17 03:24:52,412][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[scene_utils][+0.50s] spawned robot/table/object/goalviz
 I: Initializing Version 2.72.3-release.7151+gl.5390bed9
-I: Client ID: 9F6392OB
+I: Client ID: 2FYMGWNG
 I: Not using Hub: Hub not found
 I: Successfully created S3 provider for https://omniverse-content-staging.s3-us-west-2.amazonaws.com
-[2026-08-17 02:46:42,559][isaaclab.utils.assets][WARNING] - Serving remote assets from the local cache under '/share/portal/kk837/tmp'. Each copy is checked against the server before use; delete the directory to force a full re-download.
-[2026-08-17 02:46:42,559][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd'.
-[2026-08-17 02:46:42,665][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png'.
-[2026-08-17 02:46:42,667][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png'.
-[2026-08-17 02:46:42,669][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png'.
-[scene_utils][+1.11s] registered assets with scene
+[2026-08-17 03:24:52,845][isaaclab.utils.assets][WARNING] - Serving remote assets from the local cache under '/share/portal/kk837/tmp'. Each copy is checked against the server before use; delete the directory to force a full re-download.
+[2026-08-17 03:24:52,845][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd'.
+[2026-08-17 03:24:52,950][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png'.
+[2026-08-17 03:24:52,952][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png'.
+[2026-08-17 03:24:52,953][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png'.
+[scene_utils][+1.06s] registered assets with scene
 [cable] neutralised the inherited rigid tool (1 prims, 2 colliders off, 1 bodies pinned)
 [cable] goal marker reshaped on 1 prims (capsule 0.300 m x 30 mm)
-[2026-08-17 02:46:42,709][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory CableObject.
-[2026-08-17 02:46:42,714][isaaclab.sim.spawners.materials.visual_materials][WARNING] - Skipping preview surface material at '/World/envs/env_0/Cable/geometry/material' — Kit is not available.
-[2026-08-17 02:46:42,714][isaaclab.sim.utils.prims][WARNING] - Could not perform 'bind_visual_material' on any prims under: '/World/envs/env_0/Cable/geometry/mesh'. This might be because of the following reasons:
+[2026-08-17 03:24:52,992][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory CableObject.
+[2026-08-17 03:24:52,996][isaaclab.sim.spawners.materials.visual_materials][WARNING] - Skipping preview surface material at '/World/envs/env_0/Cable/geometry/material' — Kit is not available.
+[2026-08-17 03:24:52,997][isaaclab.sim.utils.prims][WARNING] - Could not perform 'bind_visual_material' on any prims under: '/World/envs/env_0/Cable/geometry/mesh'. This might be because of the following reasons:
 	(1) The desired attribute does not exist on any of the prims.
 	(2) The desired attribute exists on an instanced prim.
 		Discovered list of instanced prim paths: []
 [cable] object_scale = [7.5, 0.75, 0.75] (bbox [0.3, 0.03, 0.03] m / object_base_size 0.04)
-[cable] 24 segments, 0.300 m x 30 mm, stretch 8.84e+06, bend 6.29e+06
+[cable] 12 segments, 0.300 m x 30 mm, stretch 1.77e+07, bend 1.26e+07
 [cloning] pushed CollisionAPI onto 34 mesh prims under 34 collision Xforms
 [cloning] marked 3 object colliders convexHull
 [cloning] authored PD gains on 29 joint drives
@@ -86,7 +86,7 @@ Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/
 /share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/newton_clone_utils.py:147: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
   replace_newton_builder_shape_colors(builder, stage)
 [clone_patch] replicated 64 environments from 1 prototype row(s); variant counts [1, 1, 1, 1, 1, 1]
-[INFO]: Time taken for scene creation Last: 2.792072 s, Mean: 2.792072 s, Std: 0.000000 s, N: 1
+[INFO]: Time taken for scene creation Last: 2.664903 s, Mean: 2.664903 s, Std: 0.000000 s, N: 1
 [INFO]: Scene manager:  <class InteractiveScene>
 	Number of environments: 64
 	Environment spacing   : 1.2
@@ -94,17 +94,17 @@ Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/
 	Global prim paths     : []
 	Replicate physics     : False
 [INFO]: Starting the simulation. This may take a few seconds. Please wait...
-[2026-08-17 02:46:44,305][isaaclab_newton.physics.newton_manager][INFO] - Dispatching MODEL_INIT callbacks
-[2026-08-17 02:46:44,352][isaaclab_newton.physics.newton_manager][INFO] - Finalizing model on device: cuda:0
-[gravcomp] mujoco:gravcomp=1 on 1920/3648 bodies before finalize
+[2026-08-17 03:24:54,532][isaaclab_newton.physics.newton_manager][INFO] - Dispatching MODEL_INIT callbacks
+[2026-08-17 03:24:54,578][isaaclab_newton.physics.newton_manager][INFO] - Finalizing model on device: cuda:0
+[gravcomp] mujoco:gravcomp=1 on 1920/2880 bodies before finalize
 [condim] mujoco:condim=6 on 896 grasping shapes before finalize
-[cable_damping] linear_kd=10.0 on 2944 DOFs, angular_kd=20.0 on 2944 DOFs
+[cable_damping] linear_kd=10.0 on 1408 DOFs, angular_kd=20.0 on 1408 DOFs
 /share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/physics/newton_manager.py:1524: UserWarning: Inertia validation corrected 384 bodies. Set validate_inertia_detailed=True for detailed per-body warnings.
   NewtonManager._model = cls._builder.finalize(device=device)
-Finalize builder took: Last: 0.488680 s, Mean: 0.488680 s, Std: 0.000000 s, N: 1
-[2026-08-17 02:46:44,847][isaaclab_newton.physics.newton_manager][INFO] - Dispatching PHYSICS_READY callbacks
-[2026-08-17 02:46:44,865][isaaclab_newton.assets.articulation.articulation_data][WARNING] - Failed to get root com velocity. If the articulation is fixed, this is expected. Setting root com velocity to zeros.
-[2026-08-17 02:46:45,009][isaaclab_newton.assets.articulation.articulation][INFO] - Simulation parameters for joints in /World/envs/env_.*/Robot:
+Finalize builder took: Last: 0.473850 s, Mean: 0.473850 s, Std: 0.000000 s, N: 1
+[2026-08-17 03:24:55,057][isaaclab_newton.physics.newton_manager][INFO] - Dispatching PHYSICS_READY callbacks
+[2026-08-17 03:24:55,075][isaaclab_newton.assets.articulation.articulation_data][WARNING] - Failed to get root com velocity. If the articulation is fixed, this is expected. Setting root com velocity to zeros.
+[2026-08-17 03:24:55,215][isaaclab_newton.assets.articulation.articulation][INFO] - Simulation parameters for joints in /World/envs/env_.*/Robot:
 +-------------------------------------------------------------------------------------------------------------------------------------+
 |                                  Simulation Joint Information (Prim path: /World/envs/env_.*/Robot)                                 |
 +-------+----------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
@@ -140,10 +140,10 @@ Finalize builder took: Last: 0.488680 s, Mean: 0.488680 s, Std: 0.000000 s, N: 1
 |   27  | left_pinky_PIP       |   0.900   |  0.042  |  0.001   |      0.000      |  [0.000, 1.745] |      11.618     |     0.638     |
 |   28  | left_pinky_DIP       |   0.900   |  0.035  |  0.000   |      0.000      |  [0.000, 1.396] |      14.666     |     0.189     |
 +-------+----------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
-Initialize solver took: Last: 2.733792 s, Mean: 2.733792 s, Std: 0.000000 s, N: 1
-[INFO]: Time taken for simulation start Last: 3.474188 s, Mean: 3.474188 s, Std: 0.000000 s, N: 1
+Initialize solver took: Last: 2.570433 s, Mean: 2.570433 s, Std: 0.000000 s, N: 1
+[INFO]: Time taken for simulation start Last: 3.288648 s, Mean: 3.288648 s, Std: 0.000000 s, N: 1
 [INFO]: Completed setting up the environment...
-[material_patch] friction set: 3969 shapes at mu=0.5, 640 fingertip shapes at mu=1.5
+[material_patch] friction set: 3201 shapes at mu=0.5, 640 fingertip shapes at mu=1.5
 [fingertip_order] reordered fingertips to canonical order: ['left_thumb_DP', 'left_index_DP', 'left_middle_DP', 'left_ring_DP', 'left_pinky_DP'] -> ['left_index_DP', 'left_middle_DP', 'left_ring_DP', 'left_thumb_DP', 'left_pinky_DP']
 Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
 Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
@@ -166,16 +166,16 @@ RunningMeanStd:  (140,)
   return _orig(value, *args, **kwargs)
 /share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
   value = getattr(object.__getattribute__(self, "_wrapped"), name)
-[episodes] step 500: 61/64 envs done
+[episodes] step 500: 45/64 envs done
 
 ========================================================================
 Isaacsimenvs-Cable-Direct-v0  |  64 envs  |  first episode per env
-goals/episode = 0.0 +/- 0.0   (n=64, censored=0)
-lift fraction = 0.5781   (unguarded 0.5938, 1 ejected above 1.4 m)
-termination   = {'fall': 56, 'max_successes': 0, 'hand_far': 6, 'timeout': 2}
-mean ep length= 206.8 steps
+goals/episode = 0.0312 +/- 0.0217   (n=64, censored=0)
+lift fraction = 0.2188
+termination   = {'fall': 45, 'max_successes': 0, 'hand_far': 1, 'timeout': 18}
+mean ep length= 310.8 steps
 ========================================================================
 
-[episodes] wrote docs/results/v_seg24.json
-[2026-08-17 02:51:43,048][isaaclab.sim.simulation_context][INFO] - SimulationContext cleared
-[job] tag=v_seg24 exit=0
+[episodes] wrote docs/results/q_bd20.json
+[2026-08-17 03:31:58,653][isaaclab.sim.simulation_context][INFO] - SimulationContext cleared
+[job] tag=q_bd20 exit=0

@@ -420,6 +420,35 @@ cable zeros interpretable: the scene is sound, the proxies work, the goal is rea
 cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/episode, with lift
 3/32 -> 28/32 as the leading indicator, since goals follow lift.
 
+## Where the cable ends up: 2-5 goals per 64 envs, max 2-3 per episode
+
+Measured on a clean sim -- flat table, no clearance, overflow guard active, contacts intact.
+Best configuration found (`p_bd05`):
+
+    cable_substeps=2  linear_damping=10  angular_damping=20
+    vbd_iterations=80  bend_stiffness_scale=10.0   (bend x0.5)
+
+| config | seeds | total goals | max/episode | lift |
+|---|---|---|---|---|
+| bend x0.5 | 0, 400, 500 | 4, 5, 4 | 3, 2, 2 | 0.27-0.36 |
+| bend x0.1 | 0, 100, 300 | 5, 2, 3 | 3, 1, 2 | 0.14-0.25 |
+| 24 segments | 3 configs | **0, 0, 0** | 0 | **0.56-0.59** |
+
+**Run-to-run spread exceeds the difference between most configurations.** The same config drew 5,
+2 and 3 total goals across seeds, so no single 64-env run can rank two parameter settings -- which
+invalidates every one-run comparison made earlier in this document, including several reported as
+leads. Bend x0.5 beating bend x0.1 is the one config-level claim here backed by repeats.
+
+**The 24-segment result is the sharpest open question.** Three independent configurations lift
+~57% -- more than double anything else -- and score **exactly zero**. A finer cable conforms to the
+fingers far better, gets picked up, and never arrives. Whatever breaks transport gets *worse* with
+segment count, which matches the proxy-exchange diagnosis: more segments means more joints, more
+proxy contacts, and more exchange traffic per step.
+
+So the two axes trade against each other and neither reaches 5 in one episode: 12 segments scores
+2-5 totals at ~20% lift, 24 segments lifts ~57% and scores nothing. Totals rise because more envs
+score once or twice, never because one episode scores repeatedly.
+
 ## The instability, and the two knobs that actually fix it
 
 39 configurations screened at 4 envs x 300 steps (`scripts/cluster/sbatch_velgrid.sh`), against a
