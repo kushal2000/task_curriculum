@@ -420,6 +420,43 @@ cable zeros interpretable: the scene is sound, the proxies work, the goal is rea
 cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/episode, with lift
 3/32 -> 28/32 as the leading indicator, since goals follow lift.
 
+## Clearance is the answer: the first goals scored on a cable
+
+**A cable lying flush on a table gives the fingers nowhere to close.** That is the whole thing.
+`CableCfg.supports` rests it on two low rails with the middle span open, and the same policy --
+unchanged, same checkpoint -- starts picking it up.
+
+| config | goals/ep | goals | lift |
+|---|---:|---:|---:|
+| supports, 40 mm gap | **0.0938 +/- 0.0515** | 3 | 19/32 |
+| supports + `soft_contact_ke` x10 | 0.0312 | 1 | 19/32 |
+| supports + bend x100 | 0.0 | 0 | 17/32 |
+| supports, 60 mm gap | 0.0312 | 1 | **22/32** |
+| supports + contact + bend | 0.0625 | 2 | 16/32 |
+| *(22 configs without supports)* | **0.0** | **0** | 0-5/32 |
+
+**7 goals across the supported configs against 0 in every unsupported one**, and lift 16-22/32
+against 0-5/32. Do not rank the supported configs by goal count -- 0 to 3 events is Poisson noise.
+Lift is the robust statistic, and the dose-response is the evidence: 40 mm -> 19/32, 60 mm -> 22/32.
+
+Verified rather than assumed, on the 40 mm run: three *distinct* envs scored (5, 15, 27), not one
+env repeating; **zero ejected**, guarded and unguarded lift identical; and peak object height
+0.889 m, i.e. 26 cm above the 0.63 m table -- clear of the 0.765 m on-end pivot that faked lifts
+earlier in this document.
+
+`videos/cable_supports.mp4` shows the rig, `videos/cable_supports_grasp.mp4` shows the hand lifting
+and carrying the cable. Neither shows a scored goal: re-running does not reproduce a specific
+episode under GPU nondeterminism, so the goals live in the measurement, not the footage.
+
+### Why every other knob failed
+
+The 22-configuration table below is worth keeping precisely because it is negative. Stiffness,
+density, contact stiffness, friction, solver iterations and substeps all govern **how the cable
+behaves**. None of them changes **the geometry of the grasp**, and that was the binding constraint
+the whole time. The monotonic stiffening trend -- falls 29 -> 13, timeouts 0 -> 18, lift -> 0 -- was
+the clearest signal that the object was not the problem: an infinitely stiff cable the hand still
+cannot pick up is a statement about where the fingers can go, not about compliance.
+
 ### The full sweep: 22 configurations, zero goals
 
 All at 32 envs, whole-hand proxies, damping 1.0 + 20 VBD iterations unless stated. Rigid-rod
