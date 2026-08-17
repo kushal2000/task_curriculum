@@ -420,6 +420,55 @@ cable zeros interpretable: the scene is sound, the proxies work, the goal is rea
 cable's 0.0 is a property of the cable. It also sets the target -- 0 -> 9 goals/episode, with lift
 3/32 -> 28/32 as the leading indicator, since goals follow lift.
 
+## The instability, and the two knobs that actually fix it
+
+39 configurations screened at 4 envs x 300 steps (`scripts/cluster/sbatch_velgrid.sh`), against a
+**matched 4-env rigid rod**: mean 0.161, p50 0.112, p90 0.359, p99 0.898, max 1.31, lifting 4/4.
+
+| config | mean | p50 | p90 | p99 | max |
+|---|---:|---:|---:|---:|---:|
+| **rigid rod (reference)** | 0.161 | 0.112 | **0.359** | 0.898 | **1.31** |
+| **`cable_substeps=2` + `linear_damping=10`** | 0.290 | 0.226 | **0.620** | 1.217 | **1.84** |
+| bend x0.1 + `linear_damping=10` | 0.333 | 0.254 | 0.686 | 1.707 | 2.93 |
+| all three + 40 mm | 0.306 | 0.197 | 0.701 | 2.023 | 2.83 |
+| stock (damping 1, 20 iters) | 0.437 | 0.269 | 1.118 | 2.484 | 3.22 |
+| `stretch_stiffness_scale` x0.01 | 5.777 | 3.171 | 15.873 | 32.782 | **94.89** |
+
+**Substeps 2 with linear damping 10 reaches 1.7x the rigid p90 and 1.4x its max**, against stock's
+3.1x and 2.5x -- the first cable configuration in the same regime as a rigid object the policy
+succeeds with.
+
+### What the grid rules out, and what that implies
+
+* **Angular damping is not the lever.** 1 -> 200 at fixed iterations moves p50 by a third and leaves
+  p90 flat, while making the tail worse (damping 50 gives the *best* median at 0.189 and a p99 of
+  15.2). Judging by median alone picks it; judging by max alone misses that its ordinary motion is
+  calm. Both are why percentiles are reported here.
+* **Solver iterations do nothing at all.** 20 / 40 / 80 / 160 -> p50 0.279 / 0.347 / 0.263 / 0.284.
+  The cable is *not* under-resolved, so throwing solver budget at it cannot help.
+* **Substeps have a sharp optimum at 2**, degrading upward (4 -> 8 -> 16: p50 0.269 -> 0.358 ->
+  0.912) and failing catastrophically at 1 (max 37 m/s). Fewer, larger substeps mean fewer proxy
+  exchanges per step.
+* **Coupler iterations make it worse** (max 17.3 at 2), reproducing the very first sweep's finding.
+
+Flat in iterations, optimal at *fewer* substeps, worse with more coupler iterations: the energy
+enters through the **proxy exchange between the MJWarp and VBD entries**, not through an
+under-converged VBD solve. That is why a year of solver-budget knobs did nothing.
+
+* **Softening stretch stiffness is catastrophic** (x0.01 -> 94.9 m/s peak) while **softening bend
+  helps** (x0.1 is among the best). Opposite directions: a stiff bend response rings at this
+  timestep, and stretch stiffness is what stops the chain oscillating along its length. Every
+  earlier stiffness sweep moved both the same way, and harder.
+* Segment count optimum is the default 12 (6 -> 0.524, 12 -> 0.269, 24 -> 0.498, 48 -> 1.13).
+* Density and thickness do nothing for stability.
+
+### Method note
+
+Screening wants **many configs at few envs**; goal counts want the opposite. 39 configurations at
+4 envs took less wall-clock than six at 64. But max speed scales with env count -- stock measured
+3.22 at 4 envs and 8.61 at 8 -- so cross-env-count comparisons are invalid, which is why the rigid
+reference was re-run at 4 envs before any of the above was concluded.
+
 ## The reference: what a *working* manipulation looks like
 
 Peak speed was used as a stability metric here for a long time against a badly chosen anchor --

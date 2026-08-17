@@ -1,0 +1,13 @@
+{
+  "task": "Isaacsimenvs-Cable-Direct-v0",
+  "num_envs": 4,
+  "steps": 300,
+  "mean": 0.415,
+  "p50": 0.276,
+  "p90": 0.904,
+  "p99": 2.701,
+  "max": 4.871,
+  "non_finite": 0,
+  "goals_scored": 0,
+  "lifted": 0
+}

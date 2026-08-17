@@ -168,3 +168,6 @@ RunningMeanStd:  (140,)
   value = getattr(object.__getattribute__(self, "_wrapped"), name)
 /share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:64: DeprecationWarning: The function 'set_joint_position_target' will be deprecated in a future release. Please use 'set_joint_position_target_index' instead.
   self.robot.set_joint_position_target(self._cur_targets)
+VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 16, "steps": 600, "mean": 0.523, "p50": 0.263, "p90": 1.357, "p99": 2.999, "max": 22.826, "non_finite": 0, "goals_scored": 0, "lifted": 0}
+[2026-08-17 01:47:34,753][isaaclab.sim.simulation_context][INFO] - SimulationContext cleared
+[job] tag=cable_base exit=0

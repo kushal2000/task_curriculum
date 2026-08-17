@@ -1,0 +1,12 @@
+[grid] group=seg envs=4 steps=300 host=portal-compute-02.cs.cornell.edu configs=5
+[grid] --- g_seg6 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=80 env.cable.segments=6
+[g_seg6] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.701, "p50": 0.524, "p90": 1.764, "p99": 3.012, "max": 3.449, "non_finite": 0, "goals_scored": 0, "lifted": 1}
+[grid] --- g_seg24 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=80 env.cable.segments=24
+[g_seg24] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.64, "p50": 0.498, "p90": 1.1, "p99": 3.027, "max": 4.009, "non_finite": 0, "goals_scored": 0, "lifted": 3}
+[grid] --- g_seg48 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=80 env.cable.segments=48
+[g_seg48] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 1.53, "p50": 1.13, "p90": 3.462, "p99": 5.777, "max": 6.534, "non_finite": 0, "goals_scored": 0, "lifted": 0}
+[grid] --- g_dens : env.cable.angular_damping=20.0 env.cable.vbd_iterations=80 env.cable.density=1000.0
+[g_dens] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.687, "p50": 0.364, "p90": 1.271, "p99": 7.738, "max": 13.446, "non_finite": 0, "goals_scored": 0, "lifted": 1}
+[grid] --- g_th40 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=80 env.cable.thickness=0.04
+[g_th40] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.516, "p50": 0.265, "p90": 1.255, "p99": 2.86, "max": 5.388, "non_finite": 0, "goals_scored": 0, "lifted": 1}
+[grid] group=seg done

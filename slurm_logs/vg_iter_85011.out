@@ -1,0 +1,8 @@
+[grid] group=iter envs=4 steps=300 host=portal-compute-01.cs.cornell.edu configs=5
+[grid] --- g_d20i40 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=40
+[g_d20i40] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.51, "p50": 0.347, "p90": 1.189, "p99": 2.78, "max": 5.111, "non_finite": 0, "goals_scored": 0, "lifted": 1}
+[grid] --- g_d20i80 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=80
+[g_d20i80] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.458, "p50": 0.263, "p90": 1.047, "p99": 2.848, "max": 3.654, "non_finite": 0, "goals_scored": 0, "lifted": 0}
+[grid] --- g_d20i160 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=160
+[g_d20i160] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.529, "p50": 0.284, "p90": 1.255, "p99": 2.978, "max": 3.914, "non_finite": 0, "goals_scored": 0, "lifted": 1}
+[grid] --- g_d20i320 : env.cable.angular_damping=20.0 env.cable.vbd_iterations=320

@@ -140,3 +140,32 @@ Finalize builder took: Last: 0.338423 s, Mean: 0.338423 s, Std: 0.000000 s, N: 1
 |   27  | left_pinky_PIP       |   0.900   |  0.042  |  0.001   |      0.000      |  [0.000, 1.745] |      11.618     |     0.638     |
 |   28  | left_pinky_DIP       |   0.900   |  0.035  |  0.000   |      0.000      |  [0.000, 1.396] |      14.666     |     0.189     |
 +-------+----------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+Initialize solver took: Last: 2.643019 s, Mean: 2.643019 s, Std: 0.000000 s, N: 1
+[INFO]: Time taken for simulation start Last: 3.141746 s, Mean: 3.141746 s, Std: 0.000000 s, N: 1
+[INFO]: Completed setting up the environment...
+[material_patch] friction set: 801 shapes at mu=0.5, 160 fingertip shapes at mu=1.5
+[fingertip_order] reordered fingertips to canonical order: ['left_thumb_DP', 'left_index_DP', 'left_middle_DP', 'left_ring_DP', 'left_pinky_DP'] -> ['left_index_DP', 'left_middle_DP', 'left_ring_DP', 'left_thumb_DP', 'left_pinky_DP']
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/share/portal/kk837/task_curriculum/isaacsimenvs/eval/player.py:53: UserWarning: register_new_resolver() is deprecated and will be removed in a future release.
+Use register_resolver() instead.
+See https://github.com/omry/omegaconf/issues/426 for migration instructions.
+
+  OmegaConf.register_new_resolver(name, fn)
+self.seed = 0
+[BasePlayer] Creating regular env:  rlgpu
+{'observation_space': Box(-inf, inf, (140,), float32), 'action_space': Box(-1.0, 1.0, (29,), float32), 'agents': 1, 'value_size': 1}
+build mlp: 1024
+RunningMeanStd:  (1,)
+RunningMeanStd:  (140,)
+=> loading checkpoint '/share/portal/kk837/simtoolreal/pretrained_policy/model.pth'
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/utils/reset_utils.py:218: DeprecationWarning: The function 'write_joint_state_to_sim' will be deprecated in a future release. Please use 'write_joint_state_to_sim_index' instead.
+  env.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:2112: DeprecationWarning: The function 'write_root_pose_to_sim' will be deprecated in a future release. Please use 'write_root_pose_to_sim_index' instead.
+  return _orig(value, *args, **kwargs)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
+  value = getattr(object.__getattribute__(self, "_wrapped"), name)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:64: DeprecationWarning: The function 'set_joint_position_target' will be deprecated in a future release. Please use 'set_joint_position_target_index' instead.
+  self.robot.set_joint_position_target(self._cur_targets)
+[2026-08-17T01:53:09.867] error: *** JOB 84924 ON portal-compute-02 CANCELLED AT 2026-08-17T01:53:09 DUE to SIGNAL Terminated ***

@@ -184,3 +184,5 @@ Warning: Triangle pair buffer overflowed 4217357 > 4194304.
 Warning: Triangle pair buffer overflowed 4218771 > 4194304.
 Warning: Triangle pair buffer overflowed 4213099 > 4194304.
 [episodes] step 500: 46/64 envs done
+[episodes] step 1000: 63/64 envs done
+[2026-08-17T01:53:09.994] error: *** JOB 84799 ON portal-compute-02 CANCELLED AT 2026-08-17T01:53:09 DUE to SIGNAL Terminated ***

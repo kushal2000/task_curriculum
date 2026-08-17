@@ -1,0 +1,6 @@
+[grid] group=ref envs=4 steps=300 host=portal-compute-02.cs.cornell.edu configs=2
+[grid] --- g_ref_rod : env.cable.rigid_rod=true env.cable.keep_cable_for_coupling=true
+[g_ref_rod] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.161, "p50": 0.112, "p90": 0.359, "p99": 0.898, "max": 1.308, "non_finite": 0, "goals_scored": 7, "lifted": 4}
+[grid] --- g_ref_rod_plain : env.cable.rigid_rod=true
+[g_ref_rod_plain] VELSTATS {"task": "Isaacsimenvs-Cable-Direct-v0", "num_envs": 4, "steps": 300, "mean": 0.159, "p50": 0.132, "p90": 0.322, "p99": 0.819, "max": 1.308, "non_finite": 0, "goals_scored": 6, "lifted": 3}
+[grid] group=ref done

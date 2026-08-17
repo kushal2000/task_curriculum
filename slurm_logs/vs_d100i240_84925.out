@@ -168,3 +168,4 @@ RunningMeanStd:  (140,)
   value = getattr(object.__getattribute__(self, "_wrapped"), name)
 /share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:64: DeprecationWarning: The function 'set_joint_position_target' will be deprecated in a future release. Please use 'set_joint_position_target_index' instead.
   self.robot.set_joint_position_target(self._cur_targets)
+[2026-08-17T01:53:09.931] error: *** JOB 84925 ON portal-compute-04 CANCELLED AT 2026-08-17T01:53:09 DUE to SIGNAL Terminated ***

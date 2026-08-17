@@ -168,3 +168,4 @@ RunningMeanStd:  (140,)
   return _orig(value, *args, **kwargs)
 /share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
   value = getattr(object.__getattribute__(self, "_wrapped"), name)
+[2026-08-17T01:53:10.174] error: *** JOB 84793 ON portal-compute-01 CANCELLED AT 2026-08-17T01:53:10 DUE to SIGNAL Terminated ***
