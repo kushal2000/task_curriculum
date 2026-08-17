@@ -57,19 +57,29 @@ def _goal_overlay(viewer, inner, world: int):
 
     from isaacsimenvs.tasks.play.utils.obs_utils import _keypoints_world
 
-    rew_cfg = inner.cfg.reward
-    offsets = (
-        inner._keypoint_offsets_fixed
-        if rew_cfg.fixed_size_keypoint_reward
-        else inner._keypoint_offsets
-    )
-    # World frame: the viewer draws in world coordinates, and `root_pos_w` is already there.
-    obj_kp = _keypoints_world(
-        inner.object.data.root_pos_w, inner.object.data.root_quat_w, offsets
-    )[world]
-    goal_kp = _keypoints_world(
-        inner.goal_viz.data.root_pos_w, inner.goal_viz.data.root_quat_w, offsets
-    )[world]
+    # A deformable task defines its goal directly, not as a rigid pose plus fixed offsets. Ask the
+    # env for the quantity it actually scores when it has one -- for the cloth that is
+    # `fold_targets_w()` against the live keypoints, which is what `is_folded` thresholds. Going
+    # through `goal_viz` instead would draw an approximation of the criterion rather than the
+    # criterion, and a folded SHEET cannot be represented by a rigid marker at all: every attempt
+    # (hammer, box, flat mesh) read as some kind of slab.
+    if hasattr(inner, "fold_targets_w") and hasattr(inner, "cloth_keypoints_w"):
+        goal_kp = inner.fold_targets_w()[world]
+        obj_kp = inner.cloth_keypoints_w()[world]
+    else:
+        rew_cfg = inner.cfg.reward
+        offsets = (
+            inner._keypoint_offsets_fixed
+            if rew_cfg.fixed_size_keypoint_reward
+            else inner._keypoint_offsets
+        )
+        # World frame: the viewer draws in world coordinates, `root_pos_w` is already there.
+        obj_kp = _keypoints_world(
+            inner.object.data.root_pos_w, inner.object.data.root_quat_w, offsets
+        )[world]
+        goal_kp = _keypoints_world(
+            inner.goal_viz.data.root_pos_w, inner.goal_viz.data.root_quat_w, offsets
+        )[world]
 
     g = goal_kp.detach().cpu().numpy().astype("float32")
     o = obj_kp.detach().cpu().numpy().astype("float32")
@@ -82,6 +92,17 @@ def _goal_overlay(viewer, inner, world: int):
 
     def _pts(arr):
         return wp.array(arr, dtype=wp.vec3, device=dev)
+
+    # A replica of the sheet in the folded pose -- the goal drawn as what it actually is. Logged
+    # as a mesh each frame, so it tracks the live crease exactly like the criterion does.
+    if hasattr(inner, "folded_half_w"):
+        ghost = inner.folded_half_w()[world].detach().cpu().numpy().astype("float32")
+        viewer.log_mesh(
+            "goal_sheet",
+            _pts(ghost),
+            wp.array(inner.folded_half_topology(), dtype=wp.int32, device=dev),
+            backface_culling=False,
+        )
 
     viewer.log_points("goal_kp", _pts(g), radii=0.012, colors=_col(GOAL_KP_COLOR, len(g)))
     viewer.log_points("obj_kp", _pts(o), radii=0.009, colors=_col(OBJ_KP_COLOR, len(o)))

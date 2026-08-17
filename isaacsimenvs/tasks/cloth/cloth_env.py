@@ -24,6 +24,7 @@ from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
     folded_targets,
     grid_mesh,
     half_indices,
+    half_mesh,
     keypoint_indices,
 )
 from isaacsimenvs.tasks.play_newton.play_newton_env import PlayNewtonEnv
@@ -234,13 +235,11 @@ class ClothEnv(PlayNewtonEnv):
         from isaaclab.sim.utils import find_matching_prims
 
         c = self.cfg.cloth
-        # The folded flap covers half the sheet along the fold axis and its full width across.
-        along, across = 0.5 * float(c.size), float(c.size)
-        size = (
-            (along, across, float(c.thickness))
-            if c.fold_axis == "x"
-            else (across, along, float(c.thickness))
-        )
+        # The half's own grid, not a box: the marker stands in for a folded SHEET, and a solid slab
+        # both reads as a brick and shows a thickness the cloth does not have (a VBD cloth is a
+        # surface -- its thickness is a collision radius the renderer never draws, so the sheet
+        # itself always renders flat).
+        gv, gi = half_mesh(float(c.size), int(c.resolution), c.fold_axis)
 
         marked = 0
         for prim in find_matching_prims("/World/envs/env_.*/GoalViz"):
@@ -253,17 +252,16 @@ class ClothEnv(PlayNewtonEnv):
             )
             for child in body.GetChildren():
                 child.SetActive(False)
-            slab = UsdGeom.Cube.Define(stage, body.GetPath().AppendChild("cloth_marker"))
-            # A unit cube scaled per-axis: `Cube` has one size attribute, so the rectangular
-            # footprint has to come from the xform scale.
-            slab.CreateSizeAttr(1.0)
-            UsdGeom.Xformable(slab.GetPrim()).AddScaleOp().Set(Gf.Vec3f(*size))
-            UsdPhysics.CollisionAPI.Apply(slab.GetPrim()).CreateCollisionEnabledAttr(False)
+            sheet = UsdGeom.Mesh.Define(stage, body.GetPath().AppendChild("cloth_marker"))
+            sheet.CreatePointsAttr([Gf.Vec3f(*v) for v in gv])
+            sheet.CreateFaceVertexIndicesAttr(gi)
+            sheet.CreateFaceVertexCountsAttr([3] * (len(gi) // 3))
+            UsdPhysics.CollisionAPI.Apply(sheet.GetPrim()).CreateCollisionEnabledAttr(False)
             marked += 1
 
         print(
             f"[cloth] goal marker reshaped on {marked} prims "
-            f"(slab {size[0]:.3f} x {size[1]:.3f} x {size[2]:.3f} m)",
+            f"(half-sheet mesh, {len(gv)} verts / {len(gi) // 3} tris)",
             flush=True,
         )
 
@@ -287,6 +285,14 @@ class ClothEnv(PlayNewtonEnv):
         crease_local = rest[:, ax].max() - c.size / 2.0      # crease at the sheet's midline (=0)
         self._kp_rest_offset = kp_rest[:, ax] - crease_local  # distance past the crease
         self._kp_rest_lateral = kp_rest[:, 1 - ax]
+
+        # Same two quantities for EVERY particle of the moving half, so the folded configuration
+        # can be drawn as a ghost copy of the sheet rather than approximated by a rigid marker.
+        moving = sorted(set(half_indices(c.resolution, c.fold_axis, positive=True)))
+        self._moving_idx = torch.tensor(moving, device=self.device, dtype=torch.long)
+        mv_rest = rest[self._moving_idx]
+        self._mv_rest_offset = mv_rest[:, ax] - crease_local
+        self._mv_rest_lateral = mv_rest[:, 1 - ax]
         self._fold_targets_xy = t.unsqueeze(0) + self.scene.env_origins.unsqueeze(1)
         self._stationary_idx = torch.tensor(
             half_indices(c.resolution, c.fold_axis, positive=False),
@@ -327,8 +333,44 @@ class ClothEnv(PlayNewtonEnv):
         targets[:, :, 1 - ax] = (
             self._kp_rest_lateral.unsqueeze(0) + self.scene.env_origins[:, 1 - ax].unsqueeze(1)
         )
-        targets[:, :, 2] = (stationary_z + 2.0 * self.cfg.cloth.thickness).unsqueeze(1)
+        # ONE thickness, not two. Particle centres are what these targets and `stationary_z` both
+        # measure, and a flap resting on the stationary half sits exactly one particle DIAMETER --
+        # i.e. one `thickness` -- above it. `2 * thickness` put the target a full sheet-thickness
+        # into the air: 30 mm of pure height error at `thickness=0.03`, against a 40 mm tolerance,
+        # so a geometrically perfect fold could not score. It is also why the marker floats above
+        # the sheet in the renders.
+        targets[:, :, 2] = (stationary_z + self.cfg.cloth.thickness).unsqueeze(1)
         return targets
+
+    def folded_half_w(self) -> torch.Tensor:
+        """``(num_envs, M, 3)`` -- where EVERY particle of the moving half belongs when folded.
+
+        The same construction as :meth:`fold_targets_w`, over the whole half instead of the four
+        scored keypoints. This exists so the goal can be drawn as a ghost copy of the sheet: a
+        folded cloth is a *surface*, and no rigid marker can depict one -- a hammer, a box and a
+        flat mesh all read as some kind of slab, because ``goal_viz`` is a rigid body with a single
+        pose and a single shape. The renderer can log an arbitrary mesh, so it does.
+        """
+        parts = self._particles_w()
+        ax = 0 if self.cfg.cloth.fold_axis == "x" else 1
+        stationary = parts[:, self._stationary_idx, :]
+        crease = stationary[:, :, ax].amax(dim=1)
+        stationary_z = stationary[:, :, 2].mean(dim=1)
+
+        out = parts[:, self._moving_idx, :].clone()
+        out[:, :, ax] = crease.unsqueeze(1) - self._mv_rest_offset.unsqueeze(0)
+        out[:, :, 1 - ax] = (
+            self._mv_rest_lateral.unsqueeze(0) + self.scene.env_origins[:, 1 - ax].unsqueeze(1)
+        )
+        out[:, :, 2] = (stationary_z + self.cfg.cloth.thickness).unsqueeze(1)
+        return out
+
+    def folded_half_topology(self) -> list[int]:
+        """Triangle indices for :meth:`folded_half_w`, in that array's own vertex ordering."""
+        _, idx = half_mesh(
+            float(self.cfg.cloth.size), int(self.cfg.cloth.resolution), self.cfg.cloth.fold_axis
+        )
+        return idx
 
     def _particles_w(self) -> torch.Tensor:
         return self.object._particles()
@@ -389,6 +431,12 @@ class ClothEnv(PlayNewtonEnv):
         # Offsets must be current *before* the task reads them, or the observation lags the sheet
         # by one step.
         self._sync_observed_keypoints()
+        # The marker has to be re-driven EVERY step, not just at reset. `fold_targets_w` is defined
+        # against the sheet's *current* crease and stationary height -- that is what makes the
+        # criterion translation-invariant -- so a marker written once at reset drifts away from the
+        # target actually being scored as soon as the sheet moves. It then shows the policy (and the
+        # viewer) a goal that is not the goal.
+        self._drive_goal_marker()
         obs = super()._get_observations()
         self._assert_finite(obs)
         return obs
@@ -403,21 +451,50 @@ class ClothEnv(PlayNewtonEnv):
         NaN. This reports which quantity went bad first, so the next fix is aimed rather than
         guessed.
         """
+        # Ordered most-upstream first, so the guard names the ROOT quantity rather than the
+        # observation it poisons.
+        #
+        # **The robot is checked, not just the cloth.** 80 of the 140 policy columns are robot
+        # state (joint_pos 0-28, joint_vel 29-57, palm_pos 87-89, palm_rot 90-93,
+        # fingertip_pos_rel_palm 98-112) against 20 that are cloth-derived. The first version of
+        # this guard watched only cloth quantities and duly reported "obs bad, cloth fine" --
+        # true, and useless, because it never looked where most of the vector comes from. In a
+        # coupled solve the MJWarp articulation can diverge from a bad contact while the VBD sheet
+        # stays perfectly well behaved.
+        #
+        # `reward_buf` is deliberately NOT here: the task does feed the reward into an observation
+        # ("reward": reward_buf * 0.01, `obs_utils.py:326`) but only into `state_list`, the
+        # critic's 162-dim state. It is absent from `obs_list`, so it cannot reach `obs["policy"]`.
+        robot = self.robot.data
         parts = {
             "particles": self._particles_w(),
             "velocities": self.object._velocities(),
             "quat": self.object.data.root_quat_w,
+            "fold_targets": self.fold_targets_w(),
+            "robot_joint_pos": robot.joint_pos,
+            "robot_joint_vel": robot.joint_vel,
+            "robot_body_pos_w": robot.body_pos_w,
+            "robot_body_quat_w": robot.body_quat_w,
             "obs": obs["policy"],
         }
         for name, tensor in parts.items():
-            bad = ~torch.isfinite(tensor.reshape(tensor.shape[0], -1)).all(dim=-1)
-            if bool(bad.any()):
-                ids = torch.nonzero(bad).flatten().tolist()
-                raise RuntimeError(
-                    f"cloth: non-finite {name} in envs {ids[:8]}"
-                    f"{'...' if len(ids) > 8 else ''} ({len(ids)}/{self.num_envs}) "
-                    f"at step {int(self.episode_length_buf.max().item())}"
-                )
+            if tensor is None:
+                continue
+            flat = tensor.reshape(tensor.shape[0], -1)
+            bad = ~torch.isfinite(flat).all(dim=-1)
+            if not bool(bad.any()):
+                continue
+            ids = torch.nonzero(bad).flatten().tolist()
+            where = ""
+            if name == "obs":
+                # Which columns, so the term can be identified against `cfg.obs.obs_list`.
+                cols = torch.nonzero(~torch.isfinite(flat[ids[0]])).flatten().tolist()
+                where = f" cols {cols[:12]}{'...' if len(cols) > 12 else ''} of {flat.shape[1]}"
+            raise RuntimeError(
+                f"cloth: non-finite {name} in envs {ids[:8]}"
+                f"{'...' if len(ids) > 8 else ''} ({len(ids)}/{self.num_envs}) "
+                f"at step {int(self.episode_length_buf.max().item())}{where}"
+            )
 
     def footprint_ratio(self) -> torch.Tensor:
         """Sheet extent along the fold axis, as a fraction of its unfolded size.

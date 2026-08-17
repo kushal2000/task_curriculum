@@ -6,7 +6,7 @@ geometry, and getting them wrong would look exactly like a policy that cannot fo
 
 from __future__ import annotations
 
-__all__ = ["grid_mesh", "half_indices", "keypoint_indices", "folded_targets"]
+__all__ = ["grid_mesh", "half_indices", "half_mesh", "keypoint_indices", "folded_targets"]
 
 
 def grid_mesh(size: float, resolution: int) -> tuple[list, list]:
@@ -84,6 +84,45 @@ def corner_indices(resolution: int, axis: str = "x") -> list[int]:
     if axis == "x":
         return [vid(mid, lo), vid(mid, hi), vid(far, lo), vid(far, hi)]
     return [vid(lo, mid), vid(hi, mid), vid(lo, far), vid(hi, far)]
+
+
+def half_mesh(
+    size: float, resolution: int, axis: str = "x"
+) -> tuple[list, list]:
+    """The MOVING half as its own flat mesh, centred on its own centroid.
+
+    For drawing the goal: the fold target is a rigid transform of the moving half (a reflection
+    about the crease, which for a rigid body is a 180-degree rotation), so a rigid mesh of the
+    half's rest shape, posed at the folded pose, is exactly the configuration being scored.
+
+    A box primitive is the obvious shortcut and it is wrong twice over -- it reads as a solid brick
+    rather than a sheet, and it has a thickness the cloth does not have (a VBD cloth is a *surface*;
+    its thickness is a collision radius the renderer never draws). Reusing the sheet's own grid and
+    triangulation means the marker looks like what it is standing in for.
+
+    Returns:
+        ``(vertices, indices)`` in the half's local frame, ``z = 0``.
+    """
+    verts, _ = grid_mesh(size, resolution)
+    keep = sorted(set(half_indices(resolution, axis, positive=True)))
+    remap = {v: i for i, v in enumerate(keep)}
+
+    # Re-centre on the half's own centroid: the marker's pose is the folded *centroid*, so the mesh
+    # must be expressed about its centroid or it draws offset by half its own width.
+    pts = [list(verts[v]) for v in keep]
+    cx = sum(p[0] for p in pts) / len(pts)
+    cy = sum(p[1] for p in pts) / len(pts)
+    out_verts = [(p[0] - cx, p[1] - cy, 0.0) for p in pts]
+
+    # Keep only triangles fully inside the half, so the mesh has no edges dangling across the
+    # crease into vertices that are not part of it.
+    _, full_idx = grid_mesh(size, resolution)
+    out_idx: list[int] = []
+    for t in range(0, len(full_idx), 3):
+        tri = full_idx[t : t + 3]
+        if all(v in remap for v in tri):
+            out_idx += [remap[v] for v in tri]
+    return out_verts, out_idx
 
 
 def keypoint_indices(resolution: int, axis: str = "x", count: int = 4) -> list[int]:
