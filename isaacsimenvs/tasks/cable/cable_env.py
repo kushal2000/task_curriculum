@@ -95,6 +95,7 @@ class CableEnv(PlayNewtonEnv):
         )
 
         self._neutralise_rigid_object()
+        self._reshape_goal_marker()
 
         if c.rigid_rod:
             self._install_rigid_rod()
@@ -292,6 +293,54 @@ class CableEnv(PlayNewtonEnv):
                 "found the inherited rigid tool but disabled none of its colliders -- it would "
                 "stay live in the scene and corrupt every measurement. Check the prim layout."
             )
+
+    def _reshape_goal_marker(self) -> None:
+        """Give the goal marker the cable's shape instead of the tool's.
+
+        ``goal_viz`` spawns from the same procedural handle+head USD as the manipuland, so the
+        cable env renders a hammer-shaped ghost for a goal that a cable has to reach. The pose is
+        right and the success keypoints come from ``object_scale`` rather than this mesh, so it is
+        a cosmetic defect -- but a misleading picture is exactly how the wrong conclusion gets
+        drawn from a video, which has already happened once here with the orphaned rigid tool.
+
+        Swaps the tool geometry for a capsule matching ``cable.length`` x ``cable.thickness``,
+        authored on the USD before Newton imports it. ``collisionEnabled`` stays false: the marker
+        must never touch the manipuland, and ``render_newton._reveal_goal_viz`` draws it by setting
+        the VISIBLE flag, which does not require the shape to collide.
+        """
+        from pxr import Usd, UsdGeom, UsdPhysics
+
+        from isaaclab.sim.utils import find_matching_prims
+
+        c = self.cfg.cable
+        radius = 0.5 * float(c.thickness)
+        # Capsule height is the cylindrical span, so the round caps make up the rest of the length.
+        height = max(float(c.length) - 2.0 * radius, 1e-4)
+
+        marked = 0
+        for prim in find_matching_prims("/World/envs/env_.*/GoalViz"):
+            stage = prim.GetStage()
+            # The rigid body sits on a child (`.../GoalViz/object_root`), not on the GoalViz root.
+            # Deactivating that child removes the body the physics view resolves, so the marker
+            # must be rebuilt *under* it: keep the body, replace only its geometry.
+            body = next(
+                (d for d in Usd.PrimRange(prim) if d.HasAPI(UsdPhysics.RigidBodyAPI)), prim
+            )
+            for child in body.GetChildren():
+                child.SetActive(False)
+            capsule = UsdGeom.Capsule.Define(stage, body.GetPath().AppendChild("cable_marker"))
+            # The cable lies along object-frame +X -- the same axis `object_scale` stretches.
+            capsule.CreateAxisAttr("X")
+            capsule.CreateRadiusAttr(radius)
+            capsule.CreateHeightAttr(height)
+            UsdPhysics.CollisionAPI.Apply(capsule.GetPrim()).CreateCollisionEnabledAttr(False)
+            marked += 1
+
+        print(
+            f"[cable] goal marker reshaped on {marked} prims "
+            f"(capsule {c.length:.3f} m x {c.thickness * 1e3:.0f} mm)",
+            flush=True,
+        )
 
     def _cable_spawn_height(self) -> float:
         reset_cfg = self.cfg.reset

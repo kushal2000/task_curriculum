@@ -401,10 +401,20 @@ writes the marker's pose every step, so it tracks the goal in every world with n
 the render path. What is on screen therefore cannot drift from what the env believes the goal is,
 which a stand-in overlay cannot guarantee. This is the default; `--no_goal` turns it off.
 
-**Caveat:** the marker carries the *tool's* geometry, since `goal_viz` spawns from the tool asset.
-In the cable env it draws a hammer-shaped ghost while the manipuland is a cable. Correct as a pose
-indicator -- and the success keypoints come from `object_scale`, not the marker mesh -- but the
-shape is misleading, and a cable-shaped marker would be an improvement.
+`goal_viz` spawns from the same procedural handle+head USD as the manipuland, so the cable env
+initially drew a *hammer-shaped* ghost for a goal a cable has to reach. `CableEnv._reshape_goal_marker`
+replaces that geometry with a capsule of `cable.length` x `cable.thickness`, authored before Newton
+imports it, with `collisionEnabled` false -- the marker must never touch the manipuland, and
+revealing it needs only the VISIBLE flag, not collision.
+
+Two things to know if this is ever touched again. The rigid body sits on a **child**
+(`.../GoalViz/object_root`), not on the `GoalViz` root, so deactivating the root's children removes
+the body the physics view resolves and asset construction fails with `Expected 1 prims ... found 0`;
+the marker has to be rebuilt *under* that body. And the capsule runs along object-frame **+X**, the
+same axis `object_scale` stretches for the cable.
+
+Scoring is unaffected, as expected -- success keypoints come from `object_scale`, not the marker
+mesh.
 
 `--goal_keypoints` additionally draws what the marker cannot: success is the *max* over per-keypoint
 distances held for `success_steps`, so the quantity actually thresholded is those segment lengths.
