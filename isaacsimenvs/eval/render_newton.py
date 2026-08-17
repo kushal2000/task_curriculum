@@ -43,6 +43,11 @@ SHAPE_COLORS = {
 #: fading from amber to green -- so the thing the success test measures is what you see.
 GOAL_KP_COLOR = (0.25, 0.80, 0.45)
 OBJ_KP_COLOR = (1.00, 0.65, 0.10)
+#: The folded-sheet goal replica. Green reads as "target" against the amber moving half it is the
+#: destination for, and against the blue stationary half it should come to rest on.
+GOAL_SHEET_COLOR = (0.15, 0.85, 0.35)
+#: Vertical clearance for the goal replica, so it does not z-fight the half it lies on [m].
+GHOST_LIFT = 0.004
 
 
 def _goal_overlay(viewer, inner, world: int):
@@ -95,14 +100,26 @@ def _goal_overlay(viewer, inner, world: int):
 
     # A replica of the sheet in the folded pose -- the goal drawn as what it actually is. Logged
     # as a mesh each frame, so it tracks the live crease exactly like the criterion does.
+    #
+    # For a cloth this REPLACES the keypoint decoration rather than adding to it. Spheres, error
+    # segments and a wireframe quad were the only way to show a goal that a rigid marker could not
+    # depict; once the goal is drawn as the sheet itself they are clutter over the thing they were
+    # standing in for.
     if hasattr(inner, "folded_half_w"):
         ghost = inner.folded_half_w()[world].detach().cpu().numpy().astype("float32")
+        # Float the replica clear of the stationary half it targets. The two are coincident by
+        # construction -- that is what "folded onto" means -- and two coplanar meshes at the same
+        # depth z-fight into black stripes, which is what the first render showed. A few
+        # millimetres is far below the success tolerance, so it misleads about nothing.
+        ghost[:, 2] += GHOST_LIFT
         viewer.log_mesh(
             "goal_sheet",
             _pts(ghost),
             wp.array(inner.folded_half_topology(), dtype=wp.int32, device=dev),
             backface_culling=False,
+            color=GOAL_SHEET_COLOR,
         )
+        return
 
     viewer.log_points("goal_kp", _pts(g), radii=0.012, colors=_col(GOAL_KP_COLOR, len(g)))
     viewer.log_points("obj_kp", _pts(o), radii=0.009, colors=_col(OBJ_KP_COLOR, len(o)))
@@ -154,7 +171,19 @@ def _reveal_goal_viz(model) -> int:
     return n
 
 
-def _restrict_triangles_to_world(viewer, model, world: int) -> None:
+#: Moving half (the flap that folds), stationary half (the hinge side it folds onto), and the
+#: crease row that belongs to neither. Colouring these apart makes the fold legible: which half
+#: moved, and whether it landed on the other one, is otherwise guesswork on a uniform sheet.
+#: **Nothing here may be blue.** The scene's ground plane, table and sky are all blue, so a blue
+#: half vanishes into the table it is lying on -- which is exactly what the first attempt did.
+HALF_COLORS = {
+    "moving": (0.95, 0.30, 0.10),      # vermilion -- the half that must travel
+    "stationary": (0.98, 0.78, 0.15),  # gold -- the half that must not (white lost against the robot)
+    "crease": (0.12, 0.12, 0.15),      # near-black -- the hinge row, in neither half
+}
+
+
+def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
     """Draw only the filmed world's deformable surface.
 
     ``set_visible_worlds`` filters *rigid shapes* only -- the viewer's ``_log_triangles`` logs
@@ -190,22 +219,45 @@ def _restrict_triangles_to_world(viewer, model, world: int) -> None:
     if not keep.any():
         print("[render] triangle world filter matched nothing; leaving all worlds drawn", flush=True)
         return
-    kept = wp.array(idx[keep].flatten(), dtype=wp.int32, device=tri.device)
+    mytri = idx[keep]
 
-    def _log_triangles(self, state, _indices=kept):
+    # Split the sheet into moving / stationary / crease so each can carry its own colour.
+    # `log_mesh` takes one colour per mesh, so distinguishing the halves means logging them as
+    # separate meshes rather than colouring vertices.
+    groups: dict[str, object] = {}
+    if inner is not None and hasattr(inner, "_moving_idx"):
+        base = int(np.argmax(mine))  # first particle of this world; env indices are world-local
+        moving = set((inner._moving_idx + base).tolist())
+        stationary = set((inner._stationary_idx + base).tolist())
+        in_mv = np.isin(mytri, list(moving)).all(axis=1)
+        in_st = np.isin(mytri, list(stationary)).all(axis=1)
+        masks = {"moving": in_mv, "stationary": in_st, "crease": ~(in_mv | in_st)}
+        for name, m in masks.items():
+            if m.any():
+                groups[name] = wp.array(
+                    mytri[m].flatten(), dtype=wp.int32, device=tri.device
+                )
+    if not groups:
+        groups["all"] = wp.array(mytri.flatten(), dtype=wp.int32, device=tri.device)
+
+    def _log_triangles(self, state, _groups=groups):
         points = self._apply_layer_transform_to_points(state.particle_q)
-        self.log_mesh(
-            self._qualify("/model/triangles"),
-            points,
-            _indices,
-            hidden=not self.show_triangles or self._layer_force_hidden(),
-            backface_culling=False,
-        )
+        hidden = not self.show_triangles or self._layer_force_hidden()
+        for name, indices in _groups.items():
+            self.log_mesh(
+                self._qualify(f"/model/triangles_{name}"),
+                points,
+                indices,
+                hidden=hidden,
+                backface_culling=False,
+                color=HALF_COLORS.get(name),
+            )
 
     viewer._log_triangles = types.MethodType(_log_triangles, viewer)
+    split = " ".join(f"{k}={len(v) // 3}" for k, v in groups.items())
     print(
         f"[render] deformable surface limited to world {world}: "
-        f"{int(keep.sum())}/{len(keep)} triangles",
+        f"{int(keep.sum())}/{len(keep)} triangles ({split})",
         flush=True,
     )
 
@@ -388,7 +440,7 @@ def main() -> None:
             _reveal_goal_viz(NewtonManager.get_model())
         viewer.set_model(NewtonManager.get_model())
         viewer.set_visible_worlds([args.world])
-        _restrict_triangles_to_world(viewer, NewtonManager.get_model(), args.world)
+        _restrict_triangles_to_world(viewer, NewtonManager.get_model(), args.world, inner)
         _colorize(NewtonManager.get_model(), args)
 
         origin = inner.scene.env_origins[args.world].detach().cpu().numpy()

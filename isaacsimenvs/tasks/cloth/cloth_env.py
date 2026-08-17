@@ -322,8 +322,7 @@ class ClothEnv(PlayNewtonEnv):
         ax = 0 if self.cfg.cloth.fold_axis == "x" else 1
 
         stationary = parts[:, self._stationary_idx, :]
-        # Crease: the inboard extreme of the stationary half, which is the hinge itself.
-        crease = stationary[:, :, ax].amax(dim=1)                       # (N,)
+        crease = self._crease_w(parts, ax)
         stationary_z = stationary[:, :, 2].mean(dim=1)                  # (N,)
 
         targets = self._particles_w()[:, self._kp_idx_t, :].clone()
@@ -342,6 +341,24 @@ class ClothEnv(PlayNewtonEnv):
         targets[:, :, 2] = (stationary_z + self.cfg.cloth.thickness).unsqueeze(1)
         return targets
 
+    def _crease_w(self, parts: torch.Tensor, ax: int) -> torch.Tensor:
+        """``(num_envs,)`` current position of the hinge line along the fold axis.
+
+        **Midway between the two halves' inboard edges, not the stationary half's edge.**
+        ``half_indices`` deliberately excludes the hinge row from both halves, so
+        ``stationary[..., ax].amax()`` is one grid spacing *inboard* of the actual hinge. Using it
+        as the crease reflected every target one spacing too far: measured at ``size=0.10``,
+        ``resolution=9``, targets spanned x in [-0.0625, -0.025] where a true reflection about the
+        hinge gives [-0.05, -0.0125] -- a systematic 12.5 mm error, a third of the 40 mm tolerance,
+        placing the goal beyond the stationary half's outer edge instead of on top of it.
+
+        The midpoint is used rather than the hinge row itself so this stays correct for an even
+        ``resolution``, where there is no hinge row at all.
+        """
+        st = parts[:, self._stationary_idx, ax].amax(dim=1)
+        mv = parts[:, self._moving_idx, ax].amin(dim=1)
+        return 0.5 * (st + mv)
+
     def folded_half_w(self) -> torch.Tensor:
         """``(num_envs, M, 3)`` -- where EVERY particle of the moving half belongs when folded.
 
@@ -354,7 +371,7 @@ class ClothEnv(PlayNewtonEnv):
         parts = self._particles_w()
         ax = 0 if self.cfg.cloth.fold_axis == "x" else 1
         stationary = parts[:, self._stationary_idx, :]
-        crease = stationary[:, :, ax].amax(dim=1)
+        crease = self._crease_w(parts, ax)
         stationary_z = stationary[:, :, 2].mean(dim=1)
 
         out = parts[:, self._moving_idx, :].clone()
@@ -366,11 +383,17 @@ class ClothEnv(PlayNewtonEnv):
         return out
 
     def folded_half_topology(self) -> list[int]:
-        """Triangle indices for :meth:`folded_half_w`, in that array's own vertex ordering."""
+        """Triangle indices for :meth:`folded_half_w`, in that array's own vertex ordering.
+
+        **Winding is reversed**, because a fold is a reflection and a reflection inverts triangle
+        orientation. Keeping the rest sheet's winding leaves every folded triangle facing downward,
+        so the goal replica renders as an unlit back face -- a black shape with a lit rim, which is
+        exactly how it first appeared.
+        """
         _, idx = half_mesh(
             float(self.cfg.cloth.size), int(self.cfg.cloth.resolution), self.cfg.cloth.fold_axis
         )
-        return idx
+        return [v for t in range(0, len(idx), 3) for v in reversed(idx[t : t + 3])]
 
     def _particles_w(self) -> torch.Tensor:
         return self.object._particles()
