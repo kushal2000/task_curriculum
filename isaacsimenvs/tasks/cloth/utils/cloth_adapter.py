@@ -86,12 +86,18 @@ class ClothAsRigidObject:
             env_ids = torch.arange(self._num_envs, device=self._device)
         env_ids = torch.as_tensor(env_ids, device=self._device, dtype=torch.long)
 
+        # `root_pose` already has ONE ROW PER RESETTING ENV, aligned with `env_ids` -- it is not
+        # indexed by absolute env id. Writing `centre[env_ids]` therefore indexes a subset tensor
+        # with absolute ids and reads out of bounds as soon as a partial reset occurs: at 4 envs
+        # they usually reset together so ids 0..3 happen to be valid, but at 8+ a reset of
+        # e.g. envs [5, 7] indexes a 2-row tensor with 5 and 7. That surfaced as a CUDA
+        # device-side assert (IndexKernel.cu "index out of bounds"), which reads like a physics
+        # buffer problem and is not one.
         centre = root_pose[:, :3].clone()
         centre[:, 2] = self._spawn_z
 
-        # (len(env_ids), P, 3): the flat rest sheet translated to each requested centre. The
-        # write API is indexed and expects exactly this shape.
-        target = self._rest_local.unsqueeze(0) + centre[env_ids].unsqueeze(1)
+        # (len(env_ids), P, 3): the flat rest sheet translated to each requested centre.
+        target = self._rest_local.unsqueeze(0) + centre.unsqueeze(1)
         self._cloth.write_nodal_pos_to_sim_index(target, env_ids)
         self._cloth.write_nodal_velocity_to_sim_index(torch.zeros_like(target), env_ids)
 

@@ -96,9 +96,13 @@ class ClothCfg:
     tri_kd: float = 1.0e-5
     """In-plane damping. Nonzero by default here: every cable damping term defaulted to 0.0 and
     the sheet is far more compliant."""
-    edge_ke: float = 5.0
+    edge_ke: float = 0.5
     """Bending stiffness. Low -- a cloth that will not bend cannot be folded. This is the opposite
-    of the cable, where a stiff bend response was the thing ringing."""
+    of the cable, where a stiff bend response was the thing ringing.
+
+    Measured with a teleported fold: at 5.0 the crease springs open after **1** step; at 0.5 it
+    holds **7**. A further 10x softer (0.05) gives the same 7, so the effect saturates here and
+    bending stops being the binding constraint."""
     edge_kd: float = 1.0e-2
 
     # --- the fold -------------------------------------------------------------------------
@@ -147,14 +151,25 @@ class ClothCfg:
     color: tuple[float, float, float] = (0.85, 0.35, 0.55)
 
     # --- buffers ---------------------------------------------------------------------------
-    rigid_body_particle_contact_buffer_size: int = 1024
+    rigid_body_particle_contact_buffer_size: int = 65536
     """Hand-vs-cloth is a rigid-body-to-*particle* contact, unlike the cable's body-to-body. This
-    is the buffer that matters here."""
-    rigid_body_contact_buffer_size: int = 4096
-    per_particle_triangle_pairs: int = 512
+    is the buffer that matters here, and 1024 (inherited from the cable, where the manipuland was
+    bodies) was far too small: a 32-env run died with a CUDA device-side assert, which is what an
+    out-of-bounds write into a contact buffer looks like from the host.
+
+    Order of magnitude: 81 particles x ~16 proxied hand links x 32 envs is already ~41k potential
+    pairs before margin."""
+    rigid_body_contact_buffer_size: int = 16384
+    per_particle_triangle_pairs: int = 2048
     """Triangle-pair budget per cloth particle. The budget is GLOBAL and must scale with env count
     *and* geometry: on the cable a correctly env-scaled 4.19M still overflowed once segments
-    doubled. A sheet has far more triangles than a cable, so this is the term to watch."""
+    doubled.
+
+    Raised from 512 after a 32-env run overflowed twice. That run then died with
+    ``normal expects all elements of std >= 0.0`` from the policy's sampler -- dropped contacts let
+    a sheet penetrate, which produced NaN in that env's observation. The policy error was the
+    symptom; the overflow was the cause, and it is worth remembering that this class of failure
+    surfaces far from its origin."""
 
     @property
     def particle_radius(self) -> float:
@@ -256,6 +271,16 @@ class ClothCfg:
             rigid_body_particle_contact_buffer_size=self.rigid_body_particle_contact_buffer_size,
             rigid_contact_k_start=self.rigid_contact_k_start,
         )
+        # `rigid_body_contact_buffer_size` is NOT a field on VBDSolverCfg (the cable subclasses it
+        # for exactly this reason), but it IS in SolverVBD's signature, and the manager passes
+        # through any cfg attribute the signature accepts. Setting it on the instance therefore
+        # reaches the solver without a subclass -- and without a subclass, `{DIR}` in `class_type`
+        # still resolves against isaaclab_contrib rather than this package.
+        #
+        # It defaults to 64. A 32-env cloth run hit "Per-body rigid contact buffer overflowed
+        # 87 > 64" and then died with a CUDA device-side assert. Declaring the field in this config
+        # without wiring it here left it inert: it read as configured and did nothing.
+        vbd.rigid_body_contact_buffer_size = self.rigid_body_contact_buffer_size
 
         solver = CouplerProxyCfg(
             entries=[

@@ -22,6 +22,7 @@ from isaacsimenvs.tasks.cloth.utils.cloth_adapter import ClothAsRigidObject
 from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
     folded_targets,
     grid_mesh,
+    half_indices,
     keypoint_indices,
 )
 from isaacsimenvs.tasks.play_newton.play_newton_env import PlayNewtonEnv
@@ -210,16 +211,35 @@ class ClothEnv(PlayNewtonEnv):
         local = folded_targets(self._cloth_rest_local, self._cloth_kp_idx, c.fold_axis, lift)
 
         t = torch.tensor(local, device=self.device, dtype=torch.float32)  # (K, 3)
-        # Matches the baked mesh height exactly; a mismatch here would report a fold error that
-        # never reaches zero however well the policy folds.
-        spawn = torch.tensor(
-            [0.0, 0.0, float(self.cfg.reset.table_reset_z) + c.start_height], device=self.device
-        )
-        # (num_envs, K, 3) in world coordinates.
-        self._fold_targets_w = (
-            t.unsqueeze(0) + spawn + self.scene.env_origins.unsqueeze(1)
+        # x/y only: the height is read from the settled sheet in `fold_targets_w`, not assumed.
+        self._fold_targets_xy = t.unsqueeze(0) + self.scene.env_origins.unsqueeze(1)
+        self._stationary_idx = torch.tensor(
+            half_indices(c.resolution, c.fold_axis, positive=False),
+            device=self.device, dtype=torch.long,
         )
         self._kp_idx_t = torch.tensor(self._cloth_kp_idx, device=self.device, dtype=torch.long)
+
+    def fold_targets_w(self) -> torch.Tensor:
+        """``(num_envs, K, 3)`` fold targets, with height read from the sheet itself.
+
+        A fold means "mirrored in x/y, resting on top of the stationary half". The x/y half is
+        fixed geometry, but the **height is not knowable in advance**: the sheet is dropped and
+        settles wherever the table and its own thickness put it. Deriving the target z from the
+        *spawn* height put the targets ~33 mm below anything the cloth could reach -- a teleported,
+        physically perfect fold measured 0.0355 error against a 0.04 tolerance, i.e. passing only
+        by luck.
+
+        So the height comes from the stationary half's current position plus two sheet thicknesses
+        (the stationary layer and the folded one). That is robust to the settle height, to table
+        thickness, and to any future change in either.
+        """
+        stationary_z = self._particles_w()[:, self._stationary_idx, 2].mean(dim=1)  # (N,)
+        targets = self._fold_targets_xy.clone()                                     # (N, K, 3)
+        targets[:, :, 2] = (stationary_z + 2.0 * self.cfg.cloth.thickness).unsqueeze(1)
+        return targets
+
+    def _particles_w(self) -> torch.Tensor:
+        return self.object._particles()
 
     def cloth_keypoints_w(self) -> torch.Tensor:
         """Tracked keypoint positions, ``(num_envs, K, 3)`` in world coordinates."""
@@ -233,7 +253,7 @@ class ClothEnv(PlayNewtonEnv):
         The *max* rather than the mean: a fold with one corner still flat on the table is not a
         fold, and averaging would call it two-thirds done.
         """
-        return (self.cloth_keypoints_w() - self._fold_targets_w).norm(dim=-1).amax(dim=-1)
+        return (self.cloth_keypoints_w() - self.fold_targets_w()).norm(dim=-1).amax(dim=-1)
 
     def _sync_observed_keypoints(self) -> None:
         """Make the OBSERVED keypoints the sheet's real particle positions.
@@ -261,7 +281,7 @@ class ClothEnv(PlayNewtonEnv):
         a fold: it would be optimising a different objective from the one being scored. The task
         reads the goal exclusively through `goal_viz`, so moving the marker moves the goal.
         """
-        centre = self._fold_targets_w.mean(dim=1)  # (num_envs, 3)
+        centre = self.fold_targets_w().mean(dim=1)  # (num_envs, 3)
         pose = torch.zeros((self.num_envs, 7), device=self.device)
         pose[:, :3] = centre
         pose[:, 3] = 1.0  # identity wxyz, matching the manipuland's orientation convention here
@@ -303,7 +323,7 @@ class ClothEnv(PlayNewtonEnv):
         if hasattr(self, "_fold_hold"):
             self._fold_hold[env_ids] = 0
         # The task re-samples `goal_viz` on reset; put it back on the fold target.
-        if hasattr(self, "_fold_targets_w"):
+        if hasattr(self, "_fold_targets_xy"):
             self._drive_goal_marker()
 
     def fold_fraction(self) -> torch.Tensor:
@@ -326,5 +346,5 @@ class ClothEnv(PlayNewtonEnv):
             )
             + self.scene.env_origins.unsqueeze(1)
         )
-        span = (start - self._fold_targets_w).norm(dim=-1).amax(dim=-1).clamp(min=1e-6)
+        span = (start - self.fold_targets_w()).norm(dim=-1).amax(dim=-1).clamp(min=1e-6)
         return (1.0 - self.fold_error() / span).clamp(0.0, 1.0)

@@ -241,7 +241,7 @@ def main() -> None:
               # The warm-up check steps with zero actions and cannot see contacts that only appear
               # once the hand closes on the object: a 24-segment cable passed it, then overflowed for
               # hundreds of steps. So poll the captured fd during the rollout too.
-              if capture is not None and step % 200 == 0:
+              if capture is not None and step % 25 == 0:
                   raise_if_overflowed(capture(), num_envs, f"the rollout (step {step})")
               if step % 500 == 0:
                   print(

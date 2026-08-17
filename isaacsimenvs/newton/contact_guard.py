@@ -16,6 +16,16 @@ So this guard exists to convert a silent, greppable-away warning into an excepti
 fd is the only approach that works: the counters live in device arrays inside lazily built
 pipelines that are not reachable from the solver object, and the message itself is the one signal
 the engine reliably emits.
+
+**Capturing has a failure mode of its own, and it bit hard.** While the capture is active, fd 1/2
+point at a temp file, so warnings do not reach the terminal until it unwinds. A process that dies
+abruptly -- a CUDA device-side assert, a signal -- never unwinds it, and the warnings die with the
+temp file. Three cloth runs were diagnosed as "0 overflow warnings" on that basis; running with
+``--allow_overflow`` (capture off) showed "Per-body rigid contact buffer overflowed 87 > 64" on
+the very first attempt.
+
+So the capture **tees**: everything written is copied straight through to the real stdout as well
+as scanned. A diagnostic that can destroy the diagnostic it exists to preserve is worse than none.
 """
 
 from __future__ import annotations
@@ -59,6 +69,8 @@ def capture_fd_output():
             os.dup2(tmp.fileno(), 1)
             os.dup2(tmp.fileno(), 2)
 
+            forwarded = [0]
+
             def read_so_far() -> str:
                 sys.stdout.flush()
                 sys.stderr.flush()
@@ -66,6 +78,12 @@ def capture_fd_output():
                 tmp.seek(0)
                 data = tmp.read()
                 tmp.seek(pos)
+                # Tee: copy anything new straight to the real stdout, so a hard crash cannot take
+                # the warnings with it. Written to the saved fd, not `sys.stdout`, which is still
+                # redirected at this point.
+                if len(data) > forwarded[0]:
+                    os.write(saved_out, data[forwarded[0]:])
+                    forwarded[0] = len(data)
                 return data.decode("utf-8", errors="replace")
 
             yield read_so_far
