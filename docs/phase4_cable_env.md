@@ -450,6 +450,48 @@ Against the best `lagged` configuration's 4-5 total goals and max 2-3 per episod
 totals and the first episode to score 5 -- far outside the run-to-run spread that made every other
 comparison here unrankable.
 
+### What the two modes actually do
+
+From Newton's own source (`newton/_src/solvers/coupled/solver_coupled_proxy.py`, `Proxy.mode`):
+
+> `"lagged"` syncs source **begin** poses and end velocities, then prepares proxies to avoid
+> double-counting lagged feedback. `"staggered"` syncs source **end** poses and end velocities
+> directly.
+
+Under `lagged` the cable sees the hand's pose from the *start* of the step paired with its *end*
+velocities -- a mismatched pair whose error scales with how fast the hand is moving. That predicts
+every symptom measured here: worst during **transport** (fastest hand motion), worse with **more
+segments** (more mismatched proxy contacts), unaffected by **VBD iterations** and harmful past 80
+(converging harder against stale boundary data), and improved by **fewer substeps** (each substep
+re-applies the stale pose).
+
+There is **no public discussion of these modes** -- no issue, no doc beyond a one-line
+"Proxy transfer mode passed to Newton's coupled-proxy solver", and `lagged` is the default with
+nothing flagging it as a poor fit for fast manipulation.
+
+Untested and indicated by the same docstring: **`proxy_relaxation`** with `proxy_relaxation_mode`
+`"aitken"`, which adapts the relaxation factor from consecutive feedback residuals within a step.
+That is the textbook remedy for residual partitioned-coupling error, and is the obvious next lever.
+
+### Velocity: the gap halved, not closed
+
+4 envs, identical stack, mode the only difference:
+
+| config | p90 | vs rod | p99 | max |
+|---|---:|---:|---:|---:|
+| rigid rod (reference) | 0.288 | 1.0x | 0.83 | 1.31 |
+| **staggered (defaults)** | 0.548 | **1.9x** | 1.40 | 2.84 |
+| lagged (same stack) | 0.843 | 2.9x | 2.48 | 3.50 |
+| stock | 1.118 | 3.9x | 2.48 | 3.22 |
+
+`staggered` cuts p90 by 35% and p99 by 43% with everything else fixed. Note the *shape*: the median
+rises slightly (0.223 -> 0.251) while the upper tail falls sharply -- removing spurious impulses,
+not damping motion. Angular damping did the opposite (lower median, worse tail), which is why it
+never helped.
+
+**The cable still moves ~1.9x the rigid baseline at p90.** The coupling is much healthier, not
+settled.
+
 **The change is to how the two solvers exchange state, not to the cable.** That is exactly what the
 stability work predicted: VBD iterations did nothing (and hurt past 80), substeps had an optimum at
 *fewer* than default, and coupler iterations made things worse -- three independent signs that
