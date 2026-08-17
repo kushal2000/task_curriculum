@@ -19,8 +19,10 @@ env/
 train_dir/
 outputs/
 wandb/
-videos/
-!videos/README.md          # the guide to the folder is not media
+# Ignore the CONTENTS, not the directory: git cannot re-include a file whose parent directory is
+# excluded, so `videos/` + `!videos/README.md` silently keeps the README untracked.
+videos/*
+!videos/README.md
 evals/
 runs/
 experiments/runs/
