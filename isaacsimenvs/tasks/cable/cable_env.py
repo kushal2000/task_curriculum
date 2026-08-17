@@ -141,6 +141,7 @@ class CableEnv(PlayNewtonEnv):
             thickness=c.thickness,
             density=c.density,
             device=self.device,
+            pose_axis=c.pose_axis,
         )
         self._write_object_scale()
 

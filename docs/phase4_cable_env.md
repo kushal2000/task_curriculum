@@ -445,9 +445,23 @@ It also qualifies the headline result: goals come from the 12-segment config par
 stays straight enough for a one-axis frame to work, not necessarily because it is grasped better.
 Lift says the opposite.
 
-**Fix**: an estimator that survives bending -- PCA over segment positions for the principal axis,
-or a frame from the segments actually in the hand. This is a defect in the adapter, not a physics
-limitation, and it affects any deformable manipuland in this task.
+**Fix implemented, and it did not help.** `CableCfg.pose_axis = "pca"` takes the principal axis of
+the segment cloud (sign-matched to first->last so the frame cannot flip). At 24 segments it scores
+**0 goals at 0.797 lift** -- unchanged. So the span collapse is real and the estimator genuinely
+does degenerate, but that was **not** the operative cause, and the prediction stated here before
+running it was wrong.
+
+What that leaves open: 24 segments lifts 80%, has the calmest dynamics measured, now has a
+bend-tolerant orientation estimate, and still never scores. Untested candidates, both about the
+*position/scale* half of the keypoints rather than orientation:
+
+* `object_scale` comes from nominal cable dimensions, so keypoint offsets are sized for a straight
+  cable. On a drooping one they may sit outside the physical body regardless of frame.
+* `root_pos_w` is the centroid of the segments, which moves away from where a goal pose expects the
+  object's centre as the cable curls.
+
+Default stays `span`: every result in this document was measured with it, and `pca` changes both
+the policy's observation and the pose the success test scores.
 
 ## Solved by the coupling, not the cable: `proxy_mode=staggered`
 

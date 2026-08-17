@@ -170,6 +170,18 @@ class CableCfg:
     support_inset: float = 0.06
     """How far in from each cable end a rail sits [m]. Keeps the graspable middle clear."""
 
+    pose_axis: str = "span"
+    """How the manipuland's orientation is estimated: ``span`` | ``pca``.
+
+    ``span`` uses the first-to-last segment vector, which degenerates when the cable bends -- span
+    deviation is 1.1% of rest at 12 segments but 16.2% at 24, and it is worst while the cable is
+    held, which is the only time the estimate matters. ``pca`` takes the principal axis of the
+    segment cloud instead, so a symmetric droop cancels rather than rotating the frame.
+
+    Default is ``span`` because every result recorded in `docs/phase4_cable_env.md` was measured
+    with it; ``pca`` changes the observation the policy sees and the pose the success test scores,
+    so it needs its own measurements before it can be trusted."""
+
     proxy_links: str = "hand"
     """Which hand links the cable can feel: ``tips`` | ``fingers`` | ``hand``.
 

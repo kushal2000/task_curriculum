@@ -194,59 +194,74 @@ def main() -> None:
         contributed = torch.zeros(num_envs, dtype=torch.bool, device=device)
         reason = {name: torch.zeros(num_envs, dtype=torch.bool, device=device) for name in REASONS}
 
+        # Capture fd 1/2 across the rollout so kernel-level overflow warnings are visible. The
+        # capture MUST be unwound on the exception path too: an earlier version only closed it on
+        # success, so any mid-rollout error wrote its traceback into a discarded temp file and the
+        # job died with no diagnostic at all.
         capture = None
+        capture_cm = None
         if not args_cli.allow_overflow:
             capture_cm = capture_fd_output()
             capture = capture_cm.__enter__()
 
         step = 0
-        while step < args_cli.max_steps and not bool(contributed.all()):
-            action = player.get_action(obs["policy"], deterministic=True)
-            obs, _rew, terminated, truncated, extras = env.step(action.to(device))
+        try:
+          while step < args_cli.max_steps and not bool(contributed.all()):
+              action = player.get_action(obs["policy"], deterministic=True)
+              obs, _rew, terminated, truncated, extras = env.step(action.to(device))
 
-            # Only while the env is still on its first episode. An env that finished early keeps
-            # stepping until the others catch up, and counting those later lifts would report a
-            # statistic about a set of episodes that no other number here describes.
-            lifted |= inner._lifted_object.bool() & ~contributed
-            obj_z = (inner.object.data.root_pos_w - inner.scene.env_origins)[:, 2]
-            max_obj_z = torch.where(~contributed, torch.maximum(max_obj_z, obj_z), max_obj_z)
-            steps_alive += (~contributed).long()
+              # Only while the env is still on its first episode. An env that finished early keeps
+              # stepping until the others catch up, and counting those later lifts would report a
+              # statistic about a set of episodes that no other number here describes.
+              lifted |= inner._lifted_object.bool() & ~contributed
+              obj_z = (inner.object.data.root_pos_w - inner.scene.env_origins)[:, 2]
+              max_obj_z = torch.where(~contributed, torch.maximum(max_obj_z, obj_z), max_obj_z)
+              steps_alive += (~contributed).long()
 
-            done = (terminated.bool() | truncated.bool()) & ~contributed
-            if bool(done.any()):
-                idx = done.nonzero(as_tuple=True)[0]
-                final = extras["episode_final"]
-                # Pre-reset snapshot: log_step_metrics runs inside _get_rewards, which
-                # DirectRLEnv.step calls before _reset_idx zeroes _successes.
-                goals[idx] = final["successes"][idx].long()
-                length[idx] = steps_alive[idx]
-                for name in REASONS:
-                    reason[name][idx] = final[f"done_{name}"][idx].bool()
-                contributed |= done
+              done = (terminated.bool() | truncated.bool()) & ~contributed
+              if bool(done.any()):
+                  idx = done.nonzero(as_tuple=True)[0]
+                  final = extras["episode_final"]
+                  # Pre-reset snapshot: log_step_metrics runs inside _get_rewards, which
+                  # DirectRLEnv.step calls before _reset_idx zeroes _successes.
+                  goals[idx] = final["successes"][idx].long()
+                  length[idx] = steps_alive[idx]
+                  for name in REASONS:
+                      reason[name][idx] = final[f"done_{name}"][idx].bool()
+                  contributed |= done
 
-            # An episode that has ended carries no hidden state worth keeping; the policy never
-            # saw a rollout stitched across a reset.
-            ended = terminated.bool() | truncated.bool()
-            if bool(ended.any()):
-                player.reset_rnn(ended.nonzero(as_tuple=True)[0])
+              # An episode that has ended carries no hidden state worth keeping; the policy never
+              # saw a rollout stitched across a reset.
+              ended = terminated.bool() | truncated.bool()
+              if bool(ended.any()):
+                  player.reset_rnn(ended.nonzero(as_tuple=True)[0])
 
-            step += 1
+              step += 1
 
-            # The warm-up check steps with zero actions and cannot see contacts that only appear
-            # once the hand closes on the object: a 24-segment cable passed it, then overflowed for
-            # hundreds of steps. So poll the captured fd during the rollout too.
-            if capture is not None and step % 200 == 0:
-                raise_if_overflowed(capture(), num_envs, f"the rollout (step {step})")
-            if step % 500 == 0:
-                print(
-                    f"[episodes] step {step}: {int(contributed.sum())}/{num_envs} envs done",
-                    flush=True,
-                )
+              # The warm-up check steps with zero actions and cannot see contacts that only appear
+              # once the hand closes on the object: a 24-segment cable passed it, then overflowed for
+              # hundreds of steps. So poll the captured fd during the rollout too.
+              if capture is not None and step % 200 == 0:
+                  raise_if_overflowed(capture(), num_envs, f"the rollout (step {step})")
+              if step % 500 == 0:
+                  print(
+                      f"[episodes] step {step}: {int(contributed.sum())}/{num_envs} envs done",
+                      flush=True,
+                  )
 
-        ejected = max_obj_z > REACH_M
+          ejected = max_obj_z > REACH_M
+        finally:
+            if capture is not None:
+                pending = capture()
+                capture_cm.__exit__(None, None, None)
+                sys.stdout.write(pending)
+                sys.stdout.flush()
+                capture = None
+
         if capture is not None:
             captured = capture()
             capture_cm.__exit__(None, None, None)
+            capture = None
             raise_if_overflowed(captured, num_envs, "the rollout")
             sys.stdout.write(captured)
 

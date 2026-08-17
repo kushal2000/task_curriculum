@@ -44,6 +44,30 @@ def _wxyz_to_xyzw(q: torch.Tensor) -> torch.Tensor:
     return torch.cat([q[..., 1:4], q[..., 0:1]], dim=-1)
 
 
+def _principal_axis(pos: torch.Tensor) -> torch.Tensor:
+    """Principal axis of the segment cloud, sign-matched to the first->last direction.
+
+    ``_frame_from_span`` on the raw first-to-last vector degenerates exactly when the cable is
+    being held: a cable lifted by the middle droops at both ends, and its end-to-end span both
+    shrinks and swings away from the direction the cable actually lies along. Measured span
+    deviation is 1.1% of rest length at 12 segments but **16.2% at 24**, and the 24-segment cable
+    lifts in 8/8 envs -- so the estimator fails precisely on the configuration that grasps best,
+    making its goals unscoreable however good the grasp.
+
+    The principal component of the segment positions is the least-squares axis through the whole
+    cable, so a symmetric droop cancels instead of rotating the frame. The sign is matched to
+    first->last so the axis does not flip frame to frame, which would make the keypoints jump.
+    """
+    centred = pos - pos.mean(dim=1, keepdim=True)
+    # (N, 3, 3) scatter matrix; its dominant eigenvector is the principal axis.
+    cov = centred.transpose(1, 2) @ centred
+    # Symmetric, so eigh is stable and ordered ascending -- take the last column.
+    axis = torch.linalg.eigh(cov).eigenvectors[..., -1]
+    span = pos[:, -1] - pos[:, 0]
+    flip = (axis * span).sum(dim=-1, keepdim=True) < 0.0
+    return torch.where(flip, -axis, axis)
+
+
 def _frame_from_span(span: torch.Tensor) -> torch.Tensor:
     """Build a wxyz orientation whose +X axis follows the cable, as a right-handed frame.
 
@@ -91,6 +115,8 @@ class _CableData:
     @property
     def root_quat_w(self) -> torch.Tensor:
         pos = self._owner._segment_positions()
+        if self._owner._pose_axis == "pca":
+            return _frame_from_span(_principal_axis(pos))
         return _frame_from_span(pos[:, -1] - pos[:, 0])
 
     @property
@@ -110,9 +136,18 @@ class CableAsRigidObject:
     """Adapter over a ``CableObject``. Not a general-purpose asset — see the module docstring."""
 
     def __init__(
-        self, cable, *, num_envs: int, length: float, thickness: float, density: float, device
+        self,
+        cable,
+        *,
+        num_envs: int,
+        length: float,
+        thickness: float,
+        density: float,
+        device,
+        pose_axis: str = "span",
     ) -> None:
         self._cable = cable
+        self._pose_axis = pose_axis
         # Passed in rather than read from `cable.num_instances`: the asset has no view until the
         # simulation initialises it, which happens after `_setup_scene` returns.
         self._num_envs = int(num_envs)
