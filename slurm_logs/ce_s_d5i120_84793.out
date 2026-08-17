@@ -1,0 +1,3 @@
+[job] tag=s_d5i120 num_envs=64 host=portal-compute-01.cs.cornell.edu gpu=0
+[job] overrides: env.cable.thickness=0.03 env.cable.angular_damping=5.0 env.cable.vbd_iterations=120
+[episodes] running kit-less (no Isaac Sim runtime): AppLauncher requires the full Isaac Sim runtime. Install Isaac Sim or avoid constructing AppLauncher in a kitless process.

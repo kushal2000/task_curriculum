@@ -27,6 +27,7 @@ import statistics
 import sys
 from pathlib import Path
 
+from isaacsimenvs.newton.contact_guard import assert_no_buffer_overflow
 from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
 
 DEFAULT_CHECKPOINT = "/share/portal/kk837/simtoolreal/pretrained_policy/model.pth"
@@ -113,6 +114,11 @@ def main() -> None:
     parser.add_argument("--sim_device", default="cuda:0")
     parser.add_argument("--out", default=None, help="JSON output path.")
     AppLauncher.add_app_launcher_args(parser)
+    parser.add_argument(
+        "--allow_overflow",
+        action="store_true",
+        help="skip the contact-buffer overflow check (results will be measured on dropped contacts)",
+    )
     args_cli, hydra_args = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + hydra_args
 
@@ -164,6 +170,15 @@ def main() -> None:
 
         # Reset, then one zero-action tick, matching the reference runner's timing. Getting this
         # wrong shifts the whole rollout by a step.
+        obs, _ = env.reset()
+
+        # Fail before measuring, not after. A contact-buffer overflow drops contacts silently --
+        # the engine prints from a kernel straight to fd 1, which never reaches sys.stdout and
+        # was greppable away by every result-line filter used here.
+        if not args_cli.allow_overflow:
+            assert_no_buffer_overflow(env)
+            env.reset()
+
         obs, _ = env.reset()
         obs, *_ = env.step(torch.zeros((num_envs, inner.cfg.action_space), device=device))
 

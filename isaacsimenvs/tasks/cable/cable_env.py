@@ -44,7 +44,13 @@ class CableEnv(PlayNewtonEnv):
         The robot keeps the solver settings measured on the rigid task, so a difference between
         the two envs is the object and the coupling rather than a retuned solver.
         """
-        return cfg.cable.build_physics(cfg.newton, int(cfg.scene.num_envs))
+        n = int(cfg.scene.num_envs)
+        print(
+            f"[cable] triangle-pair budget "
+            f"{cfg.newton.resolve_max_triangle_pairs(n):,} for num_envs={n}",
+            flush=True,
+        )
+        return cfg.cable.build_physics(cfg.newton, n)
 
     #: Run at the end of `setup_scene`, before the environments are replicated -- which is also
     #: when Newton imports the stage into its model. A cable created after that point exists as a

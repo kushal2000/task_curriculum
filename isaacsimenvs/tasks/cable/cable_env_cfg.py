@@ -235,7 +235,7 @@ class CableCfg:
                 disable_sensors=newton_cfg.disable_sensors,
             )
             if self.rigid_rod and not self.keep_cable_for_coupling
-            else self.build_solver(newton_cfg)
+            else self.build_solver(newton_cfg, num_envs)
         )
 
         return NewtonCfg(
@@ -254,7 +254,7 @@ class CableCfg:
             deterministic_mode=newton_cfg.deterministic_mode,
         )
 
-    def build_solver(self, newton_cfg):
+    def build_solver(self, newton_cfg, num_envs: int = 1):
         """Return a ``CouplerProxyCfg`` pairing MJWarp (robot) with VBD (cable).
 
         Replaces the plain ``MJWarpSolverCfg`` the Newton task uses. The robot keeps the solver
@@ -267,7 +267,7 @@ class CableCfg:
             CouplerProxyMappingCfg,
         )
         from isaaclab_contrib.deformable import NewtonModelCfg, VBDSolverCfg
-        from isaaclab_newton.physics import MJWarpSolverCfg
+        from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCollisionPipelineCfg
 
         @configclass
         class _VBDWithBodyBuffer(VBDSolverCfg):
@@ -351,6 +351,19 @@ class CableCfg:
                     mass_scale=self.mass_scale,
                     mode=self.proxy_mode,
                     collide_interval=self.collide_interval,
+                    # The proxy builds its OWN collision pipeline, and the field defaults to a
+                    # bare `NewtonCollisionPipelineCfg()` -- i.e. `max_triangle_pairs = 1_000_000`,
+                    # which is a GLOBAL budget, not per-env. The outer `NewtonCfg.collision_cfg`
+                    # is sized correctly and never reaches here, so above ~16 envs the proxy
+                    # silently drops contacts: at 64 envs the solver reported
+                    # "Triangle pair buffer overflowed 1024336 > 1000000" while the configured
+                    # budget was 4,194,304. Dropped contacts are exactly the hand failing to feel
+                    # the cable, and this is the defect the sibling project found decisive
+                    # (0.12 -> 14.28 goals/episode).
+                    collision_pipeline=NewtonCollisionPipelineCfg(
+                        rigid_contact_max=newton_cfg.rigid_contact_max,
+                        max_triangle_pairs=newton_cfg.resolve_max_triangle_pairs(num_envs),
+                    ),
                 )
             ],
             iterations=self.coupler_iterations,
