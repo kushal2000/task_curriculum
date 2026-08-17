@@ -293,13 +293,26 @@ harness never had one; `episodes.py` now records per-env `max_obj_z` and classif
 `REACH_M = 1.40` (iiwa14 extended plus hand) as ejected, reporting guarded and unguarded fractions
 separately.
 
-Applied to the config most likely to be flattered by the bug -- 2 segments, the one with known
-velocity excursions -- it **vindicated** the number instead: 0 ejected, and the four lifts sit at
-0.815 / 0.781 / 0.768 / 0.763 m against a 0.63 m table, i.e. 13-19 cm of real clearance.
+Applied to 2 segments -- the config with known velocity excursions, the one most likely to be
+flattered by the bug -- it reported 0 ejected, with the four lifts at 0.815 / 0.781 / 0.768 /
+0.763 m against a 0.63 m table. That looked like 13-19 cm of real clearance, and it was briefly
+recorded here as such.
 
-One 12-segment env reached **1.221 m**, which passes the 1.40 bound but is 59 cm above the table and
-should be treated as unclassified rather than as a lift -- `REACH` catches gross ejection, not a
-vigorous toss.
+**Watching the video showed it is not.** The hand contacts the cable at the table edge, the cable
+tips **up on end**, and then falls to the floor. It is a pivot, not a grasp.
+
+The arithmetic confirms it and should have been the tell without the video. A 0.30 m cable lying
+flat has its centre at the 0.63 m table height; pivoted upright its centre sits at
+0.63 - 0.015 + 0.15 = **0.765 m**. The four values cluster on that within ~2 cm -- the signature of
+one fixed geometry, where four independent grasps would scatter. And `lifting_bonus_threshold` is
+0.15, precisely the rise a pivot produces, so the lift flag fires on a cable standing on end.
+
+So `REACH` closed one hole and not the class of hole: ejection was never the only way to inflate
+this statistic. **No cable has been grasped in any configuration measured.** The 12-segment env that
+reached 1.221 m did not reproduce on a re-run and remains unexplained.
+
+Videos: `videos/cable_lift_2seg.mp4` (pivot then fall), `videos/cable_lift_12seg.mp4` (the cable
+never leaves the table while the hand works above it).
 
 `termination_reasons` counts *reasons*, not episodes: the `done_*` flags are not mutually exclusive,
 so an env tripping two on its final step is counted twice and the totals can exceed n. This is why
@@ -318,8 +331,8 @@ diameter. It predicts a raised-support arrangement would be graspable, which rem
 experiment worth running.
 
 Do not read the 4/32 vs 3/32 difference between segment counts as an effect. At n=32 that is well
-inside noise (Fisher exact ~0.35), and the same 12-segment config drew 1/32 on one run and 3/32 on
-the next.
+inside noise (Fisher exact ~0.35), the same 12-segment config drew 1/32 on one run and 3/32 on the
+next, and per the correction above neither figure counts grasps in the first place.
 
 ## Tuning the 2-segment cable: damping + iterations, and why single draws misled
 
