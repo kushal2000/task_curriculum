@@ -15,6 +15,13 @@ Three things are drawn that the Play viewer has no notion of:
 * the stationary half, likewise
 * the fold target as a translucent ghost -- the same `folded_half_w()` the reward and the success
   criterion are computed from, so what is on screen is what is being optimised
+
+and two things are deliberately NOT drawn. The Play viewer renders the spawned rigid tool at
+`object_pose` and a green copy of it at `goal_pose`. For cloth the tool pool is still built
+(`Cloth.yaml` pins `handle_head_types: ["hammer"]`) but the sheet replaces the spawned object, so
+both are hammers: one inert, one a green hammer sitting at a `goal_viz` marker that
+`ClothEnv._drive_goal_marker` overwrites every step. `draw_rigid_object=False` suppresses them.
+This is the same confusion the offscreen renderer had before `_hide_goal_viz`.
 """
 
 from __future__ import annotations
@@ -91,6 +98,10 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
             hole_urdf_path=self._hole_urdf_path,
             github_raw_base=self.github_raw_base,
             url_check=self.url_check,
+            # The sheet is the manipuland, not the spawned rigid tool -- see the note in
+            # `build_pose_viewer_html`. Without this the viewer draws a hammer at `object_pose`
+            # and a green hammer at `goal_pose`, on top of the three cloth channels below.
+            draw_rigid_object=False,
             deformables={
                 "cloth_moving": {
                     "indices": tri[in_moving].reshape(-1).tolist(),

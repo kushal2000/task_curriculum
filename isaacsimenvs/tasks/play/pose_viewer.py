@@ -274,6 +274,7 @@ def build_pose_viewer_html(
     github_raw_base: str | None = None,
     url_check: str = "skip",
     deformables: dict | None = None,
+    draw_rigid_object: bool = True,
 ) -> str:
     """Build a self-contained-ish viewer HTML string from captured frames.
 
@@ -310,18 +311,29 @@ def build_pose_viewer_html(
     robots = [
         make_url_robot(name="robot", urdf_url=robot_urdf_url, animated=True),
         make_embedded_robot(name="table", urdf_text=table_urdf_text),
-        make_embedded_robot(name="object", urdf_text=object_urdf_text),
-        make_embedded_robot(
-            name="goal",
-            urdf_text=object_urdf_text,
-            color_override=(0.20, 0.72, 0.31),
-        ),
     ]
     object_poses = {
         "table": np.stack([frame["table_pose"] for frame in frames]),
-        "object": np.stack([frame["object_pose"] for frame in frames]),
-        "goal": np.stack([frame["goal_pose"] for frame in frames]),
     }
+    # `draw_rigid_object=False` is for tasks whose manipuland is NOT the spawned rigid tool.
+    # Cloth is one: the sheet replaces the spawned object after the scene is built, but the tool
+    # pool is still constructed, so `object_urdf_text` is a hammer. Drawn unconditionally, that
+    # puts a hammer at `object_pose` and a GREEN hammer at `goal_pose` -- and the green is close
+    # enough to the fold ghost's green to read as part of the goal. Both are meaningless for
+    # cloth: the tool is inert, and `goal_viz` is a pure rendering artefact that
+    # `ClothEnv._drive_goal_marker` overwrites every step. The sheet supplies its own object and
+    # goal as deformable channels.
+    if draw_rigid_object:
+        robots.append(make_embedded_robot(name="object", urdf_text=object_urdf_text))
+        robots.append(
+            make_embedded_robot(
+                name="goal",
+                urdf_text=object_urdf_text,
+                color_override=(0.20, 0.72, 0.31),
+            )
+        )
+        object_poses["object"] = np.stack([frame["object_pose"] for frame in frames])
+        object_poses["goal"] = np.stack([frame["goal_pose"] for frame in frames])
     if hole_urdf_text is not None and all("hole_pose" in frame for frame in frames):
         robots.insert(2, make_embedded_robot(name="hole", urdf_text=hole_urdf_text))
         object_poses["hole"] = np.stack([frame["hole_pose"] for frame in frames])
