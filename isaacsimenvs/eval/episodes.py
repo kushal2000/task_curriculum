@@ -40,7 +40,20 @@ DEFAULT_POLICY_CFG = "/share/portal/kk837/simtoolreal/pretrained_policy/config.y
 # Termination causes published by `play/utils/logging_utils.py`. Reported as a histogram: two
 # backends can agree on the mean while failing for entirely different reasons, and that is not
 # parity.
-REASONS = ("fall", "max_successes", "hand_far", "timeout")
+# "fold" / "fold_held" / "nonfinite" are cloth-only and simply stay all-False on other tasks --
+# `logging_utils` emits a `done_<name>` extra for whatever the env put in `_termination_reasons`.
+# Omitting "fold" was a real measurement hole: `ClothEnv` sets it, the harness never read it, and
+# `_successes` was ALSO being incremented by the inherited 11.25 cm tool-pose criterion, so every
+# "goals" number on the cloth task was ambiguous between a fold and a loose tool hit.
+REASONS = (
+    "fall",
+    "max_successes",
+    "hand_far",
+    "timeout",
+    "fold",
+    "fold_held",
+    "nonfinite",
+)
 
 # iiwa14 fully extended plus the hand. An object above this is not being held -- it has been
 # ejected by a solver blow-up. The distinction matters because `_lifted_object` latches on

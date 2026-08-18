@@ -50,6 +50,9 @@ class ClothEnv(PlayNewtonEnv):
         super().__init__(cfg, render_mode, **kwargs)
         self._init_fold_targets()
         self._fold_hold = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        # Envs whose state went non-finite this step; consumed by `_get_dones` to force a reset.
+        self._nonfinite_envs = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._nonfinite_count = 0
         self._drive_goal_marker()
 
     # ------------------------------------------------------------------ construction
@@ -496,11 +499,11 @@ class ClothEnv(PlayNewtonEnv):
         # viewer) a goal that is not the goal.
         self._drive_goal_marker()
         obs = super()._get_observations()
-        self._assert_finite(obs)
+        self._guard_finite(obs)
         return obs
 
-    def _assert_finite(self, obs) -> None:
-        """Fail at the source when any part of the observation goes non-finite.
+    def _guard_finite(self, obs) -> None:
+        """Keep non-finite values out of the policy, and flag the env for reset.
 
         A NaN anywhere in the 140-dim vector reaches the policy, propagates through the network and
         surfaces as ``normal expects all elements of std >= 0.0`` from the action sampler -- a
@@ -524,6 +527,7 @@ class ClothEnv(PlayNewtonEnv):
         # ("reward": reward_buf * 0.01, `obs_utils.py:326`) but only into `state_list`, the
         # critic's 162-dim state. It is absent from `obs_list`, so it cannot reach `obs["policy"]`.
         robot = self.robot.data
+        offenders = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         parts = {
             "particles": self._particles_w(),
             "velocities": self.object._velocities(),
@@ -542,17 +546,42 @@ class ClothEnv(PlayNewtonEnv):
             bad = ~torch.isfinite(flat).all(dim=-1)
             if not bool(bad.any()):
                 continue
+            offenders |= bad
             ids = torch.nonzero(bad).flatten().tolist()
             where = ""
             if name == "obs":
                 # Which columns, so the term can be identified against `cfg.obs.obs_list`.
                 cols = torch.nonzero(~torch.isfinite(flat[ids[0]])).flatten().tolist()
                 where = f" cols {cols[:12]}{'...' if len(cols) > 12 else ''} of {flat.shape[1]}"
-            raise RuntimeError(
+            msg = (
                 f"cloth: non-finite {name} in envs {ids[:8]}"
                 f"{'...' if len(ids) > 8 else ''} ({len(ids)}/{self.num_envs}) "
                 f"at step {int(self.episode_length_buf.max().item())}{where}"
             )
+            if self.cfg.cloth.nan_policy == "raise":
+                raise RuntimeError(msg)
+            # `reset`: report once per occurrence and carry on. Printing every step would drown a
+            # training log, so this is deliberately not rate-limited beyond being per-detection.
+            print(f"[cloth] {msg} -- resetting those envs", flush=True)
+
+        if not bool(offenders.any()):
+            return
+
+        # NEVER let a non-finite value reach the policy. The env is flagged for reset below, but the
+        # reset only takes effect on the NEXT step, so this step's observation would still be handed
+        # to the network -- and a single NaN propagates through the LSTM into the action sampler,
+        # then into the gradient. Zeroing is not physically meaningful, but the env is being thrown
+        # away anyway; what matters is that the number entering the optimizer is finite.
+        for tensor in obs.values():
+            if torch.is_tensor(tensor):
+                torch.nan_to_num_(tensor, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Latched, and consumed by `_get_dones` on the same step so the env terminates and resets
+        # through the normal path rather than being patched in place.
+        self._nonfinite_envs |= offenders
+        self._nonfinite_count += int(offenders.sum())
+        self.extras["nonfinite_envs"] = float(offenders.float().mean())
+        self.extras["nonfinite_total"] = float(self._nonfinite_count)
 
     def footprint_ratio(self) -> torch.Tensor:
         """Sheet extent along the fold axis, as a fraction of its unfolded size.
@@ -571,30 +600,62 @@ class ClothEnv(PlayNewtonEnv):
             self.footprint_ratio() < self.cfg.cloth.max_folded_footprint
         )
 
+    #: Steps the fold criterion must hold to count as a *held* fold. Independent of
+    #: `termination.success_steps`, which the finetune recipe drives to 1 so the reward bonus fires
+    #: on first entry -- the strict criterion still has to be reported.
+    HELD_FOLD_STEPS = 10
+
     def _get_dones(self):
         """Terminate on a completed fold, on the sheet leaving the table, or on timeout.
 
         The inherited test scores a *tool pose* against `goal_viz`, which is meaningless here: the
-        manipuland is a sheet and the goal is a fold. This replaces the success half of it while
+        manipuland is a sheet and the goal is a fold. This REPLACES the success half of it while
         keeping the task's fall/hand-far conditions.
+
+        **The inherited increment is undone, not merely added to.** `super()._get_dones()` runs
+        Play's own keypoint-success path in full, which increments `_successes`
+        (`termination_utils.py:46`) whenever `_keypoints_max_dist <= _current_success_tolerance *
+        keypoint_scale`. With `eval_success_tolerance` unset that fires at 0.075 * 1.5 = 11.25 cm,
+        against the fold criterion's 4 cm -- so `_successes` had two independent writers and every
+        "goals" number on this task was ambiguous between a fold and a loose tool-pose hit. Worse,
+        a reward keyed on `_successes` would have been farmable at 11.25 cm without ever folding.
+        Snapshot and restore so the fold is the only writer.
         """
+        successes_before = self._successes.clone()
         terminated, truncated = super()._get_dones()
+        self._successes.copy_(successes_before)
 
         folded = self.is_folded()
-        # Held for `success_steps`, matching the task's own criterion: a sheet passing through the
-        # target on its way elsewhere is not a fold.
+
+        # Two counters, deliberately. `entered` is what the reward bonus and termination key on --
+        # `termination.success_steps` is 1 under the finetune recipe, matching Play2Perfect's
+        # `success_steps=1` + `force_consecutive_near_goal_steps=True` lump sum. `held` is the
+        # strict criterion every baseline number so far used, kept so training and evaluation can be
+        # compared against the same history. The gap between them is a diagnostic: a flap that
+        # enters the target and springs back scores `entered` but not `held`.
         self._fold_hold = torch.where(folded, self._fold_hold + 1, torch.zeros_like(self._fold_hold))
-        success = self._fold_hold >= int(self.cfg.termination.success_steps)
+        entered = self._fold_hold >= int(self.cfg.termination.success_steps)
+        held = self._fold_hold >= int(self.HELD_FOLD_STEPS)
 
-        if bool(success.any()):
-            ids = success.nonzero(as_tuple=True)[0]
+        if bool(entered.any()):
+            ids = entered.nonzero(as_tuple=True)[0]
             self._successes[ids] += 1
-            self._fold_hold[ids] = 0
-            # Reset the deadline on success, as `termination_utils` does for goal hits.
-            self.episode_length_buf[ids] = 0
 
-        self._termination_reasons["fold"] = success
-        return terminated | success, truncated
+        # NOTE: `episode_length_buf` is deliberately NOT reset here. The inherited task chains
+        # goals within an episode, but a folded sheet stays folded, so re-arming would let the
+        # criterion pay repeatedly for one fold. The episode ends on the fold instead (below),
+        # which is the analogue of Play2Perfect ending the episode on a successful retract.
+        # Terminate any env whose state went non-finite, so it resets through the normal path.
+        # `_guard_finite` has already zeroed the observation for these envs, so nothing non-finite
+        # reaches the policy or the optimizer; this is what stops one diverged env from poisoning a
+        # multi-hour run. Cleared after consumption -- the reset itself restores a valid state.
+        nonfinite = self._nonfinite_envs.clone()
+        self._nonfinite_envs.zero_()
+
+        self._termination_reasons["fold"] = entered
+        self._termination_reasons["fold_held"] = held
+        self._termination_reasons["nonfinite"] = nonfinite
+        return terminated | entered | nonfinite, truncated
 
     def _reset_idx(self, env_ids):
         super()._reset_idx(env_ids)

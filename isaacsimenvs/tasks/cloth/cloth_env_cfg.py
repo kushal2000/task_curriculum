@@ -218,6 +218,18 @@ class ClothCfg:
 
     color: tuple[float, float, float] = (0.85, 0.35, 0.55)
 
+    nan_policy: str = "raise"
+    """What to do when any observed quantity goes non-finite: ``"raise"`` or ``"reset"``.
+
+    ``raise`` is right for probes and evaluation -- a NaN there is a bug to diagnose, and the guard
+    names which quantity went bad first (it is how the intermittent failure was localised to
+    ``robot_joint_pos`` rather than to the cloth).
+
+    ``reset`` is right for training. The offending envs have their observation zeroed so nothing
+    non-finite can reach the network or the gradient, and are terminated so they reset through the
+    normal path. Over a multi-hour run on 4 GPUs a single diverged env would otherwise kill
+    everything; the failure has been seen roughly once per three 900-step evals."""
+
     # --- buffers ---------------------------------------------------------------------------
     rigid_body_particle_contact_buffer_size: int = 65536
     """Body-to-particle soft-contact capacity **PER RIGID BODY**, not global.
