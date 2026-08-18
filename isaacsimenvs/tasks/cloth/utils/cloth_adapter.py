@@ -147,10 +147,21 @@ class ClothAsRigidObject:
     # ---------------------------------------------------------------- writes
 
     def write_root_pose_to_sim(self, root_pose: torch.Tensor, env_ids=None) -> None:
-        """Restore the sheet flat, centred on the requested position.
+        """Restore the sheet flat, centred on the requested position, at the requested YAW.
 
-        Only the XY of ``root_pose`` is honoured; the height is the configured spawn height. A
-        cloth has no rigid pose to teleport, and the task only ever calls this at reset.
+        XY and yaw of ``root_pose`` are honoured; the height is the configured spawn height, and
+        roll/pitch are dropped. A cloth has no rigid pose to teleport, and the task only ever calls
+        this at reset.
+
+        **Yaw only, not the full orientation.** `reset_utils` draws a Haar-uniform SO(3) quaternion,
+        which is right for a rigid tool that may land in any attitude and wrong for a sheet: roll or
+        pitch would stand it on edge or bury it in the table, and the task is defined on a sheet
+        lying flat. Taking the yaw of a uniform SO(3) draw is itself uniform on [0, 2*pi), so this
+        gets a completely random heading without a second RNG stream and without disturbing the
+        seed sequence. A `fixed_start_pose` quaternion is honoured the same way, by its yaw.
+
+        Previously the quaternion was dropped entirely, so every episode presented the sheet
+        axis-aligned and the policy never saw a fold in any other heading.
         """
         if env_ids is None:
             env_ids = torch.arange(self._num_envs, device=self._device)
@@ -166,8 +177,29 @@ class ClothAsRigidObject:
         centre = root_pose[:, :3].clone()
         centre[:, 2] = self._spawn_z
 
-        # (len(env_ids), P, 3): the flat rest sheet translated to each requested centre.
-        target = self._rest_local.unsqueeze(0) + centre.unsqueeze(1)
+        # Yaw from the (w, x, y, z) quaternion. Standard extraction; roll and pitch are discarded.
+        qw, qx, qy, qz = root_pose[:, 3], root_pose[:, 4], root_pose[:, 5], root_pose[:, 6]
+        yaw = torch.atan2(
+            2.0 * (qw * qz + qx * qy),
+            1.0 - 2.0 * (qy * qy + qz * qz),
+        )
+        cos_y = torch.cos(yaw).unsqueeze(1)   # (n, 1), broadcast over particles
+        sin_y = torch.sin(yaw).unsqueeze(1)
+
+        rest_x = self._rest_local[:, 0].unsqueeze(0)   # (1, P)
+        rest_y = self._rest_local[:, 1].unsqueeze(0)
+        rest_z = self._rest_local[:, 2].unsqueeze(0)
+        rotated = torch.stack(
+            (
+                rest_x * cos_y - rest_y * sin_y,
+                rest_x * sin_y + rest_y * cos_y,
+                rest_z.expand(cos_y.shape[0], -1),
+            ),
+            dim=-1,
+        )                                              # (n, P, 3)
+
+        # (len(env_ids), P, 3): the flat rest sheet yawed, then translated to each requested centre.
+        target = rotated + centre.unsqueeze(1)
         self._cloth.write_nodal_pos_to_sim_index(target, env_ids)
         self._cloth.write_nodal_velocity_to_sim_index(torch.zeros_like(target), env_ids)
 

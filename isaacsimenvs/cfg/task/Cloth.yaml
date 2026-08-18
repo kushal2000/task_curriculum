@@ -115,8 +115,15 @@ reset:
   # sensor/actuator randomisation: zeroing it would make all 768 envs start identically every
   # episode, removing the state diversity RL needs and inviting overfit to one configuration.
   # play2perfect's finetune launchers keep these at exactly these values.
-  # For cloth only X and Y reach the sheet -- `ClothAsRigidObject.write_root_pose_to_sim` forces
-  # z = spawn_z and drops the orientation draw, so _z and table_reset_z_range are already inert.
+  # For cloth, X, Y and YAW reach the sheet -- `ClothAsRigidObject.write_root_pose_to_sim` forces
+  # z = spawn_z and keeps only the yaw of the orientation draw, so _z and table_reset_z_range are
+  # inert while heading is fully randomised. `reset_utils` draws a Haar-uniform SO(3) quaternion,
+  # whose yaw marginal is uniform on [0, 2*pi), so the sheet's heading is uniform without a second
+  # RNG stream. Roll and pitch are dropped deliberately: they would stand a sheet on edge.
+  #
+  # This was previously yaw-FIXED -- the quaternion was discarded entirely and every episode
+  # presented the sheet axis-aligned, so a policy could learn a fold that only worked for one
+  # heading and still score perfectly.
   reset_position_noise_x: 0.1
   reset_position_noise_y: 0.1
   reset_position_noise_z: 0.02

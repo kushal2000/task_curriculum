@@ -15,6 +15,7 @@ without a simulator.
 from __future__ import annotations
 
 import torch
+from isaaclab.utils.math import quat_from_matrix
 
 from isaacsimenvs.newton import patches
 from isaacsimenvs.tasks.cloth.cloth_env_cfg import ClothEnvCfg
@@ -497,9 +498,24 @@ class ClothEnv(PlayNewtonEnv):
         # finally describes a fold rather than a translation.
         #
         # The crease runs along the axis perpendicular to `fold_axis`, so a fold about an x-normal
-        # crease is a 180-degree rotation about y (and vice versa).
-        pose[:, 3] = 0.0                                        # w = cos(pi/2) = 0
-        pose[:, 4 + (1 if self.cfg.cloth.fold_axis == "x" else 0)] = 1.0   # sin(pi/2) about y or x
+        # crease is a 180-degree rotation about y (and vice versa) IN THE SHEET'S REST FRAME.
+        #
+        # Composed with the stationary half's live rotation rather than written as a fixed world
+        # quaternion. The position above already tracks rotation (it comes from `fold_targets_w`),
+        # but a constant orientation does not, so a yawed sheet was shown a goal whose position was
+        # right and whose attitude was the rest one. That reaches the POLICY, not just the render:
+        # the task turns `goal_viz`'s pose into `keypoints_rel_goal`. Required before init yaw
+        # could be randomised.
+        r, _ = self._stationary_frame(self._particles_w())        # (N, 3, 3) rest -> current
+        fold_rest = torch.eye(3, device=self.device).repeat(self.num_envs, 1, 1)
+        # 180 degrees about rest y (fold_axis == "x") or about rest x.
+        if self.cfg.cloth.fold_axis == "x":
+            fold_rest[:, 0, 0] = -1.0
+            fold_rest[:, 2, 2] = -1.0
+        else:
+            fold_rest[:, 1, 1] = -1.0
+            fold_rest[:, 2, 2] = -1.0
+        pose[:, 3:7] = quat_from_matrix(torch.bmm(r, fold_rest))
         self.goal_viz.write_root_pose_to_sim(pose)
 
     def _get_rewards(self) -> torch.Tensor:
@@ -707,9 +723,27 @@ class ClothEnv(PlayNewtonEnv):
         A fold halves the footprint; a slide or a crumple does not necessarily. Keypoint proximity
         alone cannot tell those apart -- a dragged, crumpled sheet put keypoints near their targets
         and scored, which is why this exists as a second, independent condition.
+
+        **Measured along the sheet's own fold axis, not the world's.** This used to take the extent
+        of `parts[:, :, ax]` -- a world axis -- which is only the fold axis while the sheet is
+        axis-aligned. A yawed sheet then reports an inflated footprint for purely geometric
+        reasons: an unfolded 0.10 m sheet at 45 degrees spans 0.141 m in world x, a ratio of 1.41
+        with no deformation at all. That is the likely source of the 1.03-1.41 values seen in the
+        render HUD, which were previously read as the sheet stretching under the hand.
+
+        Since `footprint_ratio < max_folded_footprint` is half of `is_folded`, the world-axis
+        version made a correctly folded but rotated sheet score as unfolded. It also had to be
+        fixed before init yaw could be randomised at all.
+
+        `r[:, :, ax]` is the image of the rest basis vector under the stationary half's fitted
+        rotation, i.e. the fold axis carried onto the sheet's current pose. Reduces exactly to the
+        old behaviour when the sheet is axis-aligned (r = I).
         """
         ax = 0 if self.cfg.cloth.fold_axis == "x" else 1
-        coord = self._particles_w()[:, :, ax]
+        parts = self._particles_w()
+        r, _ = self._stationary_frame(parts)
+        axis_dir = r[:, :, ax]                                   # (N, 3), unit
+        coord = torch.einsum("npi,ni->np", parts, axis_dir)       # (N, P)
         return (coord.amax(dim=1) - coord.amin(dim=1)) / self.cfg.cloth.size
 
     def is_folded(self) -> torch.Tensor:
