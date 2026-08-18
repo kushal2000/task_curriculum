@@ -179,14 +179,21 @@ class ClothCfg:
 
     # --- buffers ---------------------------------------------------------------------------
     rigid_body_particle_contact_buffer_size: int = 65536
-    """Hand-vs-cloth is a rigid-body-to-*particle* contact, unlike the cable's body-to-body. This
-    is the buffer that matters here, and 1024 (inherited from the cable, where the manipuland was
-    bodies) was far too small: a 32-env run died with a CUDA device-side assert, which is what an
-    out-of-bounds write into a contact buffer looks like from the host.
+    """Body-to-particle soft-contact capacity **PER RIGID BODY**, not global.
 
-    Order of magnitude: 81 particles x ~16 proxied hand links x 32 envs is already ~41k potential
-    pairs before margin."""
+    Newton's own comment on the argument is explicit: "Per-body soft-contact list capacity"
+    (`newton/_src/solvers/vbd/solver_vbd.py:266`, default 256). So it must NOT scale with env count:
+    the allocation is this value x body count, and body count already scales with envs. Multiplying
+    it by `num_envs` as well makes the allocation quadratic -- at 512 envs that is 1,048,576 x 2,304
+    bodies = 2.4e9 elements, which overflows Warp's signed-int32 array dimension and aborts before a
+    single step.
+
+    1024, inherited from the cable where the manipuland was bodies rather than particles, was far
+    too small: a 32-env run died with a CUDA device-side assert, which is what an out-of-bounds
+    write into a contact buffer looks like from the host."""
     rigid_body_contact_buffer_size: int = 16384
+    """Body-to-body contact capacity per rigid body (Newton default 64). Also per-body: the failure
+    message is literally "Per-body rigid contact buffer overflowed 87 > 64"."""
     per_particle_triangle_pairs: int = 2048
     """Triangle-pair budget per cloth particle. The budget is GLOBAL and must scale with env count
     *and* geometry: on the cable a correctly env-scaled 4.19M still overflowed once segments

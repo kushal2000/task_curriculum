@@ -1,4 +1,4 @@
-"""Simulation throughput for the cable task, at a given environment count.
+"""Simulation throughput for a task, at a given environment count.
 
     scripts/newton_py -m isaacsimenvs.eval.throughput --num_envs 64
 
@@ -33,6 +33,11 @@ from pathlib import Path
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--task",
+        default="Isaacsimenvs-Cable-Direct-v0",
+        help="gym id to benchmark. The scene, not the harness, decides what is measured.",
+    )
     parser.add_argument("--num_envs", type=int, default=64)
     parser.add_argument("--steps", type=int, default=200, help="timed policy steps")
     parser.add_argument("--warmup", type=int, default=60, help="untimed steps first")
@@ -68,7 +73,7 @@ def main() -> None:
     from isaacsimenvs.newton.contact_guard import capture_fd_output, raise_if_overflowed
     from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
 
-    @hydra_task_config_with_yaml("Isaacsimenvs-Cable-Direct-v0", "")
+    @hydra_task_config_with_yaml(args_cli.task, "")
     def run(env_cfg, agent_cfg):
         # Under torchrun each rank must bind its own device. torchrun sets LOCAL_RANK and expects
         # the program to honour it -- it does NOT set CUDA_VISIBLE_DEVICES. Without this every rank
@@ -90,7 +95,7 @@ def main() -> None:
         use_single_object_variant()
 
         build_t0 = time.perf_counter()
-        env = gym.make("Isaacsimenvs-Cable-Direct-v0", cfg=env_cfg)
+        env = gym.make(args_cli.task, cfg=env_cfg)
         inner = env.unwrapped
         device = inner.device
         build_s = time.perf_counter() - build_t0
@@ -204,11 +209,36 @@ def main() -> None:
             "cpu_peak_rss_gb": round(
                 resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2
             ),
-            "segments": int(inner.cfg.cable.segments),
-            "substeps": int(inner.cfg.cable.cable_substeps),
-            "vbd_iterations": int(inner.cfg.cable.vbd_iterations),
-            "proxy_mode": str(inner.cfg.cable.proxy_mode),
+            "task": args_cli.task,
         }
+        # Record the knobs that actually set the cost, per scene. Without these a JSON is a bare
+        # number with no way to tell which configuration produced it -- and the cable files on
+        # disk predate a `task` field entirely, so they were only identifiable by the presence of
+        # `segments`.
+        cable = getattr(inner.cfg, "cable", None)
+        cloth = getattr(inner.cfg, "cloth", None)
+        if cable is not None:
+            result.update(
+                segments=int(cable.segments),
+                substeps=int(cable.cable_substeps),
+                vbd_iterations=int(cable.vbd_iterations),
+                proxy_mode=str(cable.proxy_mode),
+            )
+        if cloth is not None:
+            result.update(
+                resolution=int(cloth.resolution),
+                particles=int(cloth.num_particles),
+                triangles=2 * (int(cloth.resolution) - 1) ** 2,
+                thickness=float(cloth.thickness),
+                substeps=int(cloth.substeps),
+                vbd_iterations=int(cloth.vbd_iterations),
+                proxy_mode=str(cloth.proxy_mode),
+                rigid_body_particle_contact_buffer_size=int(
+                    cloth.rigid_body_particle_contact_buffer_size
+                ),
+                rigid_body_contact_buffer_size=int(cloth.rigid_body_contact_buffer_size),
+                per_particle_triangle_pairs=int(cloth.per_particle_triangle_pairs),
+            )
         print("THROUGHPUT " + json.dumps(result), flush=True)
         if args_cli.out:
             args_cli.out.parent.mkdir(parents=True, exist_ok=True)
