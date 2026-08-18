@@ -53,6 +53,17 @@ class ClothEnv(PlayNewtonEnv):
         # Envs whose state went non-finite this step; consumed by `_get_dones` to force a reset.
         self._nonfinite_envs = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._nonfinite_count = 0
+        # Best fold error seen so far this episode, for the dense progress ratchet. Kept separate
+        # from the inherited `_closest_keypoint_max_dist`, which `compute_intermediate_values`
+        # resolves against the APPROXIMATE metric inside `super()._get_dones()` -- reusing it would
+        # ratchet against a different quantity than the one being rewarded. -1 is the sentinel the
+        # task uses for "not yet observed".
+        self._closest_fold_err = torch.full(
+            (self.num_envs,), -1.0, dtype=torch.float32, device=self.device
+        )
+        # Set in `_get_dones`, consumed by `_get_rewards` in the same step: which envs earned the
+        # sparse bonus this step, under the fold criterion rather than the inherited one.
+        self._fold_bonus_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._drive_goal_marker()
 
     # ------------------------------------------------------------------ construction
@@ -488,6 +499,79 @@ class ClothEnv(PlayNewtonEnv):
         pose[:, 4 + (1 if self.cfg.cloth.fold_axis == "x" else 0)] = 1.0   # sin(pi/2) about y or x
         self.goal_viz.write_root_pose_to_sim(pose)
 
+    def _get_rewards(self) -> torch.Tensor:
+        """Re-point the inherited Play reward at the fold.
+
+        Follows `PreciseAssemblyEnv._get_rewards` (play2perfect): keep `compute_rewards`, then
+        subtract the terms that fight this task and add fold-based replacements. Written as
+        `reward - term + replacement` so every inherited term stays visible in `_reward_terms` and
+        in the wandb/tensorboard breakdown.
+
+        Three substitutions:
+
+        **Lift terms out.** `lifting_rew` (x20) and `lifting_bonus` (300) pay for raising the
+        manipuland 0.15 m above its spawn height. A fold keeps the sheet on the table, so these
+        reward the opposite of the task -- exactly why play2perfect masks them for insertion, where
+        the goal pulls the peg *down*.
+
+        **The `lifted` gate off the keypoint term.** `keypoint_reward` is multiplied by
+        `lifted.float()` (`reward_utils.py:50`), and `_lifted_object` latches only on a 0.15 m rise.
+        A folding sheet never rises that far, so the inherited keypoint reward pays **exactly zero
+        for the entire episode**. Masking the lift terms without also removing this gate would leave
+        the main shaping signal dead -- it already is.
+
+        **The keypoint metric.** The inherited term ratchets on `_keypoints_max_dist`, which is
+        `max |obj_kp - goal_kp|` built from the fitted rigid frame plus rest offsets -- an
+        approximation of the fold. `fold_error()` is the exact quantity the success criterion and
+        the eval both use. Ratcheting on that makes the dense signal *fold progress*.
+
+        The bonus is likewise re-keyed: the inherited `reach_goal_bonus` fires on `_near_goal` /
+        `_is_success`, which are computed from the approximate metric against
+        `_current_success_tolerance`. `_fold_bonus_mask` is set in `_get_dones` from the same
+        `is_folded()` the criterion uses, so the +1000 pays for a fold and nothing else.
+
+        Kept unchanged: `fingertip_delta_rew` (approach shaping, helps the hand find the sheet) and
+        both joint-velocity penalties, which are play2perfect's `r_smooth` and the regularisation
+        the pretrained policy was trained under.
+        """
+        from isaacsimenvs.tasks.play.utils.logging_utils import log_step_metrics
+        from isaacsimenvs.tasks.play.utils.reward_utils import compute_rewards
+
+        reward = compute_rewards(self)
+        terms = self._reward_terms
+        rew_cfg = self.cfg.reward
+
+        # --- out: lift progress, lift bonus, and the approximate keypoint term ---------------
+        reward = reward - terms["lifting_rew"] - terms["lift_bonus_rew"] - terms["keypoint_rew"]
+        zero = torch.zeros_like(terms["lifting_rew"])
+        terms["lifting_rew"] = zero
+        terms["lift_bonus_rew"] = zero
+
+        # --- in: dense fold progress, ungated by `lifted` -------------------------------------
+        # Same ratchet as `reward_utils.keypoint_reward`: pay only for improvement on the best
+        # fold error seen so far this goal, clamped at zero so regression is free rather than
+        # punished, and monotone so it cannot be farmed by oscillating.
+        fold_err = self.fold_error()
+        sentinel = self._closest_fold_err < 0.0
+        self._closest_fold_err = torch.where(sentinel, fold_err, self._closest_fold_err)
+        delta = torch.clamp(self._closest_fold_err - fold_err, 0.0, 100.0)
+        self._closest_fold_err = torch.minimum(self._closest_fold_err, fold_err)
+        fold_kp_rew = delta * float(rew_cfg.keypoint_rew_scale)
+        reward = reward + fold_kp_rew
+        terms["keypoint_rew"] = fold_kp_rew
+
+        # --- the sparse bonus, keyed on the fold criterion ------------------------------------
+        reward = reward - terms["bonus_rew"]
+        fold_bonus = self._fold_bonus_mask.float() * float(rew_cfg.reach_goal_bonus)
+        reward = reward + fold_bonus
+        terms["bonus_rew"] = fold_bonus
+
+        terms["total_reward"] = reward
+        self.extras["fold_err_mean"] = float(fold_err.mean())
+        self.extras["fold_rate"] = float(self._fold_bonus_mask.float().mean())
+        log_step_metrics(self)
+        return reward
+
     def _get_observations(self):
         # Offsets must be current *before* the task reads them, or the observation lags the sheet
         # by one step.
@@ -637,6 +721,10 @@ class ClothEnv(PlayNewtonEnv):
         entered = self._fold_hold >= int(self.cfg.termination.success_steps)
         held = self._fold_hold >= int(self.HELD_FOLD_STEPS)
 
+        # `_get_rewards` runs after `_get_dones` in the same step, so this is the mask the sparse
+        # bonus pays on. Keyed on the fold criterion, never on the inherited `_is_success`.
+        self._fold_bonus_mask.copy_(entered)
+
         if bool(entered.any()):
             ids = entered.nonzero(as_tuple=True)[0]
             self._successes[ids] += 1
@@ -661,6 +749,11 @@ class ClothEnv(PlayNewtonEnv):
         super()._reset_idx(env_ids)
         if hasattr(self, "_fold_hold"):
             self._fold_hold[env_ids] = 0
+        if hasattr(self, "_closest_fold_err"):
+            # Back to the sentinel: the ratchet is per-episode, so a new episode must not inherit
+            # the previous one's best fold error (which would make all progress unrewarded).
+            self._closest_fold_err[env_ids] = -1.0
+            self._fold_bonus_mask[env_ids] = False
         # The task re-samples `goal_viz` on reset; put it back on the fold target.
         if hasattr(self, "_fold_targets_xy"):
             self._drive_goal_marker()
