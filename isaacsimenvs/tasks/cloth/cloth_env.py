@@ -64,6 +64,9 @@ class ClothEnv(PlayNewtonEnv):
         # Set in `_get_dones`, consumed by `_get_rewards` in the same step: which envs earned the
         # sparse bonus this step, under the fold criterion rather than the inherited one.
         self._fold_bonus_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        # Fold error of a perfectly flat sheet -- the worst legitimate value. Used as the stand-in
+        # when an env's fold error is non-finite, so the substitution can never look like progress.
+        self._flat_fold_err = float(self.fold_error().nan_to_num(nan=0.0).max().item())
         self._drive_goal_marker()
 
     # ------------------------------------------------------------------ construction
@@ -551,7 +554,14 @@ class ClothEnv(PlayNewtonEnv):
         # Same ratchet as `reward_utils.keypoint_reward`: pay only for improvement on the best
         # fold error seen so far this goal, clamped at zero so regression is free rather than
         # punished, and monotone so it cannot be farmed by oscillating.
+        # A non-finite fold error would poison the ratchet permanently (torch.minimum with NaN
+        # propagates) and then every subsequent reward. Envs whose state has diverged are being
+        # reset this step anyway -- `_guard_finite` flagged them and `_get_dones` terminated them --
+        # so substituting the flat-sheet value costs nothing and keeps the ratchet finite.
         fold_err = self.fold_error()
+        bad = ~torch.isfinite(fold_err)
+        if bool(bad.any()):
+            fold_err = torch.where(bad, torch.full_like(fold_err, self._flat_fold_err), fold_err)
         sentinel = self._closest_fold_err < 0.0
         self._closest_fold_err = torch.where(sentinel, fold_err, self._closest_fold_err)
         delta = torch.clamp(self._closest_fold_err - fold_err, 0.0, 100.0)
@@ -565,6 +575,23 @@ class ClothEnv(PlayNewtonEnv):
         fold_bonus = self._fold_bonus_mask.float() * float(rew_cfg.reach_goal_bonus)
         reward = reward + fold_bonus
         terms["bonus_rew"] = fold_bonus
+
+        # LAST LINE OF DEFENCE. `compute_rewards` reads robot state, fingertip distances and the
+        # inherited keypoint metric, any of which can be non-finite when an articulation diverges --
+        # and a NaN reward becomes a NaN advantage and then a NaN gradient, which destroys the
+        # policy rather than just losing one env. Observed in a smoke run as
+        # `shaped_rewards/iter -> nan` while `rewards/iter` still read finite.
+        nonfinite_rew = ~torch.isfinite(reward)
+        if bool(nonfinite_rew.any()):
+            n = int(nonfinite_rew.sum())
+            reward = torch.nan_to_num(reward, nan=0.0, posinf=0.0, neginf=0.0)
+            self._nonfinite_envs |= nonfinite_rew
+            print(
+                f"[cloth] non-finite REWARD in {n}/{self.num_envs} envs -- zeroed and flagged "
+                f"for reset",
+                flush=True,
+            )
+        self.extras["nonfinite_reward"] = float(nonfinite_rew.float().mean())
 
         terms["total_reward"] = reward
         self.extras["fold_err_mean"] = float(fold_err.mean())

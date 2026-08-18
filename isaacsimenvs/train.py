@@ -83,6 +83,12 @@ def main() -> None:
         help="resume restores optimizer/rollout/env state; weights starts fresh from model weights.",
     )
     parser.add_argument(
+        "--single_variant",
+        action="store_true",
+        help="Give every env the same object. REQUIRED on Newton: SolverMuJoCo rejects worlds whose "
+        "collision shapes differ in type, and the procedural tool pool mixes boxes and capsules.",
+    )
+    parser.add_argument(
         "--distributed",
         action="store_true",
         help="Multi-GPU training under torchrun. Binds this rank to cuda:$LOCAL_RANK and sets "
@@ -136,7 +142,17 @@ def main() -> None:
     # Hand the leftover key=value tokens to Hydra via sys.argv.
     sys.argv = [sys.argv[0]] + hydra_args
 
-    app = AppLauncher(args_cli).app
+    # Kit is required by the PhysX backend and impossible for the Newton one, which runs kit-less
+    # in a venv with no Isaac Sim. Rather than a flag the caller must remember to match to the task,
+    # ask: AppLauncher raises ImportError precisely when the runtime is absent. Only that specific
+    # failure is tolerated -- if Isaac Sim IS installed, any launch error is real and propagates,
+    # because silently falling back would train against a different asset pipeline than intended.
+    # Mirrors `eval/episodes.py:149`.
+    try:
+        app = AppLauncher(args_cli).app
+    except ImportError as exc:
+        app = None
+        print(f"[train] running kit-less (no Isaac Sim runtime): {exc}", flush=True)
 
     # 2. Safe to import isaaclab-backed modules now.
     import gymnasium as gym
@@ -164,6 +180,11 @@ def main() -> None:
         # which presents as an out-of-memory bug rather than a device-binding one. The same trap
         # was hit once already in the throughput benchmark (docs/phase4_cable_env.md:664).
         import torch
+
+        from isaacsimenvs.eval.protocol import use_single_object_variant
+
+        if args_cli.single_variant:
+            use_single_object_variant()
 
         rl_device = args_cli.rl_device
         if args_cli.distributed:
@@ -293,7 +314,8 @@ def main() -> None:
     run()
 
     # Kit shutdown can hang; force-exit instead of waiting for a clean teardown.
-    del app
+    if app is not None:
+        del app
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(0)

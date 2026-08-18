@@ -8,6 +8,10 @@
 # robustness; we want the cleanest signal first on a task with rare reward events), and the scale
 # is smaller because a cloth costs 42.3 MB/env against rigid assembly's negligible footprint.
 #
+# NO --headless: IsaacLab 3.0's AppLauncher.add_app_launcher_args does not define it (it has
+# --visualizer/--viz/--device instead), and a kit-less Newton run is headless inherently. Passing it
+# makes argparse reject the whole command. None of the eval sbatch scripts pass it either.
+#
 # `--checkpoint_load_mode weights` is what makes this a FINETUNE rather than a resume: it loads
 # model + normaliser state only, and starts the optimiser, epoch counter and LR schedule fresh.
 # The release README omits this flag and `train.py` defaults to `resume`, which would also restore
@@ -40,17 +44,23 @@ echo "[train] run=$RUN_NAME gpus=$NGPU host=$(hostname) branch=$BRANCH"
 echo "[train] checkpoint=$CHECKPOINT"
 nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader
 
-# torchrun is not on PATH in this venv; go through the module. Learned the hard way -- a bare
-# `torchrun` exits 127 here.
+# Two module-form requirements here, both learned from failures:
+#   * `torchrun` is not on PATH in this venv, so go through `-m torch.distributed.run`; a bare
+#     `torchrun` exits 127.
+#   * train.py must be run as `-m isaacsimenvs.train`, NOT as a path. Running it as a path puts
+#     `isaacsimenvs/` on sys.path[0], so `import newton` resolves to our patch package
+#     `isaacsimenvs/newton/` instead of the real one:
+#     `ImportError: cannot import name 'BodyFlags' from 'newton'`. Every eval script already uses
+#     the module form for exactly this reason.
 scripts/newton_py -m torch.distributed.run \
     --standalone --nnodes=1 --nproc_per_node="$NGPU" \
-    isaacsimenvs/train.py \
+    -m isaacsimenvs.train \
     --task Isaacsimenvs-Cloth-Direct-v0 \
     --agent rl_games_sapg_cfg_entry_point \
     --checkpoint "$CHECKPOINT" \
     --checkpoint_load_mode weights \
     --distributed \
-    --headless \
+    --single_variant \
     --capture_viewer \
     --capture_viewer_len 600 \
     --capture_viewer_interval 200 \

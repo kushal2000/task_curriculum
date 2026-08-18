@@ -51,8 +51,14 @@ assets:
   table_urdf: "assets/urdf/table_narrow.urdf"
 
   object_name: "handle_head_primitives"
-  handle_head_types: ["hammer", "screwdriver", "marker", "spatula", "eraser", "brush"]
-  num_assets_per_type: 100
+  # ONE variant, and only the hammer. The cloth replaces the spawned object, so the tool pool is
+  # inert here -- but it is still built, and two things make the inherited pool wrong:
+  #   * only hammer variants are baked in the USD cache; anything else dies with a cache miss.
+  #   * Newton REQUIRES type-homogeneous collision shapes across worlds (SolverMuJoCo rejects
+  #     mixed geom types), which a 6-type pool violates. Eval enforces this with
+  #     `use_single_object_variant()`; training passes --single_variant for the same reason.
+  handle_head_types: ["hammer"]
+  num_assets_per_type: 1
 
   modify_asset_frictions: true
   robot_friction: 0.5
