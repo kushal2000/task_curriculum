@@ -180,7 +180,23 @@ class ClothCfg:
     Newton's own coupled-solver example and ADMM test use 10 and 5.
 
     That best_fold_err is flat across an 8x range also rules something out: the ~0.077 stopping
-    point is not a solver-convergence limit."""
+    point is not a solver-convergence limit.
+
+    **10 is a COUPLING floor, not a cloth-physics one.** Newton's standalone cloth examples run 4-10
+    (example_cloth_franka.py uses 5, example_cloth_twist.py 4), and iterations here serve two jobs at
+    once: converging the sheet's internal dynamics, and resolving contact against the rigid proxy.
+    What degrades at 5 is only the second -- the hand stops gripping, footprint stays near 1.0, the
+    sheet is untouched rather than unstable -- so the extra iterations are buying contact, not cloth.
+
+    The targeted fix would be `SolverVBD(rigid_contact_history=True)`, which Newton's own docstring
+    recommends for exactly this case ("may feel weak with few iterations and no history",
+    solver_vbd.py:331). It is NOT available here: contact warm-starting requires the collision
+    pipeline to match contacts across steps, and that path packs contact ids into 20 bits, capping
+    buffered contacts at 2**20 = 1,048,576 globally. This scene budgets 7,962,624 triangle pairs at
+    32 envs. Cutting to fit would mean ~386 pairs per particle, below the 512 that already
+    overflowed, and overflow silently drops contacts. Disabling deterministic mode is the only other
+    route and would cost reproducibility. Tried and reverted; recorded here so it is not re-tried
+    blind."""
     coupler_iterations: int = 1
     """Raising this made the cable *worse* at every setting tried."""
 
