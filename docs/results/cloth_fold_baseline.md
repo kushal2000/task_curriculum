@@ -45,3 +45,43 @@ Improvement means moving `best_fold_err` off ~0.082 and lifting `entered` above 
 is tight across seeds (+-0.0021), so a real shift should be obvious. If `best_fold_err` stays at
 ~0.082 the dense shaping has saturated and the +1000 bonus will essentially never fire -- the
 "prior does not transfer" outcome in the plan's risk list.
+
+---
+
+# Known risk: the frame-relative footprint can fail permissive
+
+`footprint_ratio` was changed (7a58c82) from world-axis extent to extent along the sheet's own fold
+axis, `r[:, :, ax]`, where `r` is the stationary half's Kabsch fit. That was required for init yaw
+randomisation and it fixed a real fail-STRICT bug: the world-axis version inflated to as much as
+sqrt(2) for a rotated but undeformed sheet, so a genuine fold of a turned sheet scored as unfolded.
+
+The replacement has the opposite failure mode. Projecting onto a direction that tilts out of the
+sheet's plane collapses the measured extent:
+
+| tilt of the fitted axis out of the sheet plane | footprint of an UNFOLDED sheet |
+|---|---|
+| 0 deg (in plane, along an edge) | 1.0000 |
+| 0 deg (in plane, diagonal) | 1.4142 |
+| 50 deg | 0.6428  <- crosses max_folded_footprint 0.65 |
+| 80 deg | 0.1736 |
+| 90 deg (the sheet normal) | 0.0000 |
+
+**This cannot happen for a rigid motion**: the sheet and the fitted axis rotate together, so the
+projection stays 1.0 -- that is the point of measuring in the sheet's frame. It needs a MISMATCH,
+i.e. the stationary half tilted or crumpled while the rest of the sheet lies flat, so the fit tilts
+the axis away from the plane the sheet actually occupies.
+
+Not yet observed firing. It is, however, the alternative explanation for the settled fold rate
+being 3.12% in the yaw run (199350, new footprint) against 0.65% in the yaw-fixed run (197715, old
+footprint), which is otherwise consistent with simply no longer discarding rotated folds. The two
+cannot be separated from those numbers alone.
+
+Deliberately NOT fixed mid-flight: this is the scoring criterion for two live experiments, and the
+obvious repairs carry their own failure modes -- projecting onto the horizontal component instead
+would read ~0 for a legitimately lifted sheet, which is fail-permissive in a different state.
+
+Options if it needs addressing:
+  * fail SAFE on a suspect fit -- compute the Kabsch residual and report a large footprint (not
+    folded) when the stationary half is too deformed for its frame to mean anything;
+  * measure extent in the plane fitted to ALL particles rather than along one basis vector;
+  * keep both measures and require the fold criterion to satisfy the stricter of the two.
