@@ -74,6 +74,12 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
 echo "[train] run=$RUN_NAME gpus=$NGPU host=$(hostname) branch=$BRANCH"
 echo "[train] checkpoint=$CHECKPOINT"
+# Slurm spools the batch script at SUBMIT time, but the Python is read at START time -- so a job
+# that queues picks up whatever the working tree holds when it finally runs, not when it was
+# submitted. With two runs differing only by env code (yaw-fixed vs yaw-randomised) that is the
+# difference between the two experiments, so record what actually ran and whether it was dirty.
+echo "[train] commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain)" && echo YES || echo no)"
+git --no-pager log -1 --format="[train] subject=%s"
 nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader
 
 # Two module-form requirements here, both learned from failures:
