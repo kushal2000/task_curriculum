@@ -174,3 +174,34 @@ def test_the_hammer_strings_are_a_discriminating_check():
     html = _html()  # draw_rigid_object defaults True
     assert "cylinder" in html
     assert "0.153" in html
+
+
+# --------------------------------------------------------------------------------------------
+# train.py decides which kwargs a viewer takes. It used to string-match the module name
+# ("play.pose_viewer" in module_name), which is FALSE for the cloth viewer's module even though
+# ClothPoseViewerWrapper subclasses PlayPoseViewerWrapper and needs both kwargs -- so cloth ran
+# with url_check forced to "skip", disabling the very check that reports an unpushed branch.
+# --------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "module_name, class_name, expected",
+    [
+        ("isaacsimenvs.tasks.cloth.pose_viewer", "ClothPoseViewerWrapper", True),
+        ("isaacsimenvs.tasks.play.pose_viewer", "PlayPoseViewerWrapper", True),
+        ("isaacsimenvs.tasks.multilink_cartpole.pose_viewer", "CartpolePoseViewerWrapper", False),
+    ],
+)
+def test_network_kwargs_are_offered_by_signature_not_module_name(module_name, class_name, expected):
+    import importlib
+    import inspect
+
+    viewer_cls = getattr(importlib.import_module(module_name), class_name)
+    accepted = inspect.signature(viewer_cls.__init__).parameters
+    assert ("github_raw_base" in accepted) is expected
+    assert ("url_check" in accepted) is expected
+
+
+def test_cloth_viewer_module_name_defeats_the_old_substring_test():
+    """Pin the exact reason the old gate failed, so it cannot be reintroduced."""
+    module_name = "isaacsimenvs.tasks.cloth.pose_viewer"
+    assert "play.pose_viewer" not in module_name

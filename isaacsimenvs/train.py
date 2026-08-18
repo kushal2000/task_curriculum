@@ -306,11 +306,24 @@ def main() -> None:
                     env_id=args_cli.capture_viewer_env_id,
                     wandb_key=args_cli.capture_viewer_wandb_key,
                 )
-                # Only the robot viewer has to fetch meshes over the network; the
-                # cartpole's URDF is primitives and gets embedded, so it takes neither
-                # of these.
-                if "play.pose_viewer" in module_name:
+                # Only viewers that fetch meshes over the network take these; the cartpole's
+                # URDF is primitives and gets embedded, so it accepts neither.
+                #
+                # Decided by INSPECTING THE SIGNATURE, not by matching the module name. The
+                # previous test was `"play.pose_viewer" in module_name`, which is false for
+                # `isaacsimenvs.tasks.cloth.pose_viewer` even though ClothPoseViewerWrapper
+                # subclasses PlayPoseViewerWrapper and needs both -- so cloth silently ran with
+                # `github_raw_base=None` and `url_check="skip"`. The first was masked, because
+                # `_derive_github_raw_base()` rebuilds the same URL from `git remote` + the
+                # current branch; the second was a live loss, since the URL check is exactly what
+                # would have reported the branch not being pushed instead of leaving every mesh
+                # to 404 silently in the browser.
+                import inspect
+
+                accepted = inspect.signature(viewer_cls.__init__).parameters
+                if "github_raw_base" in accepted:
                     viewer_kwargs["github_raw_base"] = args_cli.capture_viewer_github_raw_base
+                if "url_check" in accepted:
                     viewer_kwargs["url_check"] = args_cli.capture_viewer_url_check
                 env = viewer_cls(env, **viewer_kwargs)
 

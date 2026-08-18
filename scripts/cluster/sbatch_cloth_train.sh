@@ -48,6 +48,15 @@ export PYTHONUNBUFFERED=1
 # sockets on the node long enough to hang the next one that reuses the name. Observed exactly that:
 # a resubmit under the same name on the same node reached "Started to train" on all four ranks and
 # then hung on the parameter broadcast. Appending the job id makes the port unique per job.
+# The viewer's robot meshes (~41 MB of STLs) are fetched by the BROWSER from the public repo at
+# this branch, so the branch must be pushed or every mesh 404s for the whole run. Checked here
+# rather than left to `--capture_viewer_url_check warn`, which only reports once the first capture
+# is written -- minutes in, buried in the log.
+if ! git ls-remote --exit-code --heads origin "$(git rev-parse --abbrev-ref HEAD)" >/dev/null 2>&1; then
+    echo "[train] WARNING: branch $(git rev-parse --abbrev-ref HEAD) is not on origin --" \
+         "viewer meshes will 404. Push it, or drop --capture_viewer." >&2
+fi
+
 RUN_NAME="${1:-cloth_fold_sapg}_${SLURM_JOB_ID}"
 NGPU="${NGPU:-4}"
 CHECKPOINT="${CHECKPOINT:-/share/portal/kk837/simtoolreal/pretrained_policy/model.pth}"
@@ -79,6 +88,7 @@ scripts/newton_py -m torch.distributed.run \
     --capture_viewer_interval 200 \
     --capture_viewer_env_id 0 \
     --capture_viewer_github_raw_base "https://raw.githubusercontent.com/kushal2000/task_curriculum/${BRANCH}/" \
+    --capture_viewer_url_check warn \
     --wandb_activate \
     --wandb_project cloth_folding \
     --wandb_group sapg_finetune \
