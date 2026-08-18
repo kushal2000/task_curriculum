@@ -664,10 +664,17 @@ class ClothEnv(PlayNewtonEnv):
                 # Which columns, so the term can be identified against `cfg.obs.obs_list`.
                 cols = torch.nonzero(~torch.isfinite(flat[ids[0]])).flatten().tolist()
                 where = f" cols {cols[:12]}{'...' if len(cols) > 12 else ''} of {flat.shape[1]}"
+            # The OFFENDING envs' own progress, not `episode_length_buf.max()`. The max is taken
+            # over all envs, so it is only equal to the offender's step while the envs are still
+            # synchronised -- i.e. during the first episode. After that it saturates near
+            # `episode_length` and every report reads "at step 599", which looks like the failure
+            # clusters at the end of an episode when it does not. Per-env progress says when the
+            # divergence actually happened.
+            steps = self.episode_length_buf[bad].tolist()
             msg = (
                 f"cloth: non-finite {name} in envs {ids[:8]}"
                 f"{'...' if len(ids) > 8 else ''} ({len(ids)}/{self.num_envs}) "
-                f"at step {int(self.episode_length_buf.max().item())}{where}"
+                f"at env-step {steps[:8]}{'...' if len(steps) > 8 else ''}{where}"
             )
             if self.cfg.cloth.nan_policy == "raise":
                 raise RuntimeError(msg)
