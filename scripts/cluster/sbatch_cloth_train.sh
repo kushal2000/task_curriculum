@@ -32,10 +32,23 @@ set -uo pipefail
 cd /share/portal/kk837/task_curriculum
 mkdir -p slurm_logs
 
+# Pin gloo to loopback. rl_games ignores torchrun's MASTER_ADDR/MASTER_PORT and builds its own
+# `tcp://127.0.0.1:<hashed port>` process group with a TWO HOUR timeout (`a2c_common.py:110`), so
+# anything that stops gloo connecting shows up as a silent multi-hour hang rather than an error.
+# These nodes are multi-homed and gloo's interface auto-discovery is a known hang there; the group
+# is loopback-only anyway since --nnodes=1.
+export GLOO_SOCKET_IFNAME=lo
+export TP_SOCKET_IFNAME=lo
+
 export OMNI_KIT_ACCEPT_EULA=YES
 export PYTHONUNBUFFERED=1
 
-RUN_NAME="${1:-cloth_fold_sapg}"
+# The gloo rendezvous port is 23400 + md5(experiment_name[3:]) %% 500 (`a2c_common.py:110`), so two
+# runs whose names collide mod 500 fight over the same port -- and a CANCELLED run leaves its
+# sockets on the node long enough to hang the next one that reuses the name. Observed exactly that:
+# a resubmit under the same name on the same node reached "Started to train" on all four ranks and
+# then hung on the parameter broadcast. Appending the job id makes the port unique per job.
+RUN_NAME="${1:-cloth_fold_sapg}_${SLURM_JOB_ID}"
 NGPU="${NGPU:-4}"
 CHECKPOINT="${CHECKPOINT:-/share/portal/kk837/simtoolreal/pretrained_policy/model.pth}"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"

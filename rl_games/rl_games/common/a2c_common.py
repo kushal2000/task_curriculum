@@ -107,7 +107,16 @@ class A2CBase(BaseAlgorithm):
 
             import hashlib
             from datetime import timedelta
-            dist.init_process_group("gloo", rank=self.global_rank, world_size=self.world_size, init_method=f'tcp://127.0.0.1:{23400 + int(hashlib.md5(self.experiment_name[3:].encode("utf-8")).hexdigest(), 16) % 500}', timeout=timedelta(hours=2))
+            # Do not build a second process group if one already exists. Under torchrun the
+            # launcher's elastic agent sets TORCHELASTIC_USE_AGENT_STORE, so
+            # `rendezvous._create_c10d_store` attaches to the AGENT's store on MASTER_PORT --
+            # while the hand-rolled `tcp://127.0.0.1:<hashed port>` below asks for a different one.
+            # The two disagree and the store creation blocks for the full two-hour timeout with no
+            # output: a silent hang carrying no information about its cause. `isaacsimenvs/train.py
+            # --distributed` therefore initialises the group first via env://, which is torchrun's
+            # own rendezvous, and this branch becomes a no-op.
+            if not dist.is_initialized():
+                dist.init_process_group("gloo", rank=self.global_rank, world_size=self.world_size, init_method=f'tcp://127.0.0.1:{23400 + int(hashlib.md5(self.experiment_name[3:].encode("utf-8")).hexdigest(), 16) % 500}', timeout=timedelta(hours=2))
 
             self.device_name = f'cuda:{self.local_rank}'
             config['device'] = self.device_name

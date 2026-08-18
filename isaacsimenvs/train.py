@@ -29,6 +29,7 @@ CLI shape:
 from __future__ import annotations
 
 import argparse
+from datetime import timedelta
 import math
 import os
 import sys
@@ -61,7 +62,27 @@ def _pose_viewer_target(task_id: str) -> str | None:
     return None
 
 
+def _arm_hang_watchdog() -> None:
+    """Dump every thread's Python stack if the process stops making progress.
+
+    rl_games' distributed path builds its own gloo group with a TWO HOUR timeout
+    (`a2c_common.py:110`), so any failure in that region presents as a silent freeze carrying no
+    information about its cause -- which is why the 4-GPU hang resisted several rounds of inference
+    from the symptom alone. Set CLOTH_HANG_WATCHDOG=<seconds> to turn the freeze into a traceback.
+    """
+    import faulthandler
+
+    secs = os.getenv("CLOTH_HANG_WATCHDOG")
+    if not secs:
+        return
+    faulthandler.enable()
+    faulthandler.dump_traceback_later(float(secs), repeat=True, exit=False)
+    print(f"[train] hang watchdog armed: stacks every {secs}s", flush=True)
+
+
 def main() -> None:
+    _arm_hang_watchdog()
+
     from isaaclab.app import AppLauncher
 
     parser = argparse.ArgumentParser(description="Train isaacsimenvs task via rl_games.")
@@ -186,6 +207,12 @@ def main() -> None:
         if args_cli.single_variant:
             use_single_object_variant()
 
+        # Only rank 0 may own side-effecting, singleton outputs: wandb runs and viewer HTML.
+        # Without this all four ranks create the SAME wandb run id and the server rejects the
+        # duplicates with `409 ... Duplicate entry for key 'runs.PRIMARY'`, while four copies
+        # of every capture race over the same files.
+        is_main_rank = int(os.getenv("RANK", "0")) == 0
+
         rl_device = args_cli.rl_device
         if args_cli.distributed:
             local_rank = int(os.getenv("LOCAL_RANK", "0"))
@@ -196,6 +223,21 @@ def main() -> None:
             # nothing but a larger batch. Mirrors IsaacLab's own train_rl_games.py:122-126.
             agent_cfg["params"]["seed"] += int(os.getenv("RANK", "0"))
             agent_cfg["params"]["config"]["multi_gpu"] = True
+
+            # Initialise the process group HERE, using torchrun's own rendezvous (env:// reads
+            # MASTER_ADDR/MASTER_PORT/RANK/WORLD_SIZE). rl_games would otherwise build its own
+            # `tcp://127.0.0.1:<hashed port>` group, which conflicts with torchrun's elastic agent
+            # store and hangs in `_create_c10d_store` for two hours without printing anything.
+            # `a2c_common.py:110` is guarded with `if not dist.is_initialized()`, so it defers.
+            import torch.distributed as dist
+
+            if not dist.is_initialized():
+                dist.init_process_group("gloo", timeout=timedelta(minutes=30))
+                print(
+                    f"[train] process group ready: gloo, rank {dist.get_rank()}/"
+                    f"{dist.get_world_size()}",
+                    flush=True,
+                )
             print(
                 f"[train] distributed: rank {os.getenv('RANK', '0')}/"
                 f"{os.getenv('WORLD_SIZE', '1')} bound to {rl_device}",
@@ -230,7 +272,7 @@ def main() -> None:
                 disable_logger=True,
             )
 
-        if args_cli.capture_viewer:
+        if args_cli.capture_viewer and is_main_rank:
             from pathlib import Path
 
             target = _pose_viewer_target(args_cli.task)
@@ -273,7 +315,7 @@ def main() -> None:
         )
 
         observers = [EnvStatsAlgoObserver()]
-        if args_cli.wandb_activate:
+        if args_cli.wandb_activate and is_main_rank:
             from isaacsimenvs.utils.wandb_utils import WandbAlgoObserver
 
             # WandbAlgoObserver expects attribute access (cfg.wandb_project,
