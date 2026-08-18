@@ -205,7 +205,7 @@ cloth:
   thickness: 0.012                       # 12 mm; spacing is 12.5 mm, so just inside the limit
   proxy_mode: staggered                  # the cable result: lagged shakes deformables loose
   substeps: 2
-  vbd_iterations: 80
+  vbd_iterations: 10                     # Newton's default; 80 cost 5.8x for no quality gain
   # A GENUINE drop. The table's collision surface is at table_reset_z + 0.150, not + 0.045, so the
   # old 0.15 spawned the sheet 0.2 mm above it -- in contact -- and it was ejected upward at
   # ~1.7 m/s every single episode. See ClothCfg.start_height.

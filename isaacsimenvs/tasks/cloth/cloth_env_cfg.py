@@ -155,7 +155,32 @@ class ClothCfg:
     """Sharp optimum on the cable: 1 peaked at 37 m/s, 4/8/16 degraded monotonically. Fewer, larger
     substeps mean fewer proxy exchanges per step, which is where the energy enters."""
 
-    vbd_iterations: int = 80
+    vbd_iterations: int = 10
+    """VBD solver iterations per substep.
+
+    **Newton's own default, and 8x cheaper than the 80 this inherited from the cable.** Measured at
+    256 envs on pinned hardware, per-step cost is almost entirely this term:
+
+        ms/step ~ 45.5 + 11.52 x iterations
+
+    which fits every point (10 -> 160.7, 20 -> 275.9, 40 -> 489.0, 80 -> 933.7 measured). At 80
+    iterations ~96% of the step is VBD. Dropping to 10 gives 5.80x throughput at 1024 envs
+    (1077 -> 6253 env sps) with memory unchanged at 44.85 GB, and removes the ~20% per-step
+    step-up previously seen above 128 envs -- that overhead was itself iteration work, so the scene
+    now scales flat from 1 to 1024 envs.
+
+    Quality is unchanged, on five seeds / 160 episodes each side:
+
+        80 iters: 2/160 goals, best_fold_err 0.0775 +- 0.0028, falls 2-5
+        10 iters: 3/160 goals, best_fold_err 0.0792 +- 0.0012, falls 2-4
+
+    The error bars overlap heavily and nothing is monotonic in iteration count, so the claim is "10
+    is not worse", not "10 is better". 80 was never validated for the cloth; 10 is the documented
+    default of both `SolverVBD` (`solver_vbd.py:233`) and `isaaclab_contrib`'s VBD config, and
+    Newton's own coupled-solver example and ADMM test use 10 and 5.
+
+    That best_fold_err is flat across an 8x range also rules something out: the ~0.077 stopping
+    point is not a solver-convergence limit."""
     coupler_iterations: int = 1
     """Raising this made the cable *worse* at every setting tried."""
 
