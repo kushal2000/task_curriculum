@@ -94,3 +94,83 @@ def test_deformables_survive_the_opt_out():
     compact = html.replace(" ", "")
     assert "cloth_moving" in compact
     assert "fold_goal" in compact
+
+
+# --------------------------------------------------------------------------------------------
+# The tests above exercise `build_pose_viewer_html` directly, which proves the FUNCTION honours
+# the flag. It does not prove `ClothPoseViewerWrapper` passes it. This one drives the real
+# wrapper method, which is the wiring that actually shipped.
+# --------------------------------------------------------------------------------------------
+
+def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10) -> str:
+    import types
+
+    from isaacsimenvs.tasks.cloth.pose_viewer import ClothPoseViewerWrapper
+
+    n_particles = resolution * resolution
+    n_half = resolution * ((resolution + 1) // 2)
+    pose = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+    frames = [
+        {
+            "robot_joint_names": ["j0"],
+            "robot_joint_pos": np.zeros(1),
+            "robot_base_pose": np.asarray(pose),
+            "table_pose": np.asarray(pose),
+            "object_pose": np.asarray(pose),
+            "goal_pose": np.asarray(pose),
+            "cloth_vertices": np.zeros((n_particles, 3)).tolist(),
+            "goal_vertices": np.zeros((n_half, 3)).tolist(),
+            "fold_err": 0.08,
+            "footprint": 1.0,
+        }
+        for _ in range(3)
+    ]
+
+    inner = types.SimpleNamespace(
+        cfg=types.SimpleNamespace(
+            cloth=types.SimpleNamespace(size=size, resolution=resolution, fold_axis="x")
+        )
+    )
+    # `object.__new__` skips gym.Wrapper.__init__, which would need a real env. `_build_html`
+    # touches only the attributes set below.
+    wrapper = object.__new__(ClothPoseViewerWrapper)
+    wrapper.env = types.SimpleNamespace(unwrapped=inner)
+    wrapper._object_urdf_text = HAMMER_URDF
+    wrapper._table_urdf_text = TABLE_URDF
+    wrapper._hole_urdf_text = None
+    wrapper._object_urdf_path = None
+    wrapper._table_urdf_path = None
+    wrapper._hole_urdf_path = None
+    wrapper.github_raw_base = "https://raw.githubusercontent.com/kushal2000/task_curriculum/main/"
+    wrapper.url_check = "skip"
+    return ClothPoseViewerWrapper._build_html(wrapper, frames)
+
+
+def test_real_cloth_wrapper_emits_no_hammer():
+    html = _cloth_wrapper_html()
+    compact = html.replace(" ", "")
+    assert '"name":"object"' not in compact
+    assert '"name":"goal"' not in compact
+    assert "cylinder" not in html, "hammer handle survived the real wrapper path"
+    assert "0.153" not in html
+
+
+def test_real_cloth_wrapper_still_emits_the_three_cloth_channels():
+    compact = _cloth_wrapper_html().replace(" ", "")
+    for channel in ("cloth_moving", "cloth_stationary", "fold_goal"):
+        assert channel in compact, f"{channel} missing"
+    # Robot and table must survive, or the opt-out dropped more than the two tool glyphs.
+    assert '"name":"table"' in compact
+    assert '"name":"robot"' in compact
+
+
+def test_the_hammer_strings_are_a_discriminating_check():
+    """Guard against the assertions above going vacuous.
+
+    Every 'not in' assertion passes trivially if the strings stop appearing for an unrelated
+    reason (a renamed key, a changed serialisation). Drive the same builder with the flag ON and
+    require the hammer to come back, so the checks are known to still discriminate.
+    """
+    html = _html()  # draw_rigid_object defaults True
+    assert "cylinder" in html
+    assert "0.153" in html
