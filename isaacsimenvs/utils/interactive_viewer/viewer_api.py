@@ -80,6 +80,7 @@ def build_trajectory_payload(
     object_poses: dict[str, np.ndarray] | None = None,
     robot_base_poses=None,
     robot_name: str = "robot",
+    deformables: dict | None = None,
 ) -> dict:
     """
     Build the viewer trajectory payload from array-shaped inputs.
@@ -89,6 +90,7 @@ def build_trajectory_payload(
     - timestamps: (T,)
     - object_poses[name]: (T, 7) with columns [x, y, z, qx, qy, qz, qw]
     - robot_base_poses: (T, 7) with columns [x, y, z, qx, qy, qz, qw]
+    - deformables[name]: {"indices": (F*3,), "vertices": (T, V, 3), "color": (3,)}
 
     Derived shapes inside the payload:
     - joint positions: (T, J)
@@ -123,6 +125,9 @@ def build_trajectory_payload(
         "object_trajectories": _build_object_trajectories(object_poses, num_frames=num_frames),
     }
 
+    if deformables:
+        trajectory["deformables"] = _build_deformables(deformables, num_frames=num_frames)
+
     if robot_base_poses is not None:
         base_positions, base_quats = _split_pose7_array(robot_base_poses, name="robot_base_poses")
         if base_positions.shape[0] != num_frames:
@@ -137,6 +142,51 @@ def build_trajectory_payload(
     return trajectory
 
 
+def _build_deformables(deformables: dict, *, num_frames: int) -> dict:
+    """Serialize per-frame vertex trajectories for surfaces that have no rigid pose.
+
+    A cloth is not a rigid body, so it cannot be expressed as the (T, 7) pose an object trajectory
+    carries -- the sheet's shape IS the state. Each entry is a static triangle index list plus a
+    (T, V, 3) vertex trajectory.
+
+    This is DATA, not an asset: the sheet is a procedural grid, so nothing is fetched over the
+    network and nothing is uploaded alongside the HTML. A 9x9 sheet is 81 vertices x 3 floats per
+    frame -- about 1 KB per frame at 6 decimal places, against the ~41 MB of robot STLs which the
+    browser fetches from the public repo instead of embedding.
+    """
+    out = {}
+    for name, spec in deformables.items():
+        vertices = np.asarray(spec["vertices"], dtype=float)
+        if vertices.ndim != 3 or vertices.shape[2] != 3:
+            raise ValueError(
+                f"deformables['{name}']['vertices'] must be (T, V, 3). Got {vertices.shape}."
+            )
+        if vertices.shape[0] != num_frames:
+            raise ValueError(
+                f"deformables['{name}'] must have {num_frames} frames. Got {vertices.shape[0]}."
+            )
+        indices = np.asarray(spec["indices"], dtype=int).reshape(-1)
+        if indices.size % 3 != 0:
+            raise ValueError(
+                f"deformables['{name}']['indices'] must be a flat triangle list. Got {indices.size}."
+            )
+        if indices.size and int(indices.max()) >= vertices.shape[1]:
+            raise ValueError(
+                f"deformables['{name}'] index {int(indices.max())} exceeds vertex count "
+                f"{vertices.shape[1]}."
+            )
+        entry = {
+            "indices": [int(i) for i in indices],
+            "vertices": [_serialize_array(frame) for frame in vertices],
+        }
+        if spec.get("color") is not None:
+            entry["color"] = [float(c) for c in spec["color"]]
+        if spec.get("opacity") is not None:
+            entry["opacity"] = float(spec["opacity"])
+        out[name] = entry
+    return out
+
+
 def create_html(
     *,
     joint_names: list[str],
@@ -148,6 +198,7 @@ def create_html(
     dt: float | None = None,
     robot_name: str = "robot",
     template_path: Path = DEFAULT_TEMPLATE_PATH,
+    deformables: dict | None = None,
 ) -> str:
     """
     Render a full viewer HTML string from array-shaped robot and object trajectories.
@@ -166,6 +217,7 @@ def create_html(
         object_poses=object_poses,
         robot_base_poses=robot_base_poses,
         robot_name=robot_name,
+        deformables=deformables,
     )
     return render_template(template_path, {"robots": robots, "trajectory": trajectory})
 

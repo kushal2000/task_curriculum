@@ -33,7 +33,7 @@ sim:
 #    so asset metadata lives under `assets:` below).
 # -----------------------------------------------------------------------------
 scene:
-  num_envs: 8192
+  num_envs: 768                          # 6 x 128 SAPG blocks; see cfg/train/ClothSAPG.yaml
   env_spacing: 1.2
   # Both must be false for MultiUsdFileCfg to spawn per-env distinct
   # handle_head USDs: replicate_physics=false makes PhysX parse each env
@@ -105,6 +105,12 @@ reward:
 # 6) reset — initial-state distribution + goal sampling
 # -----------------------------------------------------------------------------
 reset:
+  # KEPT ON, unlike the domain_randomization block. This is the initial-state distribution, not
+  # sensor/actuator randomisation: zeroing it would make all 768 envs start identically every
+  # episode, removing the state diversity RL needs and inviting overfit to one configuration.
+  # play2perfect's finetune launchers keep these at exactly these values.
+  # For cloth only X and Y reach the sheet -- `ClothAsRigidObject.write_root_pose_to_sim` forces
+  # z = spawn_z and drops the orientation draw, so _z and table_reset_z_range are already inert.
   reset_position_noise_x: 0.1
   reset_position_noise_y: 0.1
   reset_position_noise_z: 0.02
@@ -130,12 +136,12 @@ reset:
 # -----------------------------------------------------------------------------
 termination:
   episode_length: 600                 # policy steps (600 * 2 * 1/120 = 10s)
-  success_tolerance: 0.075            # curriculum start
-  target_success_tolerance: 0.01      # curriculum floor
+  success_tolerance: 0.04             # == target, so the tolerance curriculum is a no-op
+  target_success_tolerance: 0.04      # == start: play2perfect disables the curriculum this way
   eval_success_tolerance: null
-  success_steps: 10
+  success_steps: 1                    # lump-sum bonus on FIRST entry, as in the finetune launchers
   max_consecutive_successes: 50
-  force_consecutive_near_goal_steps: false
+  force_consecutive_near_goal_steps: true
   tolerance_curriculum_increment: 0.9
   tolerance_curriculum_interval: 3000
 
@@ -143,31 +149,41 @@ termination:
 # 8) domain_randomization — sim2real essentials (delays, noise, impulses)
 # -----------------------------------------------------------------------------
 domain_randomization:
+  # ALL OFF for the finetune. play2perfect keeps DR on during assembly finetuning for sim2real
+  # robustness ("we apply domain randomization during assembly finetuning to improve robustness to
+  # perception errors, control latency, and contact-dynamics mismatch"); this run deliberately
+  # departs from that to get the cleanest possible learning signal first, on a task whose reward
+  # events are rare (3 folds / 160 episodes at baseline). Turn it back on for a transfer run.
+  #
+  # NOTE reset noise is NOT part of this block and is deliberately KEPT -- see `reset:` above.
+
   # obs / action latency
-  use_obs_delay: true
+  use_obs_delay: false
   obs_delay_max: 3
-  use_action_delay: true
+  use_action_delay: false
   action_delay_max: 3
 
   # object state delay + noise
-  use_object_state_delay_noise: true
+  use_object_state_delay_noise: false
   object_state_delay_max: 10
-  object_state_xyz_noise_std: 0.01
-  object_state_rotation_noise_degrees: 5.0
+  object_state_xyz_noise_std: 0.0
+  object_state_rotation_noise_degrees: 0.0
   object_scale_noise_multiplier_range: [1.0, 1.0]
 
   # per-step obs noise
-  joint_velocity_obs_noise_std: 0.1
+  joint_velocity_obs_noise_std: 0.0
 
-  # random force/torque impulses
-  force_scale: 20.0
-  force_prob_range: [0.001, 0.1]
+  # random force/torque impulses. Already inert for cloth regardless --
+  # `ClothAsRigidObject.set_external_force_and_torque` is a documented no-op -- but zeroed so the
+  # config states the intent rather than relying on the adapter.
+  force_scale: 0.0
+  force_prob_range: [0.0001, 0.0001]
   force_decay: 0.0
   force_decay_interval: 0.08
   force_only_when_lifted: true
 
-  torque_scale: 2.0
-  torque_prob_range: [0.001, 0.1]
+  torque_scale: 0.0
+  torque_prob_range: [0.0001, 0.0001]
   torque_decay: 0.0
   torque_decay_interval: 0.08
   torque_only_when_lifted: true

@@ -46,6 +46,6 @@ gym.register(
         "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.cloth_env_cfg:ClothEnvCfg",
         "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "Cloth.yaml"),
         "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
-        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
     },
 )

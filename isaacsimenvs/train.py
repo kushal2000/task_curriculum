@@ -46,6 +46,10 @@ import sys
 _POSE_VIEWERS = {
     "MultiLinkCartpole": "isaacsimenvs.tasks.multilink_cartpole.pose_viewer:CartpolePoseViewerWrapper",
     "BottleFlip": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",
+    # Cloth before Play: the cloth viewer adds the sheet and its fold target as deformable
+    # channels, which a rigid-pose viewer cannot represent. Substring matching is first-wins, and
+    # the cloth task id does not contain "Play", but keep it above for clarity.
+    "Cloth": "isaacsimenvs.tasks.cloth.pose_viewer:ClothPoseViewerWrapper",
     "Play": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",
 }
 
@@ -77,6 +81,12 @@ def main() -> None:
         choices=("resume", "weights"),
         default="resume",
         help="resume restores optimizer/rollout/env state; weights starts fresh from model weights.",
+    )
+    parser.add_argument(
+        "--distributed",
+        action="store_true",
+        help="Multi-GPU training under torchrun. Binds this rank to cuda:$LOCAL_RANK and sets "
+        "agent.params.config.multi_gpu, without which every rank lands on cuda:0.",
     )
     parser.add_argument("--rl_device", default="cuda:0")
     parser.add_argument("--sim_device", default="cuda:0")
@@ -148,7 +158,30 @@ def main() -> None:
 
         # sim_device CLI flag still wins — it's a launcher-level concern, not
         # something we expect in the task YAML.
-        env_cfg.sim.device = args_cli.sim_device
+        # Under torchrun each rank MUST bind its own device. torchrun sets LOCAL_RANK but not
+        # CUDA_VISIBLE_DEVICES, and both --rl_device and --sim_device default to cuda:0 -- so
+        # without this every rank puts its whole scene on GPU 0 and dies in Warp's allocator,
+        # which presents as an out-of-memory bug rather than a device-binding one. The same trap
+        # was hit once already in the throughput benchmark (docs/phase4_cable_env.md:664).
+        import torch
+
+        rl_device = args_cli.rl_device
+        if args_cli.distributed:
+            local_rank = int(os.getenv("LOCAL_RANK", "0"))
+            rl_device = f"cuda:{local_rank}"
+            env_cfg.sim.device = rl_device
+            torch.cuda.set_device(local_rank)
+            # Offset the seed per rank, or every rank explores identically and the extra GPUs buy
+            # nothing but a larger batch. Mirrors IsaacLab's own train_rl_games.py:122-126.
+            agent_cfg["params"]["seed"] += int(os.getenv("RANK", "0"))
+            agent_cfg["params"]["config"]["multi_gpu"] = True
+            print(
+                f"[train] distributed: rank {os.getenv('RANK', '0')}/"
+                f"{os.getenv('WORLD_SIZE', '1')} bound to {rl_device}",
+                flush=True,
+            )
+        else:
+            env_cfg.sim.device = args_cli.sim_device
 
         # render_mode="rgb_array" makes DirectRLEnv.render() lazily create a
         # single omni.replicator render_product at cfg.viewer.cam_prim_path —
@@ -213,7 +246,7 @@ def main() -> None:
         clip_actions = float(agent_cfg["params"]["env"].get("clip_actions", math.inf))
         register_rlgames_env(
             env,
-            rl_device=args_cli.rl_device,
+            rl_device=rl_device,
             clip_obs=clip_obs,
             clip_actions=clip_actions,
         )
@@ -243,8 +276,8 @@ def main() -> None:
         # Co-locate rl_games artifacts (checkpoints, summaries) with the Hydra
         # run dir so slurm logs + config + videos all live together.
         agent_cfg["params"]["config"]["train_dir"] = hydra_run_dir
-        agent_cfg["params"]["config"]["device"] = args_cli.rl_device
-        agent_cfg["params"]["config"]["device_name"] = args_cli.rl_device
+        agent_cfg["params"]["config"]["device"] = rl_device
+        agent_cfg["params"]["config"]["device_name"] = rl_device
 
         runner.load(agent_cfg)
         runner.reset()

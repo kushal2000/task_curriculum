@@ -224,6 +224,10 @@
       const positions = trajectory.positions;
       const jointNames = trajectory.joint_names;
       const objectTrajectories = trajectory.object_trajectories ?? {};
+      const deformables = trajectory.deformables ?? {};
+      // name -> { mesh, positionAttr }. A deformable has no rigid pose: its vertices ARE the
+      // state, so each frame rewrites the position buffer rather than setting a transform.
+      const deformableMeshes = new Map();
       const robotBaseTrajectory = trajectory.base_trajectory ?? null;
 
       if (!timestamps.length || timestamps.length !== positions.length) {
@@ -264,6 +268,28 @@
       const topLight = new THREE.PointLight(0xffffff, 1.2, 0, 2);
       topLight.position.set(0.0, 0.6, 2.2);
       scene.add(topLight);
+
+      Object.entries(deformables).forEach(([name, spec]) => {
+        const numVerts = spec.vertices[0].length;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(numVerts * 3);
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.setIndex(spec.indices);
+        const color = spec.color ? new THREE.Color(...spec.color) : new THREE.Color(0.85, 0.35, 0.55);
+        const material = new THREE.MeshStandardMaterial({
+          color,
+          // A cloth is a surface with no inside, and it folds over itself -- single-sided would
+          // render half of it invisible the moment it flips.
+          side: THREE.DoubleSide,
+          transparent: spec.opacity !== undefined && spec.opacity < 1.0,
+          opacity: spec.opacity ?? 1.0,
+          roughness: 0.9,
+          metalness: 0.0,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+        deformableMeshes.set(name, { mesh, geometry });
+      });
 
       const floor = new THREE.Mesh(
         new THREE.CircleGeometry(3.5, 96),
@@ -381,6 +407,26 @@
           if (objectQuat) {
             objectRobot.quaternion.set(...objectQuat);
           }
+        });
+
+        Object.entries(deformables).forEach(([name, spec]) => {
+          const entry = deformableMeshes.get(name);
+          if (!entry) {
+            throw new Error(`Deformable "${name}" has no mesh.`);
+          }
+          const frameVerts = spec.vertices[currentFrame];
+          if (!frameVerts) {
+            return;
+          }
+          const attr = entry.geometry.getAttribute("position");
+          for (let i = 0; i < frameVerts.length; i += 1) {
+            attr.setXYZ(i, frameVerts[i][0], frameVerts[i][1], frameVerts[i][2]);
+          }
+          attr.needsUpdate = true;
+          // Normals must be recomputed or the sheet keeps the shading of its first frame and a
+          // fold reads as a flat sheet that changed colour.
+          entry.geometry.computeVertexNormals();
+          entry.geometry.computeBoundingSphere();
         });
 
         timelineEl.value = String(currentFrame);

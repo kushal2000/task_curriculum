@@ -1,0 +1,158 @@
+# ClothSAPG — SAPG finetune of the Play policy onto cloth folding.
+#
+# Derived from PlaySAPG.yaml. Every difference is forced by a measurement or a hard constraint.
+#
+#   expl_coef_block_size: 128   (was 4096)
+#     `a2c_network.sigma` in the pretrained checkpoint is (6, 29) -- a PER-BLOCK sigma parameter, so
+#     num_blocks is baked into the weights and must stay 6 or the checkpoint will not load. Block
+#     SIZE is free (play2perfect dropped it 4096 -> 2048 for their finetune). At 768 envs/GPU
+#     that makes the block 128. `a2c_common.py:329` asserts num_actors % block == 0, and
+#     num_actors is PER RANK under multi_gpu.
+#
+#   horizon_length: 32   (was 16)
+#   minibatch_size: 24576   (was 98304)
+#     `batch_size = horizon_length * num_actors` is PER RANK (`a2c_common.py:243`); world_size never
+#     enters it. Only the GRADIENT is aggregated, via all_reduce(SUM)/world_size in
+#     `trancate_gradients_and_step` (`:360-375`). So one optimizer step sees
+#     world_size * minibatch_size = 4 * 24576 = 98304 samples -- exactly play2perfect's 98304.
+#
+#     768 x 32 is the only combination that hits it exactly under both constraints:
+#       horizon 24 / 1024 envs -> 1024 not divisible by 6
+#       horizon 16 / 1536 envs -> ~66 GB, does not fit
+#       horizon 32 /  768 envs -> 36.46 GB measured, 6 x 128 blocks    <- this
+#     (1008 x 24 was the near miss at 96,768, -1.6%.)
+#
+#     One minibatch per rank keeps the live assert at `a2c_common.py:537` satisfied:
+#     (horizon_length * total_agents // num_minibatches) %% seq_length == 0, with seq_length 16.
+#     NOTE `assert(batch_size %% minibatch_size == 0)` at `:252` is COMMENTED OUT upstream, so a
+#     non-dividing value would silently floor and drop the remainder rather than error.
+#
+#   multi_gpu: True
+#     Requires `train.py --distributed`, which binds each rank to cuda:$LOCAL_RANK. Without it every
+#     rank lands on cuda:0 -- the trap already hit once in the throughput work.
+#
+#   name: 0_cloth_fold_sapg
+#     Keeps the `<int>_` prefix (`a2c_common.py:84` parses policy_idx from it). The rendezvous port
+#     is 23400 + md5(name[3:]) %% 500 (`:110`), so concurrent runs need distinct names.
+#
+# Measured at 768 envs/GPU with the policy resident: 36.46 GB of 48, 3818 env sps
+# (~15.3k across 4 GPUs).
+
+params:
+  seed: 42
+
+  env:
+    clip_observations: 10.0   # matches env.obs.clamp_abs_observations
+    clip_actions: 1.0
+
+  algo:
+    name: a2c_continuous
+
+  model:
+    name: continuous_a2c_logstd
+
+  network:
+    name: actor_critic
+    separate: False
+    space:
+      continuous:
+        mu_activation: None
+        sigma_activation: None
+        mu_init:
+          name: default
+        sigma_init:
+          name: const_initializer
+          val: 0
+        fixed_sigma: coef_cond    # SAPG requires coef_cond (not 'fixed')
+    mlp:
+      units: [1024, 1024, 512, 512]
+      activation: elu
+      d2rl: False
+      initializer:
+        name: default
+      regularizer:
+        name: None
+    rnn:
+      name: lstm
+      units: 1024
+      layers: 1
+      before_mlp: True
+      layer_norm: True
+
+  load_checkpoint: False
+  load_path: ''
+
+  config:
+    # Must start with `<int>_` — our vendored rl_games parses policy_idx from the prefix.
+    name: 0_cloth_fold_sapg
+    full_experiment_name: ${.name}
+    env_name: rlgpu
+    device: 'cuda:0'
+    device_name: 'cuda:0'
+    multi_gpu: True
+    ppo: True
+    mixed_precision: True
+    normalize_input: True
+    normalize_value: True
+    value_bootstrap: True
+    normalize_advantage: True
+    reward_shaper:
+      scale_value: 0.01
+    num_actors: ${....env.scene.num_envs}
+    gamma: 0.99
+    tau: 0.95
+    learning_rate: 1e-4
+    lr_schedule: adaptive
+    schedule_type: standard
+    kl_threshold: 0.016
+    score_to_win: 1000000
+    max_epochs: 1000000
+    save_best_after: 100
+    save_frequency: 3000
+    print_stats: True
+    grad_norm: 1.0
+    entropy_coef: 0.0
+    truncate_grads: True
+    e_clip: 0.1
+    minibatch_size: 24576
+    mini_epochs: 2
+    critic_coef: 4.0
+    clip_value: True
+    horizon_length: 32
+    seq_length: 16
+    bounds_loss_coef: 0.0001
+
+    # Asymmetric critic (stateList > obsList)
+    central_value_config:
+      minibatch_size: 24576
+      mini_epochs: 2
+      learning_rate: 1e-4
+      kl_threshold: 0.016
+      clip_value: True
+      normalize_input: True
+      truncate_grads: True
+      network:
+        name: actor_critic
+        central_value: True
+        mlp:
+          units: [1024, 1024, 512, 512]
+          activation: elu
+          d2rl: False
+          initializer:
+            name: default
+          regularizer:
+            name: None
+
+    # === SAPG ===
+    use_others_experience: lf
+    off_policy_ratio: 1.0
+    expl_type: mixed_expl_learn_param
+    expl_reward_type: entropy
+    expl_reward_coef_embd_size: 32
+    expl_reward_coef_scale: 0.002
+    expl_coef_block_size: 128
+
+    player:
+      deterministic: False
+      games_num: 100000
+      print_stats: False

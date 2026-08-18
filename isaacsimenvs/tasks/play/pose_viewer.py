@@ -273,6 +273,7 @@ def build_pose_viewer_html(
     hole_urdf_path: Path | None = None,
     github_raw_base: str | None = None,
     url_check: str = "skip",
+    deformables: dict | None = None,
 ) -> str:
     """Build a self-contained-ish viewer HTML string from captured frames.
 
@@ -332,6 +333,7 @@ def build_pose_viewer_html(
         object_poses=object_poses,
         robot_base_poses=np.stack([frame["robot_base_pose"] for frame in frames]),
         timestamps=timestamps,
+        deformables=deformables,
     )
 
 
@@ -404,7 +406,7 @@ class PlayPoseViewerWrapper(gym.Wrapper):
             self._depth_frames_clean = []
 
         if self._frames is not None:
-            self._frames.append(capture_pose_viewer_frame(self.env.unwrapped, self.env_id))
+            self._frames.append(self._capture_frame())
             depth_frame = self._capture_student_image()
             if depth_frame is not None:
                 self._depth_frames.append(depth_frame)
@@ -459,16 +461,13 @@ class PlayPoseViewerWrapper(gym.Wrapper):
             self._finalize_capture(partial=True)
         return self.env.close()
 
-    def _finalize_capture(self, *, partial: bool = False) -> None:
-        assert self._frames is not None
-        frames = self._frames
-        if not frames:
-            self._frames = None
-            return
+    def _capture_frame(self) -> dict:
+        """One frame of viewer state. Subclasses extend this to add task-specific geometry."""
+        return capture_pose_viewer_frame(self.env.unwrapped, self.env_id)
 
-        suffix = "partial" if partial else f"step_{self._step:09d}"
-        html_path = self.output_dir / f"pose_viewer_{suffix}_{self._capture_index:04d}.html"
-        html_text = build_pose_viewer_html(
+    def _build_html(self, frames: list[dict]) -> str:
+        """Render captured frames to HTML. Subclasses override to pass extra channels."""
+        return build_pose_viewer_html(
             frames=frames,
             object_urdf_text=self._object_urdf_text,
             table_urdf_text=self._table_urdf_text,
@@ -479,6 +478,17 @@ class PlayPoseViewerWrapper(gym.Wrapper):
             github_raw_base=self.github_raw_base,
             url_check=self.url_check,
         )
+
+    def _finalize_capture(self, *, partial: bool = False) -> None:
+        assert self._frames is not None
+        frames = self._frames
+        if not frames:
+            self._frames = None
+            return
+
+        suffix = "partial" if partial else f"step_{self._step:09d}"
+        html_path = self.output_dir / f"pose_viewer_{suffix}_{self._capture_index:04d}.html"
+        html_text = self._build_html(frames)
         html_path.write_text(html_text, encoding="utf-8")
         print(f"[pose_viewer] wrote {len(frames)} frames to {html_path}", flush=True)
         self._log_wandb(html_text)
