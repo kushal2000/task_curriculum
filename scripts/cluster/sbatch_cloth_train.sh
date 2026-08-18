@@ -48,6 +48,16 @@ export PYTHONUNBUFFERED=1
 # sockets on the node long enough to hang the next one that reuses the name. Observed exactly that:
 # a resubmit under the same name on the same node reached "Started to train" on all four ranks and
 # then hung on the parameter broadcast. Appending the job id makes the port unique per job.
+# --capture_viewer_interval is counted in ENV STEPS, not epochs. PoseViewerWrapper.step()
+# increments per env.step() and triggers on `self._step % interval == 0`, so with len=600 the cycle
+# is (interval rounded up past len) steps -- at interval=200 that is 800 steps, a 75% capture duty
+# and a capture every ~2.4 min. Measured on job 197715: 598 captures over 24 h at 3.7 MB each,
+# 2.16 GB uploaded to wandb AND written to local disk, for a clip every couple of minutes that
+# nobody will watch. 12000 steps is ~36 min and ~40 captures, ~148 MB.
+#
+# The viewer runs on rank 0 only, and the other three ranks wait for it at the gradient all-reduce,
+# so capture duty is a throughput tax on the whole job as well as a storage one.
+
 # The viewer's robot meshes (~41 MB of STLs) are fetched by the BROWSER from the public repo at
 # this branch, so the branch must be pushed or every mesh 404s for the whole run. Checked here
 # rather than left to `--capture_viewer_url_check warn`, which only reports once the first capture
@@ -85,7 +95,7 @@ scripts/newton_py -m torch.distributed.run \
     --single_variant \
     --capture_viewer \
     --capture_viewer_len 600 \
-    --capture_viewer_interval 200 \
+    --capture_viewer_interval 12000 \
     --capture_viewer_env_id 0 \
     --capture_viewer_github_raw_base "https://raw.githubusercontent.com/kushal2000/task_curriculum/${BRANCH}/" \
     --capture_viewer_url_check warn \

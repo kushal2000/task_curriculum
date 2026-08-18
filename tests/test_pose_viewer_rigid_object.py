@@ -74,10 +74,18 @@ def test_cloth_opt_out_drops_both_hammer_glyphs():
 
 
 def test_cloth_opt_out_removes_the_hammer_geometry_entirely():
-    """Not just the names -- the handle/head primitives must be gone from the payload."""
+    """Not just the names -- the handle/head primitives must be gone from the payload.
+
+    Assert on URDF MARKUP (`<cylinder`, `radius=`, `length=`), never on a bare dimension like
+    "0.153". A real capture is megabytes of float arrays, so "0.153" occurs by chance inside
+    coordinate data -- it appeared 26 times in the first production capture, every one of them a
+    substring of a vertex or joint value, while the geometry was correctly absent. A test that
+    checks a bare number passes on the synthetic fixture here and then cries wolf on real output.
+    """
     html = _html(draw_rigid_object=False)
-    assert "cylinder" not in html, "hammer handle still present in viewer payload"
-    assert "0.153" not in html, "hammer handle length still present"
+    assert "<cylinder" not in html, "hammer handle still present in viewer payload"
+    assert "radius=" not in html
+    assert "length=" not in html
 
 
 def test_deformables_survive_the_opt_out():
@@ -151,8 +159,8 @@ def test_real_cloth_wrapper_emits_no_hammer():
     compact = html.replace(" ", "")
     assert '"name":"object"' not in compact
     assert '"name":"goal"' not in compact
-    assert "cylinder" not in html, "hammer handle survived the real wrapper path"
-    assert "0.153" not in html
+    assert "<cylinder" not in html, "hammer handle survived the real wrapper path"
+    assert "radius=" not in html
 
 
 def test_real_cloth_wrapper_still_emits_the_three_cloth_channels():
@@ -172,8 +180,8 @@ def test_the_hammer_strings_are_a_discriminating_check():
     require the hammer to come back, so the checks are known to still discriminate.
     """
     html = _html()  # draw_rigid_object defaults True
-    assert "cylinder" in html
-    assert "0.153" in html
+    assert "<cylinder" in html
+    assert "radius=" in html
 
 
 # --------------------------------------------------------------------------------------------
