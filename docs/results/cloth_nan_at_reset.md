@@ -5,13 +5,22 @@
 Divergences are ~15x over-represented in the first ten steps of an episode, and it replicates
 across two independent runs with different seeds, different nodes, and different env code:
 
-| run | env | <= step 10 | uniform expectation | P(>= observed \| uniform) |
-|---|---|---|---|---|
-| 197715 | yaw-fixed | 6 / 25 (24.0%) | 1.67% | 2.9e-6 |
-| 199350 | yaw-random | 3 / 7 (42.9%) | 1.67% | 1.5e-4 |
+FULL-RUN numbers, over both complete 24 h runs:
 
-Both runs also show a long tail across the rest of the episode (medians 191 and 12, maxima 527 and
-452), so this is not the only mode -- but roughly a quarter of all NaN events are reset-adjacent.
+| run | env | events | <= step 10 | uniform expectation |
+|---|---|---|---|---|
+| 197715 | yaw-fixed | 973 | **371 (38.1%)** | 1.67% |
+| 199350 | yaw-random | 1323 | **430 (32.5%)** | 1.67% |
+
+A ~20x enrichment on samples of 973 and 1323. This supersedes an earlier version of this note,
+which computed 24% and 43% from only 25 and 7 events and described the effect as "roughly a
+quarter". It is **about a third**, and it is the dominant mode rather than one of several.
+
+**But it is not instantaneous.** Divergences AT step 0 are rare -- 0 and 5 across the two runs --
+and <= step 2 accounts for only 1.0% and 1.7%. So the reset does not write an already-broken state;
+it writes one that then resolves violently over the next handful of steps. That distinction matters
+for the diagnosis below: it points at a contact that takes a few steps of solving to blow up (an
+interpenetration at spawn) rather than at a malformed buffer write.
 
 ## Why it was invisible before
 
@@ -70,17 +79,20 @@ teleported into the hand, or a hand redrawn into the sheet or table, would resol
 first-step contact impulse, which is exactly what makes an articulation diverge within a handful of
 steps.
 
-Ways to discriminate, none run yet:
-  * log the minimum distance between the fingertips and the nearest cloth particle at reset, and
-    compare the distribution for envs that diverge against those that do not;
+Ways to discriminate, none run yet, reordered by what the step-0 data implies:
+  * **most likely to be decisive** -- log the minimum distance between the fingertips and the
+    nearest cloth particle at reset, and compare the distribution for envs that diverge against
+    those that do not. A few-step fuse is exactly what an interpenetration looks like;
   * zero `reset_dof_vel_random_interval` alone and see whether the <= step 10 cluster survives;
-  * step the sim a few times after reset before handing the observation to the policy, and see
-    whether the divergence is merely delayed or actually removed.
+  * **now looks less promising** -- stepping the sim a few times after reset before handing the
+    observation to the policy. If the state is already committed to diverging at reset, settling
+    steps only move where the blow-up is observed, not whether it happens.
 
 ## Why it is not urgent
 
 The overall rate is ~1e-6 per env-step, the guard sanitises the observation and resets the env
 before anything non-finite reaches the optimiser, and `nonfinite_reward` has stayed at 0.0 in
-training. Over 24 h this is ~0.065% of episodes. It costs a little sample efficiency and nothing
+training. NOTE that last point is exactly the false comfort that hid the reward MAGNITUDE blow-up
+-- see docs/results/cloth_finetune_reward_imbalance.md and the REWARD_SANITY_LIMIT guard. Over 24 h this is ~0.065% of episodes. It costs a little sample efficiency and nothing
 else -- but it is a real defect with a specific, testable cause, and it is the single largest
 identifiable slice of the NaN budget.
