@@ -27,9 +27,40 @@ Not one broken env being re-flagged: the offending env ids are almost all distin
 15 events across 14 distinct envs). The reset does clear the condition; the problem is that the
 reset sometimes CREATES it.
 
-Not the cloth: `particles`, `velocities`, `quat` and `fold_targets` checks have never fired. Every
-event names the MJWarp articulation -- `robot_joint_pos`, `robot_joint_vel`, `robot_body_pos_w`,
-`robot_body_quat_w` -- and the obs and reward NaN are downstream of it, same env, same step.
+## CORRECTION: it is not only the robot
+
+An earlier version of this note claimed the cloth-side checks had "never fired" and that every
+event named the MJWarp articulation. That was generalised from an early sample and is WRONG. Full
+counts over both 24 h runs:
+
+| check | 197715 | 199350 |
+|---|---|---|
+| `particles` | 10 | 13 |
+| `velocities` | 10 | 13 |
+| `fold_targets` | 6 | 5 |
+| `robot_joint_pos` / `_vel` / `body_pos_w` / `body_quat_w` | 89 | 149 |
+
+The robot still dominates by ~10x, but the cloth diverges too.
+
+## Two distinct modes, not one
+
+**Robot-led.** All four robot quantities fire together, `fold_targets` with them, and obs and
+reward follow -- same env, same step. Example: env 244 at env-step 273.
+
+**Cloth-only, and this one is a bug in our own code.** `fold_targets` fires with NO robot quantity
+at all, and the poisoned observation columns are 125-136, exactly `keypoints_rel_goal`. Example:
+env 692 at env-step 2. The guard tests `particles` FIRST and it did not fire, so the particle
+positions were finite and `_stationary_frame`'s Kabsch fit produced NaN from finite input.
+
+`_stationary_frame` already carries a ridge term and an identity fallback for a non-finite `R`, but
+`_folded_w` composes `R` with a centroid, so a finite-but-degenerate fit still yields non-finite
+targets downstream of that fallback. Three of the observed cases are at env-steps 1, 2 and 4 --
+immediately after reset, when the sheet is flat and the stationary half is very nearly planar,
+which is exactly when the SVD is most degenerate.
+
+Fix candidates: check the fit's residual and singular values rather than only `isfinite(R)`; or
+guard `fold_targets_w()` itself and fall back to the rest-frame targets for envs whose fit is
+degenerate.
 
 ## Leading hypothesis, untested
 
