@@ -54,6 +54,9 @@ class ClothEnv(PlayNewtonEnv):
         # Envs whose state went non-finite this step; consumed by `_get_dones` to force a reset.
         self._nonfinite_envs = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._nonfinite_count = 0
+        # Envs whose reward left the plausible range; counted separately from the non-finite ones
+        # because they pass every isfinite check.
+        self._insane_count = 0
         # Best fold error seen so far this episode, for the dense progress ratchet. Kept separate
         # from the inherited `_closest_keypoint_max_dist`, which `compute_intermediate_values`
         # resolves against the APPROXIMATE metric inside `super()._get_dones()` -- reusing it would
@@ -609,6 +612,37 @@ class ClothEnv(PlayNewtonEnv):
             )
         self.extras["nonfinite_reward"] = float(nonfinite_rew.float().mean())
 
+        # MAGNITUDE, not just finiteness. Checking `isfinite` alone leaves a hole that a diverging
+        # articulation drives straight through: joint velocities and actions grow enormous BEFORE
+        # they become non-finite, the action penalties are sums of squares, and the reward reaches
+        # -1e5 to -1e11 while staying perfectly finite. `nan_to_num` does not touch it, the
+        # nonfinite counter stays at 0.0, and the value lands in the advantage and the gradient.
+        #
+        # Measured on job 197715: kuka_actions_penalty reached -784,354 for a single episode
+        # against a typical -13 to -36, total_reward reached -1.1e11, and `rewards/iter` was still
+        # reading -1.8 MILLION five hours in, with 56% of samples below -1000 from 44% of the way
+        # through the run. 199350 showed the same from 71.5% in. Both runs were compromised while
+        # every non-finite guard reported clean.
+        #
+        # The legitimate per-step maximum is the reach_goal_bonus (1000) plus shaping of order 100,
+        # so 1e4 is ~10x headroom over anything the task can pay. An env outside it is diverging by
+        # definition, so it gets the same treatment as a non-finite one: contribute nothing, and
+        # reset through the normal path.
+        insane_rew = reward.abs() > self.REWARD_SANITY_LIMIT
+        if bool(insane_rew.any()):
+            n = int(insane_rew.sum())
+            worst = float(reward[insane_rew].abs().max())
+            reward = torch.where(insane_rew, torch.zeros_like(reward), reward)
+            self._nonfinite_envs |= insane_rew
+            print(
+                f"[cloth] INSANE REWARD in {n}/{self.num_envs} envs (worst |r|={worst:.3e}, "
+                f"limit {self.REWARD_SANITY_LIMIT:.0e}) -- zeroed and flagged for reset",
+                flush=True,
+            )
+        self.extras["insane_reward"] = float(insane_rew.float().mean())
+        self._insane_count += int(insane_rew.sum())
+        self.extras["insane_total"] = float(self._insane_count)
+
         terms["total_reward"] = reward
         self.extras["fold_err_mean"] = float(fold_err.mean())
         self.extras["fold_rate"] = float(self._fold_bonus_mask.float().mean())
@@ -751,6 +785,10 @@ class ClothEnv(PlayNewtonEnv):
         return (self.fold_error() < self.cfg.cloth.keypoint_tolerance) & (
             self.footprint_ratio() < self.cfg.cloth.max_folded_footprint
         )
+
+    #: Any |reward| above this is a diverging env, not a task outcome: the largest the task can
+    #: legitimately pay in one step is `reach_goal_bonus` (1000) plus shaping of order 100.
+    REWARD_SANITY_LIMIT = 1.0e4
 
     #: Steps the fold criterion must hold to count as a *held* fold. Independent of
     #: `termination.success_steps`, which the finetune recipe drives to 1 so the reward bonus fires
