@@ -228,16 +228,55 @@ meshify: false
 # silently inherit. Thickness is the particle *radius* x2 and is bounded by grid
 # spacing (size / (resolution - 1)) -- ClothCfg raises if that is violated.
 # -----------------------------------------------------------------------------
+# The material, contact and self-contact values below are SIM1's calibrated cloth physics
+# (arXiv 2604.08544 Table 2, cross-checked against InternRobotics/SIM1 @ 973476b). They are ADOPTED,
+# not measured here -- see the ClothCfg docstrings for what each one displaced and what to revert
+# first if the fold regresses. Two things are deliberately NOT copied from that paper:
+#
+#   * the AVBD edge strain limit (xi = 0.05 and its ramping constants). Newton 1.5 has no per-edge
+#     strain constraint for cloth -- its AVBD is joints and contacts -- so that one needs a solver
+#     port, not a config line. Note it does not run in SIM1's released env either: the limit is
+#     read from `spring_control`, `add_cloth_mesh` hardcodes `control=0.0`, and their env never
+#     passes `add_springs`, so `spring_count == 0` and every AVBD kernel is guarded out.
+#   * Table 2's robot/table frictions (1.5 / 0.0), which their env overwrites to 1.0 on every shape
+#     immediately after building the table.
 cloth:
   size: 0.10
-  resolution: 9
-  thickness: 0.012                       # 12 mm; spacing is 12.5 mm, so just inside the limit
+  # thickness and resolution are ONE decision: 16 mm particles need >= 16.7 mm spacing, and
+  # `max_resolution_for_thickness` is exactly 7. Was 12 mm at resolution 9 (81 particles).
+  resolution: 7                          # 49 particles / 72 triangles
+  thickness: 0.016                       # SIM1 particle radius 0.008; spacing is 16.7 mm
   proxy_mode: staggered                  # the cable result: lagged shakes deformables loose
-  substeps: 2
-  vbd_iterations: 10                     # Newton's default; 80 cost 5.8x for no quality gain
+  substeps: 6                            # cloth dt 1/1440 s, matching SIM1; was 2 (1/480)
+  vbd_iterations: 12                     # SIM1 lift2 (acone uses 16); was 10, Newton's default
   # A GENUINE drop. The table's collision surface is at table_reset_z + 0.150, not + 0.045, so the
   # old 0.15 spawned the sheet 0.2 mm above it -- in contact -- and it was ejected upward at
   # ~1.7 m/s every single episode. See ClothCfg.start_height.
   start_height: 0.30
   table_half_thickness: 0.150            # measured from where the sheet rests, not from the USD box
-  edge_ke: 0.5                           # 5.0 springs a crease open in 1 step; 0.5 holds
+
+  # --- material (SIM1 Table 2) ---------------------------------------------------------------
+  density: 2.0                           # kg/m^2, PER AREA. Was 100.0 -- a 1 kg handkerchief.
+  tri_ke: 100.0                          # was 1.0e4; also Newton's own default
+  tri_ka: 100.0                          # was 1.0e4
+  tri_kd: 1.5e-6                         # was 1.0e-5
+  edge_ke: 8.0e-4                        # was 0.5; measurements said bending saturates by 0.05
+  edge_kd: 1.0e-3                        # was 1.0e-2
+
+  # --- contact (SIM1 Table 2) ----------------------------------------------------------------
+  soft_contact_ke: 500.0                 # was 8.0e3
+  soft_contact_kd: 5.0e-3                # NEW: was silently inheriting NewtonModelCfg's 1.0e-2
+  soft_contact_mu: 0.25                  # was 10.0 (effective vs fingertips: 3.9 -> 0.61)
+
+  # --- self-contact: OFF until now, so a folded flap fell through the half beneath it ---------
+  enable_self_contact: true
+  self_contact_radius: 0.002             # SIM1's value; see the docstring -- it does NOT scale to
+  self_contact_margin: 0.003             # our 16.7 mm grid the way it does to their ~mm mesh
+  self_contact_detection_interval: -1
+  conservative_bound_relaxation: 0.42     # Newton 1.5 defaults 0.85; 0.42 is SIM1's beta
+
+  # --- AVBD contact ramping: NOT from SIM1 ----------------------------------------------------
+  # Their solver has no contact ramping at all. This is Newton 1.5's own AVBD, which ships disabled
+  # (beta 0) and which silently makes rigid_contact_k_start a no-op. Most likely of these changes
+  # to go the wrong way -- A/B against 0.0.
+  rigid_avbd_beta: 500000.0

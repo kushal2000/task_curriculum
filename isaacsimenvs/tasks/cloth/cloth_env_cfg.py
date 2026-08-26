@@ -41,7 +41,7 @@ class ClothCfg:
     size: float = 0.10
     """Side length of the square sheet [m]."""
 
-    thickness: float = 0.012
+    thickness: float = 0.016
     """Cloth thickness [m], as ``2 * particle_radius``.
 
     **A VBD cloth is a surface: thickness IS the particle collision radius**, there is no
@@ -55,14 +55,28 @@ class ClothCfg:
     rather than cloth -- genuine 30 mm material is a volumetric soft body (``add_soft_mesh``, a
     tet mesh), not a cloth.
 
-    Default 12 mm at ``resolution=9`` (spacing 12.5 mm) sits just inside the limit: thick enough
-    for the hand to feel, thin enough to fold."""
+    **16 mm, adopted from SIM1 Table 2 (particle radius 0.008 m).** This is NOT a measurement on
+    this task -- it is their calibrated value, taken wholesale along with the rest of their cloth
+    material. It forces ``resolution=7``: spacing must be >= thickness, and 16 mm needs
+    ``size / thickness + 1 = 7`` (spacing 16.7 mm). ``max_resolution_for_thickness`` returns
+    exactly 7, so this pair sits on the guard boundary and any finer grid will raise.
 
-    resolution: int = 9
+    The previous value was 12 mm at ``resolution=9`` (spacing 12.5 mm), chosen as "thick enough for
+    the hand to feel, thin enough to fold". That reasoning still stands and nothing measured
+    displaced it; it was replaced to match SIM1, not to improve on it. If the fold regresses, this
+    and ``resolution`` are the first pair to revert."""
+
+    resolution: int = 7
     """Particles per side, so the sheet is ``resolution**2`` particles and
-    ``2*(resolution-1)**2`` triangles. 9 gives 81 particles / 128 triangles -- coarse, but the
-    cable work showed collision geometry is the binding memory cost at scale, and a finer sheet
-    buys nothing until folding works at all."""
+    ``2*(resolution-1)**2`` triangles. 7 gives 49 particles / 72 triangles.
+
+    **Driven by ``thickness``, not chosen independently.** 16 mm particles cannot sit on a grid
+    finer than 16.7 mm spacing without overlapping at rest, so matching SIM1's particle radius
+    forces this down from 9 (81 particles / 128 triangles). The fold geometry survives the change
+    unchanged -- ``corner_indices`` still returns the four far-half corners at the same
+    coordinates, ``folded_targets`` is identical, and the odd resolution keeps a hinge row -- but
+    the sheet is meaningfully coarser, and a 72-triangle sheet is close to the floor at which
+    "cloth" stops being a useful description."""
 
     start_height: float = 0.30
     """Spawn height above ``reset.table_reset_z`` [m].
@@ -104,23 +118,57 @@ class ClothCfg:
     resolution, and to cloth physics; it was this."""
 
     # --- material -------------------------------------------------------------------------
-    density: float = 100.0
-    tri_ke: float = 1.0e4
-    """In-plane stretch stiffness. Softening *stretch* was catastrophic on the cable (x0.01 peaked
-    at 94.9 m/s); a slack surface oscillates. Keep this stiff."""
-    tri_ka: float = 1.0e4
-    """In-plane shear/area stiffness."""
-    tri_kd: float = 1.0e-5
-    """In-plane damping. Nonzero by default here: every cable damping term defaulted to 0.0 and
-    the sheet is far more compliant."""
-    edge_ke: float = 0.5
+    density: float = 2.0
+    """Surface density [kg/m^2]. **Per AREA, not per volume.**
+
+    This reaches ``ModelBuilder.add_cloth_mesh(density=...)`` unchanged (via the ``newton:density``
+    USD attribute, read in ``isaaclab_contrib.deformable.deformable_object``), and Newton documents
+    that argument as "the density per-area of the mesh". The old 100.0 was written as though it
+    were volumetric: it made the 0.1 x 0.1 m sheet weigh **1 kg**, a handkerchief with the mass of
+    a litre of water, and it disagreed by 83x with the ``area_density = density * thickness``
+    that ``cloth_env`` computes for the ``ClothAsRigidObject`` mass proxy.
+
+    2.0 kg/m^2 is SIM1 Table 2. Still heavy for cloth -- real cotton sheeting is 0.15-0.3 kg/m^2 --
+    but it is their calibrated value and it is 50x lighter than what this ran before."""
+    tri_ke: float = 1.0e2
+    """In-plane stretch stiffness -- the Lame ``mu`` (shear modulus) of the membrane model.
+
+    **1.0e2 is SIM1 Table 2, and also Newton's own ``default_tri_ke``.** Their "calibrated"
+    elasticity is the library default; what they actually tuned away from default is bending.
+
+    This was 1.0e4. The justification was the cable, where softening stretch was catastrophic
+    (x0.01 peaked at 94.9 m/s) -- but a cable is a 1-D chain whose only in-plane mode IS stretch,
+    and the sheet has an area term (``tri_ka``) carrying load the cable had no analogue for. The
+    cable result is not evidence about a membrane. If the sheet oscillates or blows up, this is the
+    first suspect and 1.0e3 is the obvious intermediate."""
+    tri_ka: float = 1.0e2
+    """In-plane shear/area stiffness -- the Lame ``lambda`` (area modulus). SIM1 Table 2.
+
+    Note their own solver comment recommends ``lambda: 1000.0+`` to maintain area against
+    penetration, and then their env ships 1e2. Table 2 agrees with the env, so 1e2 it is."""
+    tri_kd: float = 1.5e-6
+    """In-plane damping. SIM1 Table 2 (was 1.0e-5 here).
+
+    Newton's ``default_tri_kd`` is 10.0; both this and the previous value are far below it, which
+    is right for a membrane that has to drape rather than settle."""
+    edge_ke: float = 8.0e-4
     """Bending stiffness. Low -- a cloth that will not bend cannot be folded. This is the opposite
     of the cable, where a stiff bend response was the thing ringing.
 
-    Measured with a teleported fold: at 5.0 the crease springs open after **1** step; at 0.5 it
-    holds **7**. A further 10x softer (0.05) gives the same 7, so the effect saturates here and
-    bending stops being the binding constraint."""
-    edge_kd: float = 1.0e-2
+    **8.0e-4 is SIM1 Table 2.** Note their released env ships ``bending_ke = 1e-4``; Table 2 and
+    the code disagree, and Table 2 is the stated calibration, so this follows Table 2.
+
+    The previous 0.5 was measured here with a teleported fold: at 5.0 the crease springs open after
+    **1** step; at 0.5 it holds **7**; a further 10x softer (0.05) gives the same 7. That measured
+    saturation is the reason this change is expected to be inert -- 8.0e-4 is well past the knee,
+    so it should behave like 0.05, which behaved like 0.5. It is adopted for alignment, not for an
+    expected gain.
+
+    One caveat on transferring it at all: the dihedral bending energy scales with edge length, and
+    SIM1 tuned this on a scanned garment with ~mm edges against our 16.7 mm grid. The number is not
+    dimensionally portable even though the saturation argument says it should not matter."""
+    edge_kd: float = 1.0e-3
+    """Bending damping. SIM1 Table 2 (was 1.0e-2 here)."""
 
     # --- the fold -------------------------------------------------------------------------
     fold_axis: str = "x"
@@ -151,14 +199,28 @@ class ClothCfg:
     velocities; the mismatch scales with hand speed and was the single change that took the cable
     from ~0 to 5 goals in an episode."""
 
-    substeps: int = 2
-    """Sharp optimum on the cable: 1 peaked at 37 m/s, 4/8/16 degraded monotonically. Fewer, larger
-    substeps mean fewer proxy exchanges per step, which is where the energy enters."""
+    substeps: int = 6
+    """Cloth substeps inside one coupled step, i.e. the VBD timestep.
 
-    vbd_iterations: int = 10
+    **6 makes the cloth dt 1/1440 s, matching SIM1.** Their loop is 60 Hz with 24 substeps; ours is
+    ``sim.dt`` 1/120 / ``newton.num_substeps`` 2 / this, so 6 lands on the same 0.694 ms. It was 2
+    (1/480 s, 3x larger).
+
+    **This directly contradicts a cable measurement**: on the cable there was a sharp optimum at 2,
+    with 1 peaking at 37 m/s and 4/8/16 degrading monotonically, on the theory that fewer, larger
+    substeps mean fewer proxy exchanges per step and the exchange is where the energy enters. That
+    was never re-measured for the sheet, and the cloth is a different solver entry, but it is a
+    direct conflict and not a gap -- if the sheet gains energy at reset or under contact, revert
+    this first.
+
+    Costs 3x the VBD work per policy step, on top of the iteration increase."""
+
+    vbd_iterations: int = 12
     """VBD solver iterations per substep.
 
-    **Newton's own default, and 8x cheaper than the 80 this inherited from the cable.** Measured at
+    **12 is SIM1's ``lift2`` value** (their ``acone`` task uses 16). Everything below was measured
+    at 10, which is Newton's own default and was 8x cheaper than the 80 this inherited from the
+    cable; 12 is a 20% increase on that and the cost model below predicts it directly. Measured at
     256 envs on pinned hardware, per-step cost is almost entirely this term:
 
         ms/step ~ 45.5 + 11.52 x iterations
@@ -188,15 +250,15 @@ class ClothCfg:
     What degrades at 5 is only the second -- the hand stops gripping, footprint stays near 1.0, the
     sheet is untouched rather than unstable -- so the extra iterations are buying contact, not cloth.
 
-    The targeted fix would be `SolverVBD(rigid_contact_history=True)`, which Newton's own docstring
-    recommends for exactly this case ("may feel weak with few iterations and no history",
-    solver_vbd.py:331). It is NOT available here: contact warm-starting requires the collision
-    pipeline to match contacts across steps, and that path packs contact ids into 20 bits, capping
-    buffered contacts at 2**20 = 1,048,576 globally. This scene budgets 7,962,624 triangle pairs at
-    32 envs. Cutting to fit would mean ~386 pairs per particle, below the 512 that already
-    overflowed, and overflow silently drops contacts. Disabling deterministic mode is the only other
-    route and would cost reproducibility. Tried and reverted; recorded here so it is not re-tried
-    blind."""
+    A previous version of this note proposed `SolverVBD(rigid_contact_history=True)` as the targeted
+    fix, and recorded it as tried-and-reverted because contact warm-starting packs contact ids into
+    20 bits, capping buffered contacts at 2**20 = 1,048,576 globally while this scene budgets
+    7,962,624 triangle pairs at 32 envs. **That blocker is real but it was aimed at the wrong
+    lever.** In Newton 1.5 `rigid_contact_history` is body-BODY only -- it drives
+    `snapshot_body_body_contact_history` and never touches body-particle contacts, so it could not
+    have helped the sheet's grip even if it had fit.
+
+    The knob that does reach cloth-vs-hand contact is `rigid_avbd_beta`; see that field."""
     coupler_iterations: int = 1
     """Raising this made the cable *worse* at every setting tried."""
 
@@ -204,9 +266,108 @@ class ClothCfg:
     """KEEP AT 1.0. 0.05 was ~500x worse on the cable and NaN'd the robot."""
 
     collide_interval: int = 1
-    soft_contact_ke: float = 8.0e3
-    soft_contact_mu: float = 10.0
+
+    soft_contact_ke: float = 5.0e2
+    """Body-particle contact stiffness [N/m]. SIM1 Table 2 (was 8.0e3 here).
+
+    The per-contact value is the AVERAGE of this and the rigid shape's own material stiffness
+    (`NewtonShapeCfg.ke`, 2.5e3), so the effective ceiling moves 5250 -> 1500."""
+
+    soft_contact_kd: float = 5.0e-3
+    """Body-particle contact damping [N*s/m]. SIM1 Table 2.
+
+    NEW FIELD. `NewtonModelCfg` defaults it to 1.0e-2 and `build_physics` was passing only `ke` and
+    `mu`, so this ran at the library default and was never stated."""
+
+    soft_contact_mu: float = 0.25
+    """Body-particle friction coefficient. SIM1 Table 2 (`self_contact_friction`; was 10.0 here).
+
+    Effective per-contact friction is `sqrt(soft_contact_mu * shape_mu)`, so against the fingertips
+    (`assets.finger_tip_friction` 1.5) this moves from `sqrt(10 x 1.5)` = 3.9 to `sqrt(0.25 x 1.5)`
+    = 0.61. SIM1's own effective value is 0.5 -- they set every shape's mu to 1.0.
+
+    Table 2's `robot_friction` 1.5 / `table_friction` 0.0 are NOT copied: their env overwrites
+    every shape's mu to 1.0 immediately after building the table, so those two rows describe a
+    configuration that does not run. Our per-shape frictions stay as the rigid-tool task sets
+    them."""
+
     rigid_contact_k_start: float = 1.0e2
+    """Body-particle contact penalty SEED for AVBD ramping [N/m].
+
+    **Inert unless `rigid_avbd_beta` > 0**, which is why it did nothing until now. Newton computes
+    `rigid_contact_k_start_value = -1.0 if linear_beta == 0.0 else k_start` (solver_vbd.py:677) and
+    the kernel reads `k_floor = avg_ke if k_start < 0.0 else min(k_start, avg_ke)`
+    (rigid_vbd_kernels.py:3395) -- so with beta 0 the seed is discarded and every contact starts at
+    full material stiffness."""
+
+    rigid_avbd_beta: float = 5.0e5
+    """AVBD penalty ramp rate for body-particle contacts [N/m per m of penetration].
+
+    NEW FIELD, and **the one change here that is not from SIM1**: their solver (a fork of Newton
+    0.1.3) has no contact ramping at all, so matching them exactly would mean leaving this at 0.
+    Newton 1.5 grew AVBD natively -- `SolverVBD` is documented as "VBD for particles and Augmented
+    VBD (AVBD) for rigid bodies", citing Giles et al. 2025 -- and
+    `update_body_particle_contact_penalty` (rigid_vbd_kernels.py:4953) ramps exactly the
+    cloth-vs-hand contacts this task depends on. It ships disabled (`rigid_avbd_beta = 0.0`).
+
+    Enabling it is the Newton-native answer to the same failure SIM1's strain limit addresses:
+    cloth going soft under fast gripper motion.
+
+    Sizing, which is arithmetic and NOT a measurement. The kernel does
+    `k += beta * penetration`, clamped to the per-contact ceiling (~1500, see `soft_contact_ke`),
+    from a seed of `rigid_contact_k_start` = 100. To close that 1400 gap inside one substep's 12
+    iterations needs `beta * penetration` ~ 117, i.e. beta ~ 1.2e6 at 0.1 mm penetration and
+    ~1.2e5 at 1 mm. 5.0e5 sits mid-range: it reaches the ceiling within a substep for penetrations
+    above ~0.24 mm and ramps more gradually below that.
+
+    **This is the item most likely to go the wrong way.** With only 12 iterations, starting soft
+    and ramping can leave contacts SOFTER than the current fixed-k behaviour, which would weaken
+    the grip rather than strengthen it. A/B it against 0.0 before trusting it."""
+
+    # --- self-contact ---------------------------------------------------------------------
+    enable_self_contact: bool = True
+    """Whether the sheet collides with ITSELF.
+
+    NEW FIELD, and the largest behavioural change in this config. `VBDSolverCfg` defaults
+    `particle_enable_self_contact` to False and `build_physics` never set it, so until now the
+    folded flap passed straight THROUGH the half it was supposed to land on. For a folding task
+    that is not a tuning knob, it is a missing mechanic. SIM1 runs `handle_self_contact=True`."""
+
+    self_contact_radius: float = 0.002
+    """Distance at which cloth primitives start to repel each other [m]. SIM1 Table 2.
+
+    **This is a geometric distance between mesh primitives, NOT scaled by `particle_radius`** --
+    see `evaluate_self_contact_force_norm` (particle_vbd_kernels.py:821), which is driven by
+    `collision_radius` alone.
+
+    So copying SIM1's number does not reproduce SIM1's behaviour on our geometry. Their cloth is a
+    scanned garment with ~mm triangles, where 2 mm is comparable to the mesh scale; our sheet is
+    16 mm thick on a 16.7 mm grid, so a folded flap will settle 2 mm above the layer beneath it
+    rather than ~16 mm -- the two layers visually interpenetrate by most of their thickness.
+
+    That interacts with the fold targets: `cloth_env` builds them with `lift = 2 * particle_radius`
+    = 16 mm, so the targets sit ~14 mm above where the flap can actually rest. That is inside the
+    0.04 m `keypoint_tolerance`, so it biases the reward rather than making the fold impossible.
+    Scaling this to ~`thickness` (with margin ~1.5x) is the consistent alternative and costs more
+    in collision detection. Left at SIM1's value; flagged, not hidden."""
+
+    self_contact_margin: float = 0.003
+    """Detection margin for self-contact [m]. SIM1 Table 2, and 1.5x the radius, which is the ratio
+    Newton's own error message asks for. Must be >= `self_contact_radius` or the solver raises."""
+
+    self_contact_detection_interval: int = -1
+    """How often self-contact detection runs. ``-1`` = once before initialisation, which is both
+    the `VBDSolverCfg` default and what SIM1 uses."""
+
+    conservative_bound_relaxation: float = 0.42
+    """Relaxation factor for the penetration-free displacement bound (SIM1's beta, Table 2).
+
+    Newton 1.5 defaults this to 0.85; 0.42 was the default in the Newton 0.1.3 that SIM1 forked, so
+    their Table 2 row is arguably just that default restated. Kept anyway -- it is the value their
+    calibration ran against, and a tighter bound truncates more aggressively, which is the safe
+    direction on a sheet that has never had self-contact enabled before.
+
+    Only has any effect when `enable_self_contact` is True."""
 
     proxy_links: str = "hand"
     """Which hand links the cloth can feel. `tips` (five distal phalanges) makes an enclosing grasp
@@ -357,6 +518,12 @@ class ClothCfg:
             iterations=self.vbd_iterations,
             rigid_body_particle_contact_buffer_size=self.rigid_body_particle_contact_buffer_size,
             rigid_contact_k_start=self.rigid_contact_k_start,
+            # Self-contact. Without these the folded flap passes through the half it lands on --
+            # `particle_enable_self_contact` defaults to False and this call never set it.
+            particle_enable_self_contact=self.enable_self_contact,
+            particle_self_contact_radius=self.self_contact_radius,
+            particle_self_contact_margin=self.self_contact_margin,
+            particle_collision_detection_interval=self.self_contact_detection_interval,
         )
         # `rigid_body_contact_buffer_size` is NOT a field on VBDSolverCfg (the cable subclasses it
         # for exactly this reason), but it IS in SolverVBD's signature, and the manager passes
@@ -368,6 +535,18 @@ class ClothCfg:
         # 87 > 64" and then died with a CUDA device-side assert. Declaring the field in this config
         # without wiring it here left it inert: it read as configured and did nothing.
         vbd.rigid_body_contact_buffer_size = self.rigid_body_contact_buffer_size
+
+        # Same pass-through for two more `SolverVBD` arguments that `VBDSolverCfg` does not
+        # declare. `_filter_solver_kwargs` filters `solver_cfg.to_dict()` against the solver
+        # signature, and isaaclab's `class_to_dict` walks `obj.__dict__`, so instance attributes
+        # set here do reach the solver.
+        #
+        #   * `particle_conservative_bound_relaxation`: Newton 1.5 defaults 0.85; SIM1 ran 0.42.
+        #   * `rigid_avbd_beta`: ships 0.0, which DISABLES AVBD contact ramping and makes
+        #     `rigid_contact_k_start` above a no-op. See the field docstring -- this is the one
+        #     setting here that could plausibly weaken the grip rather than strengthen it.
+        vbd.particle_conservative_bound_relaxation = self.conservative_bound_relaxation
+        vbd.rigid_avbd_beta = self.rigid_avbd_beta
 
         solver = CouplerProxyCfg(
             entries=[
@@ -417,6 +596,9 @@ class ClothCfg:
             iterations=self.coupler_iterations,
             model_cfg=NewtonModelCfg(
                 soft_contact_ke=self.soft_contact_ke,
+                # `soft_contact_kd` was previously left at the `NewtonModelCfg` default (1.0e-2)
+                # because this call only passed `ke` and `mu`.
+                soft_contact_kd=self.soft_contact_kd,
                 soft_contact_mu=self.soft_contact_mu,
             ),
         )

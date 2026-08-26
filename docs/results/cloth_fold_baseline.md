@@ -1,5 +1,14 @@
 # Cloth-fold baseline for the SAPG finetune (job 197715)
 
+> **SUPERSEDED as a like-for-like baseline.** The cloth physics in `Cloth.yaml` was replaced
+> wholesale with SIM1's calibrated values (arXiv 2604.08544 Table 2): the sheet went from 9x9 to
+> 7x7 at 16 mm thickness, in-plane stiffness dropped 100x, area density dropped 50x, self-contact
+> was turned ON for the first time, and the cloth timestep went from 1/480 s to 1/1440 s. The
+> numbers below still describe the OLD physics and remain the reference for what that physics
+> achieved -- they are no longer a control for runs on the current config. A new baseline has to be
+> re-measured before anything is compared against 3/160 or best_fold_err 0.082.
+
+
 Produced by `scripts/analysis/cloth_fold_summary.py`. Every set below is 5 seeds x 32 envs,
 600 steps, `success_tolerance=0.01` (the inherited rigid-tool criterion pinned so it cannot fire
 and become a second writer to `_successes`), fold tolerance 0.04, footprint 0.65.
