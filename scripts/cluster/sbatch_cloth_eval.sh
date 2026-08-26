@@ -32,8 +32,19 @@ set -uo pipefail
 cd /share/portal/kk837/task_curriculum
 mkdir -p slurm_logs docs/results
 
-CKPT="${1:?usage: sbatch_cloth_eval.sh <checkpoint.pth> <tag>}"
-TAG="${2:?usage: sbatch_cloth_eval.sh <checkpoint.pth> <tag>}"
+CKPT="${1:?usage: sbatch_cloth_eval.sh <checkpoint.pth> <tag> [hydra overrides...]}"
+TAG="${2:?usage: sbatch_cloth_eval.sh <checkpoint.pth> <tag> [hydra overrides...]}"
+# Anything after <tag> is forwarded to `episodes.py` as a hydra override. This DELIBERATELY
+# breaks the protocol-match promise above, so use it only when the baseline comparison is not the
+# point -- `cloth_fold_summary.py` re-reads the emitted JSON and complains if the protocol drifted.
+#
+# The case it exists for: `env.termination.success_steps=10`. `_get_dones` returns
+# `terminated | entered` and `entered` fires at `success_steps`, so at the default of 1 the episode
+# ends on the FIRST folded step and `_fold_hold` can never reach `HELD_FOLD_STEPS`. "folds (held)"
+# is therefore structurally 0.00% for every run ever measured with this script, baseline included --
+# it looks like a result and is an artifact. Raising success_steps makes a fold have to PERSIST
+# before it counts, which is the only way this harness can tell a settled fold from a transient one.
+OVERRIDES=("${@:3}")
 
 if [ ! -f "$CKPT" ]; then
     echo "[eval] checkpoint not found: $CKPT" >&2
@@ -43,7 +54,7 @@ fi
 export OMNI_KIT_ACCEPT_EULA=YES
 export PYTHONUNBUFFERED=1
 
-echo "[eval] checkpoint=$CKPT tag=$TAG host=$(hostname)"
+echo "[eval] checkpoint=$CKPT tag=$TAG host=$(hostname) overrides=${OVERRIDES[*]:-none}"
 
 for SEED in 1 2 3 4 5; do
     OUT="docs/results/cloth_${TAG}_s${SEED}.json"
@@ -60,6 +71,7 @@ for SEED in 1 2 3 4 5; do
         --single_variant \
         --seed "$SEED" \
         --out "$OUT" \
+        "${OVERRIDES[@]}" \
         || echo "[eval] seed $SEED FAILED"
 done
 
