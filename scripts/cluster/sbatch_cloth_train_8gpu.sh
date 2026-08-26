@@ -91,10 +91,18 @@ ENVS_PER_GPU="${ENVS_PER_GPU:-768}"
 MINIBATCH="${MINIBATCH:-12288}"
 BLOCK="${BLOCK:-128}"
 CHECKPOINT="${CHECKPOINT:-/share/portal/kk837/simtoolreal/pretrained_policy/model.pth}"
+# Capture cadence is in POLICY STEPS and therefore depends on throughput, which changed. The
+# inherited 12000 was tuned when the sim ran ~3x faster and the launcher comment still claims it
+# gives "~36 min and ~40 captures"; at the current ~19 s/epoch (32 steps) it is one capture every
+# ~2 h, so ~12 over a 24 h run. 4000 restores roughly the original intent: ~40 min apart, ~36 over
+# 24 h. Capture DUTY is `capture_viewer_len / interval` = 600/4000 = 15%, and the viewer runs on
+# rank 0 only while the other ranks wait at the gradient all-reduce -- so this is a throughput tax
+# on the whole job, not just on rank 0. Do not push it far below this.
+CAPTURE_INTERVAL="${CAPTURE_INTERVAL:-4000}"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
 echo "[train] run=$RUN_NAME gpus=$NGPU host=$(hostname) branch=$BRANCH overrides=${OVERRIDES[*]:-none}"
-echo "[train] envs/gpu=$ENVS_PER_GPU total=$((NGPU * ENVS_PER_GPU)) minibatch=$MINIBATCH block=$BLOCK"
+echo "[train] envs/gpu=$ENVS_PER_GPU total=$((NGPU * ENVS_PER_GPU)) minibatch=$MINIBATCH block=$BLOCK capture_interval=$CAPTURE_INTERVAL"
 echo "[train] effective batch = $NGPU x $MINIBATCH = $((NGPU * MINIBATCH)) (target 98304)"
 echo "[train] checkpoint=$CHECKPOINT"
 echo "[train] commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain)" && echo YES || echo no)"
@@ -112,7 +120,7 @@ scripts/newton_py -m torch.distributed.run \
     --single_variant \
     --capture_viewer \
     --capture_viewer_len 600 \
-    --capture_viewer_interval 12000 \
+    --capture_viewer_interval "$CAPTURE_INTERVAL" \
     --capture_viewer_env_id 0 \
     --capture_viewer_github_raw_base "https://raw.githubusercontent.com/kushal2000/task_curriculum/${BRANCH}/" \
     --capture_viewer_url_check warn \
