@@ -291,7 +291,18 @@ class ClothEnv(PlayNewtonEnv):
     def _init_fold_targets(self) -> None:
         """World-frame targets for the tracked keypoints, per env."""
         c = self.cfg.cloth
-        lift = 2.0 * c.particle_radius  # the flap rests on top of the stationary half
+        # PLY SEPARATION IS SET BY `self_contact_radius`, NOT BY `particle_radius`.
+        # These are two independent rest offsets that never meet: `particle_radius` is the
+        # cloth<->RIGID offset (three body-contact kernels), `self_contact_radius` is the
+        # cloth<->CLOTH one (`evaluate_self_contact_force_norm`). A fold is cloth on cloth, so the
+        # rigid offset has no say in where the flap comes to rest.
+        #
+        # This used `2 * particle_radius` = 16 mm while the solver settles the plies at 2.5 mm,
+        # so every keypoint on the moving half carried ~14 mm of error at a PERFECT fold. Measured
+        # with `scripts/analysis/cloth_fold_probe.py`, teleport-and-release, 4 envs, stable 180
+        # steps: settled fold_error 0.0160 -> 0.0020 from this line alone, with the 8 mm grip
+        # radius untouched. See docs/results/cloth_sim1_physics_and_fold_criterion.md.
+        lift = c.self_contact_radius  # where cloth-on-cloth contact actually settles
         local = folded_targets(self._cloth_rest_local, self._cloth_kp_idx, c.fold_axis, lift)
 
         t = torch.tensor(local, device=self.device, dtype=torch.float32)  # (K, 3)
@@ -316,14 +327,15 @@ class ClothEnv(PlayNewtonEnv):
         self._mv_rest_lateral = mv_rest[:, 1 - ax]
 
         # Where each particle belongs after the fold, expressed once in the sheet's REST frame:
-        # reflect across the crease, then lift by one thickness onto the stationary half. At
+        # reflect across the crease, then lift by one SELF-CONTACT RADIUS onto the stationary
+        # half -- that is the distance cloth-on-cloth contact actually settles at. At
         # runtime this is carried onto the sheet's live pose by the stationary half's own rigid
         # frame, which is what makes the target follow the cloth when it is rotated as well as
         # when it is translated.
         def _folded_rest(sel: torch.Tensor) -> torch.Tensor:
             f = rest[sel].clone()
             f[:, ax] = 2.0 * crease_local - f[:, ax]
-            f[:, 2] = f[:, 2] + c.thickness
+            f[:, 2] = f[:, 2] + c.self_contact_radius
             return f
 
         self._mv_folded_rest = _folded_rest(self._moving_idx)
@@ -351,7 +363,7 @@ class ClothEnv(PlayNewtonEnv):
         that way, with zero falls. It was sliding the sheet, not folding it.
 
         So the fold is defined in the sheet's REST frame -- each keypoint reflected across the
-        crease and lifted one thickness onto the stationary half -- and then carried onto the
+        crease and lifted one self-contact radius onto the stationary half -- and then carried onto the
         stationary half's CURRENT rigid frame, fitted from its particles.
 
         That frame is the whole point. Translating or rotating the cloth moves the target with it,
@@ -363,9 +375,10 @@ class ClothEnv(PlayNewtonEnv):
 
         # Carried onto the stationary half's CURRENT rigid frame, so the target follows the sheet
         # through rotation as well as translation. The rest-frame definition already encodes both
-        # the reflection across the crease and the one-thickness lift onto the stationary half --
-        # one thickness, not two, because particle centres are what both sides measure and a flap
-        # resting on the half sits exactly one particle diameter above it.
+        # the reflection across the crease and the lift onto the stationary half. The lift is
+        # `self_contact_radius`, MEASURED: two plies settle 2.5 mm apart at scr = 2 mm, while the
+        # sheet floats 8.0 mm above the TABLE at particle_radius = 8 mm. Two different offsets for
+        # two different contact pairs; only the cloth-cloth one governs a fold.
         return self._folded_w(self._kp_folded_rest)
 
     def _stationary_frame(self, parts: torch.Tensor):

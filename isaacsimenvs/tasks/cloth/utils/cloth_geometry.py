@@ -74,7 +74,20 @@ def corner_indices(resolution: int, axis: str = "x") -> list[int]:
     """
     if axis not in ("x", "y"):
         raise ValueError(f"axis must be 'x' or 'y', got {axis!r}")
-    mid = resolution // 2          # first row/column strictly past the crease
+    # `resolution // 2` is the HINGE row for odd resolutions, not the first row past it:
+    # `half_indices` splits on `mid = (resolution - 1) / 2`, so for resolution 7 the halves are
+    # rows 0-2 and 4-6 and row 3 belongs to NEITHER. Picking row 3 put two of the four tracked
+    # keypoints ON the fold axis, where they barely move during a fold while the target rule
+    # (reflect + lift) still asks them to rise one lift. Measured consequences at resolution 7,
+    # thickness 16 mm:
+    #   * a geometrically perfect fold scored fold_error 0.016 m, not 0 -- 40% of the 0.04
+    #     tolerance spent before the policy does anything;
+    #   * the corner set is not rigid under a fold (hinge->far distance 50.00 -> 52.50 mm), so the
+    #     Kabsch fit returned 162.3 deg instead of 180 and `object_rot` never reads a completed
+    #     fold.
+    # With every keypoint on the moving half both go away exactly: the set is rigid, the fit is
+    # 180.0 deg, and a perfect fold scores 0.
+    mid = resolution // 2 + (resolution % 2)   # first row/column strictly past the crease
     far = resolution - 1
     lo, hi = 0, resolution - 1
 

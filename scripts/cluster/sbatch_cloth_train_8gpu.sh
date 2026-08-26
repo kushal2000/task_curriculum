@@ -17,12 +17,26 @@
 #
 # Halving envs/GPU instead keeps every quantity that matters identical:
 #
-#                        4 GPU (sbatch_cloth_train.sh)      8 GPU (this)
-#   envs / GPU           768                                384
-#   total envs           3072                               3072      <- unchanged
-#   batch / rank         32 x 768 = 24576                   32 x 384 = 12288
+#                        4 GPU (sbatch_cloth_train.sh)      8 GPU (this, DEFAULT)
+#   envs / GPU           768                                768
+#   total envs           3072                               6144      <- 2x the data
+#   batch / rank         32 x 768 = 24576                   32 x 768 = 24576
+#   minibatches / rank   1                                  2
 #   effective batch      4 x 24576 = 98304                  8 x 12288 = 98304   <- unchanged
-#   blocks x size        6 x 128                            6 x 64
+#   blocks x size        6 x 128                            6 x 128
+#
+# The default was 384 envs/GPU, which held TOTAL envs at 3072 and gave one minibatch per rank. At
+# 768 envs/GPU the rank collects twice as much per epoch, so the minibatch is halved to 12288 and
+# each rank takes TWO optimizer steps per epoch instead of one. `world_size * minibatch_size` is
+# still 98304 -- the per-step batch play2perfect used -- and the extra data buys more gradient
+# steps rather than a bigger, differently-behaved one. Two minibatches still satisfies the live
+# assert at `a2c_common.py:537`: (32 * 768 // 2) %% 16 == 0.
+#
+# `expl_coef_block_size` returns to 128 because 768 / 128 = 6, the block count baked into the
+# checkpoint's (6, 29) sigma. Memory is the measured 28.9 GB of 48 GB at 768 envs/GPU (run 629081),
+# so the card has headroom.
+#
+#   ENVS_PER_GPU=384 MINIBATCH=12288 BLOCK=64 sbatch ...   # the previous 3072-env configuration
 #
 # `num_blocks` MUST stay 6: `a2c_network.sigma` in the pretrained checkpoint is (6, 29), a per-block
 # parameter, so any other block count fails to load. 384 / 6 = 64, so `expl_coef_block_size` drops
@@ -67,9 +81,9 @@ fi
 
 RUN_NAME="${1:-cloth_fold_sapg8}_${SLURM_JOB_ID}"
 NGPU="${NGPU:-8}"
-ENVS_PER_GPU="${ENVS_PER_GPU:-384}"
+ENVS_PER_GPU="${ENVS_PER_GPU:-768}"
 MINIBATCH="${MINIBATCH:-12288}"
-BLOCK="${BLOCK:-64}"
+BLOCK="${BLOCK:-128}"
 CHECKPOINT="${CHECKPOINT:-/share/portal/kk837/simtoolreal/pretrained_policy/model.pth}"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 

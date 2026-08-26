@@ -454,21 +454,41 @@ class ClothCfg:
         self._check_thickness()
 
     def _check_thickness(self) -> None:
-        """Reject a thickness the grid cannot hold.
+        """Warn when particle DIAMETER exceeds grid spacing. No longer an error.
 
-        Silent self-collision at rest looks exactly like a cloth that mysteriously crumples, and
-        would be diagnosed as a solver problem rather than a configuration one.
+        **The original premise was wrong.** This raised on `thickness > spacing`, on the grounds
+        that closer particles "self-collide at rest and the sheet crumples before anything
+        touches it". They cannot: self-collision is driven by `self_contact_radius` via
+        `evaluate_self_contact_force_norm`, and `particle_radius` appears in exactly three
+        kernels, all of them body-contact. The two never meet.
+
+        The crumpling this guard was written for is documented in `start_height` above as really
+        being the spawn-height bug ("attributed to thickness, to grid resolution, and to cloth
+        physics; it was this").
+
+        Independent evidence: SIM1's shipping garment violates the old rule by 40% and simulates
+        fine. Measured from their `short-shirt.usdc` -- 7,021 vertices, 13,767 triangles, median
+        edge 11.40 mm -- against an 8 mm particle radius, i.e. a 16 mm diameter at 1.40x the
+        median edge. Newton's own `example_cloth_franka.py` ships the same 8 mm radius.
+
+        Kept as a WARNING because the ratio is still worth knowing: a diameter far above spacing
+        means neighbouring particles present overlapping collision spheres to a finger, which
+        changes grip in ways nobody here has measured. But it is not a correctness constraint, and
+        as an error it forced this task from a 9x9 sheet to 7x7 for no reason.
         """
         if self.thickness > self.spacing + 1e-9:
-            raise ValueError(
-                f"cloth thickness {self.thickness:.3f} m exceeds grid spacing "
-                f"{self.spacing:.3f} m (size {self.size:.3f} / {self.resolution - 1} gaps). "
-                f"Particles would overlap at rest and the sheet would crumple before contact.\n"
-                f"  Either reduce resolution to <= {self.max_resolution_for_thickness} "
-                f"(spacing {self.size / max(1, self.max_resolution_for_thickness - 1):.3f} m), "
-                f"or reduce thickness to <= {self.spacing:.3f} m.\n"
-                f"  For genuine volumetric thickness, a cloth is the wrong primitive: use a soft "
-                f"body (tet mesh / add_soft_mesh) instead."
+            import warnings
+
+            warnings.warn(
+                f"cloth thickness {self.thickness:.4f} m (2 x particle_radius) exceeds grid "
+                f"spacing {self.spacing:.4f} m, ratio {self.thickness / self.spacing:.2f}x. This "
+                f"is NOT an error -- particle_radius is a cloth-RIGID rest offset and cannot "
+                f"cause self-collision, which uses self_contact_radius "
+                f"({self.self_contact_radius:.4f} m, {self.self_contact_radius / self.spacing:.2f}x "
+                f"spacing). For reference SIM1 ships 1.40x and Newton's example_cloth_franka.py "
+                f"the same 8 mm radius. Flagged because a diameter well above spacing gives "
+                f"neighbouring particles overlapping collision spheres, which changes grip.",
+                stacklevel=2,
             )
 
 
