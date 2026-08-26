@@ -80,6 +80,12 @@ if ! git ls-remote --exit-code --heads origin "$(git rev-parse --abbrev-ref HEAD
 fi
 
 RUN_NAME="${1:-cloth_fold_sapg8}_${SLURM_JOB_ID}"
+# Anything after <run_name> is forwarded to `train.py` as a hydra override, and echoed below so the
+# log records what actually ran. Used for `env.cloth.keypoint_tolerance`, which is only meaningful
+# to tighten AFTER the fold-criterion fixes in e01d7f8: a geometrically perfect fold scored 0.0160
+# before them, so any tolerance below ~2 cm was unreachable no matter what the policy did. It now
+# scores 0.0022, which leaves real headroom at 0.01.
+OVERRIDES=("${@:2}")
 NGPU="${NGPU:-8}"
 ENVS_PER_GPU="${ENVS_PER_GPU:-768}"
 MINIBATCH="${MINIBATCH:-12288}"
@@ -87,7 +93,7 @@ BLOCK="${BLOCK:-128}"
 CHECKPOINT="${CHECKPOINT:-/share/portal/kk837/simtoolreal/pretrained_policy/model.pth}"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
-echo "[train] run=$RUN_NAME gpus=$NGPU host=$(hostname) branch=$BRANCH"
+echo "[train] run=$RUN_NAME gpus=$NGPU host=$(hostname) branch=$BRANCH overrides=${OVERRIDES[*]:-none}"
 echo "[train] envs/gpu=$ENVS_PER_GPU total=$((NGPU * ENVS_PER_GPU)) minibatch=$MINIBATCH block=$BLOCK"
 echo "[train] effective batch = $NGPU x $MINIBATCH = $((NGPU * MINIBATCH)) (target 98304)"
 echo "[train] checkpoint=$CHECKPOINT"
@@ -119,6 +125,7 @@ scripts/newton_py -m torch.distributed.run \
     "agent.params.config.minibatch_size=${MINIBATCH}" \
     "agent.params.config.central_value_config.minibatch_size=${MINIBATCH}" \
     "agent.params.config.expl_coef_block_size=${BLOCK}" \
-    "agent.params.config.name=0_${RUN_NAME}"
+    "agent.params.config.name=0_${RUN_NAME}" \
+    "${OVERRIDES[@]}"
 
 echo "[train] exit=$?"
