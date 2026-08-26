@@ -544,6 +544,17 @@ def main() -> None:
         action="store_true",
         help="Colour the cable one solid colour instead of a per-segment hue sweep.",
     )
+    parser.add_argument(
+        "--randomize_reset",
+        action="store_true",
+        help="Keep the task's initial-state distribution instead of pinning it. "
+        "`disable_randomization` zeroes reset position/yaw/DOF noise AND sets `fixed_start_pose`, "
+        "so by default EVERY env, world and seed starts with the sheet dead-centre and "
+        "axis-aligned -- which is right for backend-vs-backend comparison but makes a set of "
+        "renders eight copies of one initial condition. Note this cannot be done with a hydra "
+        "override: `disable_randomization` runs inside the hydra-wrapped function, i.e. AFTER the "
+        "CLI overrides are merged, so it silently overwrites them.",
+    )
     parser.add_argument("--num_assets_per_type", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda:0")
@@ -594,7 +605,23 @@ def main() -> None:
         env_cfg.sim.device = args.device
         env_cfg.seed = args.seed
         env_cfg.termination.eval_success_tolerance = args.success_tolerance
-        disable_randomization(env_cfg)
+        if args.randomize_reset:
+            # Only the DR block; the reset distribution is what we are deliberately keeping.
+            dr = env_cfg.domain_randomization
+            dr.use_obs_delay = dr.use_action_delay = dr.use_object_state_delay_noise = False
+            dr.object_scale_noise_multiplier_range = (1.0, 1.0)
+            dr.joint_velocity_obs_noise_std = 0.0
+            dr.force_scale = dr.torque_scale = 0.0
+            print(
+                f"[render] reset randomisation KEPT: xy noise "
+                f"+-{env_cfg.reset.reset_position_noise_x}/"
+                f"{env_cfg.reset.reset_position_noise_y} m, "
+                f"fixed_start_pose={env_cfg.reset.fixed_start_pose} "
+                f"(None => yaw drawn per episode)",
+                flush=True,
+            )
+        else:
+            disable_randomization(env_cfg)
         use_single_object_variant()
 
         env = gym.make(args.task, cfg=env_cfg)
