@@ -106,6 +106,14 @@ def main() -> None:
     parser.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
     parser.add_argument("--policy_config", default=DEFAULT_POLICY_CFG)
     parser.add_argument(
+        "--sapg_expl_coef",
+        type=float,
+        default=50.0,
+        help="SAPG block conditioning appended to the observation. 50.0 = block 0 (the released "
+        "checkpoint's value), 0.0 = the last block, trained on task reward alone. See "
+        "SAPG_EXPL_COEF in eval/player.py.",
+    )
+    parser.add_argument(
         "--success_tolerance",
         type=float,
         default=0.01,
@@ -183,6 +191,7 @@ def main() -> None:
             device=args_cli.rl_device,
             num_observations=int(inner.cfg.observation_space),
             num_actions=int(inner.cfg.action_space),
+            expl_coef=args_cli.sapg_expl_coef,
         )
 
         # Reset, then one zero-action tick, matching the reference runner's timing. Getting this
@@ -313,6 +322,7 @@ def main() -> None:
             "max_steps": args_cli.max_steps,
             "steps_run": step,
             "checkpoint": args_cli.checkpoint,
+            "sapg_expl_coef": args_cli.sapg_expl_coef,
             "success_tolerance": args_cli.success_tolerance,
             "keypoint_scale": float(inner.cfg.reward.keypoint_scale),
             "randomization": bool(args_cli.randomize),

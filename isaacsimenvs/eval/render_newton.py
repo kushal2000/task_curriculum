@@ -532,6 +532,10 @@ def main() -> None:
     )
     parser.add_argument("--checkpoint", default="/share/portal/kk837/simtoolreal/pretrained_policy/model.pth")
     parser.add_argument("--policy_config", default="/share/portal/kk837/simtoolreal/pretrained_policy/config.yaml")
+    parser.add_argument(
+        "--sapg_expl_coef", type=float, default=50.0,
+        help="SAPG block conditioning: 50.0 = block 0, 0.0 = last block. See eval/player.py.",
+    )
     parser.add_argument("--success_tolerance", type=float, default=0.01)
     parser.add_argument(
         "--zero_action",
@@ -634,6 +638,7 @@ def main() -> None:
             device=args.device,
             num_observations=int(inner.cfg.observation_space),
             num_actions=int(inner.cfg.action_space),
+            expl_coef=args.sapg_expl_coef,
         )
 
         from isaaclab_newton.physics.newton_manager import NewtonManager

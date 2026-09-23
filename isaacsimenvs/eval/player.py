@@ -33,6 +33,13 @@ POLICY_ACTION_DIM = 29
 # Omitting it does not crash: the first Linear would simply reject the shape -- but any code that
 # pads or reshapes instead produces finite, plausible, and wrong actions. Asserted below rather
 # than trusted.
+#
+# 50.0 is SAPG block 0 -- the block with the LARGEST entropy bonus (`a2c_common.py:342,351`:
+# embedding linspace(50, 0, num_blocks), intrinsic coef linspace(0.5, 0)). Block num_blocks-1 is
+# coefficient 0.0, trained on task reward alone. A finetuned checkpoint need not share the released
+# one's best block: in the prior-vs-scratch cloth runs every fold came from block 5 (0.0) while
+# blocks 0-4 folded ~0.1% of episodes, and evaluating at 50.0 measured the wrong policy. Pass
+# `expl_coef` explicitly for anything other than the released checkpoint.
 SAPG_EXPL_COEF = 50.0
 
 # Registered by `isaacgymenvs/__init__.py` upstream. The released config interpolates through all
@@ -105,6 +112,7 @@ class PretrainedPlayer:
         device: str = "cuda:0",
         num_observations: int = POLICY_OBS_DIM,
         num_actions: int = POLICY_ACTION_DIM,
+        expl_coef: float = SAPG_EXPL_COEF,
     ) -> None:
         from rl_games.common import env_configurations
         from rl_games.torch_runner import Runner
@@ -112,6 +120,7 @@ class PretrainedPlayer:
         self.device = device
         self.num_observations = num_observations
         self.num_actions = num_actions
+        self.expl_coef = float(expl_coef)
 
         self.cfg = read_policy_cfg(config_path, device)
 
@@ -152,7 +161,7 @@ class PretrainedPlayer:
                 "reshape."
             )
         obs = obs.to(self.device)
-        expl = torch.full((obs.shape[0], 1), SAPG_EXPL_COEF, device=self.device, dtype=obs.dtype)
+        expl = torch.full((obs.shape[0], 1), self.expl_coef, device=self.device, dtype=obs.dtype)
         return self.player.get_action(obs=torch.cat([obs, expl], dim=1), is_deterministic=deterministic)
 
     def reset_rnn(self, env_ids: torch.Tensor | None = None) -> None:
