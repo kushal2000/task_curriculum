@@ -63,6 +63,11 @@ class WandbAlgoObserver(AlgoObserver):
         default_logcode_dir = os.path.join(repo_root, "isaacsimenvs")
         logcode_dir = cfg.wandb_logcode_dir if cfg.wandb_logcode_dir else default_logcode_dir
 
+        # No `settings=wandb.Settings(start_method="fork")`: wandb removed that field when the
+        # service launcher replaced the fork/spawn choice, and its Settings model forbids extras,
+        # so on wandb >= 0.30 it raises `extra_forbidden` inside init and every run trains with
+        # wandb silently off (metrics survive only as local tensorboard events). Jobs 146678-146683
+        # and 150907 all lost their wandb logging to this.
         @_retry(3, (Exception,))
         def init_wandb():
             wandb.init(
@@ -75,7 +80,6 @@ class WandbAlgoObserver(AlgoObserver):
                 id=wandb_unique_id,
                 name=display_name,
                 resume=True,
-                settings=wandb.Settings(start_method="fork"),
             )
             wandb.run.log_code(root=logcode_dir)
             print(f"[Wandb] run dir: {wandb.run.dir} (log_code root: {logcode_dir})")
