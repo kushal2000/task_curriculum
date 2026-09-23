@@ -77,6 +77,9 @@ evaluation pass (job 146704, `cloth_pvs_*_c50_s*.json`) therefore measured block
   seeds establish "prior >> scratch", not a reliable fold rate for the prior.
 * **1e8 steps is short for a from-scratch dexterous policy.** The claim is "at equal budget", not
   "scratch can never learn this". Scratch s2/s3 do move best_fold_err a little off the flat 0.100.
+* **1e8 steps is also short for the *prior* arm.** A 7.5e8-step finetune of the same prior folds
+  160/160 at `best_fold_err` 0.008 m and in every SAPG block (`cloth_vs_reference.md`), so the
+  numbers here are an early slice of that curve.
 * **Not visually verified.** The footprint half of the criterion has a documented fail-permissive
   mode (`cloth_fold_baseline.md`). best_fold_err 0.027 m for s1 is well inside tolerance, which
   makes a criterion artefact unlikely there, but a render of s1 at `--sapg_expl_coef 0` is the check.
