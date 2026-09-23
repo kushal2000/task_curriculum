@@ -91,7 +91,7 @@ action:
 # 5) reward — keypoint + lifting + distance-delta + reach-goal + action penalties
 # -----------------------------------------------------------------------------
 reward:
-  keypoint_rew_scale: 200.0
+  keypoint_rew_scale: 1500.0             # was 200: a perfect fold paid ~20 vs ~64 of action penalty (docs/results/cloth_finetune_reward_imbalance.md)
   keypoint_scale: 1.5
   object_base_size: 0.04
   fixed_size: [0.141, 0.03025, 0.0271]
