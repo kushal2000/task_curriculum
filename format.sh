@@ -12,6 +12,8 @@ for target in $PKGS; do
 done
 
 echo "xmllint: assets/**/*.urdf"
-find assets -name "*.urdf" -type f -exec xmllint --format "{}" --output "{}" \;
+# g1_wuji2_description is fetched verbatim from upstream (scripts/g1_wuji/fetch_assets.sh); leave it be.
+find assets -name "*.urdf" -type f -not -path "assets/g1_wuji2_description/*" \
+  -exec xmllint --format "{}" --output "{}" \;
 
 echo "✅ Formatting complete."

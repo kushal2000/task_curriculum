@@ -55,3 +55,7 @@ third_party/
 
 # SLURM job logs: large, regenerable, and one per run
 slurm_logs/
+
+# G1 + Wuji Hand 2 models, fetched at a pinned upstream SHA by scripts/g1_wuji/fetch_assets.sh.
+# Also holds the URDF->USD conversions the Isaac Sim replayer writes under usd/.
+assets/g1_wuji2_description/
