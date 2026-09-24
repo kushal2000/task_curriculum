@@ -108,3 +108,21 @@ positions and the root pose are written to PhysX and rendered, and physics is ne
 Collisions therefore play no part: the hands pass through each other, and nothing reports it.
 Self-collision is also switched off in the conversion. For physics-level tracking and for
 contact checks, use MuJoCo.
+
+The bos14 login node has no GPU, so submit the job through SLURM from the repo root:
+
+```bash
+sbatch scripts/cluster/bos14_g1_wuji_replay_isaacsim.sh traj.npz --video outputs/out.mp4
+```
+
+The compute nodes do not have `libGLU.so.1`. Without it, Isaac Sim's renderer fails to start
+and the video comes out empty. The launcher works around this by using a copy of the library,
+which you make once from the login node:
+
+```bash
+mkdir -p .venv_isaacsim/compat-libs
+cp /usr/lib/x86_64-linux-gnu/libGLU.so.1.3.1 .venv_isaacsim/compat-libs/libGLU.so.1
+```
+
+Inputs and outputs must be on the shared filesystem (for example under `outputs/`), because
+`/tmp` is not shared with the compute nodes.
