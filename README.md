@@ -81,6 +81,7 @@ task_curriculum/
 │       └── play/             # play2perfect base env, verbatim
 ├── rl_games/                 # vendored fork (PPO + SAPG), verbatim
 ├── assets/urdf/              # Kuka + Sharpa robot, table
+├── scripts/g1_wuji/          # G1 + Wuji Hand trajectory replay, MuJoCo and Isaac Sim
 ├── experiments/run_curriculum.sh
 ├── tests/                    # Kit-free unit tests
 └── docs/isaacsim_installation.md
