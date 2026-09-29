@@ -1,8 +1,10 @@
-# Cloth folding: our 1e8-step finetune vs the reference checkpoint
+# Cloth folding: our finetune vs the reference checkpoint
 
-**The reference checkpoint folds every episode; our best seed folds 93% of them, less precisely and
-three times slower.** The gap is a budget gap, not a method gap: the two start from the same prior,
-differ in almost nothing else, and the reference had 7.5x the environment steps.
+**At 1e8 steps our best seed folded 93% of episodes against the reference's 100%. Resumed to the
+reference's own budget (7.47e8 steps, epoch 3800) it folds 100% too, in 57 steps against 60, with
+zero falls -- everything matched except precision, which is still 2x coarser (0.0163 m against
+0.0083 m).** The gap was a budget gap, as predicted; what survives the budget is a smaller,
+different gap.
 
 ## What `/home/yiboc/mit/model.pth` is
 
@@ -80,10 +82,50 @@ In 600 steps the filmed reference env folds 4 times (w0: steps 122/263/374/543) 
 half; ours at step 224 reads `0.035 / 0.313`, the sheet bunched under the fingers. Both are genuine
 folds -- a slide leaves footprint at 1.0 -- but only one is neat.
 
+## Resumed to the same budget (job 150911)
+
+`scripts/cluster/bos14_cloth_resume.sh` restarted the s1 checkpoint at epoch 509 and ran it to
+3800 -- the reference's own epoch count, and the same per-epoch env-steps -- in 21.3 h on 4 nodes.
+Same protocol, same `--sapg_expl_coef 0`:
+
+| checkpoint | held folds | best_fold_err (m) | best_footprint | ep. length | falls |
+|---|---|---|---|---|---|
+| reference, epoch 3800 | 160 / 160 | **0.0083 +- 0.0003** | 0.498 +- 0.001 | 60 | 0 |
+| **ours, epoch 3800** | **160 / 160** | 0.0163 +- 0.0015 | **0.502 +- 0.003** | **57** | **0** |
+| ours, epoch 2450 | 159 / 160 | 0.0178 +- 0.0015 | 0.506 +- 0.003 | 65 | 1 |
+| ours, epoch 1250 | 159 / 160 | 0.0280 +- 0.0010 | 0.506 +- 0.015 | 91 | 1 |
+| ours, epoch 509 | 149 / 160 | 0.0274 +- 0.0008 | 0.458 +- 0.014 | 187 | 8 |
+
+All six SAPG blocks now fold 32/32 (`best_fold_err` 0.0145-0.0253), against only block 5 at epoch
+509 -- the same signature the reference has, and the clearest sign that the block structure is a
+matter of budget rather than of the run.
+
+Two things in the intermediate rows are worth keeping:
+
+* **Success rate and precision improve on different schedules.** 509 -> 1250 raised held folds from
+  93% to 99% while `best_fold_err` did not move at all (0.0274 -> 0.0280); precision only started
+  falling afterwards (0.0178 at 2450, 0.0163 at 3800). Read at epoch 1250 alone this looks like the
+  criterion saturating at its 0.04 tolerance -- the policy has no incentive past "inside tolerance".
+  It is not: the dense term keeps paying, just much more slowly than the term that gets the fold to
+  happen at all.
+* **Everything except precision converged by epoch 2450.** The last 1350 epochs bought 159 -> 160
+  folds and 0.0178 -> 0.0163 m. Whatever separates us from 0.0083 is not simply more of the same.
+
+Remaining candidates for that last 2x, none tested: the reference's reward config is unknown (our
+`keypoint_rew_scale: 1500` may not be what it trained under, and a dense term that keeps pressing
+below tolerance would explain exactly this); it ran 8 ranks x 768 envs against our 4 x 1536, i.e.
+twice as many independent rollout streams at half the batch per stream; and its env commit is
+unknown.
+
+Render of the final checkpoint, same framing as above: `videos/11_s1_ep3800/w0.mp4`, `w1.mp4`
+(job 154509). The filmed env folds 3 times in 600 steps (steps 115/232/374), 56 fold events across
+all 8 envs, against 62 for the reference and 32 at epoch 509.
+
 ## What this says about the 1e8-step comparison
 
 `cloth_prior_vs_scratch.md` claims "the prior is what makes the fold learnable at 1e8 steps". This
-adds the ceiling: the same prior, same task and ~7.5x the steps reaches 100% at a fifth of the
-tolerance, so our prior-arm numbers (93% / 18% / 13%) are an early slice of that curve, and the
-seed variance is early-training variance rather than a property of the method. It does **not**
-show scratch would get there with 7.5e8 steps; nothing here tests that.
+adds the ceiling, and then confirms it is reachable: our own s1, resumed to 7.47e8 steps, gets to
+100% at 0.0163 m. So the prior-arm numbers there (93% / 18% / 13%) are an early slice of a curve
+that does converge, and the seed variance is early-training variance rather than a property of the
+method. It does **not** show scratch would get there with 7.5e8 steps; nothing here tests that,
+and it remains the obvious next run.
