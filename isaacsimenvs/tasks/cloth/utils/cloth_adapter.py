@@ -71,6 +71,26 @@ def _to_torch(value):
     return value.torch if hasattr(value, "torch") else value
 
 
+def task_yaw(root_pose: torch.Tensor) -> torch.Tensor:
+    """The heading a reset pose asks for, as BOTH manipuland adapters decode it. ``(n, 7) -> (n,)``.
+
+    Shared on purpose: whatever this returns is where the sheet starts, and a chain standing in for
+    the cloth has to start exactly where the cloth would for the same reset draw.
+
+    **The decode reads ``root_pose[:, 3:7]`` as (w, x, y, z), but it does not receive that.**
+    ``patches.install_pose_write_conversion`` wraps ``env.object.write_root_pose_to_sim`` and
+    reorders the task's wxyz quaternion to xyzw before either adapter sees it. For the random draws
+    of training that is harmless -- ``random_orientation`` is an isotropic Gaussian, so any
+    relabelling of its components is still Haar-uniform and the decoded heading is still uniform on
+    [0, 2 pi). For a SPECIFIC requested orientation it is not: every pure yaw arrives as
+    (0, 0, sin, cos) and decodes to 180 deg, so the pinned evaluation start (identity) puts the
+    sheet at 180 deg. It is kept, not fixed, because every cloth result so far -- training and
+    evaluation -- was produced under it; fixing it would move the cloth's pinned start.
+    """
+    qw, qx, qy, qz = root_pose[:, 3], root_pose[:, 4], root_pose[:, 5], root_pose[:, 6]
+    return torch.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+
+
 class ClothAsRigidObject:
     """Adapt a cloth ``DeformableObject`` to the rigid-object reads the Play task performs."""
 
@@ -177,12 +197,8 @@ class ClothAsRigidObject:
         centre = root_pose[:, :3].clone()
         centre[:, 2] = self._spawn_z
 
-        # Yaw from the (w, x, y, z) quaternion. Standard extraction; roll and pitch are discarded.
-        qw, qx, qy, qz = root_pose[:, 3], root_pose[:, 4], root_pose[:, 5], root_pose[:, 6]
-        yaw = torch.atan2(
-            2.0 * (qw * qz + qx * qy),
-            1.0 - 2.0 * (qy * qy + qz * qz),
-        )
+        # Roll and pitch are discarded; see `task_yaw` for what this decode actually receives.
+        yaw = task_yaw(root_pose)
         cos_y = torch.cos(yaw).unsqueeze(1)   # (n, 1), broadcast over particles
         sin_y = torch.sin(yaw).unsqueeze(1)
 

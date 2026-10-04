@@ -147,6 +147,46 @@ def install_reader(cache_dir: Path = DEFAULT_CACHE_DIR) -> None:
     scene_utils._usd_cache_reader_installed = True
 
 
+def bake_rigid_cloth(variants=None, *, cache_dir: Path = DEFAULT_CACHE_DIR) -> list[str]:
+    """Convert the hinged-slat chain URDFs so a ``RigidCloth`` run can find them.
+
+    These do not come from a scene build. ``RigidClothEnv`` writes its chain's URDF at construction
+    time and converts it through ``scene_utils._convert_urdf_to_usd`` -- the same call the object
+    pool uses, so the same cache -- which means the entry must already exist under the kit-less
+    stack. Baking them here rather than in a script of their own keeps one definition of the cache
+    key and one command to populate it.
+
+    The three URDF parameters come from :data:`rigid_cloth_assets.URDF_DEFAULTS`, which is also
+    where ``RigidClothCfg`` takes its defaults, because the URDF text is the cache key: a run that
+    overrides any of them is a different asset and needs its own bake. It will say so, as a cache
+    miss naming the variant.
+
+    Deliberately does **not** import ``RigidClothCfg``. That config inherits from ``PlayEnvCfg``,
+    which builds a ``SimulationCfg(physics=...)`` that only Isaac Lab 3.0 accepts -- and this
+    function runs under ``.venv_isaacsim``, where the import raises before anything is baked.
+    """
+    import tempfile
+
+    from isaacsimenvs.tasks.cloth.utils import rigid_cloth as rc
+    from isaacsimenvs.tasks.cloth.utils import rigid_cloth_assets as assets
+
+    install_writer(cache_dir)
+    names = list(rc.VARIANTS) if variants is None else list(variants)
+    unknown = [n for n in names if n not in rc.VARIANTS]
+    if unknown:
+        raise ValueError(f"unknown variant(s) {unknown}; known: {sorted(rc.VARIANTS)}")
+
+    work = Path(tempfile.mkdtemp(prefix="rigid_cloth_bake_"))
+    done = []
+    for name in names:
+        urdf = assets.write_chain_urdf_for_run(name, work)
+        usd = assets.convert_variant(urdf, work)
+        key = cache_key(Path(urdf).read_text(), assets.CONVERT_KWARGS)
+        print(f"[usd_cache] baked {name} -> {key}  ({Path(usd).name})", flush=True)
+        done.append(name)
+    return done
+
+
 def main() -> None:
     """Populate the cache by building the Play scene once under Isaac Sim."""
     import argparse
@@ -165,6 +205,24 @@ def main() -> None:
         "length, so a different count yields a different set of objects.",
     )
     parser.add_argument("--task", default="Isaacsimenvs-Play-Direct-v0")
+    parser.add_argument(
+        "--rigid_cloth_variants",
+        nargs="*",
+        default=None,
+        metavar="NAME",
+        help="Also bake the hinged-slat chains of `rigid_cloth.VARIANTS`; no names means all five. "
+        "These are NOT part of any scene build -- a RigidCloth run generates its chain URDF and "
+        "converts it through the same cache, so the entry has to exist. Baking them all in one "
+        "launch costs one Kit start instead of five.",
+    )
+    parser.add_argument(
+        "--skip_scene_build",
+        action="store_true",
+        help="Do not build the Play scene; only bake --rigid_cloth_variants. The scene build is "
+        "what populates the procedural tool pool, and re-running it with a different "
+        "--num_assets_per_type writes a DIFFERENT set of objects into the cache. When the pool is "
+        "already baked, skipping it keeps the cache exactly as it is and saves the scene build.",
+    )
     from isaaclab.app import AppLauncher
 
     AppLauncher.add_app_launcher_args(parser)
@@ -190,7 +248,15 @@ def main() -> None:
         print(f"\n[usd_cache] {entries} entries in {args.cache_dir}")
         env.close()
 
-    run()
+    if args.skip_scene_build:
+        if args.rigid_cloth_variants is None:
+            parser.error("--skip_scene_build leaves nothing to do without --rigid_cloth_variants")
+        print("[usd_cache] skipping the scene build; baking chains only", flush=True)
+    else:
+        run()
+
+    if args.rigid_cloth_variants is not None:
+        bake_rigid_cloth(args.rigid_cloth_variants or None, cache_dir=args.cache_dir)
 
     del app
     sys.stdout.flush()

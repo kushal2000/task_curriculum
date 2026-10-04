@@ -1,0 +1,365 @@
+# RigidCloth — the cloth-folding task with a chain of hinged rigid slats as the manipuland.
+#
+# GENERATED FROM Cloth.yaml, kept a full flat copy for the same reason Cloth.yaml is a full copy of
+# PlayNewton.yaml: the loader does a plain `yaml.safe_load` with no inheritance, and keeping the two
+# diffable is what makes "only the manipuland changed" checkable rather than asserted.
+#
+# Intentional addition: the `rigid_cloth:` block at the bottom.
+#
+# THE `cloth:` BLOCK STAYS, and most of it is INERT here. It is kept because it is where the *task*
+# is defined -- `size`, `resolution` and `fold_axis` fix the particle grid the fold is scored on, and
+# `start_height` / `table_half_thickness` fix where the sheet spawns; `RigidClothEnv` reconstructs
+# that same grid from the slats' body poses so the reward, goal and success criterion are the VBD
+# env's own code. Everything from `proxy_mode` down -- substeps, vbd_iterations, the material
+# stiffnesses, the contact and self-contact parameters, the AVBD ramping -- describes a solver that
+# does not run in this task: `RigidClothEnv.build_physics_cfg` returns a plain MJWarp scene, because a
+# chain of boxes is rigid and needs no coupling. Those values are left in place, not deleted, so
+# `ClothCfg`'s calibration notes remain the reference for what is being approximated.
+#
+# `self_contact_radius` is the one exception -- it is READ, as the height the folded plies come to
+# rest at, and `RigidClothEnv._init_fold_targets` overwrites it with the chain's own ply gap unless
+# `rigid_cloth.fold_lift_from_ply_gap` is false.
+
+# -----------------------------------------------------------------------------
+# DirectRLEnvCfg top-level required fields
+# -----------------------------------------------------------------------------
+decimation: 2
+episode_length_s: 10.0
+action_space: 29
+# observation_space / state_space are computed in PlayEnv.__init__ from
+# obs.obs_list / obs.state_list (see Phase D). Configclass defaults (140/140)
+# act only as transient placeholders before __init__ overwrites them.
+
+# -----------------------------------------------------------------------------
+# 1) sim — SimulationCfg (60 Hz policy control, 120 Hz physics)
+# -----------------------------------------------------------------------------
+sim:
+  dt: 0.00833333333   # 1/120
+  render_interval: 2
+  gravity: [0.0, 0.0, -9.81]
+
+# -----------------------------------------------------------------------------
+# 2) scene — plain InteractiveSceneCfg (Isaac Lab rejects unknown scene fields,
+#    so asset metadata lives under `assets:` below).
+# -----------------------------------------------------------------------------
+scene:
+  num_envs: 768                          # 6 x 128 SAPG blocks; see cfg/train/ClothSAPG.yaml
+  env_spacing: 1.2
+  # Both must be false for MultiUsdFileCfg to spawn per-env distinct
+  # handle_head USDs: replicate_physics=false makes PhysX parse each env
+  # as its own subtree; clone_in_fabric=false makes the cloner land env
+  # prims in the USD stage (not just Fabric), so the multi-asset
+  # spawner's find_matching_prim_paths sees env_1..env_{N-1}.
+  replicate_physics: false
+  clone_in_fabric: false
+
+# -----------------------------------------------------------------------------
+# 3) assets — URDFs, procedural-generation knobs, static per-material frictions
+# -----------------------------------------------------------------------------
+assets:
+  robot_urdf: "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
+  table_urdf: "assets/urdf/table_narrow.urdf"
+
+  object_name: "handle_head_primitives"
+  # ONE variant, and only the hammer. The cloth replaces the spawned object, so the tool pool is
+  # inert here -- but it is still built, and two things make the inherited pool wrong:
+  #   * only hammer variants are baked in the USD cache; anything else dies with a cache miss.
+  #   * Newton REQUIRES type-homogeneous collision shapes across worlds (SolverMuJoCo rejects
+  #     mixed geom types), which a 6-type pool violates. Eval enforces this with
+  #     `use_single_object_variant()`; training passes --single_variant for the same reason.
+  handle_head_types: ["hammer"]
+  num_assets_per_type: 1
+
+  modify_asset_frictions: true
+  robot_friction: 0.5
+  finger_tip_friction: 1.5
+  object_friction: 0.5
+  table_friction: 0.5
+
+# -----------------------------------------------------------------------------
+# 3) obs — asymmetric actor-critic obs layout
+# -----------------------------------------------------------------------------
+obs:
+  state_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot, palm_vel,
+               object_rot, object_vel, fingertip_pos_rel_palm, keypoints_rel_palm,
+               keypoints_rel_goal, object_scales, closest_keypoint_max_dist,
+               closest_fingertip_dist, lifted_object, progress, successes, reward]
+  obs_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot,
+             object_rot, fingertip_pos_rel_palm, keypoints_rel_palm,
+             keypoints_rel_goal, object_scales]
+  clamp_abs_observations: 10.0
+
+# -----------------------------------------------------------------------------
+# 4) action — moving-average smoothing + speed/force scales
+# -----------------------------------------------------------------------------
+action:
+  arm_moving_average: 0.1
+  hand_moving_average: 0.1
+  dof_speed_scale: 1.5
+
+# -----------------------------------------------------------------------------
+# 5) reward — keypoint + lifting + distance-delta + reach-goal + action penalties
+# -----------------------------------------------------------------------------
+reward:
+  keypoint_rew_scale: 1500.0             # was 200: a perfect fold paid ~20 vs ~64 of action penalty (docs/results/cloth_finetune_reward_imbalance.md)
+  keypoint_scale: 1.5
+  object_base_size: 0.04
+  fixed_size: [0.141, 0.03025, 0.0271]
+  fixed_size_keypoint_reward: true
+
+  lifting_rew_scale: 20.0
+  lifting_bonus: 300.0
+  lifting_bonus_threshold: 0.15
+
+  distance_delta_rew_scale: 50.0
+  reach_goal_bonus: 1000.0
+
+  kuka_actions_penalty_scale: 0.03
+  hand_actions_penalty_scale: 0.003
+
+# -----------------------------------------------------------------------------
+# 6) reset — initial-state distribution + goal sampling
+# -----------------------------------------------------------------------------
+reset:
+  # KEPT ON, unlike the domain_randomization block. This is the initial-state distribution, not
+  # sensor/actuator randomisation: zeroing it would make all 768 envs start identically every
+  # episode, removing the state diversity RL needs and inviting overfit to one configuration.
+  # play2perfect's finetune launchers keep these at exactly these values.
+  # For cloth, X, Y and YAW reach the sheet -- `ClothAsRigidObject.write_root_pose_to_sim` forces
+  # z = spawn_z and keeps only the yaw of the orientation draw, so _z and table_reset_z_range are
+  # inert while heading is fully randomised. `reset_utils` draws a Haar-uniform SO(3) quaternion,
+  # whose yaw marginal is uniform on [0, 2*pi), so the sheet's heading is uniform without a second
+  # RNG stream. Roll and pitch are dropped deliberately: they would stand a sheet on edge.
+  #
+  # This was previously yaw-FIXED -- the quaternion was discarded entirely and every episode
+  # presented the sheet axis-aligned, so a policy could learn a fold that only worked for one
+  # heading and still score perfectly.
+  reset_position_noise_x: 0.1
+  reset_position_noise_y: 0.1
+  reset_position_noise_z: 0.02
+  fixed_start_pose: null
+
+  reset_dof_pos_random_interval_arm: 0.1
+  reset_dof_pos_random_interval_fingers: 0.1
+  reset_dof_vel_random_interval: 0.5
+
+  table_reset_z: 0.38
+  table_reset_z_range: 0.01
+  table_object_z_offset: 0.25
+
+  goal_sampling_type: delta           # "delta" | "absolute"
+  delta_goal_distance: 0.1
+  delta_rotation_degrees: 90.0
+  target_volume_mins: [-0.35, -0.2, 0.6]
+  target_volume_maxs: [0.35, 0.2, 0.95]
+  target_volume_region_scale: 1.0
+
+# -----------------------------------------------------------------------------
+# 7) termination — end-of-episode conditions + tolerance curriculum
+# -----------------------------------------------------------------------------
+termination:
+  episode_length: 600                 # policy steps (600 * 2 * 1/120 = 10s)
+  success_tolerance: 0.04             # == target, so the tolerance curriculum is a no-op
+  target_success_tolerance: 0.04      # == start: play2perfect disables the curriculum this way
+  eval_success_tolerance: null
+  success_steps: 1                    # lump-sum bonus on FIRST entry, as in the finetune launchers
+  max_consecutive_successes: 50
+  force_consecutive_near_goal_steps: true
+  tolerance_curriculum_increment: 0.9
+  tolerance_curriculum_interval: 3000
+
+# -----------------------------------------------------------------------------
+# 8) domain_randomization — sim2real essentials (delays, noise, impulses)
+# -----------------------------------------------------------------------------
+domain_randomization:
+  # ALL OFF for the finetune. play2perfect keeps DR on during assembly finetuning for sim2real
+  # robustness ("we apply domain randomization during assembly finetuning to improve robustness to
+  # perception errors, control latency, and contact-dynamics mismatch"); this run deliberately
+  # departs from that to get the cleanest possible learning signal first, on a task whose reward
+  # events are rare (3 folds / 160 episodes at baseline). Turn it back on for a transfer run.
+  #
+  # NOTE reset noise is NOT part of this block and is deliberately KEPT -- see `reset:` above.
+
+  # obs / action latency
+  use_obs_delay: false
+  obs_delay_max: 3
+  use_action_delay: false
+  action_delay_max: 3
+
+  # object state delay + noise
+  use_object_state_delay_noise: false
+  object_state_delay_max: 10
+  object_state_xyz_noise_std: 0.0
+  object_state_rotation_noise_degrees: 0.0
+  object_scale_noise_multiplier_range: [1.0, 1.0]
+
+  # per-step obs noise
+  joint_velocity_obs_noise_std: 0.0
+
+  # random force/torque impulses. Already inert for cloth regardless --
+  # `ClothAsRigidObject.set_external_force_and_torque` is a documented no-op -- but zeroed so the
+  # config states the intent rather than relying on the adapter.
+  force_scale: 0.0
+  force_prob_range: [0.0001, 0.0001]
+  force_decay: 0.0
+  force_decay_interval: 0.08
+  force_only_when_lifted: true
+
+  torque_scale: 0.0
+  torque_prob_range: [0.0001, 0.0001]
+  torque_decay: 0.0
+  torque_decay_interval: 0.08
+  torque_only_when_lifted: true
+
+# -----------------------------------------------------------------------------
+# newton — MJWarp solver knobs. Every value here is a deliberate departure from a
+# library default, and most of the defaults fail *silently*. See NewtonSolverCfg
+# for the measurement behind each.
+# -----------------------------------------------------------------------------
+newton:
+  max_triangle_pairs: null      # null => 65536 * num_envs; the 1e6 default is GLOBAL and
+                                # silently drops contacts above ~16 envs
+  # 65536 is sized for the VBD SHEET (~2.5x its measured ~26.6k/env). A 16-17 slat chain with
+  # self-collision needs far more: measured peak demand 91,615,819 pairs at 768 envs = ~119k/env for
+  # `cyl-mid-odd`, 118.5k for `box-mid-odd`, 111k for `box-surface`. At 65536 those three ran their
+  # ENTIRE training with the buffer overflowing -- 137k-208k warnings per run -- which silently drops
+  # contacts, and dropping contacts makes the sim both wrong AND faster, i.e. it flatters exactly the
+  # number this task exists to measure. `box3-mid` (3 bodies), `box2-surface` (2) and the VBD control
+  # never overflowed.
+  #
+  # 262144 was ~2.2x that training peak and is STILL TOO SMALL, because the training peak was
+  # measured on runs that never fold. At 1e8 steps no arm folds (`fold_rate` ~0.005), so the slats
+  # never stack; the evaluation runs a policy that folds every episode, and a folded 16-slat chain is
+  # two plies of eight slats face to face -- the configuration that maximises triangle pairs. The
+  # guard caught it at 32 envs: demand 9.11e6 against a 8.39e6 budget, i.e. ~285k/env, 2.4x the
+  # training peak. Note which runs survived: `vbd_s1__on_box-mid-odd` passed because the cloth policy
+  # only folds the chain ~28% of the time. **The overflow appears exactly when the measurement
+  # succeeds**, so under-sizing this corrupts the successful half of the transfer matrix and leaves
+  # the failing half clean.
+  #
+  # 524288 is ~1.8x the observed eval peak. Costs GPU memory and nothing else; under-sizing fails
+  # silently. At 768 envs this is ~4e8 pair slots; the rigid arms have the headroom (the VBD control
+  # is the memory-limited one and does not use this buffer).
+  per_env_triangle_pairs: 524288
+  njmax: 8192                   # default 300 overflows continuously on this scene
+  nconmax: 2048
+  cone: elliptic                # default pyramidal; the task authors' MuJoCo scene uses elliptic
+  impratio: 10.0                # default 1.0
+  condim: 6                     # fidelity, not score: measured neutral post-fix
+  use_mujoco_contacts: false    # default true silently ignores per-env meshes
+  num_substeps: 2
+  deterministic_mode: not_guaranteed
+
+use_gravcomp: true
+meshify: false
+
+
+# -----------------------------------------------------------------------------
+# Cloth. Defaults live in ClothCfg; this block only pins what a run should not
+# silently inherit. Thickness is the particle *radius* x2 and is bounded by grid
+# spacing (size / (resolution - 1)) -- ClothCfg raises if that is violated.
+# -----------------------------------------------------------------------------
+# The material, contact and self-contact values below are SIM1's calibrated cloth physics
+# (arXiv 2604.08544 Table 2, cross-checked against InternRobotics/SIM1 @ 973476b). They are ADOPTED,
+# not measured here -- see the ClothCfg docstrings for what each one displaced and what to revert
+# first if the fold regresses. Two things are deliberately NOT copied from that paper:
+#
+#   * the AVBD edge strain limit (xi = 0.05 and its ramping constants). Newton 1.5 has no per-edge
+#     strain constraint for cloth -- its AVBD is joints and contacts -- so that one needs a solver
+#     port, not a config line. Note it does not run in SIM1's released env either: the limit is
+#     read from `spring_control`, `add_cloth_mesh` hardcodes `control=0.0`, and their env never
+#     passes `add_springs`, so `spring_count == 0` and every AVBD kernel is guarded out.
+#   * Table 2's robot/table frictions (1.5 / 0.0), which their env overwrites to 1.0 on every shape
+#     immediately after building the table.
+cloth:
+  size: 0.10
+  # thickness and resolution are ONE decision: 16 mm particles need >= 16.7 mm spacing, and
+  # `max_resolution_for_thickness` is exactly 7. Was 12 mm at resolution 9 (81 particles).
+  resolution: 7                          # 49 particles / 72 triangles
+  thickness: 0.016                       # SIM1 particle radius 0.008; spacing is 16.7 mm
+  proxy_mode: staggered                  # the cable result: lagged shakes deformables loose
+  substeps: 6                            # cloth dt 1/1440 s, matching SIM1; was 2 (1/480)
+  vbd_iterations: 12                     # SIM1 lift2 (acone uses 16); was 10, Newton's default
+  # A GENUINE drop. The table's collision surface is at table_reset_z + 0.150, not + 0.045, so the
+  # old 0.15 spawned the sheet 0.2 mm above it -- in contact -- and it was ejected upward at
+  # ~1.7 m/s every single episode. See ClothCfg.start_height.
+  start_height: 0.30
+  table_half_thickness: 0.150            # measured from where the sheet rests, not from the USD box
+
+  # --- material (SIM1 Table 2) ---------------------------------------------------------------
+  density: 2.0                           # kg/m^2, PER AREA. Was 100.0 -- a 1 kg handkerchief.
+  tri_ke: 100.0                          # was 1.0e4; also Newton's own default
+  tri_ka: 100.0                          # was 1.0e4
+  tri_kd: 1.5e-6                         # was 1.0e-5
+  edge_ke: 8.0e-4                        # was 0.5; measurements said bending saturates by 0.05
+  edge_kd: 1.0e-3                        # was 1.0e-2
+
+  # --- contact (SIM1 Table 2) ----------------------------------------------------------------
+  soft_contact_ke: 500.0                 # was 8.0e3
+  soft_contact_kd: 5.0e-3                # NEW: was silently inheriting NewtonModelCfg's 1.0e-2
+  soft_contact_mu: 0.25                  # was 10.0 (effective vs fingertips: 3.9 -> 0.61)
+
+  # --- self-contact: OFF until now, so a folded flap fell through the half beneath it ---------
+  enable_self_contact: true
+  self_contact_radius: 0.002             # SIM1's value; see the docstring -- it does NOT scale to
+  self_contact_margin: 0.003             # our 16.7 mm grid the way it does to their ~mm mesh
+  self_contact_detection_interval: -1
+  conservative_bound_relaxation: 0.42     # Newton 1.5 defaults 0.85; 0.42 is SIM1's beta
+
+  # --- AVBD contact ramping: NOT from SIM1 ----------------------------------------------------
+  # Their solver has no contact ramping at all. This is Newton 1.5's own AVBD, which ships disabled
+  # (beta 0) and which silently makes rigid_contact_k_start a no-op. Most likely of these changes
+  # to go the wrong way -- A/B against 0.0.
+  rigid_avbd_beta: 500000.0
+
+
+# -----------------------------------------------------------------------------
+# rigid_cloth — which of the five approximations, and its physical parameters.
+#
+# Defaults live in RigidClothCfg; this block pins what a run should not silently inherit. Every
+# field here changes the URDF text or the solver state, and the URDF text is the USD cache key --
+# so changing `variant`, `density` or `joint_limit` needs a re-bake (NOT `joint_damping`: it is an
+# actuator gain and never reaches the URDF, see below):
+#
+#   OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.newton.usd_cache \
+#       --populate --rigid_cloth_variants
+#
+# The five variants, measured in scripts/analysis/rigid_cloth_probe.py (see
+# docs/results/rigid_cloth_approximation.md for the full table):
+#
+#   box3-mid       3 bodies   ply gap 2.00 mm   bidirectional   stable   ~175k steps/s   <- default
+#   box2-surface   2 bodies   ply gap 1.00 mm   NO self-contact (parent-child, filtered)
+#   cyl-mid-odd   17 bodies   ply gap 5.07 mm   bidirectional   stable   ~50k steps/s
+#   box-mid-odd   17 bodies   ply gap 5.83 mm   bidirectional   stable   ~30k steps/s
+#   box-surface   16 bodies   ply gap 1.92 mm   one-directional  DIVERGES in both drape configs
+#
+# `box-surface` is registered to be measured, not trained: it is the only variant with any
+# instability, and it also needs a `solimp` reach through Isaac Lab -> Newton -> MJWarp that has
+# never been verified.
+rigid_cloth:
+  variant: box3-mid
+  density: 2.0                    # kg/m^2 PER AREA, same number and units as cloth.density
+  joint_armature: 1.0e-5          # fictitious hinge inertia; WITHOUT IT EVERY VARIANT DIVERGES ON STEP 1
+  joint_damping: 0.05             # actuator gain, NOT the URDF's <dynamics> (the importer drops that)
+  joint_stiffness: 0.0            # limp chain; plate_joint_stiffness() is the calibrated alternative
+  joint_limit: null               # null => ChainSpec.joint_limit (the chain's own thickness)
+  slat_friction: null             # null => sqrt(0.25 * table 0.5) = 0.354, the cloth's effective value
+  fingertip_slat_friction: -1.0   # negative => sqrt(0.25 * fingertip 1.5) = 0.612, likewise
+  # MJWarp takes the higher-PRIORITY geom's friction and `max` only on a tie; without priority a
+  # slat felt max(0.354, 0.5) = 0.5 on the table and 1.5 under a fingertip. Costs fingertip-TABLE
+  # friction 1.5 -> 0.612 (the fingertip wins that contact too). false = the old max rule.
+  friction_priority: true
+  # negative => cloth.thickness/2 - slat thickness/2 = 7 mm: the VBD sheet collides through 8 mm
+  # particles, so it rests 8 mm up and is touched 8 mm above that; a bare 2 mm slat sat 14 mm lower.
+  # Nonzero also removes slat-slat contact pairs (joint limits hold the plies). 0.0 = old behaviour.
+  contact_margin: -1.0
+  fold_lift_from_ply_gap: true    # score the fold where THIS chain's plies rest, not the cloth's 2 mm
+  # Per-env physics randomisation, re-drawn at every reset, centred on the matched values above.
+  randomization:
+    enabled: false
+    slat_friction_scale: [0.7, 1.4]
+    fingertip_friction_scale: [0.7, 1.4]
+    hinge_damping_scale: [0.5, 3.0]     # log-uniform; below ~0.5 the hinge can diverge
+    hinge_stiffness: [0.0, 5.0e-4]      # N m / rad
+    contact_margin_offset: [-0.003, 0.003]
+    mass_scale: [0.7, 1.5]
