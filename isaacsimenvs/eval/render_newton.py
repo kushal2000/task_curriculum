@@ -28,6 +28,11 @@ from pathlib import Path
 
 from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
 
+#: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums. Both this
+#: module and its sibling print the identical line, so a render that disagrees with an evaluation
+#: can be diffed step by step instead of reasoned about.
+_TRACE = int(os.environ.get("RC_TRACE", "0") or 0)
+
 
 #: Per-role render colours. The scene is otherwise uniformly blue/white, which makes a thin cable
 #: on a blue table nearly impossible to follow.
@@ -189,7 +194,7 @@ HALF_COLORS = {
 }
 
 
-def _hud_lines(inner, world: int, step: int):
+def _hud_lines(inner, world: int, step: int, folds: int = 0):
     """Per-frame numbers to stamp on the video, or ``None`` for a task with no fold.
 
     The point is that a video and a metric should not be able to disagree without it being
@@ -213,7 +218,10 @@ def _hud_lines(inner, world: int, step: int):
             f"step      {step:4d}",
             f"fold err  {err:6.3f} m  (tol {tol:.3f})",
             f"footprint {fp:6.3f}    (max {max_fp:.3f})",
-            f"goals     {int(inner._successes[world].item())}",
+            # NOT `_successes`: that counter is incremented and then zeroed by the reset
+            # inside one `env.step()`, so it reads 0 on every frame of a clip that folds a
+            # dozen times. `folds` is counted by the caller off the termination itself.
+            f"folds     {folds}",
         ],
         within,
     )
@@ -247,6 +255,36 @@ def _stamp_hud(image, lines, within: bool):
     colour = (120, 255, 150, 255) if within else (255, 255, 255, 255)
     for i, text in enumerate(lines):
         draw.text((x0 + pad, 12 + pad + i * lh - 2), text, font=font, fill=colour)
+    return np.asarray(img)
+
+
+#: Banner for the held last frame of a `--stop_on_episode_end` clip: what the env scored.
+OUTCOME_BANNERS = {
+    "fold_held": ("SUCCESS: fold held", (40, 170, 70)),
+    "fold": ("SUCCESS: fold", (40, 170, 70)),
+    "fall": ("FAILURE: sheet fell off the table", (200, 50, 50)),
+    "hand_far": ("FAILURE: hand left the sheet", (200, 50, 50)),
+    "timeout": ("FAILURE: timed out (10 s)", (200, 50, 50)),
+    "nonfinite": ("FAILURE: simulation diverged", (200, 50, 50)),
+}
+
+
+def stamp_outcome(image, outcome: str):
+    """Draw the episode's scored outcome as a banner along the bottom of an RGB frame."""
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFont
+
+    text, rgb = OUTCOME_BANNERS.get(outcome, (f"outcome: {outcome}", (90, 90, 90)))
+    img = Image.fromarray(np.ascontiguousarray(image))
+    draw = ImageDraw.Draw(img, "RGBA")
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
+    except OSError:
+        font = ImageFont.load_default()
+    w = draw.textlength(text, font=font)
+    x0, y0 = (img.width - w) / 2 - 18, img.height - 72
+    draw.rectangle([x0, y0, x0 + w + 36, y0 + 50], fill=(*rgb, 215))
+    draw.text((x0 + 18, y0 + 8), text, font=font, fill=(255, 255, 255, 255))
     return np.asarray(img)
 
 
@@ -453,9 +491,28 @@ def _colorize(model, args) -> None:
     ]
     n_seg = (max(seg_ids) + 1) if seg_ids else 1
 
+    # The rigid-cloth chain's slats, `.../slat_<i>`. Coloured by index with the same hue sweep the
+    # cable uses, for the same reason: a hinged chain in one colour reads as a single blob, and the
+    # whole point of filming it is to see WHICH slats fold over which. Counted under "cable"
+    # because it is this scene's manipuland.
+    from isaacsimenvs.tasks.cloth.utils.rigid_cloth import SLAT_LINK_PREFIX
+
+    slat_re = re.compile(r"(?:^|/)" + re.escape(SLAT_LINK_PREFIX) + r"(\d+)$")
+    n_slat = max(
+        (int(m.group(1)) for lab in labels if (m := slat_re.search(lab))), default=-1
+    ) + 1
+
     counts = dict.fromkeys(SHAPE_COLORS, 0)
     for shape_idx, body_idx in enumerate(shape_body):
         label = labels[body_idx] if 0 <= body_idx < len(labels) else ""
+        if (m := slat_re.search(label)) and n_slat > 0:
+            colors[shape_idx] = (
+                SHAPE_COLORS["cable"]
+                if args.flat_cable or n_slat == 1
+                else _segment_color(int(m.group(1)), n_slat)
+            )
+            counts["cable"] += 1
+            continue
         if "/Rod" in label:
             # The rigid-rod control lives at its own prim path so the coupler's VBD entry cannot
             # claim it; it still wants the manipuland colour.
@@ -559,6 +616,22 @@ def main() -> None:
         "override: `disable_randomization` runs inside the hydra-wrapped function, i.e. AFTER the "
         "CLI overrides are merged, so it silently overwrites them.",
     )
+    parser.add_argument(
+        "--randomize",
+        action="store_true",
+        help="Skip `disable_randomization` entirely, exactly as `episodes.py --randomize` does: "
+        "the reset distribution AND the DR block (delays, obs noise, scale, random forces) stay "
+        "on. Use this when a clip must be a sample of an `episodes.py --randomize` result; "
+        "`--randomize_reset` keeps only the reset distribution and is an easier setting.",
+    )
+    parser.add_argument(
+        "--stop_on_episode_end",
+        action="store_true",
+        help="End the clip when the filmed world's FIRST episode ends (held fold, fall, hand-far or "
+        "timeout), holding the last frame for --end_hold_s, and write `<out>.json` with that "
+        "episode's outcome. One clip = one scored episode, so clips can be picked by outcome.",
+    )
+    parser.add_argument("--end_hold_s", type=float, default=1.0)
     parser.add_argument("--num_assets_per_type", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda:0")
@@ -609,7 +682,9 @@ def main() -> None:
         env_cfg.sim.device = args.device
         env_cfg.seed = args.seed
         env_cfg.termination.eval_success_tolerance = args.success_tolerance
-        if args.randomize_reset:
+        if args.randomize:
+            print("[render] full randomisation KEPT, as episodes.py --randomize", flush=True)
+        elif args.randomize_reset:
             # Only the DR block; the reset distribution is what we are deliberately keeping.
             dr = env_cfg.domain_randomization
             dr.use_obs_delay = dr.use_action_delay = dr.use_object_state_delay_noise = False
@@ -692,19 +767,31 @@ def main() -> None:
         )
 
         obs, _ = env.reset()
+        # Reset, then one zero-action tick. KEEP THIS: `episodes.py` does the same ("matching the
+        # reference runner's timing"), and the action space is absolute joint targets, so the tick
+        # is a real command rather than a no-op. Removing it here to chase a render-vs-eval
+        # discrepancy only made the two paths differ in one more place.
         obs, *_ = env.step(torch.zeros((inner.num_envs, inner.cfg.action_space), device=inner.device))
 
         args.out.parent.mkdir(parents=True, exist_ok=True)
         writer = imageio.get_writer(args.out, fps=args.fps, macro_block_size=None)
         frames = 0
-        # `_successes` is zeroed when an episode terminates, so an end-minus-start read reports
-        # ~0 for any env whose episode ended mid-render -- which is every *scoring* env, since
-        # scoring extends episodes past a short render. That made six consecutive renders of
-        # 2-to-6-goal episodes all caption "scored ~0 goals". Accumulate positive deltas instead,
-        # which survives the reset. (`episodes.py` avoids this by snapshotting
-        # `extras["episode_final"]` at the termination step.)
-        goals_seen = 0
-        prev_successes = int(inner._successes[args.world].item())
+        # Folds are counted off the terminations, NOT read from `inner._successes`. That counter is
+        # incremented and then zeroed by the reset inside one `env.step()` -- `_get_dones` scores
+        # the fold, then Isaac Lab resets the terminated envs before `step` returns -- so it reads
+        # 0 whenever it can be read, and an end-minus-start or a positive-delta accumulation both
+        # report ~0. A box3-mid clip that folded eleven times in 900 steps still captioned
+        # "~0 goals", and that caption cost two rounds of debugging a policy that was working.
+        # (`episodes.py` avoids this by snapshotting `extras["episode_final"]` at the termination
+        # step; a render has no such hook, so it scores the same state the HUD draws.)
+        folds_seen = 0
+        min_err = float("inf")
+        # Batch-wide first-episode outcome, scored the same way, so a clip's run can be compared
+        # with `episodes.py`'s `per_env_goals` for the same seed: one filmed world is a sample of 1.
+        last_raw, last_hud = None, None
+        episode_info = None
+        first_done = torch.zeros(inner.num_envs, dtype=torch.bool, device=inner.device)
+        first_fold = torch.zeros_like(first_done)
 
         for step in range(args.steps):
             if player is None:
@@ -713,12 +800,71 @@ def main() -> None:
                 )
             else:
                 action = player.get_action(obs["policy"], deterministic=True)
+            # Set RC_TRACE=<n> to print the first n steps as (obs, action, fold error) checksums.
+            # The same three lines exist in `episodes.py`: when a clip and the evaluation table
+            # disagree the question is always "do these two paths see the same observation and
+            # emit the same action", and it is answerable by diffing two traces in seconds rather
+            # than by another round of reading both files and guessing at what differs.
+            if _TRACE and step < _TRACE:
+                print(
+                    f"[trace] step {step} obs {float(obs['policy'].double().sum()):+.6f} "
+                    f"act {float(action.double().sum()):+.6f} "
+                    f"err {float(inner.fold_error()[args.world]):.6f}",
+                    flush=True,
+                )
+            # Sampled BEFORE the step, on the state the HUD draws. Counting a run of
+            # `HELD_FOLD_STEPS` here would be off by one and never fire: the env evaluates the
+            # criterion on the state the step PRODUCES, so it reaches ten and terminates while this
+            # loop has seen nine, and the reset wipes the tenth. The fold is therefore scored as
+            # "the episode ended while the sheet was folded", which is what the termination means.
+            folded_all = inner.is_folded().bool() if hasattr(inner, "is_folded") else None
+            was_folded = bool(folded_all[args.world]) if folded_all is not None else False
+            if hasattr(inner, "fold_error"):
+                min_err = min(min_err, float(inner.fold_error()[args.world]))
+
             obs, _rew, terminated, truncated, _extras = env.step(action.to(inner.device))
 
-            now = int(inner._successes[args.world].item())
-            if now > prev_successes:
-                goals_seen += now - prev_successes
-            prev_successes = now
+            if was_folded and bool(terminated[args.world]):
+                folds_seen += 1
+            world_ended = bool(terminated[args.world]) or bool(truncated[args.world])
+            if args.stop_on_episode_end and world_ended:
+                # The reset already ran inside `env.step`, so the state now is the NEXT episode's
+                # start: do not film it. The reasons dict is the one `_get_dones` just wrote.
+                reasons = getattr(inner, "_termination_reasons", {})
+                fired = [k for k, v in reasons.items() if bool(v[args.world])]
+                outcome = next(
+                    (k for k in ("fold_held", "fold", "fall", "hand_far", "nonfinite", "timeout")
+                     if k in fired),
+                    "unknown",
+                )
+                episode_info = {
+                    "outcome": outcome,
+                    "reasons": fired,
+                    "steps": step + 1,
+                    "min_fold_err": None if min_err == float("inf") else round(min_err, 5),
+                    "keypoint_tolerance": float(getattr(inner.cfg.cloth, "keypoint_tolerance", -1)),
+                    "world": args.world,
+                    "seed": args.seed,
+                    "checkpoint": str(args.checkpoint),
+                    "task": args.task,
+                }
+                if last_raw is not None:
+                    # Re-stamp the last frame: the HUD on it predates the scoring step, so it still
+                    # read "folds 0" on a success. Show the scored count and the outcome.
+                    end = last_raw
+                    if last_hud is not None:
+                        lines = list(last_hud[0])
+                        lines[-1] = f"folds     {folds_seen}"
+                        end = _stamp_hud(end, lines, last_hud[1])
+                    end = stamp_outcome(end, outcome)
+                    for _ in range(int(round(args.end_hold_s * args.fps))):
+                        writer.append_data(end)
+                        frames += 1
+                break
+            ended = (terminated.bool() | truncated.bool()) & ~first_done
+            if folded_all is not None:
+                first_fold |= ended & folded_all & terminated.bool()
+            first_done |= ended
 
             done = (terminated.bool() | truncated.bool())
             if player is not None and bool(done.any()):
@@ -739,7 +885,8 @@ def main() -> None:
             # ViewerGL already returns top-down rows, so no vertical flip -- adding one puts the
             # ground plane at the top of the frame. Just drop the alpha channel.
             image = np.ascontiguousarray(image[:, :, :3])
-            hud = _hud_lines(inner, args.world, step) if not args.no_hud else None
+            hud = _hud_lines(inner, args.world, step, folds_seen) if not args.no_hud else None
+            last_raw, last_hud = image, hud
             if hud is not None:
                 image = _stamp_hud(image, hud[0], hud[1])
             writer.append_data(image)
@@ -748,21 +895,34 @@ def main() -> None:
             if frames % 50 == 0:
                 print(
                     f"[render] step {step}/{args.steps}  frames {frames}  "
-                    f"goals(env {args.world}) {int(inner._successes[args.world].item())}",
+                    f"folds(env {args.world}) {folds_seen}",
                     flush=True,
                 )
 
         writer.close()
-        goals = goals_seen
         # Tolerate the file having been moved or removed between the write and this stat: the
-        # size is a nicety, and crashing here discards the goal count -- which is the one number
+        # size is a nicety, and crashing here discards the fold count -- which is the one number
         # the render exists to report.
         size_mb = args.out.stat().st_size / 1e6 if args.out.exists() else float("nan")
         print(
             f"\n[render] wrote {args.out} ({frames} frames, {size_mb:.1f} MB, "
-            f"{frames / args.fps:.1f}s)  env_{args.world} scored ~{goals} goals",
+            f"{frames / args.fps:.1f}s)  env_{args.world} folds {folds_seen}"
+            + (f" min_err {min_err:.4f} m" if min_err < float("inf") else ""),
             flush=True,
         )
+        print(
+            f"[render] batch first episode: folded {int(first_fold.sum())}/{inner.num_envs}, "
+            f"finished {int(first_done.sum())}/{inner.num_envs}; "
+            f"per_env {first_fold.int().tolist()}",
+            flush=True,
+        )
+        if args.stop_on_episode_end:
+            import json
+
+            if episode_info is None:
+                episode_info = {"outcome": "not_finished", "steps": args.steps, "world": args.world}
+            args.out.with_suffix(".json").write_text(json.dumps(episode_info, indent=2))
+            print(f"[render] episode outcome: {json.dumps(episode_info)}", flush=True)
         env.close()
 
     run()

@@ -34,6 +34,11 @@ from isaacsimenvs.newton.contact_guard import (
 )
 from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
 
+#: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums. Both this
+#: module and its sibling print the identical line, so a render that disagrees with an evaluation
+#: can be diffed step by step instead of reasoned about.
+_TRACE = int(os.environ.get("RC_TRACE", "0") or 0)
+
 DEFAULT_CHECKPOINT = "/share/portal/kk837/simtoolreal/pretrained_policy/model.pth"
 DEFAULT_POLICY_CFG = "/share/portal/kk837/simtoolreal/pretrained_policy/config.yaml"
 
@@ -235,6 +240,14 @@ def main() -> None:
         try:
           while step < args_cli.max_steps and not bool(contributed.all()):
               action = player.get_action(obs["policy"], deterministic=True)
+              # The twin of the trace in `render_newton.py`; see `_TRACE`.
+              if _TRACE and step < _TRACE:
+                  print(
+                      f"[trace] step {step} obs {float(obs['policy'].double().sum()):+.6f} "
+                      f"act {float(action.double().sum()):+.6f} "
+                      f"err {float(inner.fold_error()[0]):.6f}",
+                      flush=True,
+                  )
               obs, _rew, terminated, truncated, extras = env.step(action.to(device))
 
               # Only while the env is still on its first episode. An env that finished early keeps
