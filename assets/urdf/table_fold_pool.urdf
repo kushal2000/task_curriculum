@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!-- Stage-2 fold pool: table_narrow.urdf widened to 0.6 x 0.7 m so a 20 cm sheet (+-10 cm reset
+     offset, any yaw, shifted up to 7 cm toward the robot) stays on it. Height unchanged. -->
+<robot name="box">
+  <link name="box">
+    <visual>
+      <material name="wood">
+        <color rgba="0.82 0.56 0.35 1.0"/>
+      </material>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="0.6 0.7 0.3"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="0.6 0.7 0.3"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="500"/>
+      <friction value="1.0"/>
+      <inertia ixx="1000.0" ixy="0.0" ixz="0.0" iyy="1000.0" iyz="0.0" izz="1000.0"/>
+    </inertial>
+  </link>
+</robot>
