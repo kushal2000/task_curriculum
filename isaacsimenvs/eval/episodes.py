@@ -225,6 +225,10 @@ def main() -> None:
         best_fold_err = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
         best_footprint = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
         reason = {name: torch.zeros(num_envs, dtype=torch.bool, device=device) for name in REASONS}
+        # Any OTHER `done_<name>` the env publishes, per env -- e.g. the fold pool's
+        # `shape_<shape>` / `fold_<shape>`, which is what splits a result by shape. Discovered from
+        # the first finished episode, so a task that publishes none is untouched.
+        extra_done: dict[str, torch.Tensor] = {}
 
         # Capture fd 1/2 across the rollout so kernel-level overflow warnings are visible. The
         # capture MUST be unwound on the exception path too: an earlier version only closed it on
@@ -281,6 +285,12 @@ def main() -> None:
                   length[idx] = steps_alive[idx]
                   for name in REASONS:
                       reason[name][idx] = final[f"done_{name}"][idx].bool()
+                  for key, value in final.items():
+                      name = key[len("done_"):]
+                      if key.startswith("done_") and name not in REASONS:
+                          if name not in extra_done:
+                              extra_done[name] = torch.zeros(num_envs, dtype=torch.bool, device=device)
+                          extra_done[name][idx] = value[idx].bool()
                   contributed |= done
 
               # An episode that has ended carries no hidden state worth keeping; the policy never
@@ -360,6 +370,14 @@ def main() -> None:
             "per_env_goals": goals.cpu().tolist(),
             "per_env_length": length.cpu().tolist(),
         }
+        if extra_done:
+            # Per env, False for a censored env (it never finished, so it published nothing).
+            result["per_env_extra_done"] = {
+                name: [bool(v) for v in t.cpu()] for name, t in sorted(extra_done.items())
+            }
+        if hasattr(inner, "_env_size"):
+            # The fold pool's per-env sheet side [m], fixed for the run.
+            result["per_env_sheet_size"] = [round(float(v), 4) for v in inner._env_size.cpu()]
 
         if best_fold_err is not None:
             fe = best_fold_err.cpu()
