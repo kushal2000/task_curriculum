@@ -65,6 +65,11 @@ def rigid_cloth():
 
 
 @pytest.fixture(scope="session")
+def fold_shapes():
+    return load_module("isaacsimenvs/tasks/cloth/utils/fold_shapes.py", "fold_shapes")
+
+
+@pytest.fixture(scope="session")
 def cloth_geometry():
     return load_module("isaacsimenvs/tasks/cloth/utils/cloth_geometry.py", "cloth_geometry")
 
