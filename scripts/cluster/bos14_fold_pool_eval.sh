@@ -4,6 +4,8 @@
 #   TRAIN_JOB=156603 sbatch --array=0-5 scripts/cluster/bos14_fold_pool_eval.sh
 #   .venv_isaaclab3/bin/python scripts/analysis/fold_pool_eval_summary.py --train_job 156603
 #
+# A training array launched with RUN_TAG needs the same RUN_TAG here.
+#
 # Array index = (policy seed - 1) * 2 + mode; mode 0 = pinned, 1 = randomised. Each task runs two
 # evaluation seeds. One episode per env (isaacsimenvs.eval.episodes), success = the fold HELD for
 # 10 steps at the task's own 1.5 cm tolerance, as every stage-1 cloth number was reported.
@@ -37,7 +39,7 @@ mkdir -p slurm_logs docs/results
 I="${SLURM_ARRAY_TASK_ID:-0}"
 SEED=$(( I / 2 + 1 ))
 MODE=$(( I % 2 ))
-NAME="0_fp_pool_s${SEED}_${TRAIN_JOB}"
+NAME="0_fp_${RUN_TAG:-pool}_s${SEED}_${TRAIN_JOB}"
 CKPT=$(.venv_isaaclab3/bin/python -c "import sys; sys.path.insert(0, 'scripts/analysis'); from pathlib import Path; from rigid_cloth_eval_manifest import find_checkpoint; print(find_checkpoint(sys.argv[1], Path('outputs')) or '')" "$NAME")
 [ -n "$CKPT" ] && [ -f "$CKPT" ] || { echo "[fp_eval] no checkpoint for $NAME" >&2; exit 1; }
 
