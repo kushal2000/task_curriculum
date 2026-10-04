@@ -691,12 +691,32 @@ A perfect fold of `box-mid-odd` or `cyl-mid-odd` leaves its plies 5.88 mm apart 
 5.88 mm is compensated, not spent. The many-slat chains fail the 1.5 cm cutoff on their own
 manipuland with the generous target already granted them.
 
-What is left is a hypothesis, not a measurement: a 17-slat chain reaches a tight fold only when eight
-passive joints are each driven to their limit, while `box3-mid` needs two, and the arm is what has to
-drag them there. More passive degrees of freedom means more ways to be loosely folded. `box-surface`
-is a separate story -- its ply gap is 2.00 mm and it still scores worst of all six, and it is the one
-variant the approximation study declined to recommend (14 joints on their limits at rest, 64 degrees
-of limit violation in a drape, "unstable"). Neither reading was isolated by an experiment.
+**What is left is a precision ceiling, and it is measured.** Median best fold error on each policy's
+OWN chain, pooled over `fix` and `fixdr` and both eval seeds (384 episodes per arm):
+
+| manipuland | slats | median best fold error | episodes under 15 mm |
+|---|---|---|---|
+| `box3-mid` | 3 | **4.6 mm** | 92% |
+| `box2-surface` | 2 | 9.4 mm | 69% |
+| `cyl-mid-odd` | 17 | 14.9 mm | 51% |
+| `box-mid-odd` | 17 | 17.2 mm | 47% |
+| `box-surface` | 16 | 21.8 mm | 21% |
+
+It is monotone in slat count, and it explains both halves of the result: at the 4 cm cutoff every
+arm clears the bar and they look alike, while at 1.5 cm the median for the three many-slat chains
+sits *on or past* the cutoff, so their score becomes knife-edge. With two or three bodies one hinge
+rotation puts every keypoint where it belongs; with sixteen the policy can satisfy a coarse criterion
+while individual slats sit wrong. More passive degrees of freedom means more ways to be approximately
+right and fewer to be exactly right.
+
+This must be read off the **1.5 cm** runs. In the 4 cm runs `best_fold_err` is censored by the
+experiment: the episode terminates on success, so the error stops improving at ~22-27 mm for every
+variant and the five arms look identical on precisely the quantity that separates them.
+
+`box-surface` is the extreme of the same trend and also a separate story: its ply gap is 2.00 mm, so
+geometry grants it nothing, and it is the one variant the approximation study declined to recommend
+(14 joints on their limits at rest, 64 degrees of limit violation in a drape, no stable `solimp`
+setting at the correct friction).
 
 **A caveat on reading the two halves of the table against each other.** Because the target is built
 per manipuland, the own-chain columns for `box-mid-odd` and `cyl-mid-odd` are scored at a 5.88 mm
