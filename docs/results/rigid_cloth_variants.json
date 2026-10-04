@@ -1,0 +1,409 @@
+{
+  "variants": {
+    "box-mid-odd": {
+      "model": {
+        "label": "17 boxes, mid hinge",
+        "num_slats": 17,
+        "widths_mm": "5.88",
+        "thickness_mm": 5.88235294117647,
+        "shape": "box",
+        "hinge": "mid",
+        "wall_slat": 8,
+        "crease_slat": 8,
+        "total_mass_g": 20.000000000000004,
+        "joint_limit_deg": 90.0,
+        "fold_residual_mm": [
+          -6.938893903907228e-15,
+          5.882352941176477
+        ],
+        "predicted_ply_gap_mm": 5.88235294117647,
+        "damping": 1e-05,
+        "stiffness": 0.0
+      },
+      "settle": {
+        "rest_height_mm": 2.939320505207733,
+        "expected_rest_height_mm": 2.941176470588235,
+        "flatness_spread_mm": 0.0006377971938178496,
+        "max_bend_deg": 0.002612964107808765,
+        "max_speed_mm_s": 0.005484306449784678,
+        "unstable": false
+      },
+      "fold": {
+        "ply_gap_mm": 5.830946389130162,
+        "predicted_ply_gap_mm": 5.88235294117647,
+        "crease_angle_deg": 90.06208811485739,
+        "crease_target_deg": 90.0,
+        "held": true,
+        "ply_contacts": 14,
+        "limit_violation_deg": 0.32015009478290923,
+        "ply_height_trace_mm": [
+          8.824,
+          8.745,
+          8.713,
+          8.757,
+          8.715,
+          8.771,
+          8.686,
+          8.75,
+          8.753,
+          8.754
+        ],
+        "unstable": false
+      },
+      "drape": {
+        "clamped": true,
+        "drape_fraction": 0.9418948929065533,
+        "tip_drop_mm": 47.094744645327665,
+        "drape_swing": 1.7090710604794612e-05,
+        "max_speed_rad_s": 1.4163015249644864,
+        "settled": true,
+        "limit_violation_deg": 0.0,
+        "bend_concentration": 0.9522541881094844,
+        "unstable": false,
+        "drape_fraction_hard_limits": 0.9418948929065533,
+        "tip_drop_mm_hard_limits": 47.094744645327665,
+        "drape_swing_hard_limits": 1.7090710604794612e-05,
+        "max_speed_rad_s_hard_limits": 1.4163015249644864,
+        "settled_hard_limits": true,
+        "limit_violation_deg_hard_limits": 0.0,
+        "bend_concentration_hard_limits": 0.9522541881094844,
+        "unstable_hard_limits": false
+      },
+      "cost": {
+        "steps_per_s": 30021.558131290494,
+        "sim_x_realtime": 125.08982554704373,
+        "nbody": 18,
+        "nv": 22
+      },
+      "rest_load": {
+        "nefc": 272,
+        "active_joint_limits": 0,
+        "joints": 16
+      }
+    },
+    "box-surface": {
+      "model": {
+        "label": "16 boxes, surface hinge",
+        "num_slats": 16,
+        "widths_mm": "6.25",
+        "thickness_mm": 2.0,
+        "shape": "box",
+        "hinge": "surface",
+        "wall_slat": null,
+        "crease_slat": null,
+        "total_mass_g": 20.000000000000004,
+        "joint_limit_deg": 180.0,
+        "fold_residual_mm": [
+          -1.3877787807814457e-14,
+          2.000000000000006
+        ],
+        "predicted_ply_gap_mm": 2.0,
+        "damping": 1e-05,
+        "stiffness": 0.0
+      },
+      "settle": {
+        "rest_height_mm": 0.9977629911498859,
+        "expected_rest_height_mm": 1.0,
+        "flatness_spread_mm": 0.00072478998528391,
+        "max_bend_deg": 0.0027812406138246343,
+        "max_speed_mm_s": 0.0035475160285561814,
+        "unstable": false
+      },
+      "fold": {
+        "ply_gap_mm": 1.9170028179727998,
+        "predicted_ply_gap_mm": 2.0,
+        "crease_angle_deg": 180.86775792616706,
+        "crease_target_deg": 180.0,
+        "held": true,
+        "ply_contacts": 16,
+        "limit_violation_deg": 1.6266096609032041,
+        "ply_height_trace_mm": [
+          2.0,
+          2.846,
+          2.874,
+          2.788,
+          2.814,
+          2.845,
+          2.878,
+          2.929,
+          2.844,
+          2.748
+        ],
+        "unstable": false
+      },
+      "drape": {
+        "clamped": true,
+        "drape_fraction": 0.8225366476805925,
+        "tip_drop_mm": 41.126832384029626,
+        "drape_swing": 0.8518603795789212,
+        "max_speed_rad_s": 1.1982177260211793,
+        "settled": false,
+        "limit_violation_deg": 64.00648321332162,
+        "bend_concentration": 0.22797880622239045,
+        "unstable": true,
+        "drape_fraction_hard_limits": 0.16583358592559655,
+        "tip_drop_mm_hard_limits": 8.29167929627983,
+        "drape_swing_hard_limits": 0.3448903067762024,
+        "max_speed_rad_s_hard_limits": 8.824605320595238,
+        "settled_hard_limits": false,
+        "limit_violation_deg_hard_limits": 4.054028406297041,
+        "bend_concentration_hard_limits": 0.5713856035464604,
+        "unstable_hard_limits": true
+      },
+      "cost": {
+        "steps_per_s": 33158.589422402,
+        "sim_x_realtime": 138.16078926000836,
+        "nbody": 17,
+        "nv": 21
+      },
+      "rest_load": {
+        "nefc": 270,
+        "active_joint_limits": 14,
+        "joints": 15
+      }
+    },
+    "cyl-mid-odd": {
+      "model": {
+        "label": "17 cylinders, mid hinge",
+        "num_slats": 17,
+        "widths_mm": "5.88",
+        "thickness_mm": 5.88235294117647,
+        "shape": "cylinder",
+        "hinge": "mid",
+        "wall_slat": 8,
+        "crease_slat": 8,
+        "total_mass_g": 20.000000000000004,
+        "joint_limit_deg": 90.0,
+        "fold_residual_mm": [
+          -6.938893903907228e-15,
+          5.882352941176477
+        ],
+        "predicted_ply_gap_mm": 5.88235294117647,
+        "damping": 1e-05,
+        "stiffness": 0.0
+      },
+      "settle": {
+        "rest_height_mm": 2.937452322415531,
+        "expected_rest_height_mm": 2.941176470588235,
+        "flatness_spread_mm": 0.0016683958306792403,
+        "max_bend_deg": 0.024084497732470338,
+        "max_speed_mm_s": 0.0043457403342256,
+        "unstable": false
+      },
+      "fold": {
+        "ply_gap_mm": 5.072706335047113,
+        "predicted_ply_gap_mm": 5.88235294117647,
+        "crease_angle_deg": 75.44049825448315,
+        "crease_target_deg": 90.0,
+        "held": true,
+        "ply_contacts": 11,
+        "limit_violation_deg": 14.02137798990606,
+        "ply_height_trace_mm": [
+          8.824,
+          8.801,
+          8.738,
+          8.717,
+          8.594,
+          8.013,
+          8.048,
+          8.07,
+          7.918,
+          7.963
+        ],
+        "unstable": false
+      },
+      "drape": {
+        "clamped": true,
+        "drape_fraction": 0.9418831260096076,
+        "tip_drop_mm": 47.09415630048038,
+        "drape_swing": 2.497454187899706e-09,
+        "max_speed_rad_s": 1.0262872854490168,
+        "settled": true,
+        "limit_violation_deg": 0.0,
+        "bend_concentration": 0.5190746853812584,
+        "unstable": false,
+        "drape_fraction_hard_limits": 0.9418831260096076,
+        "tip_drop_mm_hard_limits": 47.09415630048038,
+        "drape_swing_hard_limits": 2.497454187899706e-09,
+        "max_speed_rad_s_hard_limits": 1.0262872854490168,
+        "settled_hard_limits": true,
+        "limit_violation_deg_hard_limits": 0.0,
+        "bend_concentration_hard_limits": 0.5190746853812584,
+        "unstable_hard_limits": false
+      },
+      "cost": {
+        "steps_per_s": 50129.20824193485,
+        "sim_x_realtime": 208.8717010080619,
+        "nbody": 18,
+        "nv": 22
+      },
+      "rest_load": {
+        "nefc": 136,
+        "active_joint_limits": 0,
+        "joints": 16
+      }
+    },
+    "box2-surface": {
+      "model": {
+        "label": "2 boxes, surface hinge",
+        "num_slats": 2,
+        "widths_mm": "50.00",
+        "thickness_mm": 2.0,
+        "shape": "box",
+        "hinge": "surface",
+        "wall_slat": null,
+        "crease_slat": null,
+        "total_mass_g": 20.000000000000004,
+        "joint_limit_deg": 180.0,
+        "fold_residual_mm": [
+          0.0,
+          2.000000000000006
+        ],
+        "predicted_ply_gap_mm": 2.0,
+        "damping": 1e-05,
+        "stiffness": 0.0
+      },
+      "settle": {
+        "rest_height_mm": 0.9947107765924039,
+        "expected_rest_height_mm": 1.0,
+        "flatness_spread_mm": 1.485356976305141e-13,
+        "max_bend_deg": 5.478390870262819e-07,
+        "max_speed_mm_s": 7.823314932684164e-05,
+        "unstable": false
+      },
+      "fold": {
+        "ply_gap_mm": 1.003707286560593,
+        "predicted_ply_gap_mm": 2.0,
+        "crease_angle_deg": 182.28212107078804,
+        "crease_target_deg": 180.0,
+        "held": true,
+        "ply_contacts": 0,
+        "limit_violation_deg": 2.2821212764680117,
+        "ply_height_trace_mm": [
+          2.0,
+          1.992,
+          1.994,
+          1.994,
+          1.994,
+          1.994,
+          1.994,
+          1.994,
+          1.994,
+          1.994
+        ],
+        "unstable": false
+      },
+      "drape": {
+        "clamped": true,
+        "drape_fraction": 0.024141827108586505,
+        "tip_drop_mm": 1.2070913554293252,
+        "drape_swing": 2.8095340590863355e-05,
+        "max_speed_rad_s": 0.00010314002414724284,
+        "settled": true,
+        "limit_violation_deg": 0.23666909337131103,
+        "bend_concentration": 1.0,
+        "unstable": false,
+        "drape_fraction_hard_limits": 0.020618116087200957,
+        "tip_drop_mm_hard_limits": 1.0309058043600479,
+        "drape_swing_hard_limits": 2.6337439174017874e-14,
+        "max_speed_rad_s_hard_limits": 3.837218590333873e-12,
+        "settled_hard_limits": true,
+        "limit_violation_deg_hard_limits": 0.03541566421210939,
+        "bend_concentration_hard_limits": 1.0,
+        "unstable_hard_limits": false
+      },
+      "cost": {
+        "steps_per_s": 217664.80105311036,
+        "sim_x_realtime": 906.9366710546266,
+        "nbody": 3,
+        "nv": 7
+      },
+      "rest_load": {
+        "nefc": 33,
+        "active_joint_limits": 1,
+        "joints": 1
+      }
+    },
+    "box3-mid": {
+      "model": {
+        "label": "2 plates + crease bar, mid hinge",
+        "num_slats": 3,
+        "widths_mm": "49.0+2.0+49.0",
+        "thickness_mm": 2.0,
+        "shape": "box",
+        "hinge": "mid",
+        "wall_slat": 1,
+        "crease_slat": 1,
+        "total_mass_g": 20.000000000000004,
+        "joint_limit_deg": 90.0,
+        "fold_residual_mm": [
+          0.0,
+          2.000000000000006
+        ],
+        "predicted_ply_gap_mm": 2.0,
+        "damping": 1e-05,
+        "stiffness": 0.0
+      },
+      "settle": {
+        "rest_height_mm": 0.9959858226039761,
+        "expected_rest_height_mm": 1.0,
+        "flatness_spread_mm": 0.0011302729314430823,
+        "max_bend_deg": 0.0026449264144383553,
+        "max_speed_mm_s": 0.0002749015427076593,
+        "unstable": false
+      },
+      "fold": {
+        "ply_gap_mm": 1.9973927358686905,
+        "predicted_ply_gap_mm": 2.0,
+        "crease_angle_deg": 89.97559989272285,
+        "crease_target_deg": 90.0,
+        "held": true,
+        "ply_contacts": 1,
+        "limit_violation_deg": 0.03049683637617763,
+        "ply_height_trace_mm": [
+          3.0,
+          2.983,
+          2.986,
+          2.986,
+          2.986,
+          2.986,
+          2.986,
+          2.986,
+          2.986,
+          2.986
+        ],
+        "unstable": false
+      },
+      "drape": {
+        "clamped": true,
+        "drape_fraction": 0.9802666248898486,
+        "tip_drop_mm": 49.013331244492434,
+        "drape_swing": 5.941116690416637e-06,
+        "max_speed_rad_s": 0.0015108609604269222,
+        "settled": true,
+        "limit_violation_deg": 0.0,
+        "bend_concentration": 0.9957754236203936,
+        "unstable": false,
+        "drape_fraction_hard_limits": 0.9802659201632121,
+        "tip_drop_mm_hard_limits": 49.01329600816061,
+        "drape_swing_hard_limits": 9.187511277874982e-06,
+        "max_speed_rad_s_hard_limits": 0.0004196003073290558,
+        "settled_hard_limits": true,
+        "limit_violation_deg_hard_limits": 0.0,
+        "bend_concentration_hard_limits": 0.9957269384022434,
+        "unstable_hard_limits": false
+      },
+      "cost": {
+        "steps_per_s": 175255.08667990807,
+        "sim_x_realtime": 730.2295278329503,
+        "nbody": 4,
+        "nv": 8
+      },
+      "rest_load": {
+        "nefc": 48,
+        "active_joint_limits": 0,
+        "joints": 2
+      }
+    }
+  }
+}

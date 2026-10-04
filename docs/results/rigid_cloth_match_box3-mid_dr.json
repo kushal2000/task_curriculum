@@ -1,0 +1,142 @@
+{
+  "task": "Isaacsimenvs-RigidCloth-Direct-v0",
+  "variant": "box3-mid",
+  "num_envs": 128,
+  "randomize": true,
+  "errors": {},
+  "heading": {
+    "decoded_deg": [
+      0.2,
+      -77.9,
+      -164.0,
+      24.8,
+      39.0,
+      117.2,
+      86.2,
+      -142.2
+    ],
+    "achieved_deg": [
+      90.2,
+      12.1,
+      -74.0,
+      114.8,
+      129.0,
+      -152.8,
+      176.2,
+      -52.2
+    ],
+    "grid_row_offset_deg": 90.0,
+    "max_abs_error_deg": 6.109,
+    "real_reset_heading_std_deg": 108.7,
+    "real_reset_heading_range_deg": [
+      -177.8,
+      178.4
+    ]
+  },
+  "height": {
+    "table_surface_z": 0.53,
+    "midplane_z_mean": 0.5392,
+    "midplane_z_min": 0.5263,
+    "midplane_z_max": 0.7027,
+    "median_above_table_mm": 8.13,
+    "flat_envs": 127,
+    "flat_envs_median_above_table_mm": 8.13,
+    "shape_margin_mm": {
+      "table": [
+        0.0
+      ],
+      "other": [
+        0.0
+      ],
+      "slat": [
+        4.095,
+        4.134,
+        4.199,
+        4.226,
+        4.271,
+        4.281
+      ],
+      "fingertip": [
+        0.0
+      ]
+    },
+    "per_env_margin_vs_height_corr": -0.007
+  },
+  "friction": {
+    "slide_speed": 0.4,
+    "slide_mm_mean": 21.73,
+    "slide_mm_min": 0.55,
+    "slide_mm_max": 31.99,
+    "mu_table_effective_mean": 0.501,
+    "mu_table_effective_median": 0.386,
+    "trace_mm": [
+      5.6,
+      20.9,
+      21.7,
+      21.7,
+      21.7,
+      21.7,
+      21.7,
+      21.7,
+      21.7,
+      21.7,
+      21.7,
+      21.7
+    ],
+    "per_env_mu_vs_drawn_corr": 1.0,
+    "per_env_mu_over_drawn_median": 1.035,
+    "resolved_pairs": {
+      "slat_table": 0.397,
+      "slat_fingertip": 0.661,
+      "fingertip_table": 0.661
+    }
+  },
+  "fold": {
+    "best_fold_error_mean": 5e-05,
+    "best_fold_error_min": 0.0,
+    "peak_hinge_deg": 94.37,
+    "nonfinite_envs": 0,
+    "top_z_max": 0.7074,
+    "dropped_slat_pairs": 128
+  },
+  "randomization": {
+    "friction_slat": 1.0,
+    "friction_slat_max_abs_err": 0.0,
+    "friction_tip_max_abs_err": 0.0,
+    "margin_max_abs_err_mm": 0.0,
+    "mass_max_rel_err": 0.0,
+    "damping_readback": "act 59 gainprm[0] corr 1.0 max rel err 0.00e+00",
+    "stiffness_readback": "act 58 gainprm[0] corr 1.0 max rel err 0.00e+00",
+    "drawn_ranges": {
+      "slat_friction": [
+        0.24856,
+        0.49423
+      ],
+      "fingertip_friction": [
+        0.43338,
+        0.8554
+      ],
+      "hinge_damping": [
+        0.01579,
+        0.14443
+      ],
+      "mass": [
+        0.70028,
+        1.49713
+      ],
+      "hinge_stiffness": [
+        0.0,
+        0.0005
+      ],
+      "contact_margin": [
+        0.00409,
+        0.00999
+      ]
+    },
+    "redraw_ms": 0.468
+  },
+  "timing": {
+    "env_steps_per_s": 8809.3,
+    "step_ms": 14.53
+  }
+}

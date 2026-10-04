@@ -1,0 +1,4 @@
+box2-surface_s1_e1536__on_box2-surface	outputs/2026-09-30/06-04-41/0_rc_box2-surface_s1_155121/nn/0_rc_box2-surface_s1_155121.pth	Isaacsimenvs-RigidCloth-Direct-v0	box2-surface
+box2-surface_s1_e1536__on_vbd	outputs/2026-09-30/06-04-41/0_rc_box2-surface_s1_155121/nn/0_rc_box2-surface_s1_155121.pth	Isaacsimenvs-Cloth-Direct-v0	-
+box2-surface_s3_e1536__on_box2-surface	outputs/2026-09-30/06-04-41/0_rc_box2-surface_s3_155121/nn/0_rc_box2-surface_s3_155121.pth	Isaacsimenvs-RigidCloth-Direct-v0	box2-surface
+box2-surface_s3_e1536__on_vbd	outputs/2026-09-30/06-04-41/0_rc_box2-surface_s3_155121/nn/0_rc_box2-surface_s3_155121.pth	Isaacsimenvs-Cloth-Direct-v0	-

@@ -1,0 +1,97 @@
+{
+  "task": "Isaacsimenvs-RigidCloth-Direct-v0",
+  "variant": "box3-mid",
+  "num_envs": 32,
+  "randomize": false,
+  "errors": {},
+  "heading": {
+    "decoded_deg": [
+      0.2,
+      48.7,
+      92.2,
+      -38.4,
+      -77.9,
+      -14.7,
+      20.7,
+      -164.7
+    ],
+    "achieved_deg": [
+      90.2,
+      140.8,
+      -177.8,
+      51.6,
+      12.1,
+      75.3,
+      110.7,
+      -74.7
+    ],
+    "grid_row_offset_deg": 90.0,
+    "max_abs_error_deg": 2.105,
+    "real_reset_heading_std_deg": 109.2,
+    "real_reset_heading_range_deg": [
+      -176.4,
+      174.7
+    ]
+  },
+  "height": {
+    "table_surface_z": 0.53,
+    "midplane_z_mean": 0.5377,
+    "midplane_z_min": 0.529,
+    "midplane_z_max": 0.5476,
+    "median_above_table_mm": 5.9,
+    "flat_envs": 32,
+    "flat_envs_median_above_table_mm": 5.9,
+    "shape_margin_mm": {
+      "table": [
+        0.0
+      ],
+      "other": [
+        0.0
+      ],
+      "slat": [
+        7.0
+      ],
+      "fingertip": [
+        0.0
+      ]
+    }
+  },
+  "friction": {
+    "slide_speed": 0.4,
+    "slide_mm_mean": 22.25,
+    "slide_mm_min": 22.24,
+    "slide_mm_max": 22.3,
+    "mu_table_effective_mean": 0.366,
+    "trace_mm": [
+      5.7,
+      21.9,
+      22.2,
+      22.3,
+      22.3,
+      22.3,
+      22.3,
+      22.3,
+      22.3,
+      22.3,
+      22.3,
+      22.3
+    ],
+    "resolved_pairs": {
+      "slat_table": 0.354,
+      "slat_fingertip": 0.612,
+      "fingertip_table": 0.612
+    }
+  },
+  "fold": {
+    "best_fold_error_mean": 4e-05,
+    "best_fold_error_min": 0.0,
+    "peak_hinge_deg": 97.55,
+    "top_z_max": 0.5492,
+    "dropped_slat_pairs": 32
+  },
+  "randomization": null,
+  "timing": {
+    "env_steps_per_s": 3008.1,
+    "step_ms": 10.638
+  }
+}

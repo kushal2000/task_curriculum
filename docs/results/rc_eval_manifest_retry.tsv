@@ -1,0 +1,7 @@
+box-surface_s1__on_box-surface	outputs/2026-09-30/09-19-04/0_rc_box-surface_s1_155046/nn/0_rc_box-surface_s1_155046.pth	Isaacsimenvs-RigidCloth-Direct-v0	box-surface
+box-surface_s2__on_box-surface	outputs/2026-09-30/09-19-04/0_rc_box-surface_s2_155046/nn/0_rc_box-surface_s2_155046.pth	Isaacsimenvs-RigidCloth-Direct-v0	box-surface
+vbd_s3__on_box-mid-odd	outputs/2026-09-30/06-54-23/0_rc_vbd_s3_155046/nn/0_rc_vbd_s3_155046.pth	Isaacsimenvs-RigidCloth-Direct-v0	box-mid-odd
+vbd_s3__on_cyl-mid-odd	outputs/2026-09-30/06-54-23/0_rc_vbd_s3_155046/nn/0_rc_vbd_s3_155046.pth	Isaacsimenvs-RigidCloth-Direct-v0	cyl-mid-odd
+reference__on_box-mid-odd	outputs/2026-09-23/17-31-13/0_pretrained_s1_resume_150911/nn/0_pretrained_s1_resume_150911.pth	Isaacsimenvs-RigidCloth-Direct-v0	box-mid-odd
+reference__on_cyl-mid-odd	outputs/2026-09-23/17-31-13/0_pretrained_s1_resume_150911/nn/0_pretrained_s1_resume_150911.pth	Isaacsimenvs-RigidCloth-Direct-v0	cyl-mid-odd
+reference__on_box-surface	outputs/2026-09-23/17-31-13/0_pretrained_s1_resume_150911/nn/0_pretrained_s1_resume_150911.pth	Isaacsimenvs-RigidCloth-Direct-v0	box-surface

@@ -1,0 +1,81 @@
+{
+  "model": {
+    "label": "(unnamed)",
+    "num_slats": 16,
+    "widths_mm": "6.25",
+    "thickness_mm": 6.25,
+    "shape": "cylinder",
+    "hinge": "mid",
+    "wall_slat": 8,
+    "crease_slat": null,
+    "total_mass_g": 20.000000000000004,
+    "joint_limit_deg": 90.0,
+    "fold_residual_mm": [
+      6.249999999999985,
+      6.250000000000006
+    ],
+    "predicted_ply_gap_mm": 6.25,
+    "damping": 1e-05,
+    "stiffness": 0.0
+  },
+  "settle": {
+    "rest_height_mm": 3.1212194496476617,
+    "expected_rest_height_mm": 3.125,
+    "flatness_spread_mm": 0.0016881330918237097,
+    "max_bend_deg": 0.018922756974188163,
+    "max_speed_mm_s": 0.00045308114791903036,
+    "unstable": false
+  },
+  "fold": {
+    "ply_gap_mm": 5.456194492171525,
+    "predicted_ply_gap_mm": 6.25,
+    "crease_angle_deg": 77.28839858591483,
+    "crease_target_deg": 90.0,
+    "held": true,
+    "ply_contacts": 9,
+    "limit_violation_deg": 12.438893892758317,
+    "ply_height_trace_mm": [
+      9.375,
+      9.344,
+      9.186,
+      9.308,
+      9.127,
+      8.558,
+      8.549,
+      8.41,
+      8.441,
+      8.429
+    ],
+    "unstable": false
+  },
+  "drape": {
+    "clamped": true,
+    "drape_fraction": 0.9228869523039333,
+    "tip_drop_mm": 46.144347615196665,
+    "drape_swing": 4.864967079576399e-05,
+    "max_speed_rad_s": 0.9397553664131655,
+    "settled": true,
+    "limit_violation_deg": 0.0,
+    "bend_concentration": 0.3989487194759573,
+    "unstable": false,
+    "drape_fraction_hard_limits": 0.9228869523039333,
+    "tip_drop_mm_hard_limits": 46.144347615196665,
+    "drape_swing_hard_limits": 4.864967079576399e-05,
+    "max_speed_rad_s_hard_limits": 0.9397553664131655,
+    "settled_hard_limits": true,
+    "limit_violation_deg_hard_limits": 0.0,
+    "bend_concentration_hard_limits": 0.3989487194759573,
+    "unstable_hard_limits": false
+  },
+  "cost": {
+    "steps_per_s": 56392.05822036575,
+    "sim_x_realtime": 234.96690925152396,
+    "nbody": 17,
+    "nv": 21
+  },
+  "rest_load": {
+    "nefc": 128,
+    "active_joint_limits": 0,
+    "joints": 15
+  }
+}

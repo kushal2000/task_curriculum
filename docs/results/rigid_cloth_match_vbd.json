@@ -1,0 +1,83 @@
+{
+  "task": "Isaacsimenvs-Cloth-Direct-v0",
+  "variant": null,
+  "num_envs": 32,
+  "randomize": false,
+  "errors": {},
+  "heading": {
+    "decoded_deg": [
+      0.2,
+      48.7,
+      92.2,
+      -38.4,
+      -77.9,
+      -14.7,
+      20.7,
+      -164.7
+    ],
+    "achieved_deg": [
+      90.2,
+      138.7,
+      -177.8,
+      51.6,
+      12.1,
+      75.3,
+      110.7,
+      -76.4
+    ],
+    "grid_row_offset_deg": 90.0,
+    "max_abs_error_deg": 2.797,
+    "real_reset_heading_std_deg": 99.6,
+    "real_reset_heading_range_deg": [
+      -179.8,
+      170.2
+    ]
+  },
+  "height": {
+    "table_surface_z": 0.53,
+    "midplane_z_mean": 0.5397,
+    "midplane_z_min": 0.5282,
+    "midplane_z_max": 0.6201,
+    "median_above_table_mm": 9.11,
+    "flat_envs": 30,
+    "flat_envs_median_above_table_mm": 7.51,
+    "shape_margin_mm": {
+      "table": [
+        0.0
+      ],
+      "other": [
+        0.0
+      ],
+      "fingertip": [
+        0.0
+      ]
+    }
+  },
+  "friction": {
+    "slide_speed": 0.4,
+    "slide_mm_mean": 23.46,
+    "slide_mm_min": 23.24,
+    "slide_mm_max": 27.24,
+    "mu_table_effective_mean": 0.348,
+    "trace_mm": [
+      6.2,
+      22.8,
+      23.5,
+      23.5,
+      23.5,
+      23.5,
+      23.5,
+      23.5,
+      23.5,
+      23.5,
+      23.5,
+      23.5
+    ]
+  },
+  "fold": null,
+  "randomization": null,
+  "timing": {
+    "env_steps_per_s": 134.6,
+    "step_ms": 237.699
+  }
+}

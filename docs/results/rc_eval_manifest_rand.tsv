@@ -1,0 +1,7 @@
+box3-mid_s1__on_box3-mid	outputs/2026-09-30/02-54-22/0_rc_box3-mid_s1_155046/nn/0_rc_box3-mid_s1_155046.pth	Isaacsimenvs-RigidCloth-Direct-v0	box3-mid
+box3-mid_s1__on_vbd	outputs/2026-09-30/02-54-22/0_rc_box3-mid_s1_155046/nn/0_rc_box3-mid_s1_155046.pth	Isaacsimenvs-Cloth-Direct-v0	-
+box2-surface_s1__on_box2-surface	outputs/2026-09-30/06-54-23/0_rc_box2-surface_s1_155046/nn/0_rc_box2-surface_s1_155046.pth	Isaacsimenvs-RigidCloth-Direct-v0	box2-surface
+box2-surface_s1__on_vbd	outputs/2026-09-30/06-54-23/0_rc_box2-surface_s1_155046/nn/0_rc_box2-surface_s1_155046.pth	Isaacsimenvs-Cloth-Direct-v0	-
+reference__on_vbd	outputs/2026-09-23/17-31-13/0_pretrained_s1_resume_150911/nn/0_pretrained_s1_resume_150911.pth	Isaacsimenvs-Cloth-Direct-v0	-
+reference__on_box3-mid	outputs/2026-09-23/17-31-13/0_pretrained_s1_resume_150911/nn/0_pretrained_s1_resume_150911.pth	Isaacsimenvs-RigidCloth-Direct-v0	box3-mid
+reference__on_box2-surface	outputs/2026-09-23/17-31-13/0_pretrained_s1_resume_150911/nn/0_pretrained_s1_resume_150911.pth	Isaacsimenvs-RigidCloth-Direct-v0	box2-surface
