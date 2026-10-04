@@ -251,7 +251,7 @@ def _stamp_hud(image, lines, within: bool):
     draw.rectangle([x0, 12, x0 + box_w, 12 + box_h], fill=(0, 0, 0, 130))
 
     # Left-aligned inside the plate: right-aligning each line independently makes the short ones
-    # ("step", "goals") slide about between frames. Monospace keeps the digits from jittering.
+    # ("step", "folds") slide about between frames. Monospace keeps the digits from jittering.
     colour = (120, 255, 150, 255) if within else (255, 255, 255, 255)
     for i, text in enumerate(lines):
         draw.text((x0 + pad, 12 + pad + i * lh - 2), text, font=font, fill=colour)
