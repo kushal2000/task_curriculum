@@ -517,6 +517,39 @@ class FoldPoolEnv(RigidClothEnv):
                 flush=True,
             )
         self._yaw_reset_applied = True
+        self._verify_arm_clear()
+
+    def _verify_arm_clear(self, steps: int = 30, tol_deg: float = 2.0) -> None:
+        """The arm holds its home pose: nothing in the scene presses on it.
+
+        A table extended toward the robot (0.6 x 0.7 m) once sat in the arm's elbow, which rests
+        below the table top. Every reset then knocked the arm away, it stayed pinned at the table
+        edge, and two training arrays ran to completion without one fold. Nothing else fails on
+        that: the sheet is placed correctly and the episodes simply time out.
+        """
+        from isaacsimenvs.tasks.cloth.utils.cloth_adapter import _to_torch
+        from isaacsimenvs.tasks.play.utils.reset_utils import _reset_table_pose
+
+        robot = self.robot
+        dt = float(self.cfg.sim.dt)
+        # The table is moved to its working height only by a reset; this runs before the first one.
+        _reset_table_pose(self, torch.arange(self.num_envs, device=self.device))
+        arm = [i for i, name in enumerate(robot.joint_names) if name.startswith("iiwa14")]
+        home = _to_torch(robot.data.default_joint_pos).clone()
+        robot.write_joint_state_to_sim(home, torch.zeros_like(home))
+        robot.set_joint_position_target(home)
+        for _ in range(steps):
+            robot.write_data_to_sim()
+            self.sim.step(render=False)
+            self.scene.update(dt)
+        drift = math.degrees(float((_to_torch(robot.data.joint_pos) - home)[:, arm].abs().max()))
+        if drift > tol_deg:
+            raise RuntimeError(
+                f"[fold_pool] the arm cannot hold its home pose: a joint drifted {drift:.1f} deg in "
+                f"{steps} steps (tolerance {tol_deg}) -- something in the scene, most likely the "
+                f"table ({self.cfg.assets.table_urdf}), is pressing on it"
+            )
+        print(f"[fold_pool] arm holds its home pose ({drift:.2f} deg drift)", flush=True)
 
     def _verify_pool_joint_writes(self, s: int) -> None:
         """A partial joint write reaches the solver and only the envs it names (see the chain's)."""

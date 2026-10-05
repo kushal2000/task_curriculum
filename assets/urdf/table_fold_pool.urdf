@@ -1,6 +1,10 @@
 <?xml version="1.0"?>
-<!-- Stage-2 fold pool: table_narrow.urdf widened to 0.6 x 0.7 m so a 20 cm sheet (+-10 cm reset
-     offset, any yaw, shifted up to 7 cm toward the robot) stays on it. Height unchanged. -->
+<!-- Stage-2 fold pool: table_narrow.urdf widened in x only, to 0.6 x 0.4 m. Height unchanged.
+     The robot-side edge must stay at y = +0.2: the arm's home pose puts the elbow below the table
+     top at y ~0.38 and the forearm crosses table height at y ~0.345, so a 0.7 m (y +-0.35) table
+     pinned the arm and no policy could reach the sheet. The far side needs no more: with the reach
+     shift a sheet reaches y = -0.171 at most. The price is on the robot side, where a corner of a
+     large, yawed sheet overhangs the edge in ~18% of resets (by > 5 cm in ~5%). -->
 <robot name="box">
   <link name="box">
     <visual>
@@ -9,13 +13,13 @@
       </material>
       <origin xyz="0 0 0"/>
       <geometry>
-        <box size="0.6 0.7 0.3"/>
+        <box size="0.6 0.4 0.3"/>
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0 0"/>
       <geometry>
-        <box size="0.6 0.7 0.3"/>
+        <box size="0.6 0.4 0.3"/>
       </geometry>
     </collision>
     <inertial>

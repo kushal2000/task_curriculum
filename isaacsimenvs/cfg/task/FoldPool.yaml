@@ -5,7 +5,8 @@
 # `rigid_cloth.variant` is inert here; every other `rigid_cloth:` field applies to the pool's plates.
 #
 # Three sanctioned differences from RigidCloth.yaml outside `fold_pool:`, all stage-2 task choices:
-#   * assets.table_urdf -> table_fold_pool.urdf (0.6 x 0.7 m), so sheets up to 20 cm stay on the table.
+#   * assets.table_urdf -> table_fold_pool.urdf (0.6 x 0.4 m: wider in x only -- extending it toward
+#     the robot pins the arm's elbow; see the URDF).
 #     A new URDF must be baked: scripts/cluster/bos14_fold_pool_bake_table.sh.
 #   * cloth.keypoint_tolerance 0.015 (the ClothCfg default is 0.04): a fixed 1.5 cm at every size.
 #   * rigid_cloth.randomization: on, contact shell only (see the block).
@@ -70,7 +71,7 @@ scene:
 # -----------------------------------------------------------------------------
 assets:
   robot_urdf: "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
-  table_urdf: "assets/urdf/table_fold_pool.urdf"   # stage 2: widened; see the header
+  table_urdf: "assets/urdf/table_fold_pool.urdf"   # stage 2: widened in x; see the header
 
   object_name: "handle_head_primitives"
   # ONE variant, and only the hammer. The cloth replaces the spawned object, so the tool pool is
