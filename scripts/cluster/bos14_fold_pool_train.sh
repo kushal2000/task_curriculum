@@ -8,6 +8,16 @@
 #
 # PRIOR is the starting weights (default: the generic tool-use prior); RUN_TAG names the run
 # 0_fp_<RUN_TAG>_s<seed>_<job> so the eval launcher can find it (pass it the same RUN_TAG).
+# WANDB=1 also logs to wandb (project fold_pool); EXTRA_ARGS are appended hydra overrides.
+#
+# For more than one GPU per run see bos14_fold_pool_train_multinode.sh.
+#
+# More envs on the one GPU buys little: 1536 / 2304 / 3072 / 3840 envs ran 5,070 / 5,240 / 5,920 /
+# 6,240 env-steps/s (folding policy; peak 69 / 74 / 78 / 83 GB). Above ~2048 envs the triangle-pair
+# budget must be held at 1536 x 524288 in total (EXTRA_ARGS=env.newton.per_env_triangle_pairs=
+# $((805306368 / ENVS))): Newton's contact-reduction hashtable is 7 x the next power of two of a
+# quarter of it, and at 2304 x 524288 that exceeds Warp's int32 array limit at startup. No
+# overflow warning in those 40-epoch runs.
 #
 # Same learner, prior, reward, horizon and 1e8 env-step budget as the stage-1 rigid-cloth runs
 # (bos14_rigid_cloth_train.sh), so a pool policy is comparable to a single-chain one.
@@ -49,10 +59,15 @@ SHAPE_ARGS=()
 if [ -n "${SHAPES:-}" ]; then
     SHAPE_ARGS=("env.fold_pool.shapes=${SHAPES}")
 fi
+WANDB_ARGS=()
+if [ "${WANDB:-0}" = 1 ]; then
+    WANDB_ARGS=(--wandb_activate --wandb_project fold_pool --wandb_group "${RUN_TAG:-pool}_${JOB_TAG}" --wandb_name "$NAME")
+fi
+read -r -a EXTRA <<<"${EXTRA_ARGS:-}"
 
 export PYTHONUNBUFFERED=1
 echo "[fp_train] seed=$SEED envs=$ENVS epochs=$EPOCHS shapes=${SHAPES:-all} name=$NAME"
-echo "[fp_train] prior=$PRIOR"
+echo "[fp_train] prior=$PRIOR wandb=${WANDB:-0} extra=${EXTRA_ARGS:-none}"
 echo "[fp_train] host=$(hostname -s) commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain)" && echo YES || echo no)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
@@ -67,6 +82,7 @@ scripts/newton_py -m isaacsimenvs.train \
     --checkpoint "$PRIOR" \
     --checkpoint_load_mode weights \
     --single_variant \
+    "${WANDB_ARGS[@]}" \
     "${SHAPE_ARGS[@]}" \
     env.cloth.nan_policy=reset \
     "env.scene.num_envs=${ENVS}" \
@@ -76,7 +92,8 @@ scripts/newton_py -m isaacsimenvs.train \
     "agent.params.config.expl_coef_block_size=${BLOCK}" \
     "agent.params.config.max_epochs=${EPOCHS}" \
     "agent.params.config.name=${NAME}" \
-    "agent.params.seed=${SEED}"
+    "agent.params.seed=${SEED}" \
+    "${EXTRA[@]}"
 RC=$?
 
 kill "$SMI_PID" 2>/dev/null
