@@ -168,6 +168,11 @@ class A2CBase(BaseAlgorithm):
         self.self_play = config.get('self_play', False)
         self.save_freq = config.get('save_frequency', 0)
         self.save_best_after = config.get('save_best_after', 100)
+        # Minimum wall-clock seconds between two best-reward checkpoint saves (0 = every new best).
+        # A run whose reward keeps rising otherwise saves on most epochs; on a fast simulator that
+        # file write dominated the epoch (PhysX chain: 1.2 s of training + ~4 s of saving).
+        self.best_save_min_interval_s = float(config.get('best_save_min_interval_s', 0.0))
+        self._last_best_save_time = -float('inf')
         self.print_stats = config.get('print_stats', True)
         self.rnn_states = None
         self.name = base_name
@@ -1300,7 +1305,9 @@ class DiscreteA2CBase(A2CBase):
                             torch_ext.safe_filesystem_op(os.makedirs, os.path.join(self.experiment_dir, 'last'), exist_ok=True)
                             self.save(os.path.join(self.experiment_dir, 'last', 'model'))
 
-                    if mean_rewards[0] > self.last_mean_rewards and epoch_num >= self.save_best_after:
+                    if (mean_rewards[0] > self.last_mean_rewards and epoch_num >= self.save_best_after
+                            and time.time() - self._last_best_save_time >= self.best_save_min_interval_s):
+                        self._last_best_save_time = time.time()
                         print('saving next best rewards: ', mean_rewards)
                         self.last_mean_rewards = mean_rewards[0]
                         self.save(os.path.join(self.nn_dir, self.config['name']))
@@ -1659,7 +1666,9 @@ class ContinuousA2CBase(A2CBase):
                                 os.system(f"cp {os.path.join(self.experiment_dir, 'last', 'model.pth')} {os.path.join(self.experiment_dir, 'last', 'model.pth.old')}")
                             self.save(os.path.join(self.experiment_dir, 'last', 'model'), all_state_dict)
 
-                    if mean_rewards[0] > self.last_mean_rewards and epoch_num >= 10:
+                    if (mean_rewards[0] > self.last_mean_rewards and epoch_num >= 10
+                            and time.time() - self._last_best_save_time >= self.best_save_min_interval_s):
+                        self._last_best_save_time = time.time()
                         print('saving next best rewards: ', mean_rewards)
                         self.last_mean_rewards = mean_rewards[0]
                         self.save(os.path.join(self.nn_dir, self.config['name']), all_state_dict)

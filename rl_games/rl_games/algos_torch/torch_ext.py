@@ -80,7 +80,32 @@ def safe_symlink(src, dst):
 def safe_save(state, filename):
     return safe_filesystem_op(torch.save, state, filename)
 
+def _alias_numpy2_modules():
+    """Let numpy 1.x unpickle checkpoints written under numpy 2.x.
+
+    A checkpoint's pickle names numpy scalars by module path, and numpy 2 renamed
+    ``numpy.core`` to ``numpy._core``. The Newton venv runs numpy 2 and the Isaac Sim (PhysX)
+    venv numpy 1.26, so without this a policy trained on one cannot be loaded on the other
+    ("No module named 'numpy._core'"). The reverse direction needs nothing: numpy 2 still
+    resolves ``numpy.core``.
+    """
+    import sys
+
+    import numpy
+
+    if hasattr(numpy, "_core") or "numpy._core" in sys.modules:
+        return
+    import numpy.core
+    import numpy.core.multiarray
+    import numpy.core.numeric
+
+    sys.modules["numpy._core"] = numpy.core
+    sys.modules["numpy._core.multiarray"] = numpy.core.multiarray
+    sys.modules["numpy._core.numeric"] = numpy.core.numeric
+
+
 def safe_load(filename):
+    _alias_numpy2_modules()
     return safe_filesystem_op(torch.load, filename, weights_only=False, map_location='cpu')
 
 def save_checkpoint(filename, state):

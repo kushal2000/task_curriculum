@@ -108,6 +108,7 @@ params:
     score_to_win: 1000000
     max_epochs: 1000000
     save_best_after: 100
+    best_save_min_interval_s: 0.0   # >0: at most one best-reward checkpoint per this many seconds
     save_frequency: 3000
     print_stats: True
     grad_norm: 1.0
