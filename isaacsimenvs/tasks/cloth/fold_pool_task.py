@@ -740,6 +740,10 @@ class FoldPoolTaskMixin:
         dt = float(self.cfg.sim.dt)
         # The table is moved to its working height only by a reset; this runs before the first one.
         _reset_table_pose(self, torch.arange(self.num_envs, device=self.device))
+        # The sheets out of the way first, as the start-fold checks do: the placement checks above
+        # leave every env's sheet at its origin, at the hand's height, and one dropping onto the
+        # fingers reads as a drifting arm (7-shape pool: 0.7 deg in every run, 6 and 13 deg twice).
+        self._reset_all_to(0, torch.zeros((self.num_envs, int(self._pool_arts[0].num_joints)), device=self.device), dy=-0.5)
         arm = [i for i, name in enumerate(robot.joint_names) if name.startswith("iiwa14")]
         home = _to_torch(robot.data.default_joint_pos).clone()
         robot.write_joint_state_to_sim(home, torch.zeros_like(home))
