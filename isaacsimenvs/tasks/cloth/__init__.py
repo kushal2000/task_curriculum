@@ -117,3 +117,33 @@ gym.register(
         "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
     },
 )
+
+
+# The two rigid-manipuland tasks on PhysX (Isaac Sim 5.1, `.venv_isaacsim`): same task code, same
+# observation, same agent configs -- see `physx_envs.py`.
+gym.register(
+    id="Isaacsimenvs-RigidClothPhysx-Direct-v0",
+    entry_point="isaacsimenvs.tasks.cloth.physx_envs:RigidClothPhysxEnv",
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.physx_env_cfg:RigidClothPhysxEnvCfg",
+        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "RigidClothPhysx.yaml"),
+        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
+    },
+)
+
+
+gym.register(
+    id="Isaacsimenvs-FoldPoolPhysx-Direct-v0",
+    entry_point="isaacsimenvs.tasks.cloth.physx_envs:FoldPoolPhysxEnv",
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.physx_env_cfg:FoldPoolPhysxEnvCfg",
+        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "FoldPoolPhysx.yaml"),
+        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
+    },
+)
