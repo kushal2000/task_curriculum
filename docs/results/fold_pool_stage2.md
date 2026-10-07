@@ -82,3 +82,21 @@ widened in x only, its robot-side edge where the narrow table's is (commit 2bf30
 `FoldPoolEnv._verify_arm_clear` now refuses to start if any arm joint drifts more than 2 deg while
 holding the home pose for 30 steps with the table in place (0.00 deg on this table, 25.9 deg on the
 old one). The void results are kept out of `docs/results`.
+
+## Zero-shot on the VBD cloth
+
+`bos14_fold_pool_eval_cloth.sh` (array 156964): the stage-1 cloth protocol -- 32 envs, two eval
+seeds, held fold, SAPG block 5 -- so the rows sit next to the stage-1 chains. Cells: held folds,
+falls, median best fold error.
+
+| policy | 4 cm pinned | 4 cm rand | 1.5 cm pinned | 1.5 cm rand |
+|---|---|---|---|---|
+| **pool, `box3-mid` prior (3 seeds)** | 51/192 (27%), falls 45%, 53 mm | 63/192 (33%), 32%, 42 mm | 8/192 (4%), 58%, 54 mm | 12/192 (6%), 52%, 52 mm |
+| pool, generic prior (3 seeds) | 2/192 (1%) | 4/192 (2%) | 0/192 | 0/192 |
+| stage-1 `box3-mid` chain, all 6 runs | 204/384 (53%), 32%, 33 mm | 157/384 (41%), 31%, 39 mm | 68/384 (18%), 53%, 32 mm | 42/384 (11%), 40%, 38 mm |
+| stage-1 `box3-mid` fixdr s2 (the prior) | 50/64 (78%), 8%, 23 mm | 21/64 (33%), 34%, 48 mm | 31/64 (48%), 20%, 14 mm | 4/64 (6%), 44%, 63 mm |
+| cloth-trained reference | 32/32 (100%) | 31/32 (97%) | 54/64 (84%) | 30/64 (47%) |
+
+Stage 2 made cloth transfer WORSE: from its own prior's 78% pinned to 19-33%, and from the six
+stage-1 runs' 53% to 27%. Falls are the failure (45% pinned against 32%). Training on five rigid
+shapes at 10-20 cm moved the policy away from the cloth, it did not generalise toward it.
