@@ -34,7 +34,10 @@ fs = load_module("isaacsimenvs/tasks/cloth/utils/fold_shapes.py", "fold_shapes")
 rc = rigid_cloth()
 
 ROOT_COLOR = (217, 89, 140)
-PLATE_COLORS = [(74, 143, 194), (80, 170, 130), (242, 173, 56), (150, 110, 200), (90, 190, 200)]
+PLATE_COLORS = [
+    (74, 143, 194), (80, 170, 130), (242, 173, 56), (150, 110, 200), (90, 190, 200),
+    (200, 110, 70), (120, 160, 60), (110, 120, 210),
+]
 SEAM_COLOR = (230, 120, 30)
 
 #: Explicit pinch gains are bounded by the timestep; see ``rigid_cloth_viser.apply_pinch``.
@@ -175,6 +178,8 @@ class Sim:
     frames: dict = field(default_factory=dict)
     gizmo: object = None
     marker: object = None
+    starts: dict = field(default_factory=dict)  # FoldShape.start_poses()
+    start: str = ""  # readout of the last start pose put on
 
     def angle(self, child: str) -> float:
         return float(self.data.qpos[self.qadr[child]])
@@ -236,6 +241,7 @@ def make_sim(shape, args, origin) -> Sim:
     )
     plate, xy = shape.grasp or (shape.plates[-1].name, _grasp_point(shape, shape.plates[-1].name))
     sim.grasp = (plate, np.array([xy[0], xy[1], 0.0]))
+    sim.starts = shape.start_poses()
     reset(sim)
     return sim
 
@@ -246,10 +252,37 @@ def reset(sim: Sim) -> None:
     mujoco.mj_resetData(sim.model, sim.data)
     sim.set_motors(False)
     sim.queue, sim.current, sim.history = [], None, []
-    sim.release_at, sim.pinch, sim.t = None, False, 0.0
+    sim.release_at, sim.pinch, sim.t, sim.start = None, False, 0.0, ""
     sim.data.xfrc_applied[:] = 0.0
     mujoco.mj_forward(sim.model, sim.data)
     sim.target = sim.world(*sim.grasp)
+
+
+def put_start(sim: Sim, name: str, degs) -> None:
+    """Teleport to start pose ``name`` with part ``i`` at ``degs[i]``, as a training reset writes it
+    (``fold_pool.init_fold_starts: other``), then hold it with the motors (root held)."""
+    import mujoco
+
+    reset(sim)
+    parts = sim.starts[name]
+    for part, d in zip(parts, degs):
+        for h in part:
+            sim.data.qpos[sim.qadr[h]] = math.radians(d)
+    mujoco.mj_forward(sim.model, sim.data)
+    sim.set_motors(True)
+    sim.target = sim.world(*sim.grasp)
+    angles = ", ".join(f"{d:.0f}°" for d in degs[: len(parts)])
+    sim.start = f"start **{name}** ({angles})"
+
+
+def random_start(sim: Sim, lo: float, hi: float, name: str | None = None) -> None:
+    """A start drawn as training draws it: a uniform pose, each part its own uniform angle."""
+    if not sim.starts:
+        reset(sim)
+        sim.start = "start **flat** (its only fold is the target)"
+        return
+    name = name or list(sim.starts)[np.random.randint(len(sim.starts))]
+    put_start(sim, name, np.random.uniform(lo, hi, size=len(sim.starts[name])))
 
 
 def request(sim: Sim, stages, record: bool = True) -> None:
@@ -322,7 +355,8 @@ def readout(sim: Sim) -> str:
     ang = ", ".join(f"{k} {math.degrees(sim.angle(k)):.0f}°" for k in sim.act)
     state = "motors, root held" if sim.motors else ("pinched" if sim.pinch else "passive")
     seam = f", seam gap {sim.seam_error() * 1e3:.1f} mm" if sh.seams else ""
-    return f"**{sh.name}** ({state}) — {ang}{seam}"
+    start = f"<br>{sim.start}" if sim.start else ""
+    return f"**{sh.name}** ({state}) — {ang}{seam}{start}"
 
 
 def make_scene(server, sim: Sim) -> None:
@@ -461,6 +495,29 @@ def main() -> None:
 
         return cb
 
+    with gui.add_folder("Folded starts (training)", expand_by_default=True):
+        gui.add_markdown(
+            "`fold_pool.init_fold_starts: other`: any legal combination of a shape's NON-target folds, "
+            "each part at its own angle, up to fully folded. Held by the motors unless *release* is "
+            "ticked. " + ", ".join(f"{s.shape.name} {len(s.starts)}" for s in sims) + " starts."
+        )
+        g_range = gui.add_multi_slider("start angle range (deg)", 0.0, 180.0, 1.0, (15.0, 180.0))
+        b_rand_all = gui.add_button("random start, every shape", color="green")
+        g_rel = gui.add_checkbox("release a start after the hold (passive hinges)", False)
+        g_cycle = gui.add_checkbox("new random start every ...", False)
+        g_period = gui.add_slider("... seconds", 0.5, 6.0, 0.5, 2.0)
+
+    def start(s, name=None):
+        random_start(s, *g_range.value, name=name)
+        if g_rel.value:
+            s.release_at = s.t + hold.value
+
+    def rand_all():
+        for s in sims:
+            start(s)
+
+    b_rand_all.on_click(on(rand_all))
+
     b_all.on_click(on(lambda: [request(s, next(iter(s.shape.folds.values()))) for s in sims]))
     b_unfold_all.on_click(on(lambda: [unfold(s) for s in sims]))
     b_reset_all.on_click(on(lambda: [reset(s) for s in sims]))
@@ -472,6 +529,30 @@ def main() -> None:
             for fold_name, stages in sh.folds.items():
                 gui.add_button(fold_name).on_click(on(lambda s=sim, st=stages: request(s, st)))
             gui.add_button("unfold").on_click(on(lambda s=sim: unfold(s)))
+            if sim.starts:
+                g_sp = gui.add_dropdown("start pose", list(sim.starts))
+
+                gui.add_button("show this start (random angles)").on_click(
+                    on(lambda s=sim, g=g_sp: start(s, g.value)))
+                gui.add_button("random start").on_click(on(lambda s=sim: start(s)))
+            else:
+                gui.add_markdown("*No folded start: its only fold is the target.*")
+            with gui.add_folder("hinge angles (deg)", expand_by_default=False):
+                gui.add_markdown(
+                    "Each slider drives one hinge's motor (root held) and holds it there. "
+                    "A hinge on a loop can only turn with its partners; alone it fights the seam."
+                )
+                for h in sh.hinges:
+                    sl = gui.add_slider(f"{h.child} on {h.parent}", -180.0, 180.0, 1.0, 0.0)
+
+                    def turn(_, s=sim, k=h.child, sl=sl):
+                        with lock:
+                            s.queue, s.current, s.release_at, s.pinch = [], None, None, False
+                            s.set_motors(True)
+                            s.cmd[k] = math.radians(sl.value)
+                            physics.value = True
+
+                    sl.on_update(turn)
             gui.add_button("reset flat").on_click(on(lambda s=sim: reset(s)))
             grasp = gui.add_dropdown(
                 "pinch plate", [pl.name for pl in sh.plates], initial_value=sim.grasp[0]
@@ -503,6 +584,7 @@ def main() -> None:
     info = gui.add_markdown("")
     frame_dt = 1.0 / 60.0
     last_info = 0.0
+    last_cycle = time.time()
     print(f"viser running at http://localhost:{args.port}  ({len(sims)} shapes)", flush=True)
     while True:
         t_start = time.time()
@@ -518,6 +600,10 @@ def main() -> None:
             with server.atomic():
                 for sim in sims:
                     sync_scene(sim)
+            if g_cycle.value and time.time() - last_cycle > g_period.value:
+                physics.value = True
+                rand_all()
+                last_cycle = time.time()
             if time.time() - last_info > 0.25:
                 info.content = "\n\n".join(readout(s) for s in sims)
                 last_info = time.time()
