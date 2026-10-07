@@ -106,6 +106,7 @@ class ClothAsRigidObject:
         spawn_z: float,
         mass: float,
         device,
+        reset_offset_xy=(0.0, 0.0),
     ) -> None:
         self._cloth = cloth
         self._num_envs = num_envs
@@ -116,6 +117,10 @@ class ClothAsRigidObject:
         self._corner_rest = torch.tensor(corner_rest, device=device, dtype=torch.float32)
         self._spawn_z = float(spawn_z)
         self._mass = float(mass)
+        #: Env-frame XY added to every reset centre (``cloth.reset_offset_xy``).
+        self._reset_offset = torch.tensor(
+            [float(reset_offset_xy[0]), float(reset_offset_xy[1])], device=device, dtype=torch.float32
+        )
         self.data = _ClothData(self)
 
     # ---------------------------------------------------------------- particle access
@@ -196,6 +201,7 @@ class ClothAsRigidObject:
         # buffer problem and is not one.
         centre = root_pose[:, :3].clone()
         centre[:, 2] = self._spawn_z
+        centre[:, :2] += self._reset_offset
 
         # Roll and pitch are discarded; see `task_yaw` for what this decode actually receives.
         yaw = task_yaw(root_pose)

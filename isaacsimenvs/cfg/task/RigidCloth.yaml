@@ -353,6 +353,10 @@ rigid_cloth:
   # particles, so it rests 8 mm up and is touched 8 mm above that; a bare 2 mm slat sat 14 mm lower.
   # Nonzero also removes slat-slat contact pairs (joint limits hold the plies). 0.0 = old behaviour.
   contact_margin: -1.0
+  # Material contact ke / kd on EVERY shape; 0 = Newton default 2500 / 100 = MuJoCo solref 0.02.
+  # 1e4 / 200 = solref 0.01 (refsafe floor is 2 substeps). See RigidClothCfg.contact_ke.
+  contact_ke: 0.0
+  contact_kd: 0.0
   fold_lift_from_ply_gap: true    # score the fold where THIS chain's plies rest, not the cloth's 2 mm
   # Per-env physics randomisation, re-drawn at every reset, centred on the matched values above.
   randomization:

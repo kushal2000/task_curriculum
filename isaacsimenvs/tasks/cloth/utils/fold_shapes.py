@@ -29,9 +29,9 @@ Without it the sheet has a slit along that line and its halves fold independentl
 four-crease vertex has the rigid-origami behaviour of a real map fold: it folds along ONE line at a
 time (horizontal OR vertical), and a fully folded sheet can then fold along the other.
 
-URDF cannot express a seam, and ``RigidClothEnv`` loads its chain from URDF, so ``box2x8``,
-``cross4`` and ``corners8`` need a different import path before they can enter the env. ``box2``
-and ``box2diag4`` are trees.
+URDF cannot express a seam, and ``RigidClothEnv`` loads its chain from URDF, so ``box2x8``, ``star8``,
+``cross4`` and ``corners8`` need a different import path before they can enter the env. ``box2``,
+``box2diag4`` and ``box4`` are trees.
 
 **Every shape can do the stage-1 half fold** (``+x`` half over onto ``-x``, root on the ``-x``
 side); that is the membership rule for the pool. Shapes that only fold some other way (a diagonal,
@@ -44,6 +44,7 @@ held only by joint limits. The pool follows the same rule.
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -60,6 +61,7 @@ __all__ = [
     "plate_mass_properties",
     "make_pool",
     "POOL",
+    "DEFAULT_SHAPES",
     "shape",
 ]
 
@@ -118,6 +120,9 @@ class Seam:
 
 #: A fold is a sequence of stages; each stage drives some hinges to new angles together.
 Fold = tuple[Mapping[str, float], ...]
+
+#: A folded start: independent parts, each a set of hinges turned up together by one angle.
+StartPose = tuple[tuple[str, ...], ...]
 
 
 @dataclass(frozen=True)
@@ -264,6 +269,58 @@ class FoldShape:
         for the surface case; the mid case differs because a single mid hinge spends no wall slat.
         """
         return 0.0 if self.hinge == "mid" else self.thickness
+
+    def start_folds(self) -> dict[str, dict[str, float]]:
+        """The single-stage folds a partly folded episode can start from: ``{fold: {child: +-1}}``.
+
+        The per-hinge direction of each fold, to be multiplied by the start angle. Single-stage only
+        (a multi-stage fold's first stage is already a full fold), and only folds whose every hinge
+        turns UP (+pi): a partial ``-pi`` from flat would push a plate into the table.
+        """
+        out = {}
+        for name, stages in self.folds.items():
+            if len(stages) != 1:
+                continue
+            st = stages[0]
+            if all(abs(a - math.pi) < 1e-9 for a in st.values()):
+                out[name] = {child: 1.0 for child in st}
+        return out
+
+    def start_poses(self, check_deg: Sequence[float] = (0.0, 60.0, 120.0, 180.0)) -> dict[str, StartPose]:
+        """Folded starts that are NOT the target: ``{name: (part, ...)}``, each part a tuple of hinges
+        turned up together by ONE angle, every part drawn its own angle (up to a full 180 deg fold).
+
+        Parts are the single-stage folds of ``start_folds`` minus ``HALF_FOLD``, and a start is any
+        set of them with no hinge in common that is legal at EVERY combination of ``check_deg``
+        angles: seams closed and no vertex below the root's plane (a corner folded on a quarter that
+        then turns over would point into the table). A named fold that is the union of other parts
+        (``all four corners``, ``gate``) is left out: their combination with equal angles is it.
+        ``box2`` has no start -- its only fold is the target.
+        """
+        parts = {n: tuple(sorted(d)) for n, d in self.start_folds().items() if n != HALF_FOLD}
+        for n, hs in list(parts.items()):
+            others = [set(h) for m, h in parts.items() if m != n and set(h) < set(hs)]
+            if others and set().union(*others) == set(hs):
+                del parts[n]
+        out = {}
+        names = list(parts)
+        for r in range(1, len(names) + 1):
+            for combo in itertools.combinations(names, r):
+                flat = [h for n in combo for h in parts[n]]
+                if len(set(flat)) == len(flat) and self._start_legal([parts[n] for n in combo], check_deg):
+                    out[" + ".join(combo)] = tuple(parts[n] for n in combo)
+        return out
+
+    def _start_legal(self, parts: Sequence[Sequence[str]], check_deg: Sequence[float]) -> bool:
+        for degs in itertools.product(check_deg, repeat=len(parts)):
+            ang = {h: math.radians(d) for hs, d in zip(parts, degs) for h in hs}
+            if self.seam_error(ang) > 1e-9:
+                return False
+            for name, (r, t) in self.transforms(ang).items():
+                for v in self.plate(name).polygon:
+                    if (r @ np.array([v[0], v[1], 0.0]) + t)[2] < -1e-9:
+                        return False
+        return True
 
     def half_fold_moving(self) -> list[str]:
         """Plates the half fold carries over: every plate whose centroid is on ``+x``."""
@@ -558,10 +615,71 @@ def make_pool(size: float = 0.10, thickness: float = 0.002, hinge: str = "mid") 
         grasp=("ne", (L - inset, L - inset)),
         **kw,
     )
+
+    # 6. Four strips in a row -- three parallel creases (x = -L/2, 0, L/2), a chain like stage 1's
+    #    box3 with one more slat. Rooted next to the centre crease, so the half fold is one hinge
+    #    and each outer strip folds in on its own (a gate fold when both do).
+    xs = (-L, -L / 2.0, 0.0, L / 2.0, L)
+    strip = {f"s{k + 1}": ((xs[k], -L), (xs[k + 1], -L), (xs[k + 1], L), (xs[k], L)) for k in range(4)}
+    out["box4" + sfx] = FoldShape(
+        name="box4" + sfx,
+        label="four strips in a row (4 plates)",
+        plates=tuple(Plate(k, strip[k]) for k in ("s2", "s1", "s3", "s4")),  # s2: root
+        hinges=(
+            Hinge("s1", "s2", (-L / 2.0, -L), (-L / 2.0, L)),
+            Hinge("s3", "s2", (0, -L), (0, L)),  # centre crease
+            Hinge("s4", "s3", (L / 2.0, -L), (L / 2.0, L)),
+        ),
+        folds={
+            HALF_FOLD: ({"s3": PI},),
+            "left strip in": ({"s1": PI},),
+            "right strip in": ({"s4": PI},),
+            "gate (both outer strips in)": ({"s1": PI, "s4": PI},),
+            "gate, then half": ({"s1": PI, "s4": PI}, {"s3": PI}),
+            # s4 lies upside down on s1 after the half fold: -pi on its layer (as box2diag4).
+            "half, then outer strip (both layers)": ({"s3": PI}, {"s1": PI, "s4": -PI}),
+        },
+        grasp=("s4", (L - inset, 0.0)),
+        **kw,
+    )
+
+    # 7. Plus + X -- creases along both axes AND both diagonals, eight triangles round the centre.
+    #    Wedge w<k> spans k*45 .. (k+1)*45 degrees. One degree-8 vertex = one loop: a chain round
+    #    the centre from the root w2 (-x side of the vertical crease), seam at the vertical crease's
+    #    lower half as in cross4. Each of the four full lines folds on its own.
+    corners = [(L, 0), (L, L), (0, L), (-L, L), (-L, 0), (-L, -L), (0, -L), (L, -L)]
+    wedge = {f"w{k}": ((0, 0), corners[k], corners[(k + 1) % 8]) for k in range(8)}
+    chain = [("w1", "w2"), ("w0", "w1"), ("w7", "w0"), ("w6", "w7"),  # right side, from the root
+             ("w3", "w2"), ("w4", "w3"), ("w5", "w4")]  # left side
+    shared = lambda a, b: next(c for c in wedge[a][1:] if c in wedge[b][1:])  # noqa: E731
+    bottom = {"w4": PI, "w7": PI}
+    right = {"w1": PI}
+    out["star8" + sfx] = FoldShape(
+        name="star8" + sfx,
+        label="plus + X creases (8 triangles, 1 seam)",
+        plates=tuple(Plate(k, wedge[k]) for k in ("w2", "w0", "w1", "w3", "w4", "w5", "w6", "w7")),
+        hinges=tuple(Hinge(c, p, (0, 0), shared(c, p)) for c, p in chain),
+        seams=(Seam("w6", "w5", (0, -L), (0, 0)),),  # vertical crease, lower half
+        folds={
+            HALF_FOLD: (right,),
+            "half: bottom up": (bottom,),
+            "diagonal: lower right over upper left": ({"w0": PI, "w5": PI},),
+            "diagonal: lower left over upper right": ({"w3": PI, "w6": PI},),
+            "quarter (bottom up, then right over)": (bottom, right),
+        },
+        grasp=("w0", (L - inset, L / 2.0)),
+        **kw,
+    )
     return out
 
 
 POOL: dict[str, FoldShape] = make_pool()
+
+#: The stage-2 training pool (``FoldPoolCfg.shapes`` default). ``POOL`` also holds shapes added
+#: later (``box4``, ``star8``) that a run must ask for by name.
+DEFAULT_SHAPES: tuple[str, ...] = (
+    "box2-mid", "box2diag4-mid", "box2x8-mid", "cross4-mid", "corners8-mid",
+)
 
 
 def shape(name: str) -> FoldShape:

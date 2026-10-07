@@ -367,6 +367,10 @@ rigid_cloth:
   # particles, so it rests 8 mm up and is touched 8 mm above that; a bare 2 mm slat sat 14 mm lower.
   # Nonzero also removes slat-slat contact pairs (joint limits hold the plies). 0.0 = old behaviour.
   contact_margin: -1.0
+  # Material contact ke / kd on EVERY shape; 0 = Newton default 2500 / 100 = MuJoCo solref 0.02.
+  # 1e4 / 200 = solref 0.01 (refsafe floor is 2 substeps). See RigidClothCfg.contact_ke.
+  contact_ke: 0.0
+  contact_kd: 0.0
   fold_lift_from_ply_gap: true    # score the fold where THIS chain's plies rest, not the cloth's 2 mm
   # Per-env physics randomisation, re-drawn at every reset, centred on the matched values above.
   # Stage 2: ONLY the contact shell is randomised (felt thickness 10-22 mm, redrawn every episode).
@@ -397,3 +401,10 @@ fold_pool:
   thickness_range: [0.002, 0.002] # plate slab [m]; the hand feels slab + 2 x contact_margin
   size_seed: 0
   reach_shift: [0.0, 1.0]         # toward the robot (+y): a bigger sheet's far edge stays in reach
+  # PhysX only: each env carries ONE shape (round-robin, fixed) instead of all five; 1.6-1.8x faster.
+  one_shape_per_env: false
+  # Partly folded starts (stage-2 run 1): this share of episodes starts with one of the shape's
+  # single-stage named folds turned up by an angle from init_fold_deg; the rest start flat.
+  init_fold_prob: 0.0
+  init_fold_deg: [15.0, 120.0]
+  init_fold_starts: single         # other: non-target folds + combinations, each part its own angle

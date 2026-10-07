@@ -38,7 +38,9 @@ def _path(shape, stages, n=41):
 
 
 def test_pool_names(pool):
-    assert set(pool) == {"box2-mid", "box2diag4-mid", "box2x8-mid", "cross4-mid", "corners8-mid"}
+    assert set(pool) == {
+        "box2-mid", "box2diag4-mid", "box2x8-mid", "cross4-mid", "corners8-mid", "box4-mid", "star8-mid"
+    }
 
 
 def _footprint(sh, ang):
@@ -90,7 +92,7 @@ def test_corners_meet_in_the_centre(pool):
         np.testing.assert_allclose(sh.point(k, corner, ang), 0.0, atol=1e-12)
 
 
-@pytest.mark.parametrize("name", ["cross4-mid", "corners8-mid"])
+@pytest.mark.parametrize("name", ["cross4-mid", "corners8-mid", "star8-mid"])
 def test_quarter_fold_lands_on_the_root_quarter(pool, name):
     """Bottom up, then right over: everything ends on the -x/+y quarter."""
     sh = pool[name]
@@ -135,6 +137,42 @@ def test_x_halves_fold_both_layers_together(pool, fold, pairs):
             )
 
 
+def test_box4_outer_strips_fold_both_layers_together(pool):
+    """After the half fold, s4 lies on s1 and must stay on it through the outer-strip fold."""
+    sh = pool["box4-mid"]
+    (half, outer) = sh.folds["half, then outer strip (both layers)"]
+    for f in np.linspace(0.0, 1.0, 21):
+        ang = {**half, **{k: f * v for k, v in outer.items()}}
+        for x, y in [(L, -L), (0.75 * L, 0.3 * L), (0.5 * L, L)]:
+            np.testing.assert_allclose(
+                sh.point("s4", (x, y), ang), sh.point("s1", (-x, y), ang), atol=1e-12
+            )
+
+
+@pytest.mark.parametrize(
+    "fold,mirror",
+    [
+        ("diagonal: lower right over upper left", lambda x, y: (y, x)),
+        ("diagonal: lower left over upper right", lambda x, y: (-y, -x)),
+    ],
+)
+def test_star_diagonal_folds_land_on_the_other_half(pool, fold, mirror):
+    """A diagonal fold is a mirror across that diagonal: every moved point lands on its image."""
+    sh = pool["star8-mid"]
+    ang = sh.fold_angles(fold)
+    tf = sh.transforms(ang)
+    flipped = set()
+    for p in sh.plates:
+        r, t = tf[p.name]
+        if r[2, 2] < 0:
+            flipped.add(p.name)
+        for v in [*p.polygon, tuple(p.centroid)]:
+            got = r @ np.array([*v, 0.0]) + t
+            want = (*mirror(*v), 0.0) if r[2, 2] < 0 else (*v, 0.0)
+            np.testing.assert_allclose(got, want, atol=1e-12)
+    assert len(flipped) == 4
+
+
 def test_half_folds_cannot_mix(pool):
     """The seam is what makes the cross a sheet: half of each fold at once tears it open."""
     sh = pool["corners8-mid"]
@@ -157,3 +195,32 @@ def test_tree_without_seam_rejected(fold_shapes):
                 fold_shapes.Hinge("b", "a", (0, -L), (0, 0)),
             ),
         )
+
+
+def test_start_poses_are_never_the_target_and_stay_legal_at_any_angles(pool):
+    """Every folded start (``init_fold_starts: other``), each part at its own random angle up to a
+    full fold: seams closed, nothing below the table, and the target hinge never moves."""
+    rng = np.random.default_rng(0)
+    for sh in pool.values():
+        target = set(sh.folds["half: right over left"][0])
+        for name, parts in sh.start_poses().items():
+            moved = {h for part in parts for h in part}
+            assert not moved & target, (sh.name, name)
+            for _ in range(20):
+                ang = {}
+                for part in parts:  # one angle per part
+                    a = rng.uniform(0.0, math.pi)
+                    ang.update({h: a for h in part})
+                assert sh.seam_error(ang) < 1e-9, (sh.name, name)
+                assert _footprint(sh, ang)[:, 2].min() > -1e-9, (sh.name, name)
+
+
+def test_start_pose_counts(pool):
+    """box2's only fold is the target; a corner folded on a quarter cannot ride a bottom-up fold
+    (it would turn into the table), and fold-shape seams forbid mixing crossing lines."""
+    counts = {n: len(sh.start_poses()) for n, sh in pool.items()}
+    assert counts == {
+        "box2-mid": 0, "box2diag4-mid": 3, "box2x8-mid": 8, "cross4-mid": 1,
+        "corners8-mid": 19, "box4-mid": 3, "star8-mid": 3,
+    }
+    assert "half: bottom up + corner sw" not in pool["corners8-mid"].start_poses()
