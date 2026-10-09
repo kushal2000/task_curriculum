@@ -67,6 +67,19 @@ def test_palm_and_fingertip_bodies_survive_fixed_joint_merging() -> None:
 
 
 @needs_assets
+def test_every_moving_link_has_an_inertial() -> None:
+    """Upstream's Rizon xacro emits mass/inertia outside <inertial>; fetch_assets.sh wraps them.
+    Without it, parsers see no mass and Isaac Sim silently uses defaults for the whole arm."""
+    root = ET.parse(fw.COMPOSED_URDF).getroot()
+    moving = {j.find("child").get("link") for j in root.iter("joint") if j.get("type") != "fixed"}
+    for link in root.iter("link"):
+        if link.get("name") in moving | {"base_link"}:
+            mass = link.find("inertial/mass")
+            assert mass is not None and float(mass.get("value")) > 0, link.get("name")
+        assert link.find("mass") is None, f"{link.get('name')}: loose <mass> outside <inertial>"
+
+
+@needs_assets
 def test_hand_gains_match_vendor_mjcf() -> None:
     root = ET.parse(WUJI_MJCF).getroot()
     default_armature = float(root.find("default/joint").get("armature"))

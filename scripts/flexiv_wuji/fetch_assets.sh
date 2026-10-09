@@ -68,6 +68,35 @@ urdf=$tmp/flexiv_description/urdf/Rizon4s.urdf
 # create_urdf.py prints its errors and exits 0, so check for the output instead.
 [[ -f $urdf ]] || { echo "xacro expansion did not write $urdf" >&2; exit 1; }
 sed -i 's|@FLEXIV@/|../|g' "$urdf"
+# Upstream's get_inertias macro (urdf/common/flexiv_common.xacro) emits <origin>, <mass> and
+# <inertia> as direct children of <link>, without the <inertial> element URDF requires, so every
+# parser ignores them: Isaac Sim falls back to default masses ("No mass specified for link link1")
+# and yourdfpy reads mass None. Wrap them.
+python3 - "$urdf" <<'EOF'
+import sys
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+tree = ET.parse(path)
+wrapped = 0
+for link in tree.getroot().iter("link"):
+    loose = [c for c in link if c.tag in ("origin", "mass", "inertia")]
+    if not loose:
+        continue
+    if link.find("inertial") is not None:
+        sys.exit(f"{link.get('name')}: has both <inertial> and loose inertia elements")
+    inertial = ET.Element("inertial")
+    for child in loose:
+        link.remove(child)
+        inertial.append(child)
+    link.insert(0, inertial)
+    wrapped += 1
+if wrapped == 0:
+    sys.exit("no loose inertia elements found; upstream may have fixed get_inertias -- drop this step")
+ET.indent(tree, space="  ")
+tree.write(path, encoding="utf-8", xml_declaration=True)
+print(f"wrapped loose inertia elements in <inertial> on {wrapped} links")
+EOF
 
 rm -rf "$DEST"
 mkdir -p "$DEST/flexiv_description/urdf" "$DEST/wuji_hand2"

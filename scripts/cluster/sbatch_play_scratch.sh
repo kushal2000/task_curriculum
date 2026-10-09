@@ -15,8 +15,10 @@
 # WHAT IS CHANGED FROM THE RECIPE
 #
 # Only the random force/torque impulses on the object (domain_randomization.force_scale and
-# torque_scale, 20 and 2 by default) are off, on both robots. Everything else is Play.yaml /
-# PlaySAPG.yaml as shipped: 8192 envs on one GPU, SAPG with 2 blocks of 4096, seed 42.
+# torque_scale, 20 and 2 by default) are off, on both robots. Everything else is PlaySAPG.yaml as
+# shipped, at SimToolReal's env count: 24576 envs on one GPU (pretrained_policy/config.yaml
+# numEnvs), i.e. 6 SAPG blocks of 4096 -- the 6 in the released checkpoint's (6, 29) sigma.
+# Play.yaml's 8192 would give 2 blocks, a different exploration setup.
 #
 # The interactive viewer loads the robot from raw GitHub at this branch, so the branch -- and for
 # the Flexiv, assets/flexiv_wuji/ -- must be pushed. The launcher warns if it is not.
@@ -45,6 +47,7 @@ esac
 RUN_NAME="${2:-play_scratch_${ROBOT}}_${SLURM_JOB_ID:-local}"
 OVERRIDES=("${@:3}")
 SEED="${SEED:-42}"
+ENVS="${ENVS:-24576}"
 CAPTURE_INTERVAL="${CAPTURE_INTERVAL:-6000}"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
@@ -55,7 +58,7 @@ if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
     echo "[train] WARNING: branch $BRANCH is not on origin -- viewer meshes will 404." >&2
 fi
 
-echo "[train] robot=$ROBOT task=$TASK run=$RUN_NAME seed=$SEED host=$(hostname) branch=$BRANCH"
+echo "[train] robot=$ROBOT task=$TASK run=$RUN_NAME seed=$SEED envs=$ENVS host=$(hostname) branch=$BRANCH"
 echo "[train] commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain)" && echo YES || echo no)"
 echo "[train] overrides=${OVERRIDES[*]:-none}"
 nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader
@@ -76,6 +79,7 @@ nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader
     --wandb_name "$RUN_NAME" \
     env.domain_randomization.force_scale=0.0 \
     env.domain_randomization.torque_scale=0.0 \
+    "env.scene.num_envs=${ENVS}" \
     "agent.params.config.name=0_${RUN_NAME}" \
     "agent.params.seed=${SEED}" \
     "${OVERRIDES[@]}"
