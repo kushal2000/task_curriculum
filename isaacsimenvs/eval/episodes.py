@@ -280,7 +280,9 @@ def main() -> None:
                   goals[idx] = final["successes"][idx].long()
                   length[idx] = steps_alive[idx]
                   for name in REASONS:
-                      reason[name][idx] = final[f"done_{name}"][idx].bool()
+                      # A reason the env does not publish (the cloth-only ones, on Play) stays False.
+                      if f"done_{name}" in final:
+                          reason[name][idx] = final[f"done_{name}"][idx].bool()
                   contributed |= done
 
               # An episode that has ended carries no hidden state worth keeping; the policy never

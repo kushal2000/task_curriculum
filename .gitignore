@@ -61,8 +61,14 @@ slurm_logs/
 assets/g1_wuji2_description/
 
 # Flexiv Rizon 4s + Wuji Hand 2 models, fetched at pinned upstream SHAs by
-# scripts/flexiv_wuji/fetch_assets.sh, plus the composed arm+hand URDF it writes.
-assets/flexiv_wuji/
+# scripts/flexiv_wuji/fetch_assets.sh, plus the composed arm+hand URDF it writes. Unlike
+# g1_wuji2_description these ARE committed: the training-time pose viewer loads the robot URDF and
+# its meshes from raw.githubusercontent.com at the run's branch. Only what the composed left-hand
+# robot references is kept; the right hand is ignored. Do not move them to LFS -- raw GitHub
+# serves LFS files as pointer stubs.
+assets/flexiv_wuji/wuji_hand2/meshes/right/
+assets/flexiv_wuji/wuji_hand2/urdf/right*
+assets/flexiv_wuji/wuji_hand2/mjcf/right*
 
 # Per-env probe dumps under docs/results. Every entry of these is one array element PER ENV, so a
 # 1536-env probe is 3 MB of raw state while the numbers the write-ups quote are the scalar summary

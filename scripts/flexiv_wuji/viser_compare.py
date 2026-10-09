@@ -5,9 +5,7 @@ table, with joint sliders for arm and hand. The Flexiv's base offset and the Wuj
 are live sliders too, so the mount can be tuned against the Kuka setup by eye; separation 0
 overlays the two robots on one table.
 
-Both hands are compared in one *canonical hand frame*, built the same way from each hand's
-knuckles (they are both left hands): origin at the middle-finger MCP, x from the hand base towards
-it (along the fingers), y from the pinky MCP towards the index MCP, z = x cross y (palm side).
+Both hands are compared in one canonical hand frame (hand_frames.py), built from their knuckles.
 The readout gives the Wuji's frame relative to the Sharpa's; "Match Kuka hand" solves the Flexiv
 arm's IK to zero it, so whatever residual is left is what the two kinematic chains cannot match.
 
@@ -36,20 +34,10 @@ from viser.extras import ViserUrdf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flexiv_wuji as fw  # noqa: E402
+from hand_frames import HAND_KEYPOINTS, hand_frame, hand_points  # noqa: E402
 
 TABLE_SIZE = (0.475, 0.4, 0.3)  # table_narrow.urdf's box
 TABLE_COLOR = (209, 143, 89)
-
-#: Links the canonical hand frame is built from: (hand base, index MCP, middle MCP, pinky MCP).
-HAND_KEYPOINTS = {
-    "kuka_sharpa": (
-        "left_hand_C_MC", "left_index_MCP_VL", "left_middle_MCP_VL", "left_pinky_MCP_VL",
-    ),
-    "flexiv_wuji": (
-        "l_wrist", "l_index_finger_proximal", "l_middle_finger_proximal", "l_pinky_proximal",
-    ),
-}
-
 
 def make_tf(pos=(0.0, 0.0, 0.0), rpy=(0.0, 0.0, 0.0)) -> np.ndarray:
     T = np.eye(4)
@@ -61,26 +49,6 @@ def make_tf(pos=(0.0, 0.0, 0.0), rpy=(0.0, 0.0, 0.0)) -> np.ndarray:
 def wxyz(T: np.ndarray) -> np.ndarray:
     x, y, z, w = Rotation.from_matrix(T[:3, :3]).as_quat()
     return np.array([w, x, y, z])
-
-
-def hand_frame(points: list[np.ndarray]) -> np.ndarray:
-    """Canonical hand frame from (base, index MCP, middle MCP, pinky MCP) positions."""
-    base, index, middle, pinky = points
-    x = middle - base
-    x /= np.linalg.norm(x)
-    y = index - pinky
-    y -= x * (x @ y)
-    y /= np.linalg.norm(y)
-    T = np.eye(4)
-    T[:3, :3] = np.column_stack([x, y, np.cross(x, y)])
-    T[:3, 3] = middle
-    return T
-
-
-def hand_points(urdf: yourdfpy.URDF, links, T_world_root=np.eye(4)) -> list[np.ndarray]:
-    return [
-        (T_world_root @ urdf.get_transform(link, urdf.base_link))[:3, 3] for link in links
-    ]
 
 
 class JointSliders:

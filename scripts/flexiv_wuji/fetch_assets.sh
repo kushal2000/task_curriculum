@@ -4,12 +4,17 @@
 #   flexiv_description/  github.com/flexivrobotics/flexiv_description: the Rizon 4s xacro expanded
 #                        to urdf/Rizon4s.urdf with upstream's own create_urdf.py, and its meshes.
 #   wuji_hand2/          github.com/wuji-technology/wuji-description, hand2/hand2_beta2/body: the
-#                        vendor URDFs (with and without the wrist mount) and their meshes. Beta 2
+#                        vendor URDFs (with and without the wrist mount), meshes, and MJCF (the
+#                        source of the provisional hand gains in isaacsimenvs/tasks/play/robots.py,
+#                        which tests/test_robot_specs.py checks against it). Beta 2
 #                        at the commit wuji-hand-teleop's wujihand_urdf was copied from, so the
 #                        hand matches assets/g1_wuji2_description/.
 #
-# Both are fetched verbatim at pinned commits; the destination is gitignored. Mesh paths in the
-# generated Rizon4s.urdf are rewritten relative to the file, so the tree can move.
+# Both are fetched verbatim at pinned commits. The left-hand robot's files are committed (the
+# training-time pose viewer loads them from raw GitHub); the right hand is gitignored. Mesh paths in the
+# generated Rizon4s.urdf are rewritten relative to the file, so the tree can move. Last, the two
+# are joined into rizon4s_left_wuji.urdf (flexiv_wuji.py, at its MOUNT_*), the model the
+# Isaacsimenvs-PlayFlexivWuji-Direct-v0 task loads.
 #
 #   scripts/flexiv_wuji/fetch_assets.sh
 #   FLEXIV_SHA=<sha> WUJI_SHA=<sha> scripts/flexiv_wuji/fetch_assets.sh
@@ -40,7 +45,7 @@ sparse_fetch() {
 
 sparse_fetch "$FLEXIV_REPO" "$FLEXIV_SHA" "$tmp/flexiv_description" \
     config scripts urdf meshes/Rizon4s
-sparse_fetch "$WUJI_REPO" "$WUJI_SHA" "$tmp/wuji" "$WUJI_SRC/urdf" "$WUJI_SRC/meshes"
+sparse_fetch "$WUJI_REPO" "$WUJI_SHA" "$tmp/wuji" "$WUJI_SRC/urdf" "$WUJI_SRC/meshes" "$WUJI_SRC/mjcf"
 
 # Upstream's xacro resolves $(find flexiv_description) through ROS 2's ament index. Stand in for
 # it with a one-function module, so the expansion needs only `xacro` and `pyyaml` from PyPI.
@@ -68,7 +73,8 @@ rm -rf "$DEST"
 mkdir -p "$DEST/flexiv_description/urdf" "$DEST/wuji_hand2"
 cp "$urdf" "$DEST/flexiv_description/urdf/"
 cp -r "$tmp/flexiv_description/meshes" "$DEST/flexiv_description/"
-cp -r "$tmp/wuji/$WUJI_SRC/urdf" "$tmp/wuji/$WUJI_SRC/meshes" "$DEST/wuji_hand2/"
+cp -r "$tmp/wuji/$WUJI_SRC/urdf" "$tmp/wuji/$WUJI_SRC/meshes" "$tmp/wuji/$WUJI_SRC/mjcf" "$DEST/wuji_hand2/"
 
 printf '%s %s\n%s %s\n' "$FLEXIV_REPO" "$FLEXIV_SHA" "$WUJI_REPO" "$WUJI_SHA" > "$DEST/UPSTREAM"
+python3 "$ROOT/scripts/flexiv_wuji/flexiv_wuji.py"
 echo "Rizon 4s @ ${FLEXIV_SHA:0:12} + Wuji Hand 2 @ ${WUJI_SHA:0:12} -> ${DEST#$ROOT/}"

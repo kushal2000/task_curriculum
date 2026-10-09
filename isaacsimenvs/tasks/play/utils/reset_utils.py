@@ -12,13 +12,6 @@ from isaaclab.utils.math import random_orientation
 from .action_utils import sample_log_uniform
 from .goal_sampling import sample_absolute_goal_pose, sample_delta_goal_pose
 from .obs_utils import KEYPOINT_CORNERS, NUM_FINGERTIPS
-from .scene_utils import (
-    ARM_JOINT_REGEX,
-    FINGERTIP_BODY_REGEX,
-    HAND_JOINT_REGEX,
-    JOINT_NAMES_CANONICAL,
-    PALM_BODY_NAME,
-)
 
 def allocate_state_buffers(env) -> None:
     """Populate every per-env buffer + index cache used by the hooks.
@@ -31,29 +24,38 @@ def allocate_state_buffers(env) -> None:
     rew = env.cfg.reward
 
     # --- Joint/body id caches ---
-    env._arm_joint_ids = env.robot.find_joints(ARM_JOINT_REGEX)[0]      # 7
-    env._hand_joint_ids = env.robot.find_joints(HAND_JOINT_REGEX)[0]     # 22
-    env._palm_body_id = env.robot.find_bodies(PALM_BODY_NAME)[0][0]
-    env._fingertip_body_ids = env.robot.find_bodies(FINGERTIP_BODY_REGEX)[0]  # 5
+    spec = env.robot_spec
+    env._arm_joint_ids = env.robot.find_joints(spec.arm_joint_regex)[0]      # 7
+    env._hand_joint_ids = env.robot.find_joints(spec.hand_joint_regex)[0]
+    env._palm_body_id = env.robot.find_bodies(spec.palm_body_name)[0][0]
+    env._fingertip_body_ids = env.robot.find_bodies(spec.fingertip_body_regex)[0]  # 5
     assert len(env._fingertip_body_ids) == NUM_FINGERTIPS
 
     # Convert between Lab parser order and canonical policy order.
     lab_names = list(env.robot.data.joint_names)
-    assert set(lab_names) == set(JOINT_NAMES_CANONICAL)
+    canonical = spec.joint_names_canonical
+    assert set(lab_names) == set(canonical), (
+        f"robot {spec.name!r} expects joints {sorted(canonical)}, but "
+        f"{env.cfg.assets.robot_urdf} has {sorted(lab_names)}"
+    )
+    # action_utils slices the arm as Lab columns [:7] and the hand as [7:].
+    n_arm = len(spec.arm_joint_names)
+    assert list(env._arm_joint_ids) == list(range(n_arm)), env._arm_joint_ids
+    assert list(env._hand_joint_ids) == list(range(n_arm, len(lab_names))), env._hand_joint_ids
     env._perm_canon_to_lab = torch.tensor(
-        [JOINT_NAMES_CANONICAL.index(n) for n in lab_names],
+        [canonical.index(n) for n in lab_names],
         device=env.device, dtype=torch.long,
     )
     env._perm_lab_to_canon = torch.tensor(
-        [lab_names.index(n) for n in JOINT_NAMES_CANONICAL],
+        [lab_names.index(n) for n in canonical],
         device=env.device, dtype=torch.long,
     )
 
     limits = env.robot.data.joint_pos_limits  # (N, num_joints, 2), Lab order
 
     # Canonical-order limits for normalizing joint_pos observations.
-    env._joint_lower_canon = limits[0, :, 0][env._perm_lab_to_canon]  # (29,)
-    env._joint_upper_canon = limits[0, :, 1][env._perm_lab_to_canon]  # (29,)
+    env._joint_lower_canon = limits[0, :, 0][env._perm_lab_to_canon]  # (num_joints,)
+    env._joint_upper_canon = limits[0, :, 1][env._perm_lab_to_canon]  # (num_joints,)
 
     # Lab-order limits for action target clamping.
     env._arm_lower = limits[:, env._arm_joint_ids, 0]

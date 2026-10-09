@@ -529,6 +529,10 @@ class PlayEnvCfg(DirectRLEnvCfg):
     key paths resolve to these fields via ``configclass.from_dict``.
     """
 
+    # Robot embodiment, a key of robots.ROBOT_SPECS. Fixed per registered task; assets.robot_urdf
+    # must be its URDF. PlayEnv sets action_space (and the obs sizes) from it.
+    robot: str = "kuka_sharpa"
+
     # --- DirectRLEnvCfg required fields ---
     decimation: int = 2  # 2 physics substeps per policy step
     episode_length_s: float = 10.0  # 600 policy steps * 2 * (1/120) = 10s
@@ -579,8 +583,23 @@ class PlayEnvCfg(DirectRLEnvCfg):
     domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg()
 
 
+@configclass
+class PlayFlexivWujiEnvCfg(PlayEnvCfg):
+    """Play on a Flexiv Rizon 4s + left Wuji Hand 2 (``Isaacsimenvs-PlayFlexivWuji-Direct-v0``).
+
+    The same task as ``PlayEnvCfg``; only the robot differs. The URDF is composed by
+    ``scripts/flexiv_wuji/fetch_assets.sh``. Note ``student_obs.raycast_dynamic_prim_exprs``
+    still names the Kuka's links, so the raycaster student camera does not see this robot yet.
+    """
+
+    robot: str = "flexiv_wuji"
+    action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
+    assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji.urdf")
+
+
 __all__ = [
     "PlayEnvCfg",
+    "PlayFlexivWujiEnvCfg",
     "AssetsCfg",
     "ObsCfg",
     "StudentObsCfg",

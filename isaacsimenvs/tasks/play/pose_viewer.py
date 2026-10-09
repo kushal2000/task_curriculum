@@ -236,7 +236,8 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
 
     if hasattr(env, "_perm_lab_to_canon"):
         joint_pos = env.robot.data.joint_pos[env_id, env._perm_lab_to_canon]
-        joint_names = list(JOINT_NAMES_CANONICAL)
+        spec = getattr(env, "robot_spec", None)
+        joint_names = list(spec.joint_names_canonical if spec else JOINT_NAMES_CANONICAL)
     else:
         joint_pos = env.robot.data.joint_pos[env_id]
         joint_names = list(env.robot.data.joint_names)
@@ -275,18 +276,20 @@ def build_pose_viewer_html(
     url_check: str = "skip",
     deformables: dict | None = None,
     draw_rigid_object: bool = True,
+    robot_urdf_relative_path: str = ROBOT_URDF_RELATIVE_PATH,
 ) -> str:
     """Build a self-contained-ish viewer HTML string from captured frames.
 
     Object and table URDFs are embedded.  The robot URDF is URL-backed because
-    the SHARPA hand references mesh files that the browser must fetch.
+    its hand references mesh files that the browser must fetch, so
+    ``robot_urdf_relative_path`` (repo-relative) and its meshes must be pushed.
     """
 
     if not frames:
         raise ValueError("Cannot build pose viewer from zero frames.")
 
     raw_base = _normalize_raw_base(github_raw_base)
-    robot_urdf_url = raw_base + ROBOT_URDF_RELATIVE_PATH
+    robot_urdf_url = raw_base + robot_urdf_relative_path
     _check_url(robot_urdf_url, url_check)
     if object_urdf_path is not None:
         object_urdf_text = _rewrite_embedded_urdf_mesh_urls(
@@ -489,6 +492,7 @@ class PlayPoseViewerWrapper(gym.Wrapper):
             hole_urdf_path=self._hole_urdf_path,
             github_raw_base=self.github_raw_base,
             url_check=self.url_check,
+            robot_urdf_relative_path=self.env.unwrapped.cfg.assets.robot_urdf,
         )
 
     def _finalize_capture(self, *, partial: bool = False) -> None:
