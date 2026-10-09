@@ -517,6 +517,12 @@ def _default_sim_cfg() -> SimulationCfg:
             bounce_threshold_velocity=0.2,
             friction_offset_threshold=0.04,
             friction_correlation_distance=0.025,
+            # Contact patches, summed over all envs. Isaac Lab's default (5 * 2**15 = 163840)
+            # overflows at SimToolReal's 24576 envs: 180k needed with robot self-collision off,
+            # 355k+ (Kuka) with it on, and PhysX drops the contacts that do not fit. SimToolReal
+            # scaled every Isaac Gym buffer 25x (default_buffer_size_multiplier). Only sizes a
+            # buffer, so it changes nothing that did not overflow before.
+            gpu_max_rigid_patch_count=2**21,
         ),
     )
 
