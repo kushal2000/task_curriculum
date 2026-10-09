@@ -1286,6 +1286,56 @@ def _convert_urdf_to_usd(
 
 
 
+def _apply_self_collision_filters(usd_path: str, pairs: dict[str, tuple[str, ...]]) -> int:
+    """Author ``FilteredPairsAPI`` on the robot's bodies so ``pairs`` (``RobotSpec.
+    self_collision_filter``) do not collide with each other; returns how many were authored.
+
+    With the articulation's self-collisions on, this is Isaac Gym's behaviour in SimToolReal:
+    everything collides except the listed pairs. Ported from simtoolreal 84058661, with one
+    change: every name must be a body of the imported robot. Upstream skipped unknown names,
+    which is how a filter list for the wrong robot (or pre-merge_fixed_joints names) would leave
+    self-collision on with nothing filtered, and the hand exploding at reset.
+    """
+    from pxr import Usd, UsdPhysics
+
+    raw_usd_path = Path(usd_path)
+    physics_usd_path = raw_usd_path.parent / "configuration" / f"{raw_usd_path.stem}_physics.usd"
+    edit_usd_path = physics_usd_path if physics_usd_path.exists() else raw_usd_path
+    stage = Usd.Stage.Open(str(edit_usd_path), Usd.Stage.LoadAll)
+    if stage is None:
+        raise RuntimeError(f"Failed to open USD while applying self-collision filters: {edit_usd_path}")
+
+    body_by_name = {
+        prim.GetName(): prim
+        for prim in Usd.PrimRange(stage.GetPseudoRoot(), Usd.TraverseInstanceProxies())
+        if prim.HasAPI(UsdPhysics.RigidBodyAPI)
+    }
+    unknown = sorted({n for a, bs in pairs.items() for n in (a, *bs)} - set(body_by_name))
+    if unknown:
+        raise RuntimeError(
+            f"self-collision filter names {unknown} are not bodies of {edit_usd_path.name} "
+            f"(bodies: {sorted(body_by_name)}); names must be post-merge_fixed_joints"
+        )
+
+    authored = 0
+    for link, partners in pairs.items():
+        rel = UsdPhysics.FilteredPairsAPI.Apply(body_by_name[link]).CreateFilteredPairsRel()
+        existing = set(rel.GetTargets())
+        for partner in partners:
+            path = body_by_name[partner].GetPath()
+            if path not in existing:
+                rel.AddTarget(path)
+                existing.add(path)
+                authored += 1
+    stage.GetRootLayer().Save()
+    print(
+        f"[scene_utils] self-collision: filtered {authored} link pairs "
+        f"across {len(body_by_name)} robot bodies in {edit_usd_path.name}",
+        flush=True,
+    )
+    return authored
+
+
 def _robot_joint_drive_cfg():
     # DriveAPI prims must exist for ImplicitActuator runtime gains to land.
     return UrdfConverterCfg.JointDriveCfg(
@@ -1546,16 +1596,22 @@ def setup_scene(env) -> None:
         for usd in object_raw_usds
     ]
 
+    # Self-collision is per registered task (cfg.robot_self_collision): on, it is SimToolReal's
+    # Isaac Gym setup -- everything collides except the spec's filtered pairs.
+    self_collision = bool(getattr(env.cfg, "robot_self_collision", False))
+    robot_converted_usd = _convert_urdf_to_usd(
+        assets_cfg.robot_urdf, usd_work_dir,
+        fix_base=True, self_collision=self_collision,
+        joint_drive=_robot_joint_drive_cfg(),
+    )
+    if self_collision:
+        _apply_self_collision_filters(robot_converted_usd, env.robot_spec.self_collision_filter)
     robot_usd_path = _bake_usd(
-        _convert_urdf_to_usd(
-            assets_cfg.robot_urdf, usd_work_dir,
-            fix_base=True, self_collision=False,
-            joint_drive=_robot_joint_drive_cfg(),
-        ),
+        robot_converted_usd,
         bake_root, "robot",
         props=dict(
             disable_gravity=True, max_depenetration_velocity=1000.0,
-            enabled_self_collisions=False,
+            enabled_self_collisions=self_collision,
             solver_position_iterations=8, solver_velocity_iterations=0,
         ),
         apply_physx_articulation=True,

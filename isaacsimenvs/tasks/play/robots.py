@@ -1,7 +1,7 @@
 """Robot embodiments the Play task can run: everything about the robot that the task code reads.
 
 ``PlayEnvCfg.robot`` names one of :data:`ROBOT_SPECS`; each registered task fixes it, so a robot
-is chosen by task id (``Isaacsimenvs-Play-Direct-v0`` / ``Isaacsimenvs-PlayFlexivWuji-Direct-v0``)
+is chosen by task id (``Isaacsimenvs-Play[SelfCollision]-Direct-v0`` / ``Isaacsimenvs-PlayFlexivWuji-Direct-v0``)
 rather than by a runtime flag. ``cfg.assets.robot_urdf`` must be the matching URDF; the env checks
 that its joints are exactly the spec's.
 
@@ -15,7 +15,7 @@ asserts that ordering for whichever robot is loaded.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -41,6 +41,10 @@ class RobotSpec:
     hand_armature: dict[str, float]
     #: Reset pose; hand joints not listed default to 0.
     arm_default_joint_pos: dict[str, float]
+    #: Body pairs excluded from robot self-collision (the task turns it on), body -> its partners,
+    #: by post-merge_fixed_joints body name. scene_utils authors them as FilteredPairsAPI and
+    #: fails if any name is not a body of the imported robot.
+    self_collision_filter: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     @property
     def num_joints(self) -> int:
@@ -84,6 +88,46 @@ _SHARPA_JOINTS = (
     "left_5_pinky_CMC", "left_pinky_MCP_FE", "left_pinky_MCP_AA",
     "left_pinky_PIP", "left_pinky_DIP",
 )
+
+# SimToolReal's own list (isaacgymenvs/tasks/simtoolreal/adjacent_links.py,
+# LEFT_SHARPA_KUKA_LINK_TO_ADJACENT_LINKS), verbatim: the recipe, so the Kuka control runs it.
+# Its hand pairs are each jointed pair, the palm with the thumb MC (touching at rest), and the
+# palm (or MC) with each proximal phalanx across the two-joint MCP knuckle.
+_SHARPA_SELF_COLLISION_FILTER = {
+    "iiwa14_link_0": ("iiwa14_link_1",),
+    "iiwa14_link_1": ("iiwa14_link_0", "iiwa14_link_2"),
+    "iiwa14_link_2": ("iiwa14_link_1", "iiwa14_link_3"),
+    "iiwa14_link_3": ("iiwa14_link_2", "iiwa14_link_4"),
+    "iiwa14_link_4": ("iiwa14_link_3", "iiwa14_link_5"),
+    "iiwa14_link_5": ("iiwa14_link_4", "iiwa14_link_6"),
+    "iiwa14_link_6": ("iiwa14_link_5", "iiwa14_link_7"),
+    "iiwa14_link_7": (
+        "iiwa14_link_6", "left_thumb_CMC_VL", "left_thumb_MC", "left_index_MCP_VL", "left_index_PP",
+        "left_middle_MCP_VL", "left_middle_PP", "left_ring_MCP_VL", "left_ring_PP", "left_pinky_MC",
+    ),
+    "left_index_MCP_VL": ("iiwa14_link_7", "left_index_PP"),
+    "left_index_PP": ("iiwa14_link_7", "left_index_MCP_VL", "left_index_MP"),
+    "left_index_MP": ("left_index_PP", "left_index_DP"),
+    "left_index_DP": ("left_index_MP",),
+    "left_middle_MCP_VL": ("iiwa14_link_7", "left_middle_PP"),
+    "left_middle_PP": ("iiwa14_link_7", "left_middle_MCP_VL", "left_middle_MP"),
+    "left_middle_MP": ("left_middle_PP", "left_middle_DP"),
+    "left_middle_DP": ("left_middle_MP",),
+    "left_pinky_MC": ("iiwa14_link_7", "left_pinky_MCP_VL", "left_pinky_PP"),
+    "left_pinky_MCP_VL": ("left_pinky_MC", "left_pinky_PP"),
+    "left_pinky_PP": ("left_pinky_MC", "left_pinky_MCP_VL", "left_pinky_MP"),
+    "left_pinky_MP": ("left_pinky_PP", "left_pinky_DP"),
+    "left_pinky_DP": ("left_pinky_MP",),
+    "left_ring_MCP_VL": ("iiwa14_link_7", "left_ring_PP"),
+    "left_ring_PP": ("iiwa14_link_7", "left_ring_MCP_VL", "left_ring_MP"),
+    "left_ring_MP": ("left_ring_PP", "left_ring_DP"),
+    "left_ring_DP": ("left_ring_MP",),
+    "left_thumb_CMC_VL": ("iiwa14_link_7", "left_thumb_MC"),
+    "left_thumb_MC": ("iiwa14_link_7", "left_thumb_CMC_VL", "left_thumb_MCP_VL", "left_thumb_PP"),
+    "left_thumb_MCP_VL": ("left_thumb_MC", "left_thumb_PP"),
+    "left_thumb_PP": ("left_thumb_MC", "left_thumb_MCP_VL", "left_thumb_DP"),
+    "left_thumb_DP": ("left_thumb_PP",),
+}
 
 KUKA_SHARPA = RobotSpec(
     name="kuka_sharpa",
@@ -156,6 +200,7 @@ KUKA_SHARPA = RobotSpec(
         "iiwa14_joint_4": 1.376, "iiwa14_joint_5": 0.0, "iiwa14_joint_6": 1.485,
         "iiwa14_joint_7": 1.308,
     },
+    self_collision_filter=_SHARPA_SELF_COLLISION_FILTER,
 )
 
 
@@ -211,6 +256,41 @@ _WUJI_ARMATURE = tuple(
     for name in _WUJI_JOINTS
 )
 
+# Derived by scripts/flexiv_wuji/self_collision_pairs.py (tests/test_robot_specs.py reruns it):
+# each jointed pair, plus the palm (link7, into which l_wrist merges) with every finger's
+# proximal_abd -- touching at reset on the ring and pinky, and through the knuckle's range on
+# the rest, as SimToolReal filters the Sharpa's palm-to-proximal pairs.
+_WUJI_SELF_COLLISION_FILTER = {
+        'base_link': ('link1',),
+        'l_index_finger_distal': ('l_index_finger_middle',),
+        'l_index_finger_middle': ('l_index_finger_distal', 'l_index_finger_proximal_abd'),
+        'l_index_finger_proximal': ('l_index_finger_proximal_abd', 'link7'),
+        'l_index_finger_proximal_abd': ('l_index_finger_middle', 'l_index_finger_proximal', 'link7'),
+        'l_middle_finger_distal': ('l_middle_finger_middle',),
+        'l_middle_finger_middle': ('l_middle_finger_distal', 'l_middle_finger_proximal_abd'),
+        'l_middle_finger_proximal': ('l_middle_finger_proximal_abd', 'link7'),
+        'l_middle_finger_proximal_abd': ('l_middle_finger_middle', 'l_middle_finger_proximal', 'link7'),
+        'l_pinky_distal': ('l_pinky_middle',),
+        'l_pinky_middle': ('l_pinky_distal', 'l_pinky_proximal_abd'),
+        'l_pinky_proximal': ('l_pinky_proximal_abd', 'link7'),
+        'l_pinky_proximal_abd': ('l_pinky_middle', 'l_pinky_proximal', 'link7'),
+        'l_ring_finger_distal': ('l_ring_finger_middle',),
+        'l_ring_finger_middle': ('l_ring_finger_distal', 'l_ring_finger_proximal_abd'),
+        'l_ring_finger_proximal': ('l_ring_finger_proximal_abd', 'link7'),
+        'l_ring_finger_proximal_abd': ('l_ring_finger_middle', 'l_ring_finger_proximal', 'link7'),
+        'l_thumb_distal': ('l_thumb_middle',),
+        'l_thumb_middle': ('l_thumb_distal', 'l_thumb_proximal_abd'),
+        'l_thumb_proximal': ('l_thumb_proximal_abd', 'link7'),
+        'l_thumb_proximal_abd': ('l_thumb_middle', 'l_thumb_proximal', 'link7'),
+        'link1': ('base_link', 'link2'),
+        'link2': ('link1', 'link3'),
+        'link3': ('link2', 'link4'),
+        'link4': ('link3', 'link5'),
+        'link5': ('link4', 'link6'),
+        'link6': ('link5', 'link7'),
+        'link7': ('l_index_finger_proximal', 'l_index_finger_proximal_abd', 'l_middle_finger_proximal', 'l_middle_finger_proximal_abd', 'l_pinky_proximal', 'l_pinky_proximal_abd', 'l_ring_finger_proximal', 'l_ring_finger_proximal_abd', 'l_thumb_proximal', 'l_thumb_proximal_abd', 'link6'),
+}
+
 FLEXIV_WUJI = RobotSpec(
     name="flexiv_wuji",
     arm_joint_regex="joint[1-7]",
@@ -240,6 +320,7 @@ FLEXIV_WUJI = RobotSpec(
         "joint1": -1.7604, "joint2": -0.2933, "joint3": 0.0197, "joint4": 1.4941,
         "joint5": -1.6591, "joint6": 1.6462, "joint7": 0.0369,
     },
+    self_collision_filter=_WUJI_SELF_COLLISION_FILTER,
 )
 
 ROBOT_SPECS: dict[str, RobotSpec] = {spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI)}

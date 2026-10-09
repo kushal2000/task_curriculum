@@ -134,3 +134,45 @@ def test_fingertip_offset_is_the_sharpa_fraction_of_the_wuji_tip() -> None:
     joints = _joints(fw.COMPOSED_URDF)
     tip = -float(joints["l_index_finger_tip_fixed"].find("origin").get("xyz").split()[2])
     assert math.isclose(-SPEC.fingertip_offset[2], tip * 0.02 / 0.026, abs_tol=5e-4)
+
+
+def test_sharpa_filter_is_simtoolreals_verbatim() -> None:
+    """The Kuka control runs SimToolReal's own list, not a re-derivation."""
+    path = REPO_ROOT.parent / "simtoolreal" / "isaacgymenvs" / "tasks" / "simtoolreal" / "adjacent_links.py"
+    if not path.is_file():
+        pytest.skip(f"no SimToolReal checkout at {path}")
+    scope: dict = {}
+    exec(path.read_text(), scope)
+    upstream = scope["LEFT_SHARPA_KUKA_LINK_TO_ADJACENT_LINKS"]
+    assert {k: set(v) for k, v in robots.KUKA_SHARPA.self_collision_filter.items()} == {
+        k: set(v) for k, v in upstream.items()
+    }
+
+
+@pytest.mark.parametrize("spec", list(robots.ROBOT_SPECS.values()), ids=lambda s: s.name)
+def test_self_collision_filter_is_symmetric_and_names_post_merge_bodies(spec) -> None:
+    pairs = spec.self_collision_filter
+    assert pairs
+    for a, partners in pairs.items():
+        for b in partners:
+            assert a in pairs.get(b, ()), f"{a} -> {b} listed one way only"
+    if spec is not SPEC or not fw.COMPOSED_URDF.is_file():
+        return
+    # Post-merge bodies are the base and the children of moving joints.
+    joints = _joints(fw.COMPOSED_URDF).values()
+    bodies = {"base_link"} | {j.find("child").get("link") for j in joints if j.get("type") != "fixed"}
+    assert set(pairs) <= bodies, set(pairs) - bodies
+
+
+@needs_assets
+def test_wuji_filter_matches_its_derivation() -> None:
+    """Rerun self_collision_pairs.py: jointed pairs, pairs touching at reset, pairs that meet
+    across a knuckle's range. Fails when the mount, default pose or meshes change without it."""
+    pytest.importorskip("trimesh")
+    pytest.importorskip("yourdfpy")
+    import self_collision_pairs
+
+    derived, _ = self_collision_pairs.derive("flexiv_wuji")
+    assert {k: set(v) for k, v in SPEC.self_collision_filter.items()} == {
+        k: set(v) for k, v in derived.items()
+    }

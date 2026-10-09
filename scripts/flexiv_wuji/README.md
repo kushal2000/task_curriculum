@@ -30,10 +30,20 @@ new upstream commit or mount, then commit the result.
 |---|---|
 | `viser_compare.py` | Both robots side by side where the env puts them, each behind its own table, with joint, base and mount sliders, and IK to match the Kuka's hand pose. `.venv_isaaclab3` |
 | `reachability.py` | IK for the palm centre over the task's goal volume and the table, for both robots. `.venv_isaaclab3` |
+| `self_collision_pairs.py` | Derives the robot's self-collision filter list (`RobotSpec.self_collision_filter`): jointed pairs, pairs touching at reset, and pairs that meet across a knuckle. `.venv_isaaclab3` |
 | `smoke_env.py` | Builds a Play-family task in Isaac Sim and checks sizes, palm/fingertip positions, arm and hand step responses, and random-action stability. `.venv_isaacsim` |
 
 The two hands are compared in one canonical frame built from their knuckles (`hand_frames.py`),
 so the vendors' different link conventions do not matter.
+
+## Self-collision
+
+On, as SimToolReal trained in Isaac Gym: every robot body collides except the pairs in
+`RobotSpec.self_collision_filter`. The Wuji's list is derived by `self_collision_pairs.py`: each
+jointed pair, plus the palm with every finger's `proximal_abd`. Ring and pinky touch it at reset;
+the others reach it as the knuckle moves. The Kuka control (`Isaacsimenvs-PlaySelfCollision-Direct-v0`)
+uses SimToolReal's own list. `Isaacsimenvs-Play-Direct-v0` keeps this port's original
+self-collision-off setup, which the pretrained-policy evals were run in.
 
 ## What is measured, and what is provisional
 

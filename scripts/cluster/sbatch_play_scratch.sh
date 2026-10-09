@@ -10,7 +10,10 @@
 # The Flexiv cannot start from SimToolReal's checkpoint (27 joints, not 29), and this repo has never
 # trained Play from scratch: every Kuka number here comes from the released policy. If the Flexiv
 # run comes out weak, the control says whether that is the robot or our reproduction of the recipe.
-# So the two runs are identical except for the task id -- same script, same seed, same config.
+# So the two runs are identical except for the robot -- same script, same seed, same config.
+# Both have robot self-collision on, minus each robot's filtered pairs (RobotSpec.
+# self_collision_filter), as SimToolReal trained in Isaac Gym; hence the Kuka's task is
+# PlaySelfCollision, not Play, which keeps this port's original self-collision-off setup.
 #
 # WHAT IS CHANGED FROM THE RECIPE
 #
@@ -41,7 +44,7 @@ mkdir -p slurm_logs
 ROBOT="${1:?usage: sbatch_play_scratch.sh flexiv_wuji|kuka_sharpa [run_name] [overrides...]}"
 case "$ROBOT" in
     flexiv_wuji) TASK=Isaacsimenvs-PlayFlexivWuji-Direct-v0 ;;
-    kuka_sharpa) TASK=Isaacsimenvs-Play-Direct-v0 ;;
+    kuka_sharpa) TASK=Isaacsimenvs-PlaySelfCollision-Direct-v0 ;;
     *) echo "unknown robot $ROBOT" >&2; exit 2 ;;
 esac
 RUN_NAME="${2:-play_scratch_${ROBOT}}_${SLURM_JOB_ID:-local}"

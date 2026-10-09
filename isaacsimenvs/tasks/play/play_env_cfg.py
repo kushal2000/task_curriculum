@@ -532,6 +532,10 @@ class PlayEnvCfg(DirectRLEnvCfg):
     # Robot embodiment, a key of robots.ROBOT_SPECS. Fixed per registered task; assets.robot_urdf
     # must be its URDF. PlayEnv sets action_space (and the obs sizes) from it.
     robot: str = "kuka_sharpa"
+    # Robot self-collision, minus robots.RobotSpec.self_collision_filter: SimToolReal's Isaac Gym
+    # setup. Off here, where this port has always run (docs/phase1_baseline.md), so the Kuka eval
+    # and the tasks built on Play are unchanged; the tasks that train from scratch turn it on.
+    robot_self_collision: bool = False
 
     # --- DirectRLEnvCfg required fields ---
     decimation: int = 2  # 2 physics substeps per policy step
@@ -587,19 +591,34 @@ class PlayEnvCfg(DirectRLEnvCfg):
 class PlayFlexivWujiEnvCfg(PlayEnvCfg):
     """Play on a Flexiv Rizon 4s + left Wuji Hand 2 (``Isaacsimenvs-PlayFlexivWuji-Direct-v0``).
 
-    The same task as ``PlayEnvCfg``; only the robot differs. The URDF is composed by
+    The same task as ``PlayEnvCfg`` except the robot, and robot self-collision, which is on (as for
+    its Kuka control, ``PlaySelfCollisionEnvCfg``). The URDF is composed by
     ``scripts/flexiv_wuji/fetch_assets.sh``. Note ``student_obs.raycast_dynamic_prim_exprs``
     still names the Kuka's links, so the raycaster student camera does not see this robot yet.
     """
 
     robot: str = "flexiv_wuji"
+    robot_self_collision: bool = True
     action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
     assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji.urdf")
+
+
+
+@configclass
+class PlaySelfCollisionEnvCfg(PlayEnvCfg):
+    """Play on the Kuka + Sharpa with robot self-collision on (``Isaacsimenvs-PlaySelfCollision-Direct-v0``).
+
+    SimToolReal's recipe as Isaac Gym ran it: the control for the Flexiv + Wuji, which has
+    self-collision on too. Reads ``Play.yaml``, which does not set the field.
+    """
+
+    robot_self_collision: bool = True
 
 
 __all__ = [
     "PlayEnvCfg",
     "PlayFlexivWujiEnvCfg",
+    "PlaySelfCollisionEnvCfg",
     "AssetsCfg",
     "ObsCfg",
     "StudentObsCfg",

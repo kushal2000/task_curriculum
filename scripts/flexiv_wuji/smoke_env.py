@@ -7,7 +7,9 @@ viser_compare.py matched hand-to-hand, so their palm centres should coincide.
         --task Isaacsimenvs-PlayFlexivWuji-Direct-v0 --headless [--out report.json]
 
 Reports, for env 0 unless noted:
-  * observation / action sizes
+  * observation / action sizes, and whether robot self-collision is on
+  * reset hold: the largest joint drift and speed while holding the reset pose. Robot links
+    that overlap at reset and are not filtered get pushed apart here
   * palm centre and fingertip pad positions after reset (env frame), as the policy sees them
   * arm step response: constant-velocity command then stop (tracking lag, settling error); a
     plain hold would show nothing, since gravity is off on the robot
@@ -31,6 +33,8 @@ parser.add_argument("--hold_steps", type=int, default=60, help="steps per step-r
 parser.add_argument("--random_steps", type=int, default=600)
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--out", default=None, help="JSON report path")
+parser.add_argument("--no_filter", action="store_true",
+                    help="negative control: self-collision with the robot's filter list emptied")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
 sys.argv = [sys.argv[0]] + hydra_args
@@ -55,6 +59,13 @@ def run(env_cfg, agent_cfg) -> None:
     env_cfg.assets.num_assets_per_type = 1
     env_cfg.seed = args_cli.seed
     disable_randomization(env_cfg)
+    if args_cli.no_filter:
+        import dataclasses
+
+        from isaacsimenvs.tasks.play import robots
+
+        robots.ROBOT_SPECS[env_cfg.robot] = dataclasses.replace(
+            robots.ROBOT_SPECS[env_cfg.robot], self_collision_filter={})
     env = gym.make(args_cli.task, cfg=env_cfg)
     inner = env.unwrapped
     spec, robot, device = inner.robot_spec, inner.robot, inner.device
@@ -64,6 +75,8 @@ def run(env_cfg, agent_cfg) -> None:
         "obs_dim": int(inner.cfg.observation_space), "state_dim": int(inner.cfg.state_space),
         "action_dim": n_act, "num_joints": robot.num_joints,
         "joint_names_lab": list(robot.data.joint_names),
+        "robot_self_collision": bool(inner.cfg.robot_self_collision),
+        "self_collision_filter_pairs": sum(map(len, spec.self_collision_filter.values())) // 2,
     }
 
     env.reset()
@@ -75,7 +88,18 @@ def run(env_cfg, agent_cfg) -> None:
     hold = zeros.clone()
     # Actions arrive in canonical order; Lab column j reads canonical column _perm_canon_to_lab[j].
     hold[:, inner._perm_canon_to_lab[inner._hand_joint_ids]] = hand_hold
-    env.step(hold)
+    q_reset = robot.data.joint_pos.clone()
+    drift, speed = 0.0, 0.0
+    for _ in range(args_cli.hold_steps):
+        env.step(hold)
+        drift = max(drift, (robot.data.joint_pos - q_reset).abs().max().item())
+        speed = max(speed, robot.data.joint_vel.abs().max().item())
+    worst = int((robot.data.joint_pos - q_reset).abs().max(dim=0).values.argmax())
+    report["reset_hold"] = {
+        "steps": args_cli.hold_steps, "envs": inner.num_envs,
+        "max_joint_drift_rad": round(drift, 4), "max_joint_speed_rad_s": round(speed, 3),
+        "worst_joint": robot.data.joint_names[worst],
+    }
 
     origin = inner.scene.env_origins[0]
 
