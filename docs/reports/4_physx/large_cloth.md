@@ -22,7 +22,7 @@ Stability (`bos14_large_cloth_probe.sh`, zero actions, 8 envs, 150 steps, nan_po
 size finite, drops 15 cm and lands flat (height spread <= 0.02 mm) at the 10 cm sheet's rest height
 0.538 m by step 20, then still; centre at the intended shift.
 
-## Run 2 (flat pool), all three seeds, by size -- `size_sweep.md`
+## Run 2 (flat pool), all three seeds, by size -- `large_cloth_size_sweep.md`
 
 Held folds per seed (of 64), overall share; falls = whole sheet pulled off the table.
 
@@ -38,7 +38,7 @@ Caveat: 12.5 and 15 cm need EVEN grids (8, 10), where the crease falls between p
 instead of on a hinge row; the 1.5 cm column there may partly measure grid geometry. 4 cm is the
 robust trend.
 
-## The viewer's four policies at 20 cm -- `menu_policies_s20.md`
+## The viewer's four policies at 20 cm -- `large_cloth_menu_policies_s20.md`
 
 | policy | 10 cm: 4cm pin / rand, 1.5cm pin / rand | 20 cm: same |
 |---|---|---|

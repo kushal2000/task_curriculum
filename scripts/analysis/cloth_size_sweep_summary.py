@@ -1,6 +1,6 @@
 """Run 2 (flat pool) on VBD cloths of several sizes: held folds per seed (of 64) and overall.
 
-    python3 scripts/analysis/cloth_size_sweep_summary.py [--md docs/results/large_cloth/size_sweep.md]
+    python3 scripts/analysis/cloth_size_sweep_summary.py [--md docs/reports/4_physx/large_cloth_size_sweep.md]
 
 10 cm: docs/results/px_matrix/one_flat_s<seed>__on_vbd__<start>__<cut>_s<es>.json (the standard eval).
 Others: docs/results/large_cloth/sweep/one_flat_s<seed>__<size>__<start>__<cut>_s<es>.json

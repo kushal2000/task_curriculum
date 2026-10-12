@@ -93,6 +93,6 @@ Ways to discriminate, none run yet, reordered by what the step-0 data implies:
 The overall rate is ~1e-6 per env-step, the guard sanitises the observation and resets the env
 before anything non-finite reaches the optimiser, and `nonfinite_reward` has stayed at 0.0 in
 training. NOTE that last point is exactly the false comfort that hid the reward MAGNITUDE blow-up
--- see docs/results/cloth_finetune_reward_imbalance.md and the REWARD_SANITY_LIMIT guard. Over 24 h this is ~0.065% of episodes. It costs a little sample efficiency and nothing
+-- see docs/reports/1_vbd_cloth/cloth_finetune_reward_imbalance.md and the REWARD_SANITY_LIMIT guard. Over 24 h this is ~0.065% of episodes. It costs a little sample efficiency and nothing
 else -- but it is a real defect with a specific, testable cause, and it is the single largest
 identifiable slice of the NaN budget.

@@ -70,7 +70,7 @@ def main() -> None:
     p.add_argument("--width", type=int, default=560)
     p.add_argument("--height", type=int, default=420)
     p.add_argument("--out_dir", default="/tmp/rigid_cloth_probe")
-    p.add_argument("--out", default="docs/results/rigid_cloth_variants.png")
+    p.add_argument("--out", default="docs/reports/2_rigid_chain/rigid_cloth_variants.png")
     args = p.parse_args()
     # `probe._build` reads these off the same namespace; the geometry comes from the spec instead.
     args.variant = None

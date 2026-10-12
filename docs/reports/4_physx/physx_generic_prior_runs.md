@@ -39,7 +39,7 @@ earlier box3 runs (12288 envs / 4e8: 63% / 44%); its seed 2 folds its own chain 
 | 3 | 39% / 38% | 100% / 95% | 20% / 24% | 94% / 82% |
 
 (4 cm cutoff; 1.5 cm is within a few points for the rigid targets -- full tables in
-`docs/results/px_matrix/summary.md`.) PhysX box3 randomised tops out at 61/64: the same 3 starts fail
+`docs/reports/4_physx/eval_matrix.md`.) PhysX box3 randomised tops out at 61/64: the same 3 starts fail
 for every policy within 13-43 steps. The pool policies fold box3 as well as the box3 policy; the box3
 policy folds only ~40% of the pool.
 

@@ -260,7 +260,7 @@ class ClothTaskMixin:
         # so every keypoint on the moving half carried ~14 mm of error at a PERFECT fold. Measured
         # with `scripts/analysis/cloth_fold_probe.py`, teleport-and-release, 4 envs, stable 180
         # steps: settled fold_error 0.0160 -> 0.0020 from this line alone, with the 8 mm grip
-        # radius untouched. See docs/results/cloth_sim1_physics_and_fold_criterion.md.
+        # radius untouched. See docs/reports/1_vbd_cloth/cloth_sim1_physics_and_fold_criterion.md.
         lift = c.self_contact_radius  # where cloth-on-cloth contact actually settles
         local = folded_targets(self._cloth_rest_local, self._cloth_kp_idx, c.fold_axis, lift)
 

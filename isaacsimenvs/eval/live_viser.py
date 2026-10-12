@@ -53,7 +53,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 #: Display name -> (checkpoint, default SAPG coef). Paths are relative to the repo root.
 #: The best seed of each 2026-10-06 PhysX run (generic prior, 24576 envs, 7.47e8 steps), picked by
-#: held folds on the VBD cloth summed over 4/1.5 cm x pinned/rand (docs/results/physx_generic_prior_runs.md);
+#: held folds on the VBD cloth summed over 4/1.5 cm x pinned/rand (docs/reports/4_physx/physx_generic_prior_runs.md);
 #: label = its cloth score at 4 cm, pinned / randomised.
 POLICIES = {
     "run 2: flat pool (s3; cloth 78/66%)": ("outputs/2026-10-06/14-53-54/0_pxpool_one_flat_s3_158376/nn/0_pxpool_one_flat_s3_158376.pth", 0.0),

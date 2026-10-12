@@ -74,7 +74,7 @@ class RigidClothCfg:
     (2.00 mm measured against 2.00 mm predicted, matching the cloth's own 2 mm), bidirectional, and
     cheap (3 bodies, ~175 k steps/s in the MuJoCo probe). ``box-mid-odd`` is the faithful-shape
     choice at 17 bodies; ``box-surface`` is the one measured to diverge and is included to be
-    measured, not to be trained on. See ``docs/results/rigid_cloth_approximation.md``."""
+    measured, not to be trained on. See ``docs/reports/2_rigid_chain/rigid_cloth_approximation.md``."""
 
     density: float = rc_assets.URDF_DEFAULTS["density"]
     """Surface density [kg/m^2], PER AREA -- the same number and the same units as
@@ -92,7 +92,7 @@ class RigidClothCfg:
     within 2-7 steps and took the robot with it.
 
     Armature adds a diagonal term to the mass matrix, which is the standard MuJoCo remedy for
-    exactly this, and the sweep in ``docs/results/rigid_cloth_approximation.md`` picks the smallest
+    exactly this, and the sweep in ``docs/reports/2_rigid_chain/rigid_cloth_approximation.md`` picks the smallest
     value that is stable -- smallest because armature is *fictitious* inertia: it makes the chain
     bend more sluggishly than its geometry says, and a cloth's bending inertia really is negligible.
     So this is the model's largest deliberate departure from the thing it approximates, alongside the

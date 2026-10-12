@@ -115,7 +115,7 @@ def _draw(ax, spec, angles, *, bent=(), title=""):
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--out", default="docs/results/rigid_cloth_variants_hinges.png")
+    p.add_argument("--out", default="docs/reports/2_rigid_chain/rigid_cloth_variants_hinges.png")
     args = p.parse_args()
 
     matplotlib.use("Agg")

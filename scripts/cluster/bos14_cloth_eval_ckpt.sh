@@ -7,7 +7,7 @@
 #
 # Same protocol as bos14_cloth_eval_pvs.sh (32 envs x 900 steps, success_tolerance 0.01 so the
 # inherited rigid-tool criterion cannot fire, env.termination.success_steps=10 so a fold must hold
-# 10 steps), so numbers are directly comparable to docs/results/cloth_prior_vs_scratch.md.
+# 10 steps), so numbers are directly comparable to docs/reports/1_vbd_cloth/cloth_prior_vs_scratch.md.
 #
 # The block matters: a SAPG checkpoint holds six policies conditioned on an exploration coefficient
 # (linspace(50, 0, 6)), and a finetune need not have learned in the same block as the checkpoint it

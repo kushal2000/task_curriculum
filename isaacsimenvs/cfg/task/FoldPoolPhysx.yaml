@@ -127,7 +127,7 @@ action:
 # 5) reward — keypoint + lifting + distance-delta + reach-goal + action penalties
 # -----------------------------------------------------------------------------
 reward:
-  keypoint_rew_scale: 1500.0             # was 200: a perfect fold paid ~20 vs ~64 of action penalty (docs/results/cloth_finetune_reward_imbalance.md)
+  keypoint_rew_scale: 1500.0             # was 200: a perfect fold paid ~20 vs ~64 of action penalty (docs/reports/1_vbd_cloth/cloth_finetune_reward_imbalance.md)
   keypoint_scale: 1.5
   object_base_size: 0.04
   fixed_size: [0.141, 0.03025, 0.0271]
@@ -310,7 +310,7 @@ cloth:
 #       --populate --rigid_cloth_variants
 #
 # The five variants, measured in scripts/analysis/rigid_cloth_probe.py (see
-# docs/results/rigid_cloth_approximation.md for the full table):
+# docs/reports/2_rigid_chain/rigid_cloth_approximation.md for the full table):
 #
 #   box3-mid       3 bodies   ply gap 2.00 mm   bidirectional   stable   ~175k steps/s   <- default
 #   box2-surface   2 bodies   ply gap 1.00 mm   NO self-contact (parent-child, filtered)

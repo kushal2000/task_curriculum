@@ -56,7 +56,7 @@ class PhysxChainCfg:
     learned to fold with that jump and folded the cloth 3-6% of the time. At 1e-3 the untouched plate
     stays within 3 mm, passive physics (rest height, friction, hinge release, half fold) is
     unchanged, and stage 1 trained here folds the cloth as often as Newton-trained stage 1 (55% / 45%
-    vs 52% / 43%). 3e-4 still leaks enough to halve that (24% pinned). See docs/results/physx_port.md."""
+    vs 52% / 43%). 3e-4 still leaks enough to halve that (24% pinned). See docs/reports/4_physx/physx_port.md."""
 
     slat_compliant_stiffness: float = 0.0
     """PhysX compliant-contact spring on every slat contact (table, robot, fingertips); 0 = rigid.

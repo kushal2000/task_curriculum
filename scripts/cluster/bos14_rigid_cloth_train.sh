@@ -22,7 +22,7 @@
 # learnable per sample" -- the one that would be confounded by a speed difference. Wall-clock is then
 # MEASURED per arm, so the equal-wall-clock comparison is recoverable from these runs while the
 # equal-sample one is not recoverable from wall-clock-matched runs. 1e8 steps also matches
-# `docs/results/cloth_prior_vs_scratch.md` exactly, so the control has a published reference value.
+# `docs/reports/1_vbd_cloth/cloth_prior_vs_scratch.md` exactly, so the control has a published reference value.
 #
 #   1536 envs x 32 horizon = 49152 steps/epoch; 2035 epochs = 1.00e8 steps.
 #

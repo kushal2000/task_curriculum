@@ -113,7 +113,7 @@ def main() -> None:
     p.add_argument("--size", type=float, default=0.10)
     p.add_argument("--num_slats", type=int, default=rc.DEFAULT_NUM_SLATS)
     p.add_argument("--thickness", type=float, default=0.002, help="slab thickness [m]")
-    p.add_argument("--out", default="docs/results/rigid_cloth_hinges.png")
+    p.add_argument("--out", default="docs/reports/2_rigid_chain/rigid_cloth_hinges.png")
     args = p.parse_args()
 
     matplotlib.use("Agg")

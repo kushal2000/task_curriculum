@@ -1,15 +1,3 @@
-### one_initfold
-
-held folds per training seed (2 eval seeds summed; pool targets of 640, others of 64)
-
-| target | 4cm pinned | 4cm rand | 1p5cm pinned | 1p5cm rand |
-|---|---|---|---|---|
-| PhysX pool | 637, 639, 626 (99%) | 589, 589, 577 (91%) | 636, 635, 625 (99%) | 588, 583, 579 (91%) |
-| PhysX box3 | 64, 64, 64 (100%) | 59, 60, 58 (92%) | 64, 64, 64 (100%) | 58, 59, 58 (91%) |
-| Newton pool | 568, 626, 608 (94%) | 383, 440, 415 (64%) | 553, 571, 613 (90%) | 360, 412, 394 (61%) |
-| Newton box3 | 64, 58, 64 (97%) | 39, 43, 39 (63%) | 62, 62, 64 (98%) | 35, 42, 41 (61%) |
-| VBD cloth | 36, 13, 35 (44%) | 32, 33, 24 (46%) | 16, 11, 21 (25%) | 16, 13, 17 (24%) |
-
 ### one_flat
 
 held folds per training seed (2 eval seeds summed; pool targets of 640, others of 64)
@@ -21,6 +9,18 @@ held folds per training seed (2 eval seeds summed; pool targets of 640, others o
 | Newton pool | 627, 635, 630 (99%) | 484, 507, 498 (78%) | 568, 604, 600 (92%) | 432, 487, 459 (72%) |
 | Newton box3 | 61, 64, 64 (98%) | 49, 48, 50 (77%) | 63, 64, 64 (99%) | 45, 42, 49 (71%) |
 | VBD cloth | 56, 49, 50 (81%) | 37, 29, 42 (56%) | 32, 25, 32 (46%) | 13, 20, 23 (29%) |
+
+### one_initfold
+
+held folds per training seed (2 eval seeds summed; pool targets of 640, others of 64)
+
+| target | 4cm pinned | 4cm rand | 1p5cm pinned | 1p5cm rand |
+|---|---|---|---|---|
+| PhysX pool | 637, 639, 626 (99%) | 589, 589, 577 (91%) | 636, 635, 625 (99%) | 588, 583, 579 (91%) |
+| PhysX box3 | 64, 64, 64 (100%) | 59, 60, 58 (92%) | 64, 64, 64 (100%) | 58, 59, 58 (91%) |
+| Newton pool | 568, 626, 608 (94%) | 383, 440, 415 (64%) | 553, 571, 613 (90%) | 360, 412, 394 (61%) |
+| Newton box3 | 64, 58, 64 (97%) | 39, 43, 39 (63%) | 62, 62, 64 (98%) | 35, 42, 41 (61%) |
+| VBD cloth | 36, 13, 35 (44%) | 32, 33, 24 (46%) | 16, 11, 21 (25%) | 16, 13, 17 (24%) |
 
 ### box3
 

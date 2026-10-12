@@ -8,7 +8,7 @@
 # The protocol is copied from `bos14_cloth_eval_ckpt.sh` value for value -- 32 envs x 900 steps,
 # `--success_tolerance 0.01` so the inherited rigid-tool criterion cannot fire and only a real fold
 # counts, `env.termination.success_steps=10` so a fold must persist 10 steps -- because that is what
-# makes these numbers comparable to `docs/results/cloth_prior_vs_scratch.md` rather than only to each
+# makes these numbers comparable to `docs/reports/1_vbd_cloth/cloth_prior_vs_scratch.md` rather than only to each
 # other.
 #
 # `--sapg_expl_coef 0` evaluates block 5, the one trained on task reward alone. The eval player's

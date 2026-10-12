@@ -1,7 +1,7 @@
 #!/bin/bash
 # Evaluate PhysX-trained chain policies on NEWTON: their own chain there, and the VBD cloth -- the
 # number the port is for. Same protocol as bos14_rigid_cloth_eval_rc2.sh, so rows line up with the
-# Newton-trained ones in docs/results/rigid_cloth_rl_comparison.md.
+# Newton-trained ones in docs/reports/2_rigid_chain/rigid_cloth_rl_comparison.md.
 #
 #   TRAIN_JOB=157222 RUN_TAG=rc2fix sbatch --array=0-11 scripts/cluster/bos14_physx_eval_on_newton.sh
 #   KIND=pool TRAIN_JOB=... RUN_TAG=box3 sbatch --array=0-11 scripts/cluster/bos14_physx_eval_on_newton.sh

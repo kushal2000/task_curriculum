@@ -8,7 +8,7 @@
 # one state. Renders are cheap and independent: film several and keep whichever are informative.
 #
 # COEF must match the block the checkpoint actually learned in -- 0 for the prior-vs-scratch runs,
-# 50 for the released SimToolReal checkpoint. See docs/results/cloth_prior_vs_scratch.md.
+# 50 for the released SimToolReal checkpoint. See docs/reports/1_vbd_cloth/cloth_prior_vs_scratch.md.
 #
 # PYGLET_HEADLESS=true, NOT xvfb-run: bos14's compute nodes have no Xvfb (only the login node does,
 # so `xvfb-run` there exits 127 on every task). ViewerGL is pyglet-based and pyglet's headless mode

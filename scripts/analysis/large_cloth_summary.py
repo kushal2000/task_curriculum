@@ -1,6 +1,6 @@
 """Large vs standard VBD cloth for the viewer's four policies: held folds out of 64 (32 envs x 2 seeds).
 
-    python3 scripts/analysis/large_cloth_summary.py [--tag s20] [--md docs/results/large_cloth/summary.md]
+    python3 scripts/analysis/large_cloth_summary.py [--tag s20] [--md docs/reports/4_physx/large_cloth_menu_policies_s20.md]
 
 Large: docs/results/large_cloth/<tag>/<policy>__<pinned|rand>__<4cm|1p5cm>_s<es>.json
 (bos14_large_cloth_eval.sh). 10 cm: the same checkpoints' existing evals -- px_matrix for the

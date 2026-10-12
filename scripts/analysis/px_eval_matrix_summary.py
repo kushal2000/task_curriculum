@@ -1,6 +1,6 @@
 """Tabulate bos14_px_eval_matrix.sh: held folds per seed for every target, start and cutoff.
 
-    python3 scripts/analysis/px_eval_matrix_summary.py box3 one_flat one_initfold [--md out.md]
+    python3 scripts/analysis/px_eval_matrix_summary.py one_flat one_initfold box3 [--md docs/reports/4_physx/eval_matrix.md]
 
 Reads docs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json and
 prints, per cell, the held folds of each training seed (summed over the two eval seeds) and the share

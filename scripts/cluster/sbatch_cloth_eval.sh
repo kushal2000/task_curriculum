@@ -10,7 +10,7 @@
 # will complain if the protocol drifted.
 #
 # Baseline (cloth_nohold, d774ba2, pretrained policy): 3/160 entered, 0/160 held,
-# best_fold_err 0.0824 +- 0.0021 across seeds. See docs/results/cloth_fold_baseline.md.
+# best_fold_err 0.0824 +- 0.0021 across seeds. See docs/reports/1_vbd_cloth/cloth_fold_baseline.md.
 #
 # --success_tolerance 0.01 pins the INHERITED rigid-tool criterion low enough that it cannot fire.
 # It is not the fold threshold (that is cloth.fold tolerance 0.04, set in the env). Leaving it
