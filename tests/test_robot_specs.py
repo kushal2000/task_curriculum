@@ -176,3 +176,32 @@ def test_wuji_filter_matches_its_derivation() -> None:
     assert {k: set(v) for k, v in SPEC.self_collision_filter.items()} == {
         k: set(v) for k, v in derived.items()
     }
+
+
+@pytest.mark.skipif(not fw.HUMAN_LIKE_URDF.is_file(), reason="run scripts/flexiv_wuji/fetch_assets.sh")
+def test_human_like_urdf_differs_only_in_its_table_of_limits() -> None:
+    """Regenerated from flexiv_wuji.HUMAN_LIKE_LIMITS_DEG: every bound the table leaves as None,
+    every joint it does not list, and everything that is not a limit is the vendor's; every range
+    still contains the 0 reset pose."""
+    vendor, human = (ET.parse(p).getroot() for p in (fw.COMPOSED_URDF, fw.HUMAN_LIKE_URDF))
+
+    def without_limits(root) -> bytes:
+        root = ET.fromstring(ET.tostring(root))
+        root.set("name", "")
+        for limit in root.iter("limit"):
+            limit.attrib.pop("lower", None)
+            limit.attrib.pop("upper", None)
+        return ET.tostring(root)
+
+    assert without_limits(vendor) == without_limits(human)
+    old = {j.get("name"): j.find("limit") for j in vendor.iter("joint") if j.find("limit") is not None}
+    new = {j.get("name"): j.find("limit") for j in human.iter("joint") if j.find("limit") is not None}
+    for name, limit in new.items():
+        table = fw.HUMAN_LIKE_LIMITS_DEG.get(name, (None, None))
+        for i, bound in enumerate(("lower", "upper")):
+            if table[i] is None:
+                assert limit.get(bound) == old[name].get(bound), (name, bound)
+            else:
+                assert float(limit.get(bound)) == pytest.approx(math.radians(table[i]), abs=1e-4), (name, bound)
+        lo, hi = float(limit.get("lower")), float(limit.get("upper"))
+        assert float(old[name].get("lower")) <= lo <= 0.0 <= hi <= float(old[name].get("upper")), name

@@ -9,7 +9,7 @@ table, are mirrored as constants below so this script runs without Isaac Lab.
 
 Pure numpy + stdlib + yourdfpy, run with ``.venv_isaaclab3/bin/python``.
 
-    python scripts/flexiv_wuji/flexiv_wuji.py            # write COMPOSED_URDF with MOUNT_*
+    python scripts/flexiv_wuji/flexiv_wuji.py   # write COMPOSED_URDF and HUMAN_LIKE_URDF with MOUNT_*
 """
 
 from __future__ import annotations
@@ -24,6 +24,8 @@ ASSET_DIR = REPO_ROOT / "assets" / "flexiv_wuji"
 FLEXIV_URDF = ASSET_DIR / "flexiv_description" / "urdf" / "Rizon4s.urdf"
 WUJI_URDF = ASSET_DIR / "wuji_hand2" / "urdf" / "left_with_mount.urdf"
 COMPOSED_URDF = ASSET_DIR / "rizon4s_left_wuji.urdf"
+#: COMPOSED_URDF with HUMAN_LIKE_LIMITS_DEG applied.
+HUMAN_LIKE_URDF = ASSET_DIR / "rizon4s_left_wuji_human_like_joint_limits.urdf"
 KUKA_SHARPA_URDF = (
     REPO_ROOT
     / "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
@@ -40,6 +42,24 @@ HAND_BASE_LINK = {"kuka_sharpa": "left_hand_C_MC", "flexiv_wuji": "l_wrist"}
 #: Yaw (palm direction about the flange axis) and any adapter-plate offset are not yet measured.
 MOUNT_XYZ = (0.0, 0.0, 0.0)
 MOUNT_RPY = (3.141592653589793, 0.0, 0.0)
+
+_FINGERS = ("index_finger", "middle_finger", "ring_finger", "pinky")
+#: HUMAN_LIKE_URDF's joint limits, (lower, upper) in degrees; None keeps the vendor's bound
+#: exactly. The vendor allows -60 deg on every finger joint, i.e. 60 deg of backward bend no human
+#: finger has: the lowers below cut it to rough human values (the knuckle bends back some, about
+#: 0-45, here 20; the middle finger joint not at all; the tip joint and the thumb a little), and
+#: flexion keeps the vendor's uppers. Positive is flexion on all of these (checked by FK: the
+#: fingertip moves toward the palm). Finger abduction is held to +-2 deg about the vendor's zero
+#: pose, as SimToolReal restricts the Sharpa's; thumb abduction keeps the vendor's range.
+HUMAN_LIKE_LIMITS_DEG: dict[str, tuple[float | None, float | None]] = {
+    **{f"l_{f}_mcp_flex": (-20.0, None) for f in _FINGERS},
+    **{f"l_{f}_mcp_abd": (-2.0, 2.0) for f in _FINGERS},
+    **{f"l_{f}_pip": (0.0, None) for f in _FINGERS},
+    **{f"l_{f}_dip": (-10.0, None) for f in _FINGERS},
+    "l_thumb_cmc_flex": (-20.0, None),
+    "l_thumb_mcp": (-10.0, None),
+    "l_thumb_ip": (-15.0, None),
+}
 
 # --- The RL env (isaacsimenvs/tasks/play), mirrored so this runs without Isaac Lab -----------
 
@@ -121,6 +141,41 @@ def compose_urdf(
     return out
 
 
+def restrict_limits(src: Path, limits_deg: dict[str, tuple[float | None, float | None]],
+                    out: Path) -> Path:
+    """Copy ``src`` with the joint limits in ``limits_deg`` narrowed (``None`` keeps a bound).
+
+    Each new range must lie inside the original and contain 0, the pose the env resets the hand
+    to. Bounds are written at the vendor's 4-decimal precision; the robot is renamed to the
+    output's stem.
+    """
+    import math
+
+    tree = ET.parse(_require(src))
+    joints = {j.get("name"): j for j in tree.getroot().iter("joint")}
+    missing = sorted(set(limits_deg) - set(joints))
+    if missing:
+        raise KeyError(f"no such joints in {src.name}: {missing}")
+    for name, (lo_deg, hi_deg) in limits_deg.items():
+        limit = joints[name].find("limit")
+        old_lo, old_hi = float(limit.get("lower")), float(limit.get("upper"))
+        lo = old_lo if lo_deg is None else math.radians(lo_deg)
+        hi = old_hi if hi_deg is None else math.radians(hi_deg)
+        if not old_lo <= lo <= 0.0 <= hi <= old_hi:
+            raise ValueError(
+                f"{name}: ({lo_deg}, {hi_deg}) deg must contain 0 and lie inside "
+                f"({math.degrees(old_lo):.1f}, {math.degrees(old_hi):.1f})")
+        if lo_deg is not None:
+            limit.set("lower", f"{lo:.4f}")
+        if hi_deg is not None:
+            limit.set("upper", f"{hi:.4f}")
+    tree.getroot().set("name", Path(out).stem)
+    tree.write(out, encoding="utf-8", xml_declaration=True)
+    return Path(out)
+
+
 if __name__ == "__main__":
     path = compose_urdf()
     print(f"wrote {path.relative_to(REPO_ROOT)}  (mount xyz {MOUNT_XYZ}, rpy {MOUNT_RPY})")
+    path = restrict_limits(COMPOSED_URDF, HUMAN_LIKE_LIMITS_DEG, HUMAN_LIKE_URDF)
+    print(f"wrote {path.relative_to(REPO_ROOT)}  ({len(HUMAN_LIKE_LIMITS_DEG)} joints restricted)")

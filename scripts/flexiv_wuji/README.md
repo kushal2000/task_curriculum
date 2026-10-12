@@ -29,12 +29,22 @@ new upstream commit or mount, then commit the result.
 | | |
 |---|---|
 | `viser_compare.py` | Both robots side by side where the env puts them, each behind its own table, with joint, base and mount sliders, and IK to match the Kuka's hand pose. `.venv_isaaclab3` |
+| `viser_wuji_limits.py` | The Flexiv + Wuji with vendor joint limits beside the human-like ones (`rizon4s_left_wuji_human_like_joint_limits.urdf`), driven by joint angles or by one policy-style hand action. `.venv_isaaclab3` |
 | `reachability.py` | IK for the palm centre over the task's goal volume and the table, for both robots. `.venv_isaaclab3` |
 | `self_collision_pairs.py` | Derives the robot's self-collision filter list (`RobotSpec.self_collision_filter`): jointed pairs, pairs touching at reset, and pairs that meet across a knuckle. `.venv_isaaclab3` |
 | `smoke_env.py` | Builds a Play-family task in Isaac Sim and checks sizes, palm/fingertip positions, arm and hand step responses, and random-action stability. `.venv_isaacsim` |
 
 The two hands are compared in one canonical frame built from their knuckles (`hand_frames.py`),
 so the vendors' different link conventions do not matter.
+
+## Human-like joint limits
+
+The vendor's Wuji lets every finger joint bend 60 deg backwards and spread +-40 deg.
+`flexiv_wuji.py` also writes `rizon4s_left_wuji_human_like_joint_limits.urdf` with
+`HUMAN_LIKE_LIMITS_DEG`: lower limits raised to knuckle -20, middle joint 0, tip joint -10, thumb
+base -20, MCP -10, IP -15 (upper limits kept), and finger abduction +-2 deg about the vendor's zero
+pose, as SimToolReal restricts the Sharpa's. Thumb abduction is the vendor's. No task trains it
+yet.
 
 ## Self-collision
 
