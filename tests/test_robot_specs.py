@@ -35,7 +35,7 @@ def _joints(urdf_path) -> dict[str, ET.Element]:
 
 
 def test_specs_are_registered_and_kuka_is_unchanged_in_shape() -> None:
-    assert set(robots.ROBOT_SPECS) == {"kuka_sharpa", "flexiv_wuji"}
+    assert set(robots.ROBOT_SPECS) == {"kuka_sharpa", "flexiv_wuji", "flexiv_wuji_human_like"}
     assert robots.KUKA_SHARPA.num_joints == 29  # the released checkpoint's action size
     assert SPEC.num_joints == 27
 
@@ -165,15 +165,18 @@ def test_self_collision_filter_is_symmetric_and_names_post_merge_bodies(spec) ->
 
 
 @needs_assets
-def test_wuji_filter_matches_its_derivation() -> None:
+@pytest.mark.parametrize("robot", ["flexiv_wuji", "flexiv_wuji_human_like"])
+def test_wuji_filter_matches_its_derivation(robot) -> None:
     """Rerun self_collision_pairs.py: jointed pairs, pairs touching at reset, pairs that meet
-    across a knuckle's range. Fails when the mount, default pose or meshes change without it."""
+    across a knuckle's range. Fails when the mount, default pose, meshes or joint limits change
+    without it."""
     pytest.importorskip("trimesh")
     pytest.importorskip("yourdfpy")
     import self_collision_pairs
 
-    derived, _ = self_collision_pairs.derive("flexiv_wuji")
-    assert {k: set(v) for k, v in SPEC.self_collision_filter.items()} == {
+    derived, _ = self_collision_pairs.derive(robot)
+    spec = robots.ROBOT_SPECS[robot]
+    assert {k: set(v) for k, v in spec.self_collision_filter.items()} == {
         k: set(v) for k, v in derived.items()
     }
 
@@ -205,3 +208,11 @@ def test_human_like_urdf_differs_only_in_its_table_of_limits() -> None:
                 assert float(limit.get(bound)) == pytest.approx(math.radians(table[i]), abs=1e-4), (name, bound)
         lo, hi = float(limit.get("lower")), float(limit.get("upper"))
         assert float(old[name].get("lower")) <= lo <= 0.0 <= hi <= float(old[name].get("upper")), name
+
+
+def test_human_like_spec_is_the_flexiv_wuji_but_for_its_name() -> None:
+    """Its limits live in its URDF; joints, gains, geometry and pose must be FLEXIV_WUJI's."""
+    import dataclasses
+
+    human = robots.FLEXIV_WUJI_HUMAN_LIKE
+    assert dataclasses.replace(human, name=SPEC.name) == SPEC

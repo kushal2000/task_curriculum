@@ -2,8 +2,9 @@
 
 Registers ``Isaacsimenvs-Play-Direct-v0`` (SimToolReal's Kuka iiwa14 + Sharpa) and
 ``Isaacsimenvs-PlayFlexivWuji-Direct-v0`` (Flexiv Rizon 4s + Wuji Hand 2) with the gymnasium
-registry for the DirectRLEnv training path, and ``Isaacsimenvs-PlaySelfCollision-Direct-v0`` (the
-Kuka with robot self-collision on). Same env class; the cfg picks the robot and self-collision.
+registry for the DirectRLEnv training path, ``Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0`` (that
+robot with human-like joint limits), and ``Isaacsimenvs-PlaySelfCollision-Direct-v0`` (the Kuka with
+robot self-collision on). Same env class; the cfg picks the robot and self-collision.
 
 Entry points:
 - ``env_cfg_entry_point``           → PlayEnvCfg (typed defaults in code)
@@ -84,6 +85,20 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": "isaacsimenvs.tasks.play.play_env_cfg:PlaySelfCollisionEnvCfg",
         "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "Play.yaml"),
+        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
+    },
+)
+
+# Flexiv + Wuji with human-like joint limits (flexiv_wuji.py HUMAN_LIKE_LIMITS_DEG).
+gym.register(
+    id="Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0",
+    entry_point="isaacsimenvs.tasks.play.play_env:PlayEnv",
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "isaacsimenvs.tasks.play.play_env_cfg:PlayFlexivWujiHumanLikeEnvCfg",
+        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "PlayFlexivWujiHumanLike.yaml"),
         "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
         "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
     },

@@ -44,7 +44,11 @@ import flexiv_wuji as fw  # noqa: E402
 sys.path.insert(0, str(fw.REPO_ROOT / "isaacsimenvs" / "tasks" / "play"))
 import robots  # noqa: E402  (stdlib-only; imported by path so Isaac Lab is not needed)
 
-URDFS = {"kuka_sharpa": fw.KUKA_SHARPA_URDF, "flexiv_wuji": fw.COMPOSED_URDF}
+URDFS = {
+    "kuka_sharpa": fw.KUKA_SHARPA_URDF,
+    "flexiv_wuji": fw.COMPOSED_URDF,
+    "flexiv_wuji_human_like": fw.HUMAN_LIKE_URDF,
+}
 #: Deeper than this counts as overlapping (onboard.py's threshold).
 OVERLAP_M = 5e-4
 #: Samples per joint range in the knuckle sweep.

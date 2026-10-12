@@ -14,6 +14,7 @@ asserts that ordering for whichever robot is loaded.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import dataclass, field
 
@@ -323,7 +324,20 @@ FLEXIV_WUJI = RobotSpec(
     self_collision_filter=_WUJI_SELF_COLLISION_FILTER,
 )
 
-ROBOT_SPECS: dict[str, RobotSpec] = {spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI)}
+# The same robot with scripts/flexiv_wuji/flexiv_wuji.py's HUMAN_LIKE_LIMITS_DEG: finger and thumb
+# joints' backward bend cut to rough human values, finger abduction held to +-2 deg. Joints, gains,
+# geometry and default pose are FLEXIV_WUJI's; the limits live in its URDF. The self-collision
+# filter is re-derived on that URDF (self_collision_pairs.py), since the knuckle sweep depends on
+# the joint ranges.
+FLEXIV_WUJI_HUMAN_LIKE = dataclasses.replace(
+    FLEXIV_WUJI,
+    name="flexiv_wuji_human_like",
+    self_collision_filter=_WUJI_SELF_COLLISION_FILTER,
+)
+
+ROBOT_SPECS: dict[str, RobotSpec] = {
+    spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE)
+}
 
 
 def get_robot_spec(name: str) -> RobotSpec:

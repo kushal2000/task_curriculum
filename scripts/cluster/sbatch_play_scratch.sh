@@ -4,6 +4,7 @@
 #
 #   sbatch scripts/cluster/sbatch_play_scratch.sh flexiv_wuji [run_name] [hydra overrides...]
 #   sbatch scripts/cluster/sbatch_play_scratch.sh kuka_sharpa [run_name] [hydra overrides...]
+#   sbatch scripts/cluster/sbatch_play_scratch.sh flexiv_wuji_human_like [run_name] [hydra overrides...]
 #
 # WHY A KUKA CONTROL
 #
@@ -41,9 +42,10 @@ set -uo pipefail
 cd /share/portal/kk837/task_curriculum
 mkdir -p slurm_logs
 
-ROBOT="${1:?usage: sbatch_play_scratch.sh flexiv_wuji|kuka_sharpa [run_name] [overrides...]}"
+ROBOT="${1:?usage: sbatch_play_scratch.sh flexiv_wuji|flexiv_wuji_human_like|kuka_sharpa [run_name] [overrides...]}"
 case "$ROBOT" in
     flexiv_wuji) TASK=Isaacsimenvs-PlayFlexivWuji-Direct-v0 ;;
+    flexiv_wuji_human_like) TASK=Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0 ;;
     kuka_sharpa) TASK=Isaacsimenvs-PlaySelfCollision-Direct-v0 ;;
     *) echo "unknown robot $ROBOT" >&2; exit 2 ;;
 esac

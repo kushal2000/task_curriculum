@@ -611,6 +611,20 @@ class PlayFlexivWujiEnvCfg(PlayEnvCfg):
 
 
 @configclass
+class PlayFlexivWujiHumanLikeEnvCfg(PlayFlexivWujiEnvCfg):
+    """``PlayFlexivWujiEnvCfg`` on the Wuji with human-like joint limits
+    (``Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0``): backward finger bend cut and finger
+    abduction held to +-2 deg (``scripts/flexiv_wuji/flexiv_wuji.py`` HUMAN_LIKE_LIMITS_DEG).
+    Everything else, self-collision included, is the Flexiv task's.
+    """
+
+    robot: str = "flexiv_wuji_human_like"
+    assets: AssetsCfg = AssetsCfg(
+        robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf"
+    )
+
+
+@configclass
 class PlaySelfCollisionEnvCfg(PlayEnvCfg):
     """Play on the Kuka + Sharpa with robot self-collision on (``Isaacsimenvs-PlaySelfCollision-Direct-v0``).
 
@@ -624,6 +638,7 @@ class PlaySelfCollisionEnvCfg(PlayEnvCfg):
 __all__ = [
     "PlayEnvCfg",
     "PlayFlexivWujiEnvCfg",
+    "PlayFlexivWujiHumanLikeEnvCfg",
     "PlaySelfCollisionEnvCfg",
     "AssetsCfg",
     "ObsCfg",

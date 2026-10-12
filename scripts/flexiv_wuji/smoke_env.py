@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 
 from isaaclab.app import AppLauncher
@@ -76,6 +77,19 @@ def run(env_cfg, agent_cfg) -> None:
         "action_dim": n_act, "num_joints": robot.num_joints,
         "joint_names_lab": list(robot.data.joint_names),
         "robot_self_collision": bool(inner.cfg.robot_self_collision),
+        # What the sim loaded, not what the cfg asked for.
+        "hand_limits_deg": {
+            robot.data.joint_names[j]: [round(math.degrees(float(inner._hand_lower[0, k])), 1),
+                                        round(math.degrees(float(inner._hand_upper[0, k])), 1)]
+            for k, j in enumerate(list(inner._hand_joint_ids))
+        },
+        "robot_shape_frictions": sorted({
+            round(float(v), 3) for v in robot.root_physx_view.get_material_properties()[0, :, 0]
+        }),
+        "fingertip_shape_friction": sorted({
+            round(float(v), 3)
+            for v in robot.root_physx_view.get_material_properties()[0, :, 0]
+        } - {round(float(inner.cfg.assets.robot_friction), 3)}) or "same as robot_friction",
         "self_collision_filter_pairs": sum(map(len, spec.self_collision_filter.values())) // 2,
     }
 
