@@ -6,8 +6,11 @@
 #   LIST=<file> sbatch --array=0-$(( 2 * $(wc -l < <file>) - 1 )) scripts/cluster/bos14_px_eval_trend.sh
 #   python3 scripts/analysis/px_eval_matrix_summary.py <tag> [<tag> ...]
 #
-# LIST: one checkpoint per line, "<tag> <seed> <checkpoint path>", e.g.
+# LIST: one checkpoint per line, "<tag> <seed> <checkpoint path>" or "<tag> <seed> <run name> <select>"
+# (select as find_checkpoint: best / last / ep:<N>, resolved when the task runs, so a list can be
+# queued behind a training that has not written the checkpoint yet), e.g.
 #   ft7_flat0_ep1500 2 outputs/.../nn/snap_0_pxpool_ft7_flat0_s2_170001_ep_1500.pth
+#   ft7_flat0_ep1500 2 0_pxpool_ft7_flat0_s2_170001 ep:1500
 # Index = line*2 + start (0 = pinned, 1 = randomised).
 # Output: docs/results/px_matrix/<tag>_s<seed>__on_vbd__<pinned|rand>__<4cm|1p5cm>_s<es>.json, the
 # matrix's naming, so px_eval_matrix_summary.py and px_eval_fold_steps.py read it as is.
@@ -31,7 +34,10 @@ OUTDIR="${OUTDIR:-docs/results/px_matrix}"
 mkdir -p slurm_logs "$OUTDIR"
 I="${SLURM_ARRAY_TASK_ID:-0}"
 LINE=$(( I / 2 + 1 )); S=$(( I % 2 ))
-read -r TAG SEED CKPT < <(sed -n "${LINE}p" "$LIST")
+read -r TAG SEED CKPT SEL < <(sed -n "${LINE}p" "$LIST")
+if [ -n "${SEL:-}" ]; then
+    CKPT=$(.venv_isaaclab3/bin/python -c "import sys; sys.path.insert(0, 'scripts/analysis'); from pathlib import Path; from rigid_cloth_eval_manifest import find_checkpoint; print(find_checkpoint(sys.argv[1], Path('outputs'), sys.argv[2]) or '')" "$CKPT" "$SEL")
+fi
 [ -n "${CKPT:-}" ] && [ -f "$CKPT" ] || { echo "[px_trend] line $LINE of $LIST: no checkpoint '${CKPT:-}'" >&2; exit 1; }
 if [ "$S" -eq 1 ]; then START=rand; SARGS=(--randomize); else START=pinned; SARGS=(); fi
 export PYTHONUNBUFFERED=1
