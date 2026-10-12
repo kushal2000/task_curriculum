@@ -1,7 +1,9 @@
 """Side-by-side viser viewer: Kuka iiwa14 + Sharpa vs Flexiv Rizon 4s + Wuji Hand 2.
 
 Each robot stands where the RL env puts it, ``ROBOT_BASE_POS`` behind its own copy of the env's
-table, with joint sliders for arm and hand. The Flexiv's base offset and the Wuji's flange mount
+table, with joint sliders for each arm and each hand. Each hand also has one "hand action" slider
+that sets every hand joint the way the policy's hand action does (-1 = lower limit, +1 = upper,
+linearly in between), for opening and closing it in one go. The Flexiv's base offset and the Wuji's flange mount
 are live sliders too, so the mount can be tuned against the Kuka setup by eye; separation 0
 overlays the two robots on one table.
 
@@ -52,26 +54,49 @@ def wxyz(T: np.ndarray) -> np.ndarray:
 
 
 class JointSliders:
-    """One slider per actuated joint of ``urdf``, in a GUI folder."""
+    """One slider per actuated joint of ``urdf`` (or the given subset), in a GUI folder.
 
-    def __init__(self, server, label, urdf: yourdfpy.URDF, defaults, on_change, expand):
-        self.names = list(urdf.actuated_joint_names)
+    ``hand_action`` adds a slider on top that sets every joint to ``lower + (a + 1) / 2 *
+    (upper - lower)``, the map the Play task applies to its hand actions.
+    """
+
+    def __init__(self, server, label, urdf: yourdfpy.URDF, defaults, on_change, expand,
+                 names=None, hand_action=False):
+        self.names = list(names if names is not None else urdf.actuated_joint_names)
         self.defaults = {n: float(defaults.get(n, 0.0)) for n in self.names}
         self.sliders = {}
+        self.on_change = on_change
+        limits = {n: (urdf.joint_map[n].limit.lower, urdf.joint_map[n].limit.upper) for n in self.names}
+        self.action = None
         with server.gui.add_folder(label, expand_by_default=expand):
+            if hand_action:
+                action = self.action = server.gui.add_slider(
+                    "hand action (all joints)", -1.0, 1.0, 0.01, 0.0)
+
+                @action.on_update
+                def _(_) -> None:
+                    a = (action.value + 1.0) / 2.0
+                    self.set({n: lo + a * (hi - lo) for n, (lo, hi) in limits.items()})
+
             for name in self.names:
                 lo, hi = urdf.joint_map[name].limit.lower, urdf.joint_map[name].limit.upper
                 init = float(np.clip(self.defaults[name], lo, hi))
                 slider = server.gui.add_slider(name, min=lo, max=hi, step=1e-3, initial_value=init)
-                slider.on_update(lambda _: on_change())
+                slider.on_update(lambda _: self.on_change())
                 self.sliders[name] = slider
 
     def q(self) -> np.ndarray:
         return np.array([self.sliders[n].value for n in self.names])
 
     def set(self, values: dict[str, float]) -> None:
-        for name, value in values.items():
-            self.sliders[name].value = float(value)
+        # Each slider's own update would redraw the scene; hold that off until all are set.
+        on_change, self.on_change = self.on_change, lambda: None
+        try:
+            for name, value in values.items():
+                self.sliders[name].value = float(value)
+        finally:
+            self.on_change = on_change
+        self.on_change()
 
     def reset(self) -> None:
         self.set(self.defaults)
@@ -123,8 +148,8 @@ def main() -> None:
             )
             frame_axes[name].visible = show_frames.value
 
-        kuka.update_cfg(kuka_q.q())
-        viser_kuka.update_cfg(kuka_q.q())
+        kuka.update_cfg(kuka_cfg())
+        viser_kuka.update_cfg(kuka_cfg())
         viser_arm.update_cfg(flexiv_q.q())
         viser_hand.update_cfg(wuji_q.q())
 
@@ -188,9 +213,17 @@ def main() -> None:
             server.gui.add_slider(f"mount {a} (rad)", -np.pi, np.pi, 0.01, v)
             for a, v in zip(("roll", "pitch", "yaw"), fw.MOUNT_RPY)
         ]
-    kuka_q = JointSliders(server, "Kuka + Sharpa joints", kuka, fw.KUKA_DEFAULT_ARM_POS, refresh, False)
+    kuka_arm_names = [n for n in kuka.actuated_joint_names if n in fw.KUKA_DEFAULT_ARM_POS]
+    kuka_arm_q = JointSliders(server, "Kuka arm joints", kuka, fw.KUKA_DEFAULT_ARM_POS, refresh,
+                              False, names=kuka_arm_names)
+    sharpa_q = JointSliders(server, "Sharpa hand joints", kuka, {}, refresh, True, hand_action=True,
+                            names=[n for n in kuka.actuated_joint_names if n not in kuka_arm_names])
     flexiv_q = JointSliders(server, "Flexiv arm joints", arm, fw.FLEXIV_DEFAULT_ARM_POS, refresh, False)
-    wuji_q = JointSliders(server, "Wuji hand joints", hand, {}, refresh, False)
+    wuji_q = JointSliders(server, "Wuji hand joints", hand, {}, refresh, True, hand_action=True)
+
+    def kuka_cfg() -> np.ndarray:
+        values = {**dict(zip(kuka_arm_q.names, kuka_arm_q.q())), **dict(zip(sharpa_q.names, sharpa_q.q()))}
+        return np.array([values[n] for n in kuka.actuated_joint_names])
     for handle in (layout_sep, show_tables, show_frames, base_yaw, *base_xyz, *mount_xyz, *mount_rpy):
         handle.on_update(lambda _: refresh())
 
@@ -223,7 +256,7 @@ def main() -> None:
 
     @reset_button.on_click
     def _(_) -> None:
-        for sliders in (kuka_q, flexiv_q, wuji_q):
+        for sliders in (kuka_arm_q, sharpa_q, flexiv_q, wuji_q):
             sliders.reset()
         refresh()
 
