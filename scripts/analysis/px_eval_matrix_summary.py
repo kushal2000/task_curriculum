@@ -4,7 +4,8 @@
 
 Reads docs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json and
 prints, per cell, the held folds of each training seed (summed over the two eval seeds) and the share
-over all seeds. A missing file shows as "?" so an unfinished or failed task cannot pass as a zero.
+over all seeds. A missing file shows as "?" so an unfinished or failed task cannot pass as a zero. A
+target with no file at all for a tag (the 7-shape targets before 2026-10-12) is left out.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ TARGETS = [
     ("newton_pool", "Newton pool"),
     ("newton_box3", "Newton box3"),
     ("vbd", "VBD cloth"),
+    ("physx_pool7", "PhysX 7-shape pool"),
+    ("physx_pool7of", "PhysX 7-shape, folded starts"),
 ]
 COLS = [(s, c) for c in ("4cm", "1p5cm") for s in ("pinned", "rand")]
 
@@ -51,10 +54,12 @@ def main() -> None:
     out = []
     for tag in a.tags:
         out.append(f"### {tag}\n")
-        out.append("held folds per training seed (2 eval seeds summed; pool targets of 640, others of 64)\n")
+        out.append("held folds per training seed (2 eval seeds summed; pool targets of 640, 7-shape of 896, others of 64)\n")
         out.append("| target | " + " | ".join(f"{c} {s}" for s, c in COLS) + " |")
         out.append("|---|" + "---|" * len(COLS))
         for key, name in TARGETS:
+            if not glob.glob(f"docs/results/px_matrix/{tag}_s[123]__on_{key}__*.json"):
+                continue
             out.append(f"| {name} | " + " | ".join(cell(tag, key, s, c) for s, c in COLS) + " |")
         out.append("")
     text = "\n".join(out)

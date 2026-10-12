@@ -17,6 +17,10 @@
 # run whose reward keeps rising saves on most epochs, ~4 s each on the shared filesystem -- 3-4x the
 # 1.2 s a 1536-env PhysX chain epoch takes. The checkpoint the evals pick is then <= 60 s stale.
 #
+# LOAD_MODE (default weights): weights = model + normalizers only, fresh optimizer / lr / epoch count
+# (set the lr with agent.params.config.learning_rate). resume = also the optimizer, lr, epoch and frame
+# counters, so EPOCHS is the TOTAL epoch count (source epochs + new ones).
+#
 # Policies are evaluated on Newton (the VBD cloth exists only there): the observation is identical,
 # see isaacsimenvs/tasks/cloth/physx_envs.py.
 
@@ -70,7 +74,7 @@ read -r -a EXTRA <<<"${EXTRA_ARGS:-}"
 
 export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES
 echo "[px_train] task=$GYM_TASK seed=$SEED envs=$ENVS epochs=$EPOCHS minibatch=$MINIBATCH name=$NAME"
-echo "[px_train] prior=$PRIOR wandb=${WANDB:-0} extra=${EXTRA_ARGS:-none} ${TASK_ARGS[*]:-}"
+echo "[px_train] prior=$PRIOR load_mode=${LOAD_MODE:-weights} wandb=${WANDB:-0} extra=${EXTRA_ARGS:-none} ${TASK_ARGS[*]:-}"
 echo "[px_train] host=$(hostname -s) commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain)" && echo YES || echo no)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
@@ -99,7 +103,7 @@ for TRY in $(seq 1 "${PX_TRIES:-3}"); do
         --agent rl_games_sapg_cfg_entry_point \
         --headless \
         --checkpoint "$PRIOR" \
-        --checkpoint_load_mode weights \
+        --checkpoint_load_mode "${LOAD_MODE:-weights}" \
         --single_variant \
         "${WANDB_ARGS[@]}" \
         "${TASK_ARGS[@]}" \

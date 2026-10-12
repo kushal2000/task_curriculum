@@ -173,6 +173,15 @@ class A2CBase(BaseAlgorithm):
         # file write dominated the epoch (PhysX chain: 1.2 s of training + ~4 s of saving).
         self.best_save_min_interval_s = float(config.get('best_save_min_interval_s', 0.0))
         self._last_best_save_time = -float('inf')
+        # Periodic full checkpoints (SAPG loop only): every `periodic_save_every` epochs (0 = off) a
+        # resumable `nn/periodic_<name>_ep_<N>.pth`; only the newest `periodic_keep` are kept, except
+        # the epochs listed in `periodic_keep_epochs`, which are never deleted. `snapshot_every` (0 =
+        # off) writes a weights-only `nn/snap_<name>_ep_<N>.pth` (model + normalizers, enough for
+        # eval, ~1/8 the size) that is never deleted -- the points of a score-vs-epoch curve.
+        self.periodic_save_every = int(config.get('periodic_save_every', 0))
+        self.periodic_keep = int(config.get('periodic_keep', 15))
+        self.periodic_keep_epochs = {int(e) for e in (config.get('periodic_keep_epochs', None) or [])}
+        self.snapshot_every = int(config.get('snapshot_every', 0))
         self.print_stats = config.get('print_stats', True)
         self.rnn_states = None
         self.name = base_name
@@ -691,6 +700,27 @@ class A2CBase(BaseAlgorithm):
 
     def train_central_value(self):
         return self.central_value_net.train_net()
+
+    def _periodic_save(self, epoch_num, all_state_dict):
+        name = self.config['name']
+        if self.periodic_save_every > 0 and epoch_num % self.periodic_save_every == 0:
+            self.save(os.path.join(self.nn_dir, f'periodic_{name}_ep_{epoch_num}'), all_state_dict)
+            prefix, eps = f'periodic_{name}_ep_', []
+            for fn in os.listdir(self.nn_dir):
+                if fn.startswith(prefix) and fn.endswith('.pth'):
+                    try:
+                        eps.append(int(fn[len(prefix):-len('.pth')]))
+                    except ValueError:
+                        continue
+            rotating = sorted(e for e in eps if e not in self.periodic_keep_epochs)
+            for e in rotating[:-self.periodic_keep] if self.periodic_keep > 0 else rotating:
+                torch_ext.safe_filesystem_op(os.remove, os.path.join(self.nn_dir, f'{prefix}{e}.pth'))
+        if self.snapshot_every > 0 and epoch_num % self.snapshot_every == 0:
+            state = self.get_weights()
+            state['epoch'] = epoch_num
+            state['frame'] = self.frame
+            torch_ext.save_checkpoint(os.path.join(self.nn_dir, f'snap_{name}_ep_{epoch_num}'),
+                                      {self.global_rank: state})
 
     def get_full_state_weights(self):
         state = self.get_weights()
@@ -1666,7 +1696,7 @@ class ContinuousA2CBase(A2CBase):
                                 os.system(f"cp {os.path.join(self.experiment_dir, 'last', 'model.pth')} {os.path.join(self.experiment_dir, 'last', 'model.pth.old')}")
                             self.save(os.path.join(self.experiment_dir, 'last', 'model'), all_state_dict)
 
-                    if (mean_rewards[0] > self.last_mean_rewards and epoch_num >= 10
+                    if (mean_rewards[0] > self.last_mean_rewards and epoch_num >= self.save_best_after
                             and time.time() - self._last_best_save_time >= self.best_save_min_interval_s):
                         self._last_best_save_time = time.time()
                         print('saving next best rewards: ', mean_rewards)
@@ -1680,6 +1710,8 @@ class ContinuousA2CBase(A2CBase):
                                 print('Maximum reward achieved. Network won!')
                                 self.save(os.path.join(self.nn_dir, checkpoint_name), all_state_dict)
                                 should_exit = True
+
+                self._periodic_save(epoch_num, all_state_dict)
 
                 if epoch_num >= self.max_epochs and self.max_epochs != -1:
                     if self.game_rewards.current_size == 0:

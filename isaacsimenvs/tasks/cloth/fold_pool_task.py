@@ -585,6 +585,23 @@ class FoldPoolTaskMixin:
             self._termination_reasons["fold_start_folded"] = entered & self._start_folded
         return terminated, truncated
 
+    def _get_rewards(self) -> torch.Tensor:
+        reward = super()._get_rewards()
+        # How many steps a fold takes. The logger averages `episode_final` over finished episodes,
+        # so `fold_steps` (the episode length if it folded, else 0) divided by `done_fold` is the
+        # mean length of a folded episode; `fold_steps_flat_start` / `fold_flat_start` the same for
+        # episodes that started flat. Not `done_*`: eval/episodes.py reads those as booleans.
+        # `episode_length_buf` already counts this step (DirectRLEnv.step increments it before
+        # `_get_dones`), so it equals eval's `per_env_length` for an episode ending here.
+        entered = self._termination_reasons["fold"].bool()
+        flat_fold = entered & ~self._start_folded
+        length = self.episode_length_buf.float()
+        final = self.extras["episode_final"]
+        final["fold_steps"] = entered.float() * length
+        final["fold_flat_start"] = flat_fold.float()
+        final["fold_steps_flat_start"] = flat_fold.float() * length
+        return reward
+
     # ------------------------------------------------------------------ startup proofs
 
     def _calibrate_and_verify_placement(self) -> None:

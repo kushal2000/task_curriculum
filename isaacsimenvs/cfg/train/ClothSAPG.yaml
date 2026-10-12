@@ -110,6 +110,10 @@ params:
     save_best_after: 100
     best_save_min_interval_s: 0.0   # >0: at most one best-reward checkpoint per this many seconds
     save_frequency: 3000
+    periodic_save_every: 0          # >0: resumable nn/periodic_<name>_ep_<N>.pth every N epochs
+    periodic_keep: 15               # ...keeping only the newest this many
+    periodic_keep_epochs: []        # ...except these epochs, never deleted
+    snapshot_every: 0               # >0: weights-only nn/snap_<name>_ep_<N>.pth every N epochs, never deleted
     print_stats: True
     grad_norm: 1.0
     entropy_coef: 0.0
