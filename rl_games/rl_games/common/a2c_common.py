@@ -789,6 +789,12 @@ class A2CBase(BaseAlgorithm):
 
         # Skip loading if the shapes don't match
         SKIP = "current_rewards" not in weights or weights["current_rewards"].shape[0] != self.num_actors
+        # ...or if the env could not save its state (IVecEnv.get_env_state() -> None): the env then
+        # restarts every episode from scratch, and the saved obs / done flags / RNN hidden states
+        # belong to episodes that no longer exist. An LSTM policy fed a stale hidden state at a fresh
+        # start stalls until the episode times out and the reset clears it (PhysX fold pool resume
+        # smoke 169896: no episode ended for the first 17 epochs, the first ones were 0-fold timeouts).
+        SKIP = SKIP or weights.get('env_state', None) is None
         if SKIP:
             print("Skipping loading of many things in a2c_common.set_full_state_weights because the shapes don't match")
             print(f"self.num_actors = {self.num_actors}, weights['current_rewards'].shape = {weights['current_rewards'].shape if 'current_rewards' in weights else 'not in weights'}")
