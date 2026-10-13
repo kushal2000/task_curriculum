@@ -127,6 +127,16 @@ def run(env_cfg, agent_cfg) -> None:
         off = torch.tensor(spec.fingertip_offset, device=device).expand(s.shape[0], 3)
         return s[:, :3] + quat_apply(s[:, 3:7], off) - origin
 
+    # The distance-delta reward's fingertip distances, against the observed pad points: equal when
+    # reward.fingertip_distance_from_pad is on, ~fingertip_offset apart when it is off.
+    obj = inner.object.data.root_pos_w[0] - origin
+    pad_dist = (fingertips() - obj).norm(dim=-1)
+    report["reward_fingertip_distance"] = {
+        "fingertip_distance_from_pad": bool(inner.cfg.reward.fingertip_distance_from_pad),
+        "max_abs_diff_vs_observed_pads_mm": round(
+            float((inner._curr_fingertip_distances[0] - pad_dist).abs().max()) * 1000, 3),
+    }
+
     p0 = palm_centre()
     report["palm_centre_after_reset"] = _r(p0)
     report["palm_body"] = robot.data.body_names[inner._palm_body_id]

@@ -171,7 +171,13 @@ def compute_intermediate_values(env) -> None:
     goal_rot = env.goal_viz.data.root_quat_w
 
     ft_state = env.robot.data.body_state_w[:, env._fingertip_body_ids, :]
-    ft_pos = ft_state[:, :, 0:3] - env_origins.unsqueeze(1)
+    ft_pos_w = ft_state[:, :, 0:3]
+    if rew_cfg.fingertip_distance_from_pad:
+        ft_pos_w = _apply_local_offset(
+            ft_pos_w, ft_state[:, :, 3:7], env.robot_spec.fingertip_offset,
+            (env.num_envs, NUM_FINGERTIPS),
+        )
+    ft_pos = ft_pos_w - env_origins.unsqueeze(1)
     env._curr_fingertip_distances = torch.norm(
         ft_pos - obj_pos.unsqueeze(1), dim=-1
     )  # (N, 5)

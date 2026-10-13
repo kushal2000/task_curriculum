@@ -338,6 +338,11 @@ class RewardCfg:
     lifting_bonus_threshold: float = 0.15
 
     distance_delta_rew_scale: float = 50.0
+    # Where the fingertip-to-object distance behind the distance-delta term is measured from.
+    # False (this port's original behaviour): each fingertip body's origin, at the last finger
+    # joint. True (SimToolReal's Isaac Gym env, env.py:2945-2955): the pad point the policy
+    # observes, body + RobotSpec.fingertip_offset. scripts/cluster/sbatch_play_scratch.sh sets it.
+    fingertip_distance_from_pad: bool = False
     reach_goal_bonus: float = 1000.0
 
     kuka_actions_penalty_scale: float = 0.03
