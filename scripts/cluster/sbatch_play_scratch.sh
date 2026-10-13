@@ -19,11 +19,7 @@
 # WHAT IS CHANGED FROM THE RECIPE
 #
 # The random force/torque impulses on the object (domain_randomization.force_scale and
-# torque_scale, 20 and 2 by default) are off, on every robot. And the fingertip distance behind the
-# distance-delta reward is measured from the pad point the policy observes
-# (reward.fingertip_distance_from_pad), as SimToolReal's Isaac Gym env does; this port's default
-# measures from the fingertip body origin. Runs before that line was added used the default.
-# Everything else is PlaySAPG.yaml as
+# torque_scale, 20 and 2 by default) are off, on every robot. Everything else is PlaySAPG.yaml as
 # shipped, at SimToolReal's env count: 24576 envs on one GPU (pretrained_policy/config.yaml
 # numEnvs), i.e. 6 SAPG blocks of 4096 -- the 6 in the released checkpoint's (6, 29) sigma.
 # Play.yaml's 8192 would give 2 blocks, a different exploration setup.
@@ -88,7 +84,6 @@ nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader
     --wandb_name "$RUN_NAME" \
     env.domain_randomization.force_scale=0.0 \
     env.domain_randomization.torque_scale=0.0 \
-    env.reward.fingertip_distance_from_pad=true \
     "env.scene.num_envs=${ENVS}" \
     "agent.params.config.name=0_${RUN_NAME}" \
     "agent.params.seed=${SEED}" \
