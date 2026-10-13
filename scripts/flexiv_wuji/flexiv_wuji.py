@@ -24,6 +24,8 @@ ASSET_DIR = REPO_ROOT / "assets" / "flexiv_wuji"
 FLEXIV_URDF = ASSET_DIR / "flexiv_description" / "urdf" / "Rizon4s.urdf"
 WUJI_URDF = ASSET_DIR / "wuji_hand2" / "urdf" / "left_with_mount.urdf"
 COMPOSED_URDF = ASSET_DIR / "rizon4s_left_wuji.urdf"
+#: The Rizon 4s with the Kuka's Sharpa hand (compose_flexiv_sharpa_urdf).
+FLEXIV_SHARPA_URDF = ASSET_DIR / "rizon4s_left_sharpa.urdf"
 #: COMPOSED_URDF with HUMAN_LIKE_LIMITS_DEG applied.
 HUMAN_LIKE_URDF = ASSET_DIR / "rizon4s_left_wuji_human_like_joint_limits.urdf"
 KUKA_SHARPA_URDF = (
@@ -33,6 +35,18 @@ KUKA_SHARPA_URDF = (
 TABLE_URDF = REPO_ROOT / "assets" / "urdf" / "table_narrow.urdf"
 
 FLANGE_LINK = "flange"
+#: The Sharpa subtree's root in the Kuka URDF: its adapter plate, fixed to the iiwa's flange face
+#: (iiwa14_link_ee) by joint iiwa14_sharpa. The Flexiv + Sharpa fixes it to the Rizon's flange the
+#: same way.
+SHARPA_MOUNT_LINK = "sharpa_mount"
+KUKA_SHARPA_MOUNT_JOINT = "iiwa14_sharpa"
+#: ``flange`` -> ``sharpa_mount`` on the Rizon. The Flexiv keeps FLEXIV_DEFAULT_ARM_POS whatever
+#: hand it carries, so the hand is turned about the flange axis instead: at that pose this yaw
+#: puts the Sharpa palm-down, 8.3 deg from the Kuka's hand orientation with its origin 47 mm off
+#: (45 of it along the fingers -- the Sharpa and its plate stand further off the flange than the
+#: Wuji). The Kuka's own 15 deg would leave the palm facing up. Solved, not measured on hardware.
+FLEXIV_SHARPA_MOUNT_XYZ = (0.0, 0.0, 0.0)
+FLEXIV_SHARPA_MOUNT_RPY = (0.0, 0.0, -3.129)
 WUJI_ROOT_LINK = "l_mount"
 #: Link each hand's pose readout uses: the first link past the arm's mount.
 HAND_BASE_LINK = {"kuka_sharpa": "left_hand_C_MC", "flexiv_wuji": "l_wrist"}
@@ -141,6 +155,60 @@ def compose_urdf(
     return out
 
 
+def compose_flexiv_sharpa_urdf(out: Path = FLEXIV_SHARPA_URDF) -> Path:
+    """Write the Rizon 4s with the Kuka's Sharpa hand on its flange, as one URDF.
+
+    The hand is the Kuka URDF's ``sharpa_mount`` subtree verbatim -- adapter plate, restricted
+    joint limits, renamed joints, elastomer pads -- so it is the hand the Kuka trains with. It is
+    fixed to the Rizon's ``flange`` (+z out of the arm, like the iiwa's ``iiwa14_link_ee``) at
+    FLEXIV_SHARPA_MOUNT_*.
+    """
+    arm = ET.parse(_require(FLEXIV_URDF)).getroot()
+    kuka = ET.parse(_require(KUKA_SHARPA_URDF)).getroot()
+    out = Path(out)
+    _rebase_meshes(arm, FLEXIV_URDF.parent, out.parent)
+    _rebase_meshes(kuka, KUKA_SHARPA_URDF.parent, out.parent)
+    for el in list(arm):
+        is_world = el.tag == "link" and el.get("name") == "world"
+        from_world = el.tag == "joint" and el.find("parent").get("link") == "world"
+        if is_world or from_world:
+            arm.remove(el)
+
+    children: dict[str, list[ET.Element]] = {}
+    for j in kuka.iter("joint"):
+        children.setdefault(j.find("parent").get("link"), []).append(j)
+    links = {el.get("name"): el for el in kuka.iter("link")}
+    hand_links, hand_joints, stack = [], [], [SHARPA_MOUNT_LINK]
+    while stack:
+        name = stack.pop()
+        hand_links.append(links[name])
+        for j in children.get(name, []):
+            hand_joints.append(j)
+            stack.append(j.find("child").get("link"))
+
+    arm_names = {el.get("name") for el in arm if el.tag in ("link", "joint")}
+    clashes = arm_names & {el.get("name") for el in hand_links + hand_joints}
+    if clashes:
+        raise ValueError(f"arm and hand share link/joint names: {sorted(clashes)}")
+    kuka_mount = next(j for j in kuka.iter("joint") if j.get("name") == KUKA_SHARPA_MOUNT_JOINT)
+    assert kuka_mount.find("child").get("link") == SHARPA_MOUNT_LINK
+
+    arm.set("name", out.stem)
+    subtree = {id(el) for el in hand_links + hand_joints}
+    for el in kuka:  # the Kuka file's own order, so the hand reads the same in both
+        if id(el) in subtree:
+            arm.append(el)
+    mount = ET.SubElement(arm, "joint", name="flange_to_sharpa_mount", type="fixed")
+    ET.SubElement(mount, "parent", link=FLANGE_LINK)
+    ET.SubElement(mount, "child", link=SHARPA_MOUNT_LINK)
+    ET.SubElement(mount, "origin", xyz=_fmt(FLEXIV_SHARPA_MOUNT_XYZ), rpy=_fmt(FLEXIV_SHARPA_MOUNT_RPY))
+
+    ET.indent(arm, space="  ")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    ET.ElementTree(arm).write(out, encoding="utf-8", xml_declaration=True)
+    return out
+
+
 def restrict_limits(src: Path, limits_deg: dict[str, tuple[float | None, float | None]],
                     out: Path) -> Path:
     """Copy ``src`` with the joint limits in ``limits_deg`` narrowed (``None`` keeps a bound).
@@ -177,5 +245,7 @@ def restrict_limits(src: Path, limits_deg: dict[str, tuple[float | None, float |
 if __name__ == "__main__":
     path = compose_urdf()
     print(f"wrote {path.relative_to(REPO_ROOT)}  (mount xyz {MOUNT_XYZ}, rpy {MOUNT_RPY})")
+    path = compose_flexiv_sharpa_urdf()
+    print(f"wrote {path.relative_to(REPO_ROOT)}  (Kuka's Sharpa subtree on the Rizon flange)")
     path = restrict_limits(COMPOSED_URDF, HUMAN_LIKE_LIMITS_DEG, HUMAN_LIKE_URDF)
     print(f"wrote {path.relative_to(REPO_ROOT)}  ({len(HUMAN_LIKE_LIMITS_DEG)} joints restricted)")

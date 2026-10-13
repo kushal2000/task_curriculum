@@ -1,11 +1,13 @@
-"""Side-by-side viser viewer: Kuka iiwa14 + Sharpa vs Flexiv Rizon 4s + Wuji Hand 2.
+"""Side-by-side viser viewer: Kuka iiwa14 + Sharpa, Flexiv Rizon 4s + Wuji Hand 2, and the Rizon
+carrying the Kuka's Sharpa (flexiv_wuji.FLEXIV_SHARPA_URDF).
 
 Each robot stands where the RL env puts it, ``ROBOT_BASE_POS`` behind its own copy of the env's
-table, with joint sliders for each arm and each hand. Each hand also has one "hand action" slider
-that sets every hand joint the way the policy's hand action does (-1 = lower limit, +1 = upper,
-linearly in between), for opening and closing it in one go. The Flexiv's base offset and the Wuji's flange mount
-are live sliders too, so the mount can be tuned against the Kuka setup by eye; separation 0
-overlays the two robots on one table.
+table, left to right one ``separation`` apart (0 overlays them on one table). The two Flexivs share
+the Flexiv arm sliders -- one default pose whatever the hand -- and the two Sharpas share the
+Sharpa hand sliders. Each hand also has a "hand action" slider that sets every hand joint the way
+the policy's hand action does (-1 = lower limit, +1 = upper, linearly in between). The Flexiv's
+base offset and the Wuji's flange mount are live sliders, so the mount can be tuned against the
+Kuka setup by eye.
 
 Both hands are compared in one canonical hand frame (hand_frames.py), built from their knuckles.
 The readout gives the Wuji's frame relative to the Sharpa's; "Match Kuka hand" solves the Flexiv
@@ -53,13 +55,19 @@ import robots  # noqa: E402  (stdlib-only; imported by path so Isaac Lab is not 
 FINGERS = ("index", "middle", "ring", "thumb", "pinky")  # both specs list their tips in this order
 #: "robots" dropdown: label -> which setups' robot meshes are drawn (fingertips, frames and tables
 #: are not affected, so hiding a robot shows its fingertip points unobstructed).
+#: The three setups, left to right, one ``separation`` apart.
+SETUPS = ("kuka_sharpa", "flexiv_wuji", "flexiv_sharpa")
+SETUP_LABELS = {"kuka_sharpa": "Kuka+Sharpa", "flexiv_wuji": "Flexiv+Wuji", "flexiv_sharpa": "Flexiv+Sharpa"}
 ROBOT_DISPLAY = {
-    "show both": {"kuka_sharpa", "flexiv_wuji"},
-    "hide Kuka + Sharpa": {"flexiv_wuji"},
-    "hide Flexiv + Wuji": {"kuka_sharpa"},
-    "hide both": set(),
+    "show all": set(SETUPS),
+    "Kuka+Sharpa only": {"kuka_sharpa"},
+    "Flexiv+Wuji only": {"flexiv_wuji"},
+    "Flexiv+Sharpa only": {"flexiv_sharpa"},
+    "Kuka+Sharpa, Flexiv+Wuji": {"kuka_sharpa", "flexiv_wuji"},
+    "Kuka+Sharpa, Flexiv+Sharpa": {"kuka_sharpa", "flexiv_sharpa"},
+    "hide all": set(),
 }
-KUKA_COLOR, FLEXIV_COLOR = (0.62, 0.62, 0.62), (0.35, 0.55, 0.85)
+KUKA_COLOR, FLEXIV_COLOR, FLEXIV_SHARPA_COLOR = (0.62, 0.62, 0.62), (0.35, 0.55, 0.85), (0.4, 0.7, 0.45)
 TIP_POINTS = {  # dropdown label -> (use the spec's fingertip_offset, marker colour)
     "policy input (pad: body + offset)": (True, (230, 40, 160)),
     "reward input (body origin)": (False, (40, 200, 230)),
@@ -148,6 +156,9 @@ def main() -> None:
             hand.joint_map[name].limit.lower = human.joint_map[name].limit.lower
             hand.joint_map[name].limit.upper = human.joint_map[name].limit.upper
     wuji_spec = robots.FLEXIV_WUJI_HUMAN_LIKE if args.wuji == "human_like" else robots.FLEXIV_WUJI
+    # The Rizon with the Kuka's Sharpa, as one model (its mount is fixed: FLEXIV_SHARPA_MOUNT_*).
+    flexiv_sharpa = yourdfpy.URDF.load(str(fw._require(fw.FLEXIV_SHARPA_URDF)))
+    keypoints = {**HAND_KEYPOINTS, "flexiv_sharpa": HAND_KEYPOINTS["kuka_sharpa"]}
 
     server = viser.ViserServer(port=args.port)
     server.scene.set_up_direction("+z")
@@ -155,17 +166,18 @@ def main() -> None:
 
     # Scene graph: /<setup> sits at that setup's env origin (moved by the separation slider);
     # robot and table hang under it in env coordinates, as the env places them.
-    roots = {name: server.scene.add_frame(f"/{name}", show_axes=False) for name in HAND_KEYPOINTS}
+    roots = {name: server.scene.add_frame(f"/{name}", show_axes=False) for name in SETUPS}
     tables = {
         name: server.scene.add_box(
             f"/{name}/table", color=TABLE_COLOR, dimensions=TABLE_SIZE,
             position=(0.0, 0.0, fw.TABLE_CENTER_Z),
         )
-        for name in HAND_KEYPOINTS
+        for name in SETUPS
     }
     server.scene.add_frame("/kuka_sharpa/robot", show_axes=False, position=fw.ROBOT_BASE_POS)
     flexiv_base = server.scene.add_frame("/flexiv_wuji/robot", show_axes=False)
     wuji_root = server.scene.add_frame("/flexiv_wuji/robot/wuji", show_axes=False)
+    flexiv_sharpa_base = server.scene.add_frame("/flexiv_sharpa/robot", show_axes=False)
     # Flat colours: viser can only change the opacity of single-colour meshes (the "robot alpha"
     # slider), not of the URDFs' own textured ones.
     viser_kuka = ViserUrdf(server, kuka, root_node_name="/kuka_sharpa/robot",
@@ -174,18 +186,21 @@ def main() -> None:
                           mesh_color_override=(*FLEXIV_COLOR, 1.0))
     viser_hand = ViserUrdf(server, hand, root_node_name="/flexiv_wuji/robot/wuji",
                            mesh_color_override=(*FLEXIV_COLOR, 1.0))
+    viser_flexiv_sharpa = ViserUrdf(server, flexiv_sharpa, root_node_name="/flexiv_sharpa/robot",
+                                    mesh_color_override=(*FLEXIV_SHARPA_COLOR, 1.0))
     frame_axes = {
         name: server.scene.add_frame(f"/{name}/hand_frame", axes_length=0.08, axes_radius=0.003)
-        for name in HAND_KEYPOINTS
+        for name in SETUPS
     }
-    specs = {"kuka_sharpa": robots.KUKA_SHARPA, "flexiv_wuji": wuji_spec}
+    specs = {"kuka_sharpa": robots.KUKA_SHARPA, "flexiv_wuji": wuji_spec,
+             "flexiv_sharpa": robots.FLEXIV_SHARPA}
     tip_markers = {
         name: {
             label: [server.scene.add_icosphere(f"/{name}/fingertips/{label.split()[0]}/{f}",
                                                radius=0.006, color=color) for f in FINGERS]
             for label, (_, color) in TIP_POINTS.items()
         }
-        for name in HAND_KEYPOINTS
+        for name in SETUPS
     }
 
     def fingertips(urdf, spec, T_root, with_offset: bool) -> np.ndarray:
@@ -200,8 +215,8 @@ def main() -> None:
         if not ready:
             return
         sep = layout_sep.value
-        for name, sign in (("kuka_sharpa", -0.5), ("flexiv_wuji", 0.5)):
-            roots[name].position = (sign * sep, 0.0, 0.0)
+        for i, name in enumerate(SETUPS):
+            roots[name].position = ((i - 1) * sep, 0.0, 0.0)
             tables[name].visible = show_tables.value and (
                 sep > 0 or name == "kuka_sharpa"
             )
@@ -209,17 +224,20 @@ def main() -> None:
             for label, markers in tip_markers[name].items():
                 for m in markers:
                     m.visible = show_tips.value and label == tip_point.value
-        for urdf_handle in (viser_kuka, viser_arm, viser_hand):
+        for urdf_handle in (viser_kuka, viser_arm, viser_hand, viser_flexiv_sharpa):
             for mesh in urdf_handle._meshes:  # viser keeps no public list of a URDF's meshes
                 mesh.opacity = robot_alpha.value
         shown = ROBOT_DISPLAY[robot_display.value]
         viser_kuka.show_visual = "kuka_sharpa" in shown
         viser_arm.show_visual = viser_hand.show_visual = "flexiv_wuji" in shown
+        viser_flexiv_sharpa.show_visual = "flexiv_sharpa" in shown
 
         kuka.update_cfg(kuka_cfg())
         viser_kuka.update_cfg(kuka_cfg())
         viser_arm.update_cfg(flexiv_q.q())
         viser_hand.update_cfg(wuji_q.q())
+        flexiv_sharpa.update_cfg(flexiv_sharpa_cfg())
+        viser_flexiv_sharpa.update_cfg(flexiv_sharpa_cfg())
 
         T_base = base_tf()
         T_flange = arm.get_transform(fw.FLANGE_LINK, arm.base_link)
@@ -228,16 +246,21 @@ def main() -> None:
         T_hand_root = T_flange @ mount_tf()
         wuji_root.position = T_hand_root[:3, 3]
         wuji_root.wxyz = wxyz(T_hand_root)
+        flexiv_sharpa_base.position = T_base[:3, 3]
+        flexiv_sharpa_base.wxyz = wxyz(T_base)
 
         # Hand frames in env coordinates (origin = table centre, floor level).
         T_kuka = make_tf(fw.ROBOT_BASE_POS)
         H_kuka = hand_frame(hand_points(kuka, HAND_KEYPOINTS["kuka_sharpa"], T_kuka))
         H_wuji = hand_frame(hand_points(hand, HAND_KEYPOINTS["flexiv_wuji"], T_base @ T_hand_root))
-        for name, H in (("kuka_sharpa", H_kuka), ("flexiv_wuji", H_wuji)):
+        H_fs = hand_frame(hand_points(flexiv_sharpa, keypoints["flexiv_sharpa"], T_base))
+        frames = {"kuka_sharpa": H_kuka, "flexiv_wuji": H_wuji, "flexiv_sharpa": H_fs}
+        for name, H in frames.items():
             frame_axes[name].position = H[:3, 3]
             frame_axes[name].wxyz = wxyz(H)
 
-        roots_tf = {"kuka_sharpa": (kuka, T_kuka), "flexiv_wuji": (hand, T_base @ T_hand_root)}
+        roots_tf = {"kuka_sharpa": (kuka, T_kuka), "flexiv_wuji": (hand, T_base @ T_hand_root),
+                    "flexiv_sharpa": (flexiv_sharpa, T_base)}
         tips = {
             name: {
                 label: fingertips(urdf, specs[name], T_root, with_offset)
@@ -252,11 +275,19 @@ def main() -> None:
         # The chosen point in each hand's own canonical frame, mm: comparable across the hands.
         chosen = {
             name: (np.linalg.inv(H)[:3, :3] @ (tips[name][tip_point.value] - H[:3, 3]).T).T * 1000
-            for name, H in (("kuka_sharpa", H_kuka), ("flexiv_wuji", H_wuji))
+            for name, H in frames.items()
         }
         tip_rows = [
-            f"| {f} | `{np.round(pk).astype(int)}` | `{np.round(pw).astype(int)}` | {np.linalg.norm(pw - pk):.0f} |"
+            f"| {f} | `{np.round(pk).astype(int)}` | `{np.round(pw).astype(int)}` | "
+            f"{np.linalg.norm(pw - pk):.0f} |"
             for f, pk, pw in zip(FINGERS, chosen["kuka_sharpa"], chosen["flexiv_wuji"])
+        ]
+        # Fingertips in the env (table) frame, Flexiv+Sharpa vs Kuka+Sharpa: the same hand on two
+        # arms, so this is where the arm puts it, not hand geometry.
+        fs_rows = [
+            f"| {f} | {np.linalg.norm(pf - pk) * 1000:.0f} |"
+            for f, pk, pf in zip(FINGERS, tips["kuka_sharpa"][tip_point.value],
+                                 tips["flexiv_sharpa"][tip_point.value])
         ]
         labels = list(TIP_POINTS)
         pad_to_body_mm = {
@@ -264,18 +295,20 @@ def main() -> None:
             for name in tips
         }
 
-        rel = np.linalg.inv(H_kuka) @ H_wuji
-        dpos_mm = rel[:3, 3] * 1000
-        dang_deg = np.degrees(Rotation.from_matrix(rel[:3, :3]).magnitude())
+        def vs_kuka(H) -> str:
+            rel = np.linalg.inv(H_kuka) @ H
+            d = rel[:3, 3] * 1000
+            return (f"`{np.round(d, 1)}` mm (|d| {np.linalg.norm(d):.1f}), "
+                    f"{np.degrees(Rotation.from_matrix(rel[:3, :3]).magnitude()):.1f} deg")
+
         table_top = np.array([0.0, 0.0, fw.TABLE_CENTER_Z + TABLE_SIZE[2] / 2])
         readout.content = "\n".join([
             "**Hand frame, relative to table-top centre (m)**",
-            f"- Kuka+Sharpa: `{np.round(H_kuka[:3, 3] - table_top, 3)}`",
-            f"- Flexiv+Wuji: `{np.round(H_wuji[:3, 3] - table_top, 3)}`",
+            *(f"- {SETUP_LABELS[n]}: `{np.round(H[:3, 3] - table_top, 3)}`" for n, H in frames.items()),
             "",
-            "**Wuji in the Sharpa hand frame**",
-            f"- position: `{np.round(dpos_mm, 1)}` mm (|d| {np.linalg.norm(dpos_mm):.1f})",
-            f"- rotation: {dang_deg:.1f} deg",
+            "**Hand frame in the Kuka+Sharpa hand frame**",
+            f"- Flexiv+Wuji: {vs_kuka(H_wuji)}",
+            f"- Flexiv+Sharpa: {vs_kuka(H_fs)}",
             "",
             f"**Fingertips, {tip_point.value}, each in its own hand frame (mm)**",
             "| finger | Sharpa | Wuji | apart |",
@@ -284,6 +317,11 @@ def main() -> None:
             "",
             f"Pad to body origin: Sharpa {pad_to_body_mm['kuka_sharpa']:.0f} mm, "
             f"Wuji {pad_to_body_mm['flexiv_wuji']:.0f} mm",
+            "",
+            f"**Flexiv+Sharpa fingertips vs Kuka+Sharpa's, on the table (mm)**",
+            "| finger | apart |",
+            "|---|---:|",
+            *fs_rows,
         ])
 
     def base_tf() -> np.ndarray:
@@ -298,7 +336,7 @@ def main() -> None:
         layout_sep = server.gui.add_slider("separation (m)", 0.0, 2.0, 0.01, 1.2)
         show_tables = server.gui.add_checkbox("tables", True)
         show_frames = server.gui.add_checkbox("hand frames", True)
-        robot_display = server.gui.add_dropdown("robots", tuple(ROBOT_DISPLAY), initial_value="show both")
+        robot_display = server.gui.add_dropdown("robots", tuple(ROBOT_DISPLAY), initial_value="show all")
         robot_alpha = server.gui.add_slider("robot alpha", 0.05, 1.0, 0.05, 1.0)
         show_tips = server.gui.add_checkbox("fingertips", True)
         tip_point = server.gui.add_dropdown("fingertip point", tuple(TIP_POINTS),
@@ -324,14 +362,19 @@ def main() -> None:
     kuka_arm_names = [n for n in kuka.actuated_joint_names if n in fw.KUKA_DEFAULT_ARM_POS]
     kuka_arm_q = JointSliders(server, "Kuka arm joints", kuka, fw.KUKA_DEFAULT_ARM_POS, refresh,
                               False, names=kuka_arm_names)
-    sharpa_q = JointSliders(server, "Sharpa hand joints", kuka, {}, refresh, True, hand_action=True,
+    sharpa_q = JointSliders(server, "Sharpa hand joints (Kuka and Flexiv)", kuka, {}, refresh, True, hand_action=True,
                             names=[n for n in kuka.actuated_joint_names if n not in kuka_arm_names])
-    flexiv_q = JointSliders(server, "Flexiv arm joints", arm, fw.FLEXIV_DEFAULT_ARM_POS, refresh, False)
+    flexiv_q = JointSliders(server, "Flexiv arm joints (both Flexivs)", arm, fw.FLEXIV_DEFAULT_ARM_POS, refresh, False)
     wuji_q = JointSliders(server, f"Wuji hand joints ({args.wuji.replace('_', '-')} limits)", hand, {}, refresh, True, hand_action=True)
 
     def kuka_cfg() -> np.ndarray:
         values = {**dict(zip(kuka_arm_q.names, kuka_arm_q.q())), **dict(zip(sharpa_q.names, sharpa_q.q()))}
         return np.array([values[n] for n in kuka.actuated_joint_names])
+
+    def flexiv_sharpa_cfg() -> np.ndarray:
+        """The Flexiv arm sliders and the Sharpa hand sliders: one arm pose, one hand pose."""
+        values = {**dict(zip(flexiv_q.names, flexiv_q.q())), **dict(zip(sharpa_q.names, sharpa_q.q()))}
+        return np.array([values[n] for n in flexiv_sharpa.actuated_joint_names])
     for handle in (layout_sep, show_tables, show_frames, show_tips, tip_point, robot_display, robot_alpha, base_yaw, *base_xyz, *mount_xyz, *mount_rpy):
         handle.on_update(lambda _: refresh())
 

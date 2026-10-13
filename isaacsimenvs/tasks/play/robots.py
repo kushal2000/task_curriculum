@@ -211,6 +211,7 @@ KUKA_SHARPA = RobotSpec(
 # ----------------------------------------------------------------------------
 
 _RIZON_JOINTS = tuple(f"joint{i}" for i in range(1, 8))
+_RIZON_LINKS = ("base_link", *(f"link{i}" for i in range(1, 8)))
 #: Rizon 4s joint torque limits (flexiv_description joint_limits.yaml), Nm.
 _RIZON_EFFORT = (123.0, 123.0, 64.0, 64.0, 39.0, 39.0, 39.0)
 _KUKA_ARM_K = tuple(KUKA_SHARPA.arm_stiffness.values())
@@ -335,8 +336,57 @@ FLEXIV_WUJI_HUMAN_LIKE = dataclasses.replace(
     self_collision_filter=_WUJI_SELF_COLLISION_FILTER,
 )
 
+# ----------------------------------------------------------------------------
+# Flexiv Rizon 4s + the Kuka's left Sharpa (scripts/flexiv_wuji/flexiv_wuji.py
+# compose_flexiv_sharpa_urdf): the Rizon of FLEXIV_WUJI, at its default pose, carrying the hand of
+# KUKA_SHARPA -- arm entries from the one, hand entries from the other.
+# ----------------------------------------------------------------------------
+
+
+def _rename(pairs: dict[str, tuple[str, ...]], names: dict[str, str]) -> dict[str, tuple[str, ...]]:
+    return {names.get(a, a): tuple(names.get(b, b) for b in bs) for a, bs in pairs.items()}
+
+
+_IIWA_TO_RIZON = {"iiwa14_link_7": "link7"}
+_FLEXIV_SHARPA_SELF_COLLISION_FILTER = {
+    # The Rizon's chain, as FLEXIV_WUJI filters it ...
+    **{a: tuple(b for b in bs if not b.startswith("l_"))
+       for a, bs in _WUJI_SELF_COLLISION_FILTER.items() if a in _RIZON_LINKS},
+}
+# ... and SimToolReal's Sharpa pairs, with the palm in the Rizon's link7 instead of the iiwa's.
+for _a, _bs in _rename(_SHARPA_SELF_COLLISION_FILTER, _IIWA_TO_RIZON).items():
+    if _a.startswith("iiwa14_"):
+        continue
+    _kept = tuple(b for b in _bs if not b.startswith("iiwa14_"))
+    _FLEXIV_SHARPA_SELF_COLLISION_FILTER[_a] = tuple(
+        dict.fromkeys(_FLEXIV_SHARPA_SELF_COLLISION_FILTER.get(_a, ()) + _kept))
+del _a, _bs, _kept
+
+FLEXIV_SHARPA = RobotSpec(
+    name="flexiv_sharpa",
+    arm_joint_regex=FLEXIV_WUJI.arm_joint_regex,
+    hand_joint_regex=KUKA_SHARPA.hand_joint_regex,
+    joint_names_canonical=_RIZON_JOINTS + KUKA_SHARPA.hand_joint_names,
+    # The importer merges flange, sharpa_mount and left_hand_C_MC into link7.
+    palm_body_name="link7",
+    # The Kuka's palm centre, carried rigidly with the hand (the same hand, so exact). Depends on
+    # flexiv_wuji.FLEXIV_SHARPA_MOUNT_*; tests/test_robot_specs.py recomputes it.
+    palm_center_offset=(-0.0049, -0.0194, 0.239),
+    fingertip_body_regex=KUKA_SHARPA.fingertip_body_regex,
+    fingertip_link_names=KUKA_SHARPA.fingertip_link_names,
+    fingertip_offset=KUKA_SHARPA.fingertip_offset,
+    arm_stiffness=FLEXIV_WUJI.arm_stiffness,
+    arm_damping=FLEXIV_WUJI.arm_damping,
+    hand_stiffness=KUKA_SHARPA.hand_stiffness,
+    hand_damping=KUKA_SHARPA.hand_damping,
+    hand_armature=KUKA_SHARPA.hand_armature,
+    # The Flexiv keeps one default pose whatever hand it carries; the mount yaw puts the palm down.
+    arm_default_joint_pos=FLEXIV_WUJI.arm_default_joint_pos,
+    self_collision_filter=_FLEXIV_SHARPA_SELF_COLLISION_FILTER,
+)
+
 ROBOT_SPECS: dict[str, RobotSpec] = {
-    spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE)
+    spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_SHARPA)
 }
 
 

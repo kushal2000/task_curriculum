@@ -18,6 +18,7 @@ HAND_KEYPOINTS = {
         "l_wrist", "l_index_finger_proximal", "l_middle_finger_proximal", "l_pinky_proximal",
     ),
 }
+HAND_KEYPOINTS["flexiv_sharpa"] = HAND_KEYPOINTS["kuka_sharpa"]  # the same hand
 
 
 def hand_frame(points) -> np.ndarray:

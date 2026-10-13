@@ -26,6 +26,9 @@ VARIANTS = {
         "action_space": 27,
         "assets.robot_urdf": "assets/flexiv_wuji/rizon4s_left_wuji.urdf",
     }),
+    "PlayFlexivSharpa.yaml": ("flexiv_sharpa", {
+        "assets.robot_urdf": "assets/flexiv_wuji/rizon4s_left_sharpa.urdf",
+    }),
     "PlayFlexivWujiHumanLike.yaml": ("flexiv_wuji_human_like", {
         "action_space": 27,
         "assets.robot_urdf": "assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf",

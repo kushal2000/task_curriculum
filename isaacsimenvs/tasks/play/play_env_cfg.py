@@ -631,6 +631,19 @@ class PlayFlexivWujiHumanLikeEnvCfg(PlayFlexivWujiEnvCfg):
 
 
 @configclass
+class PlayFlexivSharpaEnvCfg(PlayEnvCfg):
+    """Play on a Flexiv Rizon 4s carrying the Kuka's left Sharpa (``Isaacsimenvs-PlayFlexivSharpa-Direct-v0``).
+
+    The Flexiv tasks' arm and the Kuka's hand; robot self-collision on, as for both. The URDF is
+    written by ``scripts/flexiv_wuji/flexiv_wuji.py``.
+    """
+
+    robot: str = "flexiv_sharpa"
+    robot_self_collision: bool = True
+    assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_left_sharpa.urdf")
+
+
+@configclass
 class PlaySelfCollisionEnvCfg(PlayEnvCfg):
     """Play on the Kuka + Sharpa with robot self-collision on (``Isaacsimenvs-PlaySelfCollision-Direct-v0``).
 
@@ -645,6 +658,7 @@ __all__ = [
     "PlayEnvCfg",
     "PlayFlexivWujiEnvCfg",
     "PlayFlexivWujiHumanLikeEnvCfg",
+    "PlayFlexivSharpaEnvCfg",
     "PlaySelfCollisionEnvCfg",
     "AssetsCfg",
     "ObsCfg",

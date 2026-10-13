@@ -35,7 +35,8 @@ def _joints(urdf_path) -> dict[str, ET.Element]:
 
 
 def test_specs_are_registered_and_kuka_is_unchanged_in_shape() -> None:
-    assert set(robots.ROBOT_SPECS) == {"kuka_sharpa", "flexiv_wuji", "flexiv_wuji_human_like"}
+    assert set(robots.ROBOT_SPECS) == {
+        "kuka_sharpa", "flexiv_wuji", "flexiv_wuji_human_like", "flexiv_sharpa"}
     assert robots.KUKA_SHARPA.num_joints == 29  # the released checkpoint's action size
     assert SPEC.num_joints == 27
 
@@ -216,3 +217,50 @@ def test_human_like_spec_is_the_flexiv_wuji_but_for_its_name() -> None:
 
     human = robots.FLEXIV_WUJI_HUMAN_LIKE
     assert dataclasses.replace(human, name=SPEC.name) == SPEC
+
+
+needs_flexiv_sharpa = pytest.mark.skipif(
+    not fw.FLEXIV_SHARPA_URDF.is_file(), reason="run scripts/flexiv_wuji/flexiv_wuji.py"
+)
+
+
+@needs_flexiv_sharpa
+def test_flexiv_sharpa_carries_the_kukas_hand_unchanged() -> None:
+    """Same hand joints, limits and links as the Kuka's, and the same spec entries for them."""
+    kuka, flexiv = _joints(fw.KUKA_SHARPA_URDF), _joints(fw.FLEXIV_SHARPA_URDF)
+    spec, kuka_spec = robots.FLEXIV_SHARPA, robots.KUKA_SHARPA
+    for name in kuka_spec.hand_joint_names:
+        canon = lambda el: ET.canonicalize(ET.tostring(el), strip_text=True)  # noqa: E731
+        assert canon(kuka[name]) == canon(flexiv[name]), name
+    for field in ("hand_stiffness", "hand_damping", "hand_armature", "fingertip_link_names",
+                  "fingertip_body_regex", "fingertip_offset"):
+        assert getattr(spec, field) == getattr(kuka_spec, field), field
+    for field in ("arm_stiffness", "arm_damping", "arm_default_joint_pos"):
+        assert getattr(spec, field) == getattr(SPEC, field), field
+
+
+@needs_flexiv_sharpa
+def test_flexiv_sharpa_palm_centre_is_the_kukas_carried_with_the_hand() -> None:
+    np = pytest.importorskip("numpy")
+    yourdfpy = pytest.importorskip("yourdfpy")
+    kuka = yourdfpy.URDF.load(str(fw.KUKA_SHARPA_URDF), load_meshes=False)
+    flexiv = yourdfpy.URDF.load(str(fw.FLEXIV_SHARPA_URDF), load_meshes=False)
+    k_spec, f_spec = robots.KUKA_SHARPA, robots.FLEXIV_SHARPA
+    palm = kuka.get_transform(k_spec.palm_body_name, kuka.base_link) @ np.array([*k_spec.palm_center_offset, 1.0])
+    in_hand = np.linalg.inv(kuka.get_transform("left_hand_C_MC", kuka.base_link)) @ palm
+    expected = (np.linalg.inv(flexiv.get_transform(f_spec.palm_body_name, flexiv.base_link))
+                @ flexiv.get_transform("left_hand_C_MC", flexiv.base_link) @ in_hand)[:3]
+    assert np.allclose(f_spec.palm_center_offset, expected, atol=1e-3), expected.round(4)
+
+
+@needs_flexiv_sharpa
+def test_flexiv_sharpa_filter_covers_its_derivation() -> None:
+    """Every pair self_collision_pairs.py finds (jointed, touching at reset, meeting across a
+    knuckle) is filtered. SimToolReal's list adds two knuckle pairs the derivation does not find,
+    as on the Kuka."""
+    pytest.importorskip("trimesh")
+    import self_collision_pairs
+
+    derived, _ = self_collision_pairs.derive("flexiv_sharpa")
+    pairs = lambda m: {frozenset((a, b)) for a, bs in m.items() for b in bs}  # noqa: E731
+    assert pairs(derived) <= pairs(robots.FLEXIV_SHARPA.self_collision_filter)

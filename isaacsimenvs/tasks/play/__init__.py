@@ -3,7 +3,8 @@
 Registers ``Isaacsimenvs-Play-Direct-v0`` (SimToolReal's Kuka iiwa14 + Sharpa) and
 ``Isaacsimenvs-PlayFlexivWuji-Direct-v0`` (Flexiv Rizon 4s + Wuji Hand 2) with the gymnasium
 registry for the DirectRLEnv training path, ``Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0`` (that
-robot with human-like joint limits), and ``Isaacsimenvs-PlaySelfCollision-Direct-v0`` (the Kuka with
+robot with human-like joint limits), ``Isaacsimenvs-PlayFlexivSharpa-Direct-v0`` (the Rizon with
+the Kuka's Sharpa), and ``Isaacsimenvs-PlaySelfCollision-Direct-v0`` (the Kuka with
 robot self-collision on). Same env class; the cfg picks the robot and self-collision.
 
 Entry points:
@@ -99,6 +100,20 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": "isaacsimenvs.tasks.play.play_env_cfg:PlayFlexivWujiHumanLikeEnvCfg",
         "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "PlayFlexivWujiHumanLike.yaml"),
+        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
+    },
+)
+
+# Flexiv Rizon 4s carrying the Kuka's left Sharpa hand.
+gym.register(
+    id="Isaacsimenvs-PlayFlexivSharpa-Direct-v0",
+    entry_point="isaacsimenvs.tasks.play.play_env:PlayEnv",
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "isaacsimenvs.tasks.play.play_env_cfg:PlayFlexivSharpaEnvCfg",
+        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "PlayFlexivSharpa.yaml"),
         "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
         "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
     },
