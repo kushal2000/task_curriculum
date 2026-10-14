@@ -19,7 +19,9 @@ checkpoint is loaded unless a ``.pth`` is given. By default the eval protocol ap
 object's start pose) and the success tolerance pinned (slider, default the curriculum's floor).
 ``--randomize`` keeps the run's training-time randomization instead.
 
-Controls: play / pause, step, reset, speed; which object (type + variant) to watch; SAPG
+Controls: play / pause, step, reset, speed; which object (type + variant) to watch; the object's
+start orientation (random, as in training, or a fixed roll/pitch/yaw, applied at the next reset of
+all envs); SAPG
 exploration block, whose coefficient is appended to the observation (block 5, coefficient 0, is
 trained on task reward alone; see player.SAPG_EXPL_COEF); greedy or sampled actions.
 
@@ -288,7 +290,10 @@ def main() -> None:
         # GUI callbacks run on viser's thread; they only queue requests ("want_*"), and the main
         # loop applies them between steps, so the scene is never edited while it is drawn.
         state = {"playing": True, "step_once": False, "reset": False, "env": 0, "t": 0,
-                 "want_env": None, "want_policy": None}
+                 "want_env": None, "want_policy": None, "want_start": None}
+        rs = inner.cfg.reset
+        # Where a fixed start puts the object: the table centre, dropped from training's height.
+        start_xyz = (0.0, 0.0, float(rs.table_reset_z) + float(rs.table_object_z_offset))
         stats = {t: {"episodes": 0, "goals": 0} for t in types}
         ep_goals = np.zeros(num_envs, dtype=np.int64)
 
@@ -312,8 +317,30 @@ def main() -> None:
             g_type = server.gui.add_dropdown("type", types, initial_value=types[0])
             g_variant = server.gui.add_slider("variant", 0, max(len(variants[types[0]]) - 1, 1), 1, 0)
             g_obj_md = server.gui.add_markdown("")
+        with server.gui.add_folder("Object start"):
+            start_modes = ("random (as in training)", "fixed")
+            g_start = server.gui.add_dropdown(
+                "orientation", start_modes,
+                initial_value=start_modes[1] if rs.fixed_start_pose is not None else start_modes[0])
+            g_rpy = [server.gui.add_slider(f"{a} (deg)", -180.0, 180.0, 5.0, 0.0)
+                     for a in ("roll", "pitch", "yaw")]
+            g_apply = server.gui.add_button("apply (resets all envs + stats)")
+            g_start_md = server.gui.add_markdown("")
         md = server.gui.add_markdown("")
 
+        def describe_start() -> str:
+            if rs.fixed_start_pose is None:
+                return "now: random orientation each reset, as in training"
+            from scipy.spatial.transform import Rotation as Rot
+            w, x, y, z = rs.fixed_start_pose[3:]
+            rpy = Rot.from_quat([x, y, z, w]).as_euler("xyz", degrees=True)
+            return f"now: fixed, roll/pitch/yaw {np.round(rpy).astype(int).tolist()} deg"
+
+        g_start_md.content = describe_start()
+
+        @g_apply.on_click
+        def _(_) -> None:
+            state["want_start"] = (g_start.value == "fixed", tuple(float(g.value) for g in g_rpy))
         @g_run.on_update
         def _(_) -> None:
             r = next(x for x in siblings if x.name == g_run.value)
@@ -393,6 +420,16 @@ def main() -> None:
                 watch(state["want_env"])
                 state["want_env"] = None
                 draw()
+            if state["want_start"] is not None:
+                fixed, rpy = state["want_start"]
+                if fixed:
+                    from scipy.spatial.transform import Rotation as Rot
+                    x, y, z, w = Rot.from_euler("xyz", rpy, degrees=True).as_quat()
+                    rs.fixed_start_pose = (*start_xyz, float(w), float(x), float(y), float(z))
+                else:
+                    rs.fixed_start_pose = None  # _reset_object_pose draws random_orientation()
+                g_start_md.content = describe_start()
+                state.update(want_start=None, reset=True)
             if state["want_policy"] is not None:
                 load_policy(*state["want_policy"])
                 g_block.max = max(policy["blocks"] - 1, 1)
