@@ -71,6 +71,11 @@ ROBOT_DISPLAY = {
     "Kuka+Sharpa, Flexiv+Sharpa": {"kuka_sharpa", "flexiv_sharpa"},
     "hide all": set(),
 }
+#: Written above each robot.
+HAND_NAMES = {
+    "kuka_sharpa": "Sharpa (on the Kuka)", "flexiv_sharpa": "Sharpa",
+    "flexiv_wuji": "Wuji (vendor limits)", "flexiv_wuji_human_like": "Wuji (human-like limits)",
+}
 SETUP_COLORS = {
     "kuka_sharpa": (0.62, 0.62, 0.62), "flexiv_sharpa": (0.4, 0.7, 0.45),
     "flexiv_wuji": (0.35, 0.55, 0.85), "flexiv_wuji_human_like": (0.85, 0.55, 0.3),
@@ -198,6 +203,10 @@ def main() -> None:
                              mesh_color_override=col["flexiv_wuji_human_like"])
     viser_flexiv_sharpa = ViserUrdf(server, flexiv_sharpa, root_node_name="/flexiv_sharpa/robot",
                                     mesh_color_override=col["flexiv_sharpa"])
+    # Above the robot's hand at its default pose (the env's palm sits ~0.2 m over the table).
+    for name in SETUPS:
+        server.scene.add_label(f"/{name}/hand_name", HAND_NAMES[name],
+                               position=(0.0, fw.ROBOT_BASE_POS[1] / 2, 1.15))
     frame_axes = {
         name: server.scene.add_frame(f"/{name}/hand_frame", axes_length=0.08, axes_radius=0.003)
         for name in SETUPS
