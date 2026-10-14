@@ -8,9 +8,10 @@ run's own ``num_assets_per_type`` (100) are they the exact objects it trained on
 generator's draws depend on the count. Viser draws the robot, object, goal and table of the env you are
 watching; the panel counts goals and episodes per object type across every env.
 
-Isaac Sim builds one robot per process, so the env is the launch run's robot. The policy dropdown
-lists every run of that robot (same task, same observation layout), and any of their checkpoints
-can be loaded live. Different robots: one process each, on different ports.
+Isaac Sim builds one robot per process. The run dropdown lists every run of every robot:
+"load policy" swaps in a checkpoint of a run on the current robot (same task, same observation
+layout) without touching the env; "load env" restarts this viewer in place -- same process, same
+port -- on the chosen run's robot, and the browser reconnects once it is built (about 30 s).
 
     OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.eval.viser_play \\
         --run play_scratch_flexiv_sharpa_ft05_nodr_249241 --port 8081
@@ -33,6 +34,7 @@ On the cluster, forward the port: ``ssh -L 8081:localhost:8081 <node>``.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 import tempfile
@@ -173,6 +175,8 @@ def main() -> None:
     if run.task is None:
         raise SystemExit(f"{run.name}: no task for robot {run.robot!r}, self-collision {run.self_collision}")
     siblings = [r for r in runs if r.task == run.task]
+    playable = [r for r in runs if r.task is not None]
+    run_label = {r.name: f"{r.robot}: {r.name}" for r in playable}
     print(f"[viser_play] {run.name} ({run.task}), {checkpoint.name}; "
           f"{len(siblings)} runs of this robot", flush=True)
 
@@ -293,7 +297,7 @@ def main() -> None:
         # GUI callbacks run on viser's thread; they only queue requests ("want_*"), and the main
         # loop applies them between steps, so the scene is never edited while it is drawn.
         state = {"playing": True, "step_once": False, "reset": False, "env": 0, "t": 0,
-                 "want_env": None, "want_policy": None, "want_start": None}
+                 "want_env": None, "want_policy": None, "want_start": None, "want_restart": None}
         rs = inner.cfg.reset
         # Where a fixed start puts the object: the table centre, dropped from training's height.
         start_xyz = (0.0, 0.0, float(rs.table_reset_z) + float(rs.table_object_z_offset))
@@ -301,13 +305,15 @@ def main() -> None:
         ep_goals = np.zeros(num_envs, dtype=np.int64)
 
         with server.gui.add_folder("Policy"):
-            run_names = [r.name for r in siblings]
-            g_run = server.gui.add_dropdown("run", run_names, initial_value=run.name)
+            g_run = server.gui.add_dropdown("run", [run_label[r.name] for r in playable],
+                                            initial_value=run_label[run.name])
             g_ckpt = server.gui.add_dropdown("checkpoint", [p.name for p in run.checkpoints()],
                                             initial_value=checkpoint.name)
             g_block = server.gui.add_slider("SAPG block (last = task reward only)", 0,
                                             max(policy["blocks"] - 1, 1), 1, policy["block"])
-            g_load = server.gui.add_button("load policy (resets all envs)")
+            g_load = server.gui.add_button("load policy (same robot; resets all envs)")
+            g_load_env = server.gui.add_button("load env (this run's robot; restarts, ~30 s)")
+            g_policy_md = server.gui.add_markdown("")
             g_greedy = server.gui.add_checkbox("greedy actions", True)
         with server.gui.add_folder("Playback"):
             g_play = server.gui.add_button("play / pause")
@@ -344,17 +350,31 @@ def main() -> None:
         @g_apply.on_click
         def _(_) -> None:
             state["want_start"] = (g_start.value == "fixed", tuple(float(g.value) for g in g_rpy))
+        def selected_run() -> Run:
+            return next(x for x in playable if run_label[x.name] == g_run.value)
+
         @g_run.on_update
         def _(_) -> None:
-            r = next(x for x in siblings if x.name == g_run.value)
+            r = selected_run()
+            g_policy_md.content = ("" if r.task == run.task else
+                                   f"`{r.robot}` is not this env's robot: use **load env**")
             names = [p.name for p in r.checkpoints()]
             g_ckpt.options = names
             g_ckpt.value = newest_checkpoint(r).name
 
         @g_load.on_click
         def _(_) -> None:
-            r = next(x for x in siblings if x.name == g_run.value)
+            r = selected_run()
+            if r.task != run.task:
+                g_policy_md.content = f"`{r.robot}` is not this env's robot: use **load env**"
+                return
             state["want_policy"] = (r, r.dir / "nn" / g_ckpt.value, int(g_block.value))
+
+        @g_load_env.on_click
+        def _(_) -> None:
+            r = selected_run()
+            state["want_restart"] = r.dir / "nn" / g_ckpt.value
+            g_policy_md.content = f"restarting on `{r.robot}` ... the page reconnects when it is built"
 
         g_play.on_click(lambda _: state.update(playing=not state["playing"]))
         g_step.on_click(lambda _: state.update(step_once=True))
@@ -413,12 +433,28 @@ def main() -> None:
         watch(variants[types[0]][0])
         obs, _ = env.reset()
         draw()
+        port = server.get_port()
+        if port != args.port:  # viser moves to the next free port rather than failing
+            print(f"[viser_play] WARNING: port {args.port} is taken; serving on {port}", flush=True)
         print(f"[viser_play] {num_envs} envs, one per object ("
               + ", ".join(f"{t} {len(v)}" for t, v in variants.items())
-              + f"); viser on http://localhost:{args.port}", flush=True)
+              + f"); viser on http://localhost:{port}", flush=True)
 
         while app.is_running():
             inner.cfg.termination.eval_success_tolerance = float(g_tol.value)
+            if state["want_restart"] is not None:
+                # A new robot needs a new Isaac Sim stage, so a new process: replace this one with
+                # the same command on the chosen checkpoint. Same PID and port; exec frees the GPU.
+                argv = [sys.executable, "-m", "isaacsimenvs.eval.viser_play",
+                        "--run", str(state["want_restart"]), "--port", str(args.port),
+                        "--num_assets_per_type", str(args.num_assets_per_type),
+                        "--seed", str(args.seed), "--device", args.device]
+                if args.randomize:
+                    argv.append("--randomize")
+                print(f"[viser_play] load env: {' '.join(argv[3:])}", flush=True)
+                server.stop()
+                sys.stdout.flush()
+                os.execv(sys.executable, argv)
             if state["want_env"] is not None:
                 watch(state["want_env"])
                 state["want_env"] = None
