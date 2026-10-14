@@ -1,9 +1,11 @@
 """Play trained Play-family policies live in Isaac Sim and watch them in viser.
 
-Pick a run (and checkpoint) from ``outputs/``, and the training objects it is tested on: the env
-is built with the run's own config and object pool -- the same seed-42 procedural objects it
-trained on, ``num_assets_per_type`` from each of the 12 size distributions over the 6
-handle-head types (so 1200 at training's 100) -- one object per env, all stepped together. Viser draws the robot, object, goal and table of the env you are
+Pick a run (and checkpoint) from ``outputs/``, and the objects it is tested on: the env is built
+with the run's own config, one env per object, all stepped together. Objects come from training's
+12 size distributions over the 6 handle-head types, ``--num_assets_per_type`` (default 1) from
+each, so 12 envs by default. They are fresh seed-42 samples from those distributions; only at the
+run's own ``num_assets_per_type`` (100) are they the exact objects it trained on, since the
+generator's draws depend on the count. Viser draws the robot, object, goal and table of the env you are
 watching; the panel counts goals and episodes per object type across every env.
 
 Isaac Sim builds one robot per process, so the env is the launch run's robot. The policy dropdown
@@ -157,8 +159,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--run", required=True, help="run name (or a unique part), run dir, or .pth")
     parser.add_argument("--port", type=int, default=8081)
-    parser.add_argument("--num_assets_per_type", type=int, default=None,
-                        help="variants per object type; default the run's own (its training pool)")
+    parser.add_argument("--num_assets_per_type", type=int, default=1,
+                        help="objects per size distribution (12 distributions); 100 = the run's "
+                        "exact training pool, 1200 envs")
     parser.add_argument("--randomize", action="store_true",
                         help="keep the run's training-time randomization (default: eval protocol)")
     parser.add_argument("--seed", type=int, default=0)
@@ -209,7 +212,7 @@ def main() -> None:
                   f"{run.task} from its defaults", flush=True)
         from isaacsimenvs.tasks.play.utils.object_size_distributions import OBJECT_SIZE_DISTRIBUTIONS
 
-        per_type = args.num_assets_per_type or int(env_cfg.assets.num_assets_per_type)
+        per_type = args.num_assets_per_type
         env_cfg.assets.num_assets_per_type = per_type
         # One env per object: num_assets_per_type from every size distribution of the chosen types
         # (generate_handle_head_urdfs), several distributions per type.
