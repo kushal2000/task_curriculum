@@ -465,6 +465,28 @@ class DomainRandomizationCfg:
     # Per-step Gaussian noise on joint-velocity obs (legacy env.py:3251).
     joint_velocity_obs_noise_std: float = 0.1
 
+    # How the three delays above pick their lag. "per_step": a fresh draw every policy step (legacy;
+    # the observed stream can step back in time). "per_episode": one draw per env at every reset,
+    # held for the episode -- a fixed latency, as on hardware. Same ranges either way.
+    delay_mode: str = "per_step"
+
+    # Per-step Gaussian noise on the executed policy action (after the delay, clamped to [-1, 1]).
+    action_noise_std: float = 0.0
+    # Per-step Gaussian noise on joint-position obs [rad], added before normalisation.
+    joint_pos_obs_noise_std: float = 0.0
+
+    # Per-episode bias on the observed object pose: a constant offset drawn at every reset, uniform
+    # in +-xyz [m] per axis and a random-axis rotation of up to this many degrees. Unlike the
+    # per-step noise above it does not average out -- a calibration error. Independent of
+    # use_object_state_delay_noise.
+    object_pose_bias_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    object_pose_bias_rot_degrees: float = 0.0
+
+    # Per-episode multiplier on the robot's joint PD gains, uniform, drawn at every reset; arm and
+    # hand, stiffness and damping each get their own factor. (1, 1) = nominal gains, no writes.
+    robot_stiffness_scale_range: tuple[float, float] = (1.0, 1.0)
+    robot_damping_scale_range: tuple[float, float] = (1.0, 1.0)
+
     # Random force/torque impulses on the object body.
     force_scale: float = 20.0
     force_prob_range: tuple[float, float] = (0.001, 0.1)

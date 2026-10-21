@@ -121,14 +121,21 @@ def _sample_delay(
     values: torch.Tensor,
     env,
     flush: torch.Tensor | None = None,
+    fixed_idx: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Push current values into a rolling queue and sample per-env delay."""
+    """Push current values into a rolling queue and sample per-env delay.
+
+    ``fixed_idx`` (``delay_mode=per_episode``): read this per-env lag instead of a fresh draw.
+    """
     if flush is not None and flush.any():
         queue[flush] = values[flush].unsqueeze(1).expand(-1, queue.shape[1], -1)
 
     queue = torch.roll(queue, shifts=1, dims=1)
     queue[:, 0, :] = values
-    idx = torch.randint(0, queue.shape[1], (env.num_envs,), device=env.device)
+    if fixed_idx is not None and env.cfg.domain_randomization.delay_mode == "per_episode":
+        idx = fixed_idx
+    else:
+        idx = torch.randint(0, queue.shape[1], (env.num_envs,), device=env.device)
     delayed = queue[torch.arange(env.num_envs, device=env.device), idx]
     return queue, delayed
 
@@ -212,7 +219,8 @@ def _apply_object_state_dr(env, obj_pos, obj_rot, obj_linvel, obj_angvel):
     dr = env.cfg.domain_randomization
     state = torch.cat([obj_pos, obj_rot, obj_linvel, obj_angvel], dim=-1)
     env._object_state_queue, delayed = _sample_delay(
-        env._object_state_queue, state, env, flush=_episode_start(env)
+        env._object_state_queue, state, env, flush=_episode_start(env),
+        fixed_idx=env._object_delay_idx,
     )
     noisy_pos = delayed[:, 0:3] + torch.randn_like(delayed[:, 0:3]) * dr.object_state_xyz_noise_std
     noisy_rot = _perturb_quat(delayed[:, 3:7], dr.object_state_rotation_noise_degrees)
@@ -223,7 +231,8 @@ def _apply_object_state_dr(env, obj_pos, obj_rot, obj_linvel, obj_angvel):
 def _apply_obs_delay(env, policy_tensor: torch.Tensor) -> torch.Tensor:
     """Apply per-env policy-observation delay."""
     env._obs_queue, delayed = _sample_delay(
-        env._obs_queue, policy_tensor, env, flush=_episode_start(env)
+        env._obs_queue, policy_tensor, env, flush=_episode_start(env),
+        fixed_idx=env._obs_delay_idx,
     )
     return delayed
 
@@ -271,6 +280,9 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         )
     else:
         noisy_obj_pos, noisy_obj_rot, noisy_obj_vel = obj_pos, obj_rot, obj_vel
+    # Per-episode pose bias (zero / identity unless object_pose_bias_* is set).
+    noisy_obj_pos = noisy_obj_pos + env._object_bias_pos
+    noisy_obj_rot = quat_mul(env._object_bias_quat, noisy_obj_rot)
 
     kp_offsets = env._keypoint_offsets * env._object_scale_multiplier.unsqueeze(1)
     obj_kp = _keypoints_world(obj_pos, obj_rot, kp_offsets)
@@ -334,6 +346,12 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     if dr.joint_velocity_obs_noise_std > 0:
         obs_noisy["joint_vel"] = (
             joint_vel + torch.randn_like(joint_vel) * dr.joint_velocity_obs_noise_std
+        )
+    if dr.joint_pos_obs_noise_std > 0:
+        # Noise in radians, carried through the [-1, 1] normalisation of _canonical_joint_obs.
+        span = env._joint_upper_canon - env._joint_lower_canon
+        obs_noisy["joint_pos"] = (
+            joint_pos + torch.randn_like(joint_pos) * dr.joint_pos_obs_noise_std * 2.0 / span
         )
 
     state_tensor = _stack_obs_dict(obs_clean, env.cfg.obs.state_list)

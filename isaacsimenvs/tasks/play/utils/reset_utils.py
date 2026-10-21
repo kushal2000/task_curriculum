@@ -11,7 +11,7 @@ from isaaclab.utils.math import random_orientation
 
 from .action_utils import sample_log_uniform
 from .goal_sampling import sample_absolute_goal_pose, sample_delta_goal_pose
-from .obs_utils import KEYPOINT_CORNERS, NUM_FINGERTIPS
+from .obs_utils import KEYPOINT_CORNERS, NUM_FINGERTIPS, _perturb_quat
 from .scene_utils import (
     ARM_JOINT_REGEX,
     FINGERTIP_BODY_REGEX,
@@ -148,6 +148,24 @@ def allocate_state_buffers(env) -> None:
         action_space,
         device=env.device,
     )
+    # Per-episode DR draws (delay_mode=per_episode lags, object pose bias, robot PD gain factors),
+    # re-drawn by _draw_episode_dr at every reset. Neutral until the first reset.
+    env._obs_delay_idx = torch.zeros(env.num_envs, dtype=torch.long, device=env.device)
+    env._action_delay_idx = torch.zeros(env.num_envs, dtype=torch.long, device=env.device)
+    env._object_delay_idx = torch.zeros(env.num_envs, dtype=torch.long, device=env.device)
+    env._object_bias_pos = torch.zeros(env.num_envs, 3, device=env.device)
+    env._object_bias_quat = torch.zeros(env.num_envs, 4, device=env.device)
+    env._object_bias_quat[:, 0] = 1.0
+    # Columns: arm stiffness, hand stiffness, arm damping, hand damping.
+    env._robot_gain_scale = torch.ones(env.num_envs, 4, device=env.device)
+    if tuple(dr.robot_stiffness_scale_range) != (1.0, 1.0) or tuple(dr.robot_damping_scale_range) != (1.0, 1.0):
+        # The nominal gains the actuators wrote at startup; every draw multiplies these.
+        stiff, damp = env.robot.data.joint_stiffness, env.robot.data.joint_damping
+        env._robot_base_stiffness = (stiff.torch if hasattr(stiff, "torch") else stiff).clone()
+        env._robot_base_damping = (damp.torch if hasattr(damp, "torch") else damp).clone()
+        env._arm_joint_mask = torch.zeros(env._robot_base_stiffness.shape[1], dtype=torch.bool, device=env.device)
+        env._arm_joint_mask[env._arm_joint_ids] = True
+    _print_dr_summary(env)
 
     # --- Wrench DR state (Phase C/D) ---
     env._random_force_prob = sample_log_uniform(
@@ -416,10 +434,68 @@ def reset_env_state(env, env_ids: torch.Tensor) -> None:
     env._object_scale_multiplier[env_ids] = torch.empty(
         n, 3, device=env.device
     ).uniform_(lo, hi)
+    _draw_episode_dr(env, env_ids)
 
     # Camera pose randomization (no-op when cfg.student_obs.use_camera_pose_rand is False).
     from .scene_utils import _apply_camera_pose_rand_at_reset
     _apply_camera_pose_rand_at_reset(env, env_ids)
+
+
+def _draw_episode_dr(env, env_ids: torch.Tensor) -> None:
+    """Re-draw the per-episode DR terms for ``env_ids``: fixed lags, object pose bias, PD gains."""
+    dr = env.cfg.domain_randomization
+    n = env_ids.numel()
+    if dr.delay_mode == "per_episode":
+        for idx, queue in (
+            (env._obs_delay_idx, env._obs_queue),
+            (env._action_delay_idx, env._action_queue),
+            (env._object_delay_idx, env._object_state_queue),
+        ):
+            idx[env_ids] = torch.randint(0, queue.shape[1], (n,), device=env.device)
+    elif dr.delay_mode != "per_step":
+        raise ValueError(f"domain_randomization.delay_mode must be per_step or per_episode, got {dr.delay_mode!r}")
+
+    bxyz = torch.as_tensor(tuple(dr.object_pose_bias_xyz), device=env.device, dtype=torch.float32)
+    if bool((bxyz != 0).any()):
+        env._object_bias_pos[env_ids] = (torch.rand(n, 3, device=env.device) * 2.0 - 1.0) * bxyz
+    if float(dr.object_pose_bias_rot_degrees) > 0.0:
+        ident = torch.zeros(n, 4, device=env.device)
+        ident[:, 0] = 1.0
+        env._object_bias_quat[env_ids] = _perturb_quat(ident, float(dr.object_pose_bias_rot_degrees))
+
+    k_rng = tuple(float(v) for v in dr.robot_stiffness_scale_range)
+    d_rng = tuple(float(v) for v in dr.robot_damping_scale_range)
+    if k_rng != (1.0, 1.0) or d_rng != (1.0, 1.0):
+        scale = torch.empty(n, 4, device=env.device)
+        scale[:, 0:2].uniform_(*k_rng)
+        scale[:, 2:4].uniform_(*d_rng)
+        env._robot_gain_scale[env_ids] = scale
+        arm = env._arm_joint_mask.unsqueeze(0)
+        k = env._robot_base_stiffness[env_ids] * torch.where(arm, scale[:, 0:1], scale[:, 1:2])
+        d = env._robot_base_damping[env_ids] * torch.where(arm, scale[:, 2:3], scale[:, 3:4])
+        # The plain (not `_index`) writers: the Isaac Lab in the PhysX venv predates the `_index` API.
+        env.robot.write_joint_stiffness_to_sim(k.contiguous(), env_ids=env_ids)
+        env.robot.write_joint_damping_to_sim(d.contiguous(), env_ids=env_ids)
+
+
+def _print_dr_summary(env) -> None:
+    """One log line with every observation / action DR term, so a run's log states its regime."""
+    dr = env.cfg.domain_randomization
+    print(
+        "[dr] obs delay "
+        f"{'0-' + str(dr.obs_delay_max - 1) if dr.use_obs_delay else 'off'}, action delay "
+        f"{'0-' + str(dr.action_delay_max - 1) if dr.use_action_delay else 'off'}, object state "
+        + (
+            f"delay 0-{dr.object_state_delay_max - 1} + noise {dr.object_state_xyz_noise_std} m / "
+            f"{dr.object_state_rotation_noise_degrees} deg"
+            if dr.use_object_state_delay_noise else "off"
+        )
+        + f" | delay_mode {dr.delay_mode} | joint vel noise {dr.joint_velocity_obs_noise_std}, "
+        f"joint pos noise {dr.joint_pos_obs_noise_std} rad, action noise {dr.action_noise_std} | "
+        f"object bias +-{tuple(dr.object_pose_bias_xyz)} m / {dr.object_pose_bias_rot_degrees} deg | "
+        f"robot gains k x{tuple(dr.robot_stiffness_scale_range)} d x{tuple(dr.robot_damping_scale_range)}",
+        flush=True,
+    )
 
 
 __all__ = [

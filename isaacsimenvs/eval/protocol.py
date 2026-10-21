@@ -23,6 +23,12 @@ def disable_randomization(cfg) -> None:
     dr.use_object_state_delay_noise = False
     dr.object_scale_noise_multiplier_range = (1.0, 1.0)
     dr.joint_velocity_obs_noise_std = 0.0
+    dr.joint_pos_obs_noise_std = 0.0
+    dr.action_noise_std = 0.0
+    dr.object_pose_bias_xyz = (0.0, 0.0, 0.0)
+    dr.object_pose_bias_rot_degrees = 0.0
+    dr.robot_stiffness_scale_range = (1.0, 1.0)
+    dr.robot_damping_scale_range = (1.0, 1.0)
     dr.force_scale = 0.0
     dr.torque_scale = 0.0
     dr.force_prob_range = (0.0001, 0.0001)

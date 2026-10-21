@@ -40,12 +40,19 @@ def apply_action_pipeline(env, actions: torch.Tensor) -> None:
             env._action_queue[episode_start] = actions[episode_start].unsqueeze(1)
         env._action_queue = torch.roll(env._action_queue, shifts=1, dims=1)
         env._action_queue[:, 0, :] = actions
-        delay_idx = torch.randint(
-            0, env._action_queue.shape[1], (env.num_envs,), device=env.device
-        )
+        if dr.delay_mode == "per_episode":
+            delay_idx = env._action_delay_idx
+        else:
+            delay_idx = torch.randint(
+                0, env._action_queue.shape[1], (env.num_envs,), device=env.device
+            )
         actions = env._action_queue[
             torch.arange(env.num_envs, device=env.device), delay_idx
         ]
+
+    # Action noise on what is executed (the delayed action), kept in the policy's [-1, 1].
+    if dr.action_noise_std > 0:
+        actions = (actions + torch.randn_like(actions) * dr.action_noise_std).clamp(-1.0, 1.0)
 
     # Arm: velocity-delta accumulator.
     arm_action = actions[:, :7]
