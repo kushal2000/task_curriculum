@@ -159,3 +159,78 @@ def test_curriculum_ranges_are_ordered_and_bounded():
         # The adaptive scheduler clamps range_hi into [init_range[1], final_range[1]],
         # so an init ceiling above the final one would freeze the curriculum immediately.
         assert curriculum["init_range"][1] <= curriculum["final_range"][1], rel
+
+
+# --- cfg/experiment/: run recipes layered over a task YAML (train.py --experiment) ---------------
+
+EXPERIMENT_DIR = REPO_ROOT / "isaacsimenvs/cfg/experiment"
+# Per task id: env root configclass, its modules, and the SAPG agent YAML.
+EXPERIMENT_TASKS = {
+    "Isaacsimenvs-FoldPoolPhysx-Direct-v0": (
+        "FoldPoolPhysxEnvCfg",
+        [
+            "isaacsimenvs/tasks/cloth/physx_env_cfg.py",
+            "isaacsimenvs/tasks/cloth/cloth_cfg.py",
+            "isaacsimenvs/tasks/cloth/fold_pool_cfg.py",
+            "isaacsimenvs/tasks/cloth/rigid_cloth_cfg.py",
+            PLAY_CFG,
+            CURRICULUM_CFG,
+        ],
+        "isaacsimenvs/cfg/train/ClothSAPG.yaml",
+    ),
+}
+
+
+def _load_experiment(name: str) -> dict:
+    """As `hydra_utils.load_experiment`, which needs a booted Kit to import."""
+    exp = yaml.safe_load((EXPERIMENT_DIR / f"{name}.yaml").read_text()) or {}
+    base = exp.pop("base", None)
+    if not base:
+        return exp
+
+    def merge(a, b):
+        return {**a, **{k: merge(a[k], v) if isinstance(v, dict) and isinstance(a.get(k), dict) else v
+                        for k, v in b.items()}}
+
+    return merge(_load_experiment(base), exp)
+
+
+def _env_problems(overlay: dict, classes: dict, cls: str, path: str) -> list[str]:
+    fields, annotations = _resolve(classes, cls)
+    problems = []
+    for key, value in overlay.items():
+        where = f"{path}{key}"
+        if path == "" and key in DIRECT_RL_FIELDS:
+            allowed = {"sim": SIM_FIELDS, "scene": SCENE_FIELDS}.get(key)
+            if isinstance(value, dict) and allowed is not None:
+                problems += [f"{where}.{k}" for k in value if k not in allowed]
+        elif key not in fields:
+            problems.append(f"{where} is not a field of {cls}")
+        elif isinstance(value, dict):
+            sub = annotations.get(key)
+            if sub not in classes:
+                problems.append(f"cannot resolve {where} (annotated {sub})")
+            else:
+                problems += _env_problems(value, classes, sub, where + ".")
+    return problems
+
+
+def _agent_problems(overlay: dict, ref: dict, path: str) -> list[str]:
+    problems = []
+    for key, value in overlay.items():
+        if key not in ref:
+            problems.append(f"agent.{path}{key} is not in the agent YAML")
+        elif isinstance(value, dict):
+            problems += _agent_problems(value, ref[key], f"{path}{key}.")
+    return problems
+
+
+@pytest.mark.parametrize("name", sorted(p.stem for p in EXPERIMENT_DIR.glob("*.yaml")))
+def test_every_experiment_key_maps_to_a_config_field(name):
+    exp = _load_experiment(name)
+    assert set(exp) <= {"task", "env", "agent"}, f"{name}: unknown top-level keys {set(exp)}"
+    assert exp.get("task") in EXPERIMENT_TASKS, f"{name}: task {exp.get('task')!r} has no checker entry"
+    root_cls, modules, agent_yaml = EXPERIMENT_TASKS[exp["task"]]
+    problems = _env_problems(exp.get("env") or {}, _collect_classes(modules), root_cls, "")
+    problems += _agent_problems(exp.get("agent") or {}, yaml.safe_load((REPO_ROOT / agent_yaml).read_text()), "")
+    assert not problems, f"{name}:\n  " + "\n  ".join(problems)

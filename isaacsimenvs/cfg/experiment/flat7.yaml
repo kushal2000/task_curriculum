@@ -1,0 +1,27 @@
+# flat7: the PhysX fold pool on all 7 shapes, flat starts only, the pool's default DR (per-env sheet
+# size 10-20 cm, contact shell 7 +- 3 mm per episode). Trained 2026-10-13 as job 175261, seeds 1-3,
+# from the generic prior (--checkpoint pretrained_policy/model.pth --checkpoint_load_mode weights).
+task: Isaacsimenvs-FoldPoolPhysx-Direct-v0
+
+env:
+  scene:
+    num_envs: 24576
+  cloth:
+    nan_policy: reset
+  fold_pool:
+    shapes: [box2-mid, box2diag4-mid, box2x8-mid, cross4-mid, corners8-mid, box4-mid, star8-mid]
+    one_shape_per_env: true
+    init_fold_prob: 0.0
+
+agent:
+  params:
+    config:
+      multi_gpu: false
+      max_epochs: 3052
+      minibatch_size: 24576
+      central_value_config:
+        minibatch_size: 24576
+      expl_coef_block_size: 4096     # num_envs / 6 SAPG blocks
+      best_save_min_interval_s: 60
+      periodic_save_every: 100
+      snapshot_every: 100

@@ -24,6 +24,12 @@ CLI shape:
         agent.params.config.max_epochs=200 \
         agent.params.config.minibatch_size=16384 \
         agent.params.seed=42
+
+    A recorded run recipe instead of the overrides (isaacsimenvs/cfg/experiment/), e.g. flat7DRABC:
+    python -m isaacsimenvs.train \
+        --task Isaacsimenvs-FoldPoolPhysx-Direct-v0 --agent rl_games_sapg_cfg_entry_point --headless \
+        --experiment flat7DRABC --checkpoint pretrained_policy/model.pth --checkpoint_load_mode weights \
+        agent.params.seed=1
 """
 
 from __future__ import annotations
@@ -105,6 +111,12 @@ def main() -> None:
         default="rl_games_cfg_entry_point",
         help="Key in gym.register kwargs for the rl_games YAML. "
         "Use rl_games_sapg_cfg_entry_point for SAPG.",
+    )
+    parser.add_argument(
+        "--experiment",
+        default=None,
+        help="A run recipe in isaacsimenvs/cfg/experiment/<name>.yaml, layered between the task YAML "
+        "and the Hydra CLI overrides, e.g. flat7DRABC.",
     )
     # --- Runtime toggles ---
     parser.add_argument("--test", action="store_true", help="Run inference (player) instead of training")
@@ -201,7 +213,7 @@ def main() -> None:
         register_rlgames_env,
     )
 
-    @hydra_task_config_with_yaml(args_cli.task, args_cli.agent)
+    @hydra_task_config_with_yaml(args_cli.task, args_cli.agent, experiment=args_cli.experiment)
     def run(env_cfg, agent_cfg: dict) -> None:
         hydra_run_dir = HydraConfig.get().runtime.output_dir
 

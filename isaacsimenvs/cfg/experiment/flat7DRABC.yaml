@@ -1,0 +1,33 @@
+# flat7DRABC: flat7 plus three layers of domain randomisation. Trained 2026-10-13 as job 175385,
+# seeds 1-3, from the same prior as flat7.
+#   A  observation / action / object-state delays and the inherited obs noise, switched on
+#   B  delays fixed per episode, action noise, joint-position noise, object pose bias, robot PD gains
+#   C  the plates' hinge damping, hinge stiffness and mass
+base: flat7
+
+env:
+  domain_randomization:
+    # A
+    use_obs_delay: true
+    obs_delay_max: 3
+    use_action_delay: true
+    action_delay_max: 3
+    use_object_state_delay_noise: true
+    object_state_delay_max: 6
+    object_state_xyz_noise_std: 0.01
+    object_state_rotation_noise_degrees: 5.0
+    joint_velocity_obs_noise_std: 0.1
+    # B
+    delay_mode: per_episode
+    action_noise_std: 0.05
+    joint_pos_obs_noise_std: 0.01
+    object_pose_bias_xyz: [0.005, 0.005, 0.002]
+    object_pose_bias_rot_degrees: 3.0
+    robot_stiffness_scale_range: [0.8, 1.2]
+    robot_damping_scale_range: [0.8, 1.2]
+  rigid_cloth:
+    randomization:
+      # C
+      hinge_damping_scale: [0.5, 3.0]
+      hinge_stiffness: [0.0, 5.0e-4]
+      mass_scale: [0.7, 1.5]
