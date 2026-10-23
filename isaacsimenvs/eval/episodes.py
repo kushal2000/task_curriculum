@@ -284,7 +284,9 @@ def main() -> None:
                   goals[idx] = final["successes"][idx].long()
                   length[idx] = steps_alive[idx]
                   for name in REASONS:
-                      reason[name][idx] = final[f"done_{name}"][idx].bool()
+                      # A reason the env does not publish (the cloth-only ones, on Play) stays False.
+                      if f"done_{name}" in final:
+                          reason[name][idx] = final[f"done_{name}"][idx].bool()
                   for key, value in final.items():
                       name = key[len("done_"):]
                       if key.startswith("done_") and name not in REASONS:

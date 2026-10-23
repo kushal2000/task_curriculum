@@ -338,6 +338,12 @@ class RewardCfg:
     lifting_bonus_threshold: float = 0.15
 
     distance_delta_rew_scale: float = 50.0
+    # Where the fingertip-to-object distance behind the distance-delta term is measured from.
+    # True, as in SimToolReal's Isaac Gym env (env.py:2945-2955): the pad point the policy
+    # observes, body + RobotSpec.fingertip_offset. False: each fingertip body's origin, at the last
+    # finger joint -- what the Isaac Sim port did (simtoolreal 2868d94e), and what every run here
+    # trained with before 2026-10-13.
+    fingertip_distance_from_pad: bool = True
     reach_goal_bonus: float = 1000.0
 
     kuka_actions_penalty_scale: float = 0.03
@@ -539,6 +545,12 @@ def _default_sim_cfg() -> SimulationCfg:
             bounce_threshold_velocity=0.2,
             friction_offset_threshold=0.04,
             friction_correlation_distance=0.025,
+            # Contact patches, summed over all envs. Isaac Lab's default (5 * 2**15 = 163840)
+            # overflows at SimToolReal's 24576 envs: 180k needed with robot self-collision off,
+            # 355k+ (Kuka) with it on, and PhysX drops the contacts that do not fit. SimToolReal
+            # scaled every Isaac Gym buffer 25x (default_buffer_size_multiplier). Only sizes a
+            # buffer, so it changes nothing that did not overflow before.
+            gpu_max_rigid_patch_count=2**21,
         ),
     )
 
@@ -550,6 +562,14 @@ class PlayEnvCfg(DirectRLEnvCfg):
     Structure mirrors ``cfg/task/Play.yaml`` exactly — YAML overlay
     key paths resolve to these fields via ``configclass.from_dict``.
     """
+
+    # Robot embodiment, a key of robots.ROBOT_SPECS. Fixed per registered task; assets.robot_urdf
+    # must be its URDF. PlayEnv sets action_space (and the obs sizes) from it.
+    robot: str = "kuka_sharpa"
+    # Robot self-collision, minus robots.RobotSpec.self_collision_filter: SimToolReal's Isaac Gym
+    # setup. Off here, where this port has always run (docs/phase1_baseline.md), so the Kuka eval
+    # and the tasks built on Play are unchanged; the tasks that train from scratch turn it on.
+    robot_self_collision: bool = False
 
     # --- DirectRLEnvCfg required fields ---
     decimation: int = 2  # 2 physics substeps per policy step
@@ -601,8 +621,67 @@ class PlayEnvCfg(DirectRLEnvCfg):
     domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg()
 
 
+@configclass
+class PlayFlexivWujiEnvCfg(PlayEnvCfg):
+    """Play on a Flexiv Rizon 4s + left Wuji Hand 2 (``Isaacsimenvs-PlayFlexivWuji-Direct-v0``).
+
+    The same task as ``PlayEnvCfg`` except the robot, and robot self-collision, which is on (as for
+    its Kuka control, ``PlaySelfCollisionEnvCfg``). The URDF is composed by
+    ``scripts/flexiv_wuji/fetch_assets.sh``. Note ``student_obs.raycast_dynamic_prim_exprs``
+    still names the Kuka's links, so the raycaster student camera does not see this robot yet.
+    """
+
+    robot: str = "flexiv_wuji"
+    robot_self_collision: bool = True
+    action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
+    assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji.urdf")
+
+
+
+@configclass
+class PlayFlexivWujiHumanLikeEnvCfg(PlayFlexivWujiEnvCfg):
+    """``PlayFlexivWujiEnvCfg`` on the Wuji with human-like joint limits
+    (``Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0``): backward finger bend cut and finger
+    abduction held to +-2 deg (``scripts/flexiv_wuji/flexiv_wuji.py`` HUMAN_LIKE_LIMITS_DEG).
+    Everything else, self-collision included, is the Flexiv task's.
+    """
+
+    robot: str = "flexiv_wuji_human_like"
+    assets: AssetsCfg = AssetsCfg(
+        robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf"
+    )
+
+
+@configclass
+class PlayFlexivSharpaEnvCfg(PlayEnvCfg):
+    """Play on a Flexiv Rizon 4s carrying the Kuka's left Sharpa (``Isaacsimenvs-PlayFlexivSharpa-Direct-v0``).
+
+    The Flexiv tasks' arm and the Kuka's hand; robot self-collision on, as for both. The URDF is
+    written by ``scripts/flexiv_wuji/flexiv_wuji.py``.
+    """
+
+    robot: str = "flexiv_sharpa"
+    robot_self_collision: bool = True
+    assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_left_sharpa.urdf")
+
+
+@configclass
+class PlaySelfCollisionEnvCfg(PlayEnvCfg):
+    """Play on the Kuka + Sharpa with robot self-collision on (``Isaacsimenvs-PlaySelfCollision-Direct-v0``).
+
+    SimToolReal's recipe as Isaac Gym ran it: the control for the Flexiv + Wuji, which has
+    self-collision on too. Reads ``Play.yaml``, which does not set the field.
+    """
+
+    robot_self_collision: bool = True
+
+
 __all__ = [
     "PlayEnvCfg",
+    "PlayFlexivWujiEnvCfg",
+    "PlayFlexivWujiHumanLikeEnvCfg",
+    "PlayFlexivSharpaEnvCfg",
+    "PlaySelfCollisionEnvCfg",
     "AssetsCfg",
     "ObsCfg",
     "StudentObsCfg",

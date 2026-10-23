@@ -8,21 +8,24 @@ import torch
 
 from isaaclab.utils.math import convert_quat, quat_apply, quat_from_angle_axis, quat_mul
 
+from ..robots import KUKA_SHARPA
+
 
 # ----------------------------------------------------------------------------
 # Constants
 # ----------------------------------------------------------------------------
 
 
-NUM_JOINTS: int = 29
+# The Kuka + Sharpa's values (robots.py); the env reads its own robot's from env.robot_spec.
+NUM_JOINTS: int = KUKA_SHARPA.num_joints
 NUM_FINGERTIPS: int = 5
 NUM_KEYPOINTS: int = 4
 
 # Policy was trained against the palm center, not the raw wrist body.
-PALM_CENTER_OFFSET: tuple[float, float, float] = (-0.0, -0.02, 0.16)
+PALM_CENTER_OFFSET: tuple[float, float, float] = KUKA_SHARPA.palm_center_offset
 
 # Shift fingertip body origins to the approximate pad centers.
-FINGERTIP_OFFSET: tuple[float, float, float] = (0.02, 0.002, 0.0)
+FINGERTIP_OFFSET: tuple[float, float, float] = KUKA_SHARPA.fingertip_offset
 
 # Object-frame keypoint corners before scaling.
 KEYPOINT_CORNERS: tuple[tuple[int, int, int], ...] = (
@@ -31,6 +34,9 @@ KEYPOINT_CORNERS: tuple[tuple[int, int, int], ...] = (
     (-1, -1, 1),
     (-1, -1, -1),
 )
+
+#: Fields with one entry per robot joint; their size follows the robot.
+_PER_JOINT_FIELDS = ("joint_pos", "joint_vel", "prev_action_targets")
 
 OBS_FIELD_SIZES: dict[str, int] = {
     "joint_pos": NUM_JOINTS,
@@ -54,9 +60,10 @@ OBS_FIELD_SIZES: dict[str, int] = {
 }
 
 
-def compute_obs_dim(field_list) -> int:
+def compute_obs_dim(field_list, num_joints: int = NUM_JOINTS) -> int:
     """Return total tensor dim for an ordered list of obs field names."""
-    return sum(OBS_FIELD_SIZES[f] for f in field_list)
+    sizes = {**OBS_FIELD_SIZES, **{f: num_joints for f in _PER_JOINT_FIELDS}}
+    return sum(sizes[f] for f in field_list)
 
 
 def _stack_obs_dict(obs_dict: dict[str, torch.Tensor], field_list) -> torch.Tensor:
@@ -171,7 +178,13 @@ def compute_intermediate_values(env) -> None:
     goal_rot = env.goal_viz.data.root_quat_w
 
     ft_state = env.robot.data.body_state_w[:, env._fingertip_body_ids, :]
-    ft_pos = ft_state[:, :, 0:3] - env_origins.unsqueeze(1)
+    ft_pos_w = ft_state[:, :, 0:3]
+    if rew_cfg.fingertip_distance_from_pad:
+        ft_pos_w = _apply_local_offset(
+            ft_pos_w, ft_state[:, :, 3:7], env.robot_spec.fingertip_offset,
+            (env.num_envs, NUM_FINGERTIPS),
+        )
+    ft_pos = ft_pos_w - env_origins.unsqueeze(1)
     env._curr_fingertip_distances = torch.norm(
         ft_pos - obj_pos.unsqueeze(1), dim=-1
     )  # (N, 5)
@@ -250,7 +263,7 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     palm_vel = palm_state[:, 7:13]
 
     palm_center_pos_w = _apply_local_offset(
-        palm_pos_w, palm_rot, PALM_CENTER_OFFSET, (env.num_envs,)
+        palm_pos_w, palm_rot, env.robot_spec.palm_center_offset, (env.num_envs,)
     )
     palm_pos = palm_center_pos_w - env_origins
 
@@ -261,7 +274,7 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     ft_pos_w = _apply_local_offset(
         ft_body_pos_w,
         ft_body_rot_w,
-        FINGERTIP_OFFSET,
+        env.robot_spec.fingertip_offset,
         (env.num_envs, NUM_FINGERTIPS),
     )
 

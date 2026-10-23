@@ -38,6 +38,12 @@ uv pip install --python "$PY" \
 step "typing_extensions re-pin (must come after isaaclab)"
 uv pip install --python "$PY" "typing_extensions>=4.13"
 
+step "websockets for viser, outside the venv"
+# isaacsim-kernel pins websockets==12.0 and viser needs >=13.1, so viser cannot start in this venv
+# as installed. isaacsimenvs/eval/viser_play.py puts this directory first on sys.path instead; the
+# training venv itself keeps Isaac's pin.
+uv pip install --python "$PY" --target third_party/viser_websockets "websockets==16.0"
+
 step "repo package (no deps)"
 uv pip install --python "$PY" -e . --no-deps
 
