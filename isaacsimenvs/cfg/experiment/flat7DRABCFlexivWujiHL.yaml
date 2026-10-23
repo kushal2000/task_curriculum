@@ -1,0 +1,5 @@
+# flat7DRABCFlexivWujiHL: the flat7DRABC recipe (flat7DRABC.yaml) on the Flexiv Rizon 4s + Wuji Hand 2
+# with human-like joint limits; only the robot differs. Start from the Flexiv + Wuji Play prior
+# (--checkpoint pretrained_policy/flexiv_wuji.pth --checkpoint_load_mode weights).
+base: flat7DRABC
+task: Isaacsimenvs-FoldPoolPhysxFlexivWujiHumanLike-Direct-v0
