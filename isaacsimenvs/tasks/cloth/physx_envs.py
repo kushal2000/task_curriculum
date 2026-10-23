@@ -323,8 +323,6 @@ class _PhysxClothMixin:
         """
         from isaaclab.sim.utils import get_current_stage
 
-        from isaacsimenvs.tasks.play.utils.scene_utils import FINGERTIP_LINK_NAMES
-
         r, pc = self.cfg.rigid_cloth, self.cfg.physx_chain
         stage = get_current_stage()
         slat = "/World/PhysicsMaterials/slat"
@@ -344,7 +342,7 @@ class _PhysxClothMixin:
             if not rels:
                 raise RuntimeError(f"[physx] no collider under env_{envs[0]}/{asset}")
             slats += bind_material_in_every_env(stage, n, asset, rels, slat, env_ids=envs)
-        tips = tuple(FINGERTIP_LINK_NAMES)
+        tips = tuple(self.robot_spec.fingertip_link_names)
         robot = self.robot.cfg.prim_path.rsplit("/", 1)[-1]
         rels = collider_paths(
             stage, f"/World/envs/env_0/{robot}",

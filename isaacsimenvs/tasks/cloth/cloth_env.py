@@ -38,7 +38,9 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
     @staticmethod
     def build_physics_cfg(cfg: "ClothEnvCfg"):
         """Coupled MJWarp (robot) + VBD (cloth) solve, sized for this env count."""
-        return cfg.cloth.build_physics(cfg.newton, int(cfg.scene.num_envs))
+        from isaacsimenvs.tasks.play.robots import get_robot_spec
+
+        return cfg.cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), get_robot_spec(cfg.robot))
 
     #: Runs at the end of `setup_scene`, before replication -- which is also when Newton imports
     #: the stage. A mesh authored after that point is invisible to the solver.

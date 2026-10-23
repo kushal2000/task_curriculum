@@ -100,6 +100,11 @@ def hydra_task_config_with_yaml(
                 # what our hand-rolled `apply_task_overrides` walker does, but
                 # upstream-supported.
                 env_cfg.from_dict(overlay)
+            # A robot overlay (cfg/robot/) on top, for task ids that swap the robot.
+            robot_yaml = gym.spec(short_name).kwargs.get("env_cfg_robot_yaml_entry_point")
+            if robot_yaml:
+                with open(robot_yaml) as f:
+                    env_cfg.from_dict(yaml.safe_load(f) or {})
 
             if experiment:
                 exp = load_experiment(experiment)

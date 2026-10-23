@@ -490,13 +490,16 @@ class ClothCfg:
             )
 
 
-    def build_physics(self, newton_cfg, num_envs: int):
+    def build_physics(self, newton_cfg, num_envs: int, robot_spec=None):
         """``NewtonCfg`` for the coupled MJWarp (robot) + VBD (cloth) scene.
 
         The one structural difference from the cable: the VBD entry owns **particles**, not bodies.
         A cloth is a particle system, so ``all_particles=True`` is what assigns the sheet to the
         deformable solver -- a body selector would match nothing and the cloth would be integrated
         by nobody, presenting as a sheet frozen in mid-air.
+
+        ``robot_spec`` (a ``robots.RobotSpec``, the Kuka + Sharpa when omitted) names the hand
+        bodies the cloth couples to.
         """
         from isaaclab_contrib.coupling import (
             CouplerEntryCfg,
@@ -511,15 +514,16 @@ class ClothCfg:
             NewtonShapeCfg,
         )
 
+        from isaacsimenvs.tasks.play.robots import KUKA_SHARPA
+
+        robot_spec = robot_spec or KUKA_SHARPA
         rigid_bodies = [r"/World/envs/env_.*/Robot"]
-        finger = r"/World/envs/env_.*/Robot/left_(thumb|index|middle|ring|pinky)_"
-        proxy_bodies = [finger + ("(DP|MP|PP)" if self.proxy_links != "tips" else "(DP)")]
+        robot = r"/World/envs/env_.*/Robot/"
+        segments = ("distal",) if self.proxy_links == "tips" else ("distal", "middle", "proximal")
+        proxy_bodies = [robot + robot_spec.finger_links_regex(*segments)]
         if self.proxy_links == "hand":
-            # The palm body is `iiwa14_link_7`; the URDF's `left_hand_C_MC` is merged away by the
-            # importer and matches nothing.
-            proxy_bodies.append(
-                r"/World/envs/env_.*/Robot/(iiwa14_link_7|left_thumb_MC|left_pinky_MC)"
-            )
+            palm = (robot_spec.palm_body_name, *robot_spec.palm_side_link_names)
+            proxy_bodies.append(robot + "(" + "|".join(palm) + ")")
         if self.proxy_table:
             rigid_bodies.append(r"/World/envs/env_.*/Table")
             proxy_bodies.append(r"/World/envs/env_.*/Table")

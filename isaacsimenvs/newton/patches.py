@@ -683,14 +683,12 @@ def install_fingertip_order() -> None:
     if getattr(reset_utils, "_fingertip_order_patch_installed", False):
         return
 
-    scene_utils = compat.play_module("scene_utils")
-    canonical = list(scene_utils.FINGERTIP_LINK_NAMES)
-
     original = reset_utils.allocate_state_buffers
 
     def allocate_state_buffers_ordered(env, *args, **kwargs):
         result = original(env, *args, **kwargs)
 
+        canonical = list(env.robot_spec.fingertip_link_names)
         body_names = list(env.robot.body_names)
         ordered = [body_names.index(name) for name in canonical]
 
@@ -912,7 +910,7 @@ def install_cloning(
             # Upstream authors zero-gain USD drives and injects gains at runtime, which PhysX
             # honours but Newton cannot: SolverMuJoCo bakes actuation from USD at build time.
             # Write the canonical gains before the model is finalized.
-            written, missing = author_drive_gains(env.scene.stage, scene_utils)
+            written, missing = author_drive_gains(env.scene.stage, env.robot_spec)
             if written:
                 print(
                     f"[cloning] authored PD gains on {written} joint drives"
@@ -1172,8 +1170,8 @@ def push_collision_api_to_meshes(stage, root_path: str = "/World/envs") -> tuple
 # parameter buffers, it cannot create actuation that was never built.
 #
 # So the gains are written into USD *before* replication and finalization, taken from the same
-# canonical tables the PhysX path uses (``scene_utils.ARM_JOINT_STIFFNESS`` /
-# ``HAND_JOINT_STIFFNESS`` and their damping counterparts). Both backends therefore run the same
+# tables the PhysX path uses (the env's ``robots.RobotSpec``: ``arm_stiffness`` /
+# ``hand_stiffness`` and their damping counterparts). Both backends therefore run the same
 # numbers; only the delivery mechanism differs, which is precisely what transfer invariant 3 in
 # upstream's own test suite pins down.
 #
@@ -1184,17 +1182,15 @@ _STIFFNESS_ATTR = "drive:angular:physics:stiffness"
 _DAMPING_ATTR = "drive:angular:physics:damping"
 
 
-def author_drive_gains(stage, scene_utils, root_path: str = "/World/envs") -> tuple[int, int]:
-    """Write canonical PD gains onto every robot joint drive under ``root_path``.
+def author_drive_gains(stage, robot_spec, root_path: str = "/World/envs") -> tuple[int, int]:
+    """Write ``robot_spec``'s PD gains onto every robot joint drive under ``root_path``.
 
     Returns ``(joints_written, joints_missing_gains)``.
     """
     from pxr import Sdf, Usd, UsdPhysics
 
-    stiffness = dict(scene_utils.ARM_JOINT_STIFFNESS)
-    stiffness.update(scene_utils.HAND_JOINT_STIFFNESS)
-    damping = dict(scene_utils.ARM_JOINT_DAMPING)
-    damping.update(scene_utils.HAND_JOINT_DAMPING)
+    stiffness = {**robot_spec.arm_stiffness, **robot_spec.hand_stiffness}
+    damping = {**robot_spec.arm_damping, **robot_spec.hand_damping}
 
     root = stage.GetPrimAtPath(root_path)
     if not root.IsValid():
@@ -1646,11 +1642,10 @@ def install_newton_materials() -> None:
     if getattr(scene_utils, "_material_patch_installed", False):
         return
 
-    fingertip_link_names = set(scene_utils.FINGERTIP_LINK_NAMES)
-
     def apply_newton_material_properties(env) -> None:
         import warp as wp
 
+        fingertip_link_names = set(env.robot_spec.fingertip_link_names)
         assets_cfg = env.cfg.assets
         if not bool(getattr(assets_cfg, "apply_material_properties", True)):
             return
@@ -1700,7 +1695,7 @@ def install_newton_materials() -> None:
 
         if n_fingertip == 0:
             raise RuntimeError(
-                "No fingertip shapes matched FINGERTIP_LINK_NAMES in Model.shape_label; "
+                "No fingertip shapes matched the robot's fingertip_link_names in Model.shape_label; "
                 "friction would silently stay at the robot default. "
                 f"Expected body names containing {sorted(fingertip_link_names)}."
             )
@@ -1915,7 +1910,7 @@ def _zero_implicit_effort(articulation) -> None:
 # half of that; the cone and impratio are defaults on :class:`NewtonSolverKnobs`.
 
 
-def install_newton_condim(condim: int = 6) -> bool:
+def install_newton_condim(condim: int = 6, grasping: tuple[str, ...] | None = None) -> bool:
     """Set MuJoCo contact dimensionality on the grasping shapes *before* the solver compiles.
 
     Newton exposes this as a builder custom attribute, which is the only point at which it can
@@ -1931,6 +1926,7 @@ def install_newton_condim(condim: int = 6) -> bool:
     Args:
         condim: 3 sliding only (MuJoCo default), 4 adds torsional, 6 adds rolling. The
             SimToolReal authors' own MuJoCo model uses 6 on the fingertip pads, tool and table.
+        grasping: Fingertip link names; the Kuka + Sharpa's when omitted.
 
     Returns:
         Whether the hook was installed.
@@ -1944,8 +1940,8 @@ def install_newton_condim(condim: int = 6) -> bool:
 
     from isaacsimenvs.newton import compat
 
-    scene_utils = compat.play_module("scene_utils")
-    grasping = tuple(scene_utils.FINGERTIP_LINK_NAMES)
+    if grasping is None:
+        grasping = tuple(compat.play_module("scene_utils").FINGERTIP_LINK_NAMES)
     original = NewtonManager._prepare_builder_for_finalize
 
     def _prepare(cls_or_builder, builder=None):

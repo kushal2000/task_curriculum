@@ -485,7 +485,7 @@ def main() -> None:
         if tri_by_world:
             from isaacsimenvs.tasks.cloth.utils.pierce import PierceDetector
 
-            pierce = PierceDetector(model, n_env, device)
+            pierce = PierceDetector(model, n_env, device, robot_spec=getattr(inner, "robot_spec", None))
             pierce_run = torch.zeros(n_env, len(pierce.names), dtype=torch.long, device=device)
         last_pierce: list = []
 

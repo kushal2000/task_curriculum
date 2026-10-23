@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from isaacsimenvs.newton import compat, patches, physx_schema_shim, usd_cache
 from isaacsimenvs.tasks.play.play_env import PlayEnv
+from isaacsimenvs.tasks.play.robots import get_robot_spec
 
 from .play_newton_env_cfg import PlayNewtonEnvCfg
 
@@ -141,7 +142,9 @@ def _install_pre_construction_patches(cfg: PlayNewtonEnvCfg, *, physics_cfg, pre
         patches.disable_global_gravity(cfg)
 
     patches.install_newton_materials()
-    patches.install_newton_condim(int(cfg.newton.condim))
+    patches.install_newton_condim(
+        int(cfg.newton.condim), tuple(get_robot_spec(cfg.robot).fingertip_link_names)
+    )
 
     if cfg.meshify:
         scene_utils = compat.play_module("scene_utils")

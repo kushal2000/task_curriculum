@@ -1,0 +1,6 @@
+# Robot overlay: the Flexiv Rizon 4s + left Wuji Hand 2 with the vendor's joint limits, as
+# Isaacsimenvs-PlayFlexivWuji-Direct-v0 has it. See flexiv_wuji_human_like.yaml.
+robot: flexiv_wuji
+robot_self_collision: true
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_left_wuji.urdf"

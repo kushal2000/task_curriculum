@@ -101,8 +101,6 @@ class RigidClothEnv(RigidClothTaskMixin, ClothEnv):
         """
         import numpy as np
 
-        from isaacsimenvs.newton import compat
-
         model = self.sim.physics_manager.get_model()
         self._model = model
         n = self.num_envs
@@ -110,7 +108,7 @@ class RigidClothEnv(RigidClothTaskMixin, ClothEnv):
         body_labels = [label.rsplit("/", 1)[-1] for label in model.body_label]
         body_world = model.body_world.numpy()
         shape_body = model.shape_body.numpy()
-        fingertip_names = set(compat.play_module("scene_utils").FINGERTIP_LINK_NAMES)
+        fingertip_names = set(self.robot_spec.fingertip_link_names)
 
         def per_world(indices, world_of, what: str) -> torch.Tensor:
             rows = [[] for _ in range(n)]

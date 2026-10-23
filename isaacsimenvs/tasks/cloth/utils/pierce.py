@@ -13,12 +13,18 @@ import re
 
 import numpy as np
 
-__all__ = ["FINGER_RE", "PierceDetector", "finger_segments", "quat_rotate_xyzw", "segment_hits"]
-
-FINGER_RE = re.compile(r"/Robot/left_(thumb|index|middle|ring|pinky)_(DP|MP)$")
+__all__ = ["FINGER_RE", "PierceDetector", "finger_re", "finger_segments", "quat_rotate_xyzw", "segment_hits"]
 
 
-def finger_segments(model):
+def finger_re(robot_spec) -> re.Pattern:
+    """The watched finger links (distal and middle phalanges) of ``robot_spec``, by body label."""
+    return re.compile(r"/Robot/" + robot_spec.finger_links_regex("distal", "middle") + "$")
+
+
+FINGER_RE = re.compile(r"/Robot/left_(thumb|index|middle|ring|pinky)_(DP|MP)$")  # the Kuka + Sharpa's
+
+
+def finger_segments(model, pattern: re.Pattern = FINGER_RE):
     """Per finger body: (body index, world, label, segment endpoints in the BODY frame, radius)."""
     import warp as wp  # noqa: F401
 
@@ -29,7 +35,7 @@ def finger_segments(model):
     src = model.shape_source
     out = []
     for b, lab in enumerate(labels):
-        if not FINGER_RE.search(lab):
+        if not pattern.search(lab):
             continue
         pts = []
         for s in np.nonzero(shape_body == b)[0]:
@@ -90,10 +96,10 @@ def segment_hits(a, b, tri):
 class PierceDetector:
     """Per env and finger link, whether that link's axis crosses the env's cloth this step."""
 
-    def __init__(self, model, num_envs: int, device):
+    def __init__(self, model, num_envs: int, device, robot_spec=None):
         import torch
 
-        fingers = finger_segments(model)
+        fingers = finger_segments(model, FINGER_RE if robot_spec is None else finger_re(robot_spec))
         self.names = sorted({f[2] for f in fingers})
         bidx = np.full((num_envs, len(self.names)), -1, dtype=np.int64)
         seg = np.zeros((len(self.names), 2, 3))

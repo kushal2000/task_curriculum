@@ -1,0 +1,8 @@
+# Robot overlay: the Flexiv Rizon 4s + left Wuji Hand 2 with human-like joint limits, as
+# Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0 has it. Layered over a task YAML by the
+# `env_cfg_robot_yaml_entry_point` of the *FlexivWujiHumanLike task ids (tasks/cloth/__init__.py).
+# action_space / observation_space follow the robot (PlayEnv recomputes them).
+robot: flexiv_wuji_human_like
+robot_self_collision: true
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf"

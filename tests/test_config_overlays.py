@@ -179,6 +179,11 @@ EXPERIMENT_TASKS = {
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
     ),
 }
+# The robot-swapped ids (tasks/cloth/__init__.py) share their base task's cfg and agent YAML.
+for _robot in ("FlexivWuji", "FlexivWujiHumanLike"):
+    EXPERIMENT_TASKS[f"Isaacsimenvs-FoldPoolPhysx{_robot}-Direct-v0"] = EXPERIMENT_TASKS[
+        "Isaacsimenvs-FoldPoolPhysx-Direct-v0"
+    ]
 
 
 def _load_experiment(name: str) -> dict:

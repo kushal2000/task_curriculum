@@ -46,10 +46,22 @@ class RobotSpec:
     #: by post-merge_fixed_joints body name. scene_utils authors them as FilteredPairsAPI and
     #: fails if any name is not a body of the imported robot.
     self_collision_filter: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: The cloth tasks' view of the hand: a regex over body names per finger segment ("distal",
+    #: "middle", "proximal"; the thumb's segments included), and the palm-side bodies other than
+    #: ``palm_body_name``. The VBD cloth couples to these bodies and the pierce detector watches
+    #: them. Empty on a robot the cloth tasks have not been set up for.
+    finger_segment_regex: dict[str, str] = field(default_factory=dict)
+    palm_side_link_names: tuple[str, ...] = ()
 
     @property
     def num_joints(self) -> int:
         return len(self.joint_names_canonical)
+
+    def finger_links_regex(self, *segments: str) -> str:
+        """One regex group matching the finger bodies of ``segments`` (keys of ``finger_segment_regex``)."""
+        if not self.finger_segment_regex:
+            raise ValueError(f"{self.name}: no finger_segment_regex; the cloth tasks need it")
+        return "(" + "|".join(self.finger_segment_regex[s] for s in segments) + ")"
 
     @property
     def arm_joint_names(self) -> tuple[str, ...]:
@@ -202,6 +214,13 @@ KUKA_SHARPA = RobotSpec(
         "iiwa14_joint_7": 1.308,
     },
     self_collision_filter=_SHARPA_SELF_COLLISION_FILTER,
+    finger_segment_regex={
+        "distal": "left_(thumb|index|middle|ring|pinky)_DP",
+        "middle": "left_(thumb|index|middle|ring|pinky)_MP",
+        "proximal": "left_(thumb|index|middle|ring|pinky)_PP",
+    },
+    # The URDF's `left_hand_C_MC` is merged into the palm body by the importer.
+    palm_side_link_names=("left_thumb_MC", "left_pinky_MC"),
 )
 
 
@@ -323,6 +342,15 @@ FLEXIV_WUJI = RobotSpec(
         "joint5": -1.6591, "joint6": 1.6462, "joint7": 0.0369,
     },
     self_collision_filter=_WUJI_SELF_COLLISION_FILTER,
+    # `l_*_tip` and `l_*_tip_sensor_frame` merge into the distal link; both proximal links carry
+    # collision (the flexion one, then the abduction one).
+    finger_segment_regex={
+        "distal": "l_(thumb|index_finger|middle_finger|ring_finger|pinky)_distal",
+        "middle": "l_(thumb|index_finger|middle_finger|ring_finger|pinky)_middle",
+        "proximal": "l_(thumb|index_finger|middle_finger|ring_finger|pinky)_proximal(_abd)?",
+    },
+    # `l_mount` and `l_wrist` merge into link7, the palm body.
+    palm_side_link_names=(),
 )
 
 # The same robot with scripts/flexiv_wuji/flexiv_wuji.py's HUMAN_LIKE_LIMITS_DEG: finger and thumb
@@ -383,6 +411,8 @@ FLEXIV_SHARPA = RobotSpec(
     # The Flexiv keeps one default pose whatever hand it carries; the mount yaw puts the palm down.
     arm_default_joint_pos=FLEXIV_WUJI.arm_default_joint_pos,
     self_collision_filter=_FLEXIV_SHARPA_SELF_COLLISION_FILTER,
+    finger_segment_regex=KUKA_SHARPA.finger_segment_regex,
+    palm_side_link_names=KUKA_SHARPA.palm_side_link_names,
 )
 
 ROBOT_SPECS: dict[str, RobotSpec] = {
