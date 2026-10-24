@@ -324,9 +324,13 @@ FLEXIV_WUJI = RobotSpec(
     # knuckles. Depends on flexiv_wuji.MOUNT_*; tests/test_robot_specs.py recomputes it.
     palm_center_offset=(-0.0018, -0.015, 0.1948),
     fingertip_body_regex="l_(thumb|index_finger|middle_finger|ring_finger|pinky)_distal",
+    # The order the policy observes them in. PhysX's find_bodies(fingertip_body_regex) returns body
+    # index order, which for this hand is index, middle, pinky, ring, thumb (not the Kuka's index,
+    # middle, ring, thumb, pinky); the Play prior was trained on it. Newton reorders its fingertips
+    # to this tuple (newton/patches.py install_fingertip_order), so it must list the PhysX order.
     fingertip_link_names=(
-        "l_index_finger_distal", "l_middle_finger_distal", "l_ring_finger_distal",
-        "l_thumb_distal", "l_pinky_distal",
+        "l_index_finger_distal", "l_middle_finger_distal", "l_pinky_distal",
+        "l_ring_finger_distal", "l_thumb_distal",
     ),
     # The tip is 24.8 mm down each distal link's -z (29.8 on the thumb); the Sharpa's offset sits
     # ~77% of the way to its tip, and this is the same fraction.
