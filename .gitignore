@@ -18,6 +18,7 @@ env/
 # Training / experiment outputs
 train_dir/
 outputs/
+deploy/logs/
 wandb/
 # Ignore the CONTENTS, not the directory: git cannot re-include a file whose parent directory is
 # excluded, so `videos/` + `!videos/README.md` silently keeps the README untracked.
@@ -37,8 +38,11 @@ pretrained_assembly/
 
 # Third-party source checkouts (Isaac Lab 3.0 for the Newton backend).
 # Not a submodule by choice: the pinned SHA lives in scripts/install_isaaclab3.sh, so the
-# checkout is reproducible without carrying submodule machinery in the repo.
-third_party/
+# checkout is reproducible without carrying submodule machinery in the repo. The real-robot drivers
+# (aioflexiv, aiowuji) ARE submodules: `git submodule update --init third_party/aio*`.
+third_party/*
+!third_party/aioflexiv
+!third_party/aiowuji
 
 # Pytest
 .pytest_cache/
