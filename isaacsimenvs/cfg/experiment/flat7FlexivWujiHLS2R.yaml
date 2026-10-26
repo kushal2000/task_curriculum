@@ -1,0 +1,5 @@
+# flat7FlexivWujiHLS2R: flat7FlexivWujiHL with Wuji's sim2real hand drive (robot
+# flexiv_wuji_human_like_s2r: finger Kp 2-3.8x, vendor torque limits); nothing else differs.
+# Same prior (--checkpoint pretrained_policy/flexiv_wuji.pth --checkpoint_load_mode weights).
+base: flat7
+task: Isaacsimenvs-FoldPoolPhysxFlexivWujiHumanLikeS2R-Direct-v0

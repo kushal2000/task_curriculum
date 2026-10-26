@@ -1180,6 +1180,7 @@ def push_collision_api_to_meshes(stage, root_path: str = "/World/envs") -> tuple
 
 _STIFFNESS_ATTR = "drive:angular:physics:stiffness"
 _DAMPING_ATTR = "drive:angular:physics:damping"
+_MAX_FORCE_ATTR = "drive:angular:physics:maxForce"
 
 
 def author_drive_gains(stage, robot_spec, root_path: str = "/World/envs") -> tuple[int, int]:
@@ -1191,6 +1192,8 @@ def author_drive_gains(stage, robot_spec, root_path: str = "/World/envs") -> tup
 
     stiffness = {**robot_spec.arm_stiffness, **robot_spec.hand_stiffness}
     damping = {**robot_spec.arm_damping, **robot_spec.hand_damping}
+    # Torque limits only where the spec overrides the URDF's (the importer's maxForce otherwise).
+    max_force = dict(robot_spec.hand_effort_limit)
 
     root = stage.GetPrimAtPath(root_path)
     if not root.IsValid():
@@ -1208,7 +1211,10 @@ def author_drive_gains(stage, robot_spec, root_path: str = "/World/envs") -> tup
             missing += 1
             continue
 
-        for attr_name, table in ((_STIFFNESS_ATTR, stiffness), (_DAMPING_ATTR, damping)):
+        tables = [(_STIFFNESS_ATTR, stiffness), (_DAMPING_ATTR, damping)]
+        if name in max_force:
+            tables.append((_MAX_FORCE_ATTR, max_force))
+        for attr_name, table in tables:
             attr = prim.GetAttribute(attr_name)
             if not attr:
                 attr = prim.CreateAttribute(attr_name, Sdf.ValueTypeNames.Float)

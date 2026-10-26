@@ -52,6 +52,9 @@ class RobotSpec:
     #: them. Empty on a robot the cloth tasks have not been set up for.
     finger_segment_regex: dict[str, str] = field(default_factory=dict)
     palm_side_link_names: tuple[str, ...] = ()
+    #: Hand joint torque limits [N m]; empty keeps the URDF's ``effort``. Both backends apply it
+    #: (PhysX via ``effort_limit_sim``, Newton via the drives' ``maxForce``).
+    hand_effort_limit: dict[str, float] = field(default_factory=dict)
 
     @property
     def num_joints(self) -> int:
@@ -83,6 +86,8 @@ class RobotSpec:
         for table in ("hand_damping", "hand_armature"):
             if set(getattr(self, table)) != set(hand):
                 raise ValueError(f"{self.name}: {table} must cover exactly the hand joints")
+        if self.hand_effort_limit and set(self.hand_effort_limit) != set(hand):
+            raise ValueError(f"{self.name}: hand_effort_limit must be empty or cover exactly the hand joints")
         if len(self.fingertip_link_names) != 5:
             raise ValueError(f"{self.name}: the task observes 5 fingertips")
 
@@ -368,6 +373,28 @@ FLEXIV_WUJI_HUMAN_LIKE = dataclasses.replace(
     self_collision_filter=_WUJI_SELF_COLLISION_FILTER,
 )
 
+#: Wuji's own sim2real drive for Hand 2 (wuji-isaaclab tasks/reorient/config/wuji_hand2/
+#: hand2_constants.py HAND2_DRIVE, identical to wuji-mjlab's HAND2_REORIENT_ACTUATOR_GAINS /
+#: FORCE_LIMITS): (stiffness N m/rad, damping N m s/rad, effort limit N m) per joint, thumb to
+#: pinky in _WUJI_JOINTS order. Given for the right hand; the left mirrors it joint for joint.
+#: Kp 1.95-3.79x (mean 3.2x) the MJCF servo's, with the MCP flexion torque at ~1 N m instead of 2.
+_WUJI_S2R_DRIVE = (
+    (1.354985, 0.04769, 1.02), (2.198821, 0.062838, 0.83), (0.886467, 0.027982, 0.35), (0.654026, 0.020457, 0.21),
+    (1.345207, 0.047402, 1.05), (0.88946, 0.027239, 0.38), (0.779361, 0.024489, 0.31), (0.656424, 0.020508, 0.30),
+    (1.299313, 0.045699, 1.06), (0.942641, 0.027846, 0.39), (0.73725, 0.023408, 0.32), (0.710314, 0.022366, 0.29),
+    (1.276892, 0.046209, 1.02), (1.013334, 0.028704, 0.41), (0.859159, 0.027436, 0.28), (0.648064, 0.020448, 0.30),
+    (1.102915, 0.043816, 0.87), (0.910201, 0.026593, 0.36), (0.861968, 0.027476, 0.28), (0.656704, 0.020611, 0.30),
+)
+
+# FLEXIV_WUJI_HUMAN_LIKE with that drive on the hand (armature is the same 0.0005 / 0.0002 split).
+FLEXIV_WUJI_HUMAN_LIKE_S2R = dataclasses.replace(
+    FLEXIV_WUJI_HUMAN_LIKE,
+    name="flexiv_wuji_human_like_s2r",
+    hand_stiffness={j: d[0] for j, d in zip(_WUJI_JOINTS, _WUJI_S2R_DRIVE)},
+    hand_damping={j: d[1] for j, d in zip(_WUJI_JOINTS, _WUJI_S2R_DRIVE)},
+    hand_effort_limit={j: d[2] for j, d in zip(_WUJI_JOINTS, _WUJI_S2R_DRIVE)},
+)
+
 # ----------------------------------------------------------------------------
 # Flexiv Rizon 4s + the Kuka's left Sharpa (scripts/flexiv_wuji/flexiv_wuji.py
 # compose_flexiv_sharpa_urdf): the Rizon of FLEXIV_WUJI, at its default pose, carrying the hand of
@@ -420,7 +447,7 @@ FLEXIV_SHARPA = RobotSpec(
 )
 
 ROBOT_SPECS: dict[str, RobotSpec] = {
-    spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_SHARPA)
+    spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_HUMAN_LIKE_S2R, FLEXIV_SHARPA)
 }
 
 

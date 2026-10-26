@@ -36,7 +36,8 @@ def _joints(urdf_path) -> dict[str, ET.Element]:
 
 def test_specs_are_registered_and_kuka_is_unchanged_in_shape() -> None:
     assert set(robots.ROBOT_SPECS) == {
-        "kuka_sharpa", "flexiv_wuji", "flexiv_wuji_human_like", "flexiv_sharpa"}
+        "kuka_sharpa", "flexiv_wuji", "flexiv_wuji_human_like", "flexiv_wuji_human_like_s2r",
+        "flexiv_sharpa"}
     assert robots.KUKA_SHARPA.num_joints == 29  # the released checkpoint's action size
     assert SPEC.num_joints == 27
 

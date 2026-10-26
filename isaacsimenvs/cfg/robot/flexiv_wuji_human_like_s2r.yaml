@@ -1,0 +1,6 @@
+# Robot overlay: flexiv_wuji_human_like.yaml with Wuji's sim2real hand drive (robots.py
+# FLEXIV_WUJI_HUMAN_LIKE_S2R: HAND2_DRIVE stiffness, damping and torque limits). Same URDF.
+robot: flexiv_wuji_human_like_s2r
+robot_self_collision: true
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf"
