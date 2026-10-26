@@ -189,10 +189,14 @@ def main() -> None:
             if record:
                 traj = {key: torch.stack(v) for key, v in traj.items()}
             res["joint_err_deg"] = res_joint
+            # Per-episode DR draws, to split results by them.
+            res["obs_delay"] = inner._obs_delay_idx.float().unsqueeze(1).expand(-1, k_seg).clone()
+            res["action_delay"] = inner._action_delay_idx.float().unsqueeze(1).expand(-1, k_seg).clone()
+            res["gain_scale"] = inner._gain_scale.clone()
             return res, traj
 
         def summarise(res) -> dict:
-            flat = {k: v.flatten() for k, v in res.items() if k != "joint_err_deg"}
+            flat = {k: v.flatten() for k, v in res.items() if k not in ("joint_err_deg", "gain_scale")}
             move = flat["arm_move_rad"]
             out_d = {}
             for label, mask in (
@@ -215,6 +219,17 @@ def main() -> None:
                     "settle_s_median": float(settle.median()) if settle.numel() else float("nan"),
                     "end_speed_rad_s_median": float(flat["end_speed"][mask].median()),
                 }
+            dr = inner.cfg.domain_randomization
+            for key, on in (("obs_delay", dr.use_obs_delay), ("action_delay", dr.use_action_delay)):
+                if on:
+                    for lag in range(3):
+                        m = flat[key] == lag
+                        if int(m.sum()):
+                            out_d[f"{key}={lag}"] = {
+                                "segments": int(m.sum()), "reached": float(flat["reached"][m].mean()),
+                                "hand_err_deg_p90": float(flat["hand_err_deg"][m].quantile(0.9)),
+                                "end_speed_rad_s_median": float(flat["end_speed"][m].median()),
+                            }
             je = res["joint_err_deg"].reshape(-1, 27).abs()
             out_d["joint_abs_err_deg_p90"] = {n: round(float(v), 2) for n, v in zip(names, je.nanquantile(0.9, dim=0))}
             return out_d
