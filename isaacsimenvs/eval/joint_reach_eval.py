@@ -135,6 +135,7 @@ def main() -> None:
             obs = inner._get_observations()  # the obs queue is still flushed at episode start
             res = {key: torch.full((n_env, k_seg), float("nan"), device=dev) for key in
                    ("arm_err_deg", "hand_err_deg", "reached", "settle_s", "end_speed", "arm_move_rad")}
+            res_joint = torch.full((n_env, k_seg, 27), float("nan"), device=dev)  # signed goal - q [deg]
             traj = {key: [] for key in ("obs", "action", "target", "q", "qd", "goal")} if record else None
             max_steps = int(inner.hold_steps(chains[:, :-1].reshape(-1, 27), chains[:, 1:].reshape(-1, 27),
                                              torch.full((n_env * k_seg,), settle_s, device=dev))
@@ -168,6 +169,7 @@ def main() -> None:
                     ids = ended.nonzero(as_tuple=False).squeeze(-1)
                     k = seg[ids]
                     prev_goal = chains[ids, k]
+                    res_joint[ids, k] = torch.rad2deg(inner._goal[ids] - q[ids])
                     res["arm_err_deg"][ids, k] = torch.rad2deg(arm_e[ids])
                     res["hand_err_deg"][ids, k] = torch.rad2deg(hand_e[ids])
                     res["reached"][ids, k] = in_tol[ids].float()
@@ -186,10 +188,11 @@ def main() -> None:
                     speed_n[ids] = 0.0
             if record:
                 traj = {key: torch.stack(v) for key, v in traj.items()}
+            res["joint_err_deg"] = res_joint
             return res, traj
 
         def summarise(res) -> dict:
-            flat = {k: v.flatten() for k, v in res.items()}
+            flat = {k: v.flatten() for k, v in res.items() if k != "joint_err_deg"}
             move = flat["arm_move_rad"]
             out_d = {}
             for label, mask in (
@@ -212,6 +215,8 @@ def main() -> None:
                     "settle_s_median": float(settle.median()) if settle.numel() else float("nan"),
                     "end_speed_rad_s_median": float(flat["end_speed"][mask].median()),
                 }
+            je = res["joint_err_deg"].reshape(-1, 27).abs()
+            out_d["joint_abs_err_deg_p90"] = {n: round(float(v), 2) for n, v in zip(names, je.nanquantile(0.9, dim=0))}
             return out_d
 
         summary = {"checkpoint": args.checkpoint, "sapg_expl_coef": args.sapg_expl_coef,
@@ -224,6 +229,9 @@ def main() -> None:
             summary["conditions"][name] = summarise(res)
             torch.save({k: v.cpu() for k, v in res.items()}, out / f"segments_{name}.pt")
             print(f"[jr_eval] {name}: {json.dumps(summary['conditions'][name]['all'])}", flush=True)
+            if name == conditions[0]:
+                print(f"[jr_eval] {name} per-joint |err| p90 [deg]: "
+                      f"{json.dumps(summary['conditions'][name]['joint_abs_err_deg_p90'])}", flush=True)
 
         # Real-robot sequence: a held-out chain from the default pose, no DR, env 0 recorded.
         set_condition("nodr")

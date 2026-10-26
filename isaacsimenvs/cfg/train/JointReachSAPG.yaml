@@ -2,7 +2,9 @@
 #
 # ClothSAPG.yaml's network and learner unchanged (MLP [1024, 1024, 512, 512] + LSTM 1024, input
 # normalisation, 6 SAPG blocks, horizon 32, minibatch 24576), so the deploy code that runs this policy
-# runs flat7's. Rewards are not scaled down (scale_value 1.0). Single GPU; the experiment recipe sets envs and block size.
+# runs flat7's. Rewards are not scaled down (scale_value 1.0); initial std 0.37 and a stronger
+# bounds loss, since this policy starts from scratch rather than from a trained prior. Single GPU;
+# the experiment recipe sets envs and block size.
 
 params:
   seed: 42
@@ -28,7 +30,9 @@ params:
           name: default
         sigma_init:
           name: const_initializer
-          val: 0
+          val: -1.0   # log std: 0.37. At 0 (std 1, the action range) the clipped Gaussian pushed mu
+                      # past the bounds, where all samples clip and the gradient vanishes; training
+                      # from scratch saturated and diverged (KL spikes up to 310)
         fixed_sigma: coef_cond    # SAPG requires coef_cond (not 'fixed')
     mlp:
       units: [1024, 1024, 512, 512]
@@ -92,7 +96,7 @@ params:
     clip_value: True
     horizon_length: 32
     seq_length: 16
-    bounds_loss_coef: 0.0001
+    bounds_loss_coef: 0.01   # 1e-4 did not hold mu inside +-1.1
 
     # Asymmetric critic (stateList > obsList)
     central_value_config:
