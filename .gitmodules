@@ -3,4 +3,5 @@
 	url = https://github.com/younghyopark/aioflexiv
 [submodule "third_party/aiowuji"]
 	path = third_party/aiowuji
-	url = https://github.com/younghyopark/aiowuji
+	url = https://github.com/Halo123188/aiowuji
+	branch = yiboc-deployment

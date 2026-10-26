@@ -128,10 +128,12 @@ class HandIO:
     by default the velocity is the backward difference of the position between policy steps.
     """
 
-    def __init__(self, sn: str | None, kp, kd, effort_limit: float, dry_run: bool, vel: str) -> None:
+    def __init__(self, sn: str | None, kp, kd, effort_limit: float, dry_run: bool, vel: str,
+                 disabled_joints=()) -> None:
         from aiowuji import WujiController
 
-        self.c = WujiController(sn, kp=kp, kd=kd, effort_limit=effort_limit, dry_run=dry_run)
+        self.c = WujiController(sn, kp=kp, kd=kd, effort_limit=effort_limit, dry_run=dry_run,
+                                disabled_joints=disabled_joints)
         self.vel = vel
         self._last = None
 
@@ -156,11 +158,19 @@ class HandIO:
         return q, qd
 
     def command(self, q: np.ndarray) -> None:
-        self.c.set_now("q_desired", q)
+        self.c.set_now("q_desired", self._clip(q))
 
     async def move_to(self, q: np.ndarray, max_velocity: float) -> None:
-        await self.c.move(q, max_velocity=max_velocity)
+        await self.c.move(self._clip(q), max_velocity=max_velocity)
         self._last = None
+
+    @staticmethod
+    def _clip(q: np.ndarray) -> np.ndarray:
+        # The sim's thumb_cmc_abd lower limit (-85.03 deg) is 0.03 deg past aiowuji's documented -85, which
+        # aiowuji rejects; clip to aiowuji's range.
+        from aiowuji import JOINT_LIMITS
+
+        return np.clip(q, JOINT_LIMITS[:, 0], JOINT_LIMITS[:, 1])
 
 
 # ---------------------------------------------------------------------------------------------- main
@@ -188,6 +198,9 @@ def _parse() -> argparse.Namespace:
                    help="hand kd [A s/rad] = this x sim kd [Nm s/rad]")
     p.add_argument("--hand_effort_limit", type=float, default=0.5, help="A (aiowuji default 0.5, max 1.5)")
     p.add_argument("--hand_vel", choices=("diff", "sdk"), default="diff")
+    p.add_argument("--hand_disabled_joints", type=int, nargs="*", default=[],
+                   help="hand joint indices 0-19 (aiowuji order, e.g. 17 = pinky_S2) never enabled: they hang "
+                        "limp, the policy sees them at their target, and they are left out of the scoring")
     p.add_argument("--move_speed", type=float, default=0.3, help="rad/s for the move to the start pose")
     p.add_argument("--settle_s", type=float, default=1.0, help="hold at the start pose before the policy")
     p.add_argument("--max_arm_track_err", type=float, default=0.15,
@@ -217,6 +230,11 @@ async def run(args: argparse.Namespace) -> int:
     hand_kp = spec.stiffness[na:] * args.hand_kp_per_nm
     hand_kd = spec.damping[na:] * args.hand_kd_per_nm
 
+    hand_off = sorted(set(args.hand_disabled_joints))
+    if any(not 0 <= j < n - na for j in hand_off):
+        raise SystemExit(f"--hand_disabled_joints must be within [0, {n - na})")
+    off = np.array([na + j for j in hand_off], dtype=int)  # canonical indices of the disabled joints
+
     print(f"[jr] {len(seq.goals)} goals, {n_steps} steps = {n_steps * spec.dt:.0f} s at {1 / spec.dt:.0f} Hz, mode {args.mode}")
     print(f"[jr] start pose arm [deg] {np.round(np.degrees(seq.start[:na]), 1).tolist()}")
     far = np.abs(seq.goals[:, :na] - seq.start[:na]).max()
@@ -225,6 +243,9 @@ async def run(args: argparse.Namespace) -> int:
     print(f"[jr] hand kp {np.round(hand_kp, 3).tolist()} A/rad")
     print(f"[jr] hand kd {np.round(hand_kd, 4).tolist()} A s/rad, effort limit {args.hand_effort_limit} A, "
           f"velocity from {args.hand_vel}")
+    if len(off):
+        print(f"[jr] hand joints disabled (limp, not scored): "
+              f"{', '.join(f'{j} {spec.joint_names[na + j]}' for j in hand_off)}")
     if not args.yes and (args.arm not in ("mujoco", "fake") or args.hand not in ("fake", "dry_run")):
         if input("[jr] hardware will move. Type 'go' to start: ").strip() != "go":
             print("[jr] not started")
@@ -245,7 +266,8 @@ async def run(args: argparse.Namespace) -> int:
         hand = FakeJoints(seq.start[na:], 0.05)
     else:
         sn = args.hand_sn if args.hand == "dry_run" else (None if args.hand == "auto" else args.hand)
-        hand = HandIO(sn, hand_kp, hand_kd, args.hand_effort_limit, args.hand == "dry_run", args.hand_vel)
+        hand = HandIO(sn, hand_kp, hand_kd, args.hand_effort_limit, args.hand == "dry_run", args.hand_vel,
+                      hand_off)
 
     log = {k: np.zeros((n_steps, n)) for k in ("obs_q", "obs_qd", "goal", "action", "target")}
     log["obs"] = np.zeros((n_steps, 4 * n))
@@ -282,7 +304,9 @@ async def run(args: argparse.Namespace) -> int:
                 q_arm, qd_arm = arm.read()
                 q_hand, qd_hand = hand.read()
                 q, qd = np.concatenate([q_arm, q_hand]), np.concatenate([qd_arm, qd_hand])
-                obs = build_obs(spec, q, qd, pipe.prev, goal_at[t])
+                q_in, qd_in = q.copy(), qd.copy()
+                q_in[off], qd_in[off] = pipe.prev[off], 0.0  # disabled joints: as if they tracked their target
+                obs = build_obs(spec, q_in, qd_in, pipe.prev, goal_at[t])
                 if policy is not None:
                     action = await asyncio.to_thread(policy.act, obs)
                     target = pipe.step(action)
@@ -309,6 +333,7 @@ async def run(args: argparse.Namespace) -> int:
                     qa, _ = arm.read()
                     qh, _ = hand.read()
                     err = np.abs(seq.goals[k] - np.concatenate([qa, qh]))
+                    err[off] = 0.0
                     ea, eh = np.degrees(err[:na].max()), np.degrees(err[na:].max())
                     ok = ea < np.degrees(spec.arm_tol) and eh < np.degrees(spec.hand_tol)
                     sim = rec.get("sim_segments", {}) if rec is not None else {}
