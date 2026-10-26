@@ -58,8 +58,7 @@ class JointReachEnv(PlayEnv):
         apply_physx_material_properties(self)
         allocate_state_buffers(self)
         self._allocate_reach_buffers()
-        self._goal_bank = self._load_or_build_goal_bank()
-        print(f"[joint_reach] goal bank: {self._goal_bank.shape[0]} configurations", flush=True)
+        self._load_goals()
 
     # ------------------------------------------------------------------ buffers
 
@@ -74,6 +73,9 @@ class JointReachEnv(PlayEnv):
         self._err = torch.zeros(n_env, n, device=dev)
         # When True the env never draws goals itself: the caller writes _goal (eval / replay).
         self.external_goals = False
+        self._chain_id = torch.zeros(n_env, dtype=torch.long, device=dev)
+        self._chain_idx = torch.zeros(n_env, dtype=torch.long, device=dev)
+        self._chain_dir = torch.ones(n_env, dtype=torch.long, device=dev)
 
         stiff, damp = self.robot.data.joint_stiffness, self.robot.data.joint_damping
         self._base_k_lab = (stiff.torch if hasattr(stiff, "torch") else stiff).clone()
@@ -148,109 +150,196 @@ class JointReachEnv(PlayEnv):
         self.object.write_root_pose_to_sim(pose, env_ids=env_ids)
         self.object.write_root_velocity_to_sim(torch.zeros(n, 6, device=self.device), env_ids=env_ids)
 
-    def build_goal_bank(self, size: int, seed: int) -> torch.Tensor:
-        """Sample collision-free goal configurations in the workspace, canonical order, (size, 27).
+    def _arm_limits(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Sampling limits, canonical order: arm limits shrunk by the margin, hand limits as they are."""
+        lo, hi = self._lo.clone(), self._hi.clone()
+        margin = math.radians(self.cfg.goal.arm_limit_margin_deg)
+        lo[:7] += margin
+        hi[:7] -= margin
+        return lo, hi
 
-        Every env tests one candidate per round: the robot is written to it with zero joint gains and
-        stepped; with gravity off only a contact can move it. Candidates that stay put and pass the
-        workspace test are kept.
-        """
+    def _begin_validation(self) -> None:
+        """Ready the scene for _valid: the highest table the reset noise can place, the object away,
+        zero joint gains. _end_validation restores the gains."""
         g = self.cfg.goal
-        dev = self.device
-        gen = torch.Generator(device=dev).manual_seed(int(seed))
-        all_ids = torch.arange(self.num_envs, device=dev)
-        n_arm = len(self.robot_spec.arm_joint_names)
-
-        # The highest table the reset noise can place, and the object out of the way.
         top, _, _ = self._table_top_and_halfsize()
-        table_pose = torch.zeros(self.num_envs, 7, device=dev)
+        table_pose = torch.zeros(self.num_envs, 7, device=self.device)
         table_pose[:, :3] = self.scene.env_origins
         table_pose[:, 2] += top - 0.5 * g.table_box_size[2]
         table_pose[:, 3] = 1.0
         self.table.write_root_pose_to_sim(table_pose)
-        self._park_object(all_ids)
-
-        lo, hi = self._lo.clone(), self._hi.clone()
-        margin = math.radians(g.arm_limit_margin_deg)
-        lo[:n_arm] += margin
-        hi[:n_arm] -= margin
-
-        zeros = torch.zeros(self.num_envs, self.robot_spec.num_joints, device=dev)
+        self._park_object(torch.arange(self.num_envs, device=self.device))
+        zeros = torch.zeros(self.num_envs, self.robot_spec.num_joints, device=self.device)
         self.robot.write_joint_stiffness_to_sim(zeros)
         self.robot.write_joint_damping_to_sim(zeros)
+
+    def _end_validation(self) -> None:
+        self.robot.write_joint_stiffness_to_sim(self._base_k_lab)
+        self.robot.write_joint_damping_to_sim(self._base_d_lab)
+
+    def _valid(self, q: torch.Tensor) -> torch.Tensor:
+        """Which of num_envs candidate configurations (canonical order) are goals: written with zero
+        joint gains and stepped, a configuration in contact moves (gravity is off on the robot); one that
+        stays put must also pass the workspace test."""
+        g = self.cfg.goal
+        q_lab = q[:, self._perm_canon_to_lab]
+        self.robot.write_joint_state_to_sim(q_lab, torch.zeros_like(q_lab))
+        self.robot.set_joint_position_target(q_lab)
+        for _ in range(g.collision_check_steps):
+            self.scene.write_data_to_sim()
+            self.sim.step(render=False)
+            self.scene.update(dt=self.physics_dt)
+        still = (self.robot.data.joint_pos - q_lab).abs().max(dim=-1).values < g.collision_tol_rad
+        palm, points = self._robot_points()
+        return still & self._check_points(palm, points)
+
+    def build_goal_bank(self, size: int, seed: int) -> torch.Tensor:
+        """Collision-free configurations spread over the workspace, canonical order, (size, 27): every
+        joint uniform in its sampling limits, one candidate per env per round, rejection by _valid."""
+        g = self.cfg.goal
+        gen = torch.Generator(device=self.device).manual_seed(int(seed))
+        lo, hi = self._arm_limits()
+        self._begin_validation()
         kept, n_kept, n_tried, rounds = [], 0, 0, 0
         while n_kept < size:
-            q = lo + (hi - lo) * torch.rand(self.num_envs, lo.numel(), device=dev, generator=gen)
-            q_lab = q[:, self._perm_canon_to_lab]
-            self.robot.write_joint_state_to_sim(q_lab, torch.zeros_like(q_lab))
-            self.robot.set_joint_position_target(q_lab)
-            for _ in range(g.collision_check_steps):
-                self.scene.write_data_to_sim()
-                self.sim.step(render=False)
-                self.scene.update(dt=self.physics_dt)
-            still = (self.robot.data.joint_pos - q_lab).abs().max(dim=-1).values < g.collision_tol_rad
-            palm, points = self._robot_points()
-            ok = still & self._check_points(palm, points)
+            q = lo + (hi - lo) * torch.rand(self.num_envs, lo.numel(), device=self.device, generator=gen)
+            ok = self._valid(q)
             kept.append(q[ok])
             n_kept += int(ok.sum())
             n_tried += self.num_envs
             rounds += 1
-            if rounds % 20 == 0 or n_kept >= size:
+            if rounds % 100 == 0 or n_kept >= size:
                 print(
                     f"[joint_reach] goal bank round {rounds}: kept {n_kept}/{n_tried} "
                     f"({100.0 * n_kept / n_tried:.2f}%)", flush=True,
                 )
             if rounds >= g.max_bank_rounds:
                 raise RuntimeError(f"goal bank: {n_kept} of {size} after {rounds} rounds; loosen the workspace")
-        self.robot.write_joint_stiffness_to_sim(self._base_k_lab)
-        self.robot.write_joint_damping_to_sim(self._base_d_lab)
+        self._end_validation()
         return torch.cat(kept)[:size].contiguous()
 
-    def _load_or_build_goal_bank(self) -> torch.Tensor:
+    def build_goal_chains(self, starts: torch.Tensor, length: int, seed: int) -> torch.Tensor:
+        """Random walks of `length` goals from `starts` (num_envs, 27), canonical order, (num_envs,
+        length, 27). Each step moves every arm joint by up to chain_arm_step_rad x a scale drawn per
+        step and redraws the hand; a proposal _valid rejects is redrawn next round."""
         g = self.cfg.goal
-        path = Path(g.bank_file)
+        dev = self.device
+        gen = torch.Generator(device=dev).manual_seed(int(seed))
+        lo, hi = self._arm_limits()
+        n_env = self.num_envs
+        rows = torch.arange(n_env, device=dev)
+        chains = starts.unsqueeze(1).repeat(1, length, 1)
+        filled = torch.ones(n_env, dtype=torch.long, device=dev)
+        self._begin_validation()
+        rounds, tried = 0, 0
+        while bool((filled < length).any()) and rounds < g.max_chain_rounds:
+            cur = chains[rows, filled - 1]
+            s_lo, s_hi = g.chain_step_scale_range
+            scale = s_lo + (s_hi - s_lo) * torch.rand(n_env, 1, device=dev, generator=gen)
+            step = (2.0 * torch.rand(n_env, 7, device=dev, generator=gen) - 1.0) * g.chain_arm_step_rad * scale
+            q = lo + (hi - lo) * torch.rand(n_env, lo.numel(), device=dev, generator=gen)
+            q[:, :7] = torch.minimum(torch.maximum(cur[:, :7] + step, lo[:7]), hi[:7])
+            open_ = filled < length
+            ok = self._valid(q) & open_
+            tried += int(open_.sum())
+            ids = ok.nonzero(as_tuple=False).squeeze(-1)
+            chains[ids, filled[ids]] = q[ids]
+            filled[ids] += 1
+            rounds += 1
+            if rounds % 50 == 0:
+                print(
+                    f"[joint_reach] chains round {rounds}: {int(filled.sum())}/{n_env * length} goals, "
+                    f"acceptance {100.0 * (int(filled.sum()) - n_env) / max(tried, 1):.1f}%", flush=True,
+                )
+        self._end_validation()
+        # A chain that could not be extended repeats its last goal.
+        short = filled < length
+        if bool(short.any()):
+            print(f"[joint_reach] {int(short.sum())} chains stopped short after {rounds} rounds", flush=True)
+            idx = torch.arange(length, device=dev).unsqueeze(0).expand(n_env, -1)
+            last = torch.minimum(idx, (filled - 1).unsqueeze(1))
+            chains = chains[rows.unsqueeze(1), last]
+        return chains
+
+    def default_goal(self) -> torch.Tensor:
+        """The default pose, canonical order (27,)."""
+        return self.robot.data.default_joint_pos[0, self._perm_lab_to_canon].clone()
+
+    def chain_starts(self, bank: torch.Tensor, default_frac: float, seed: int) -> torch.Tensor:
+        """num_envs chain starts: the first default_frac at the default pose, the rest from `bank`."""
+        gen = torch.Generator(device=self.device).manual_seed(int(seed) + 1)
+        n_def = int(round(default_frac * self.num_envs))
+        starts = bank[torch.randint(0, bank.shape[0], (self.num_envs,), device=self.device, generator=gen)]
+        starts[:n_def] = self.default_goal()
+        return starts
+
+    def _load_or_build(self, path_str: str, build, what: str) -> torch.Tensor:
+        path = Path(path_str)
         if path.is_file():
             payload = torch.load(path, map_location=self.device)
-            bank = payload["goals"].to(self.device)
             if list(payload["joint_names"]) != list(self.robot_spec.joint_names_canonical):
                 raise ValueError(f"{path}: joint order differs from {self.robot_spec.name}")
-            return bank
-        bank = self.build_goal_bank(g.bank_size, g.bank_seed)
+            return payload["goals"].to(self.device)
+        goals = build()
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
         torch.save(
-            {
-                "goals": bank.cpu(),
-                "joint_names": list(self.robot_spec.joint_names_canonical),
-                "seed": g.bank_seed,
-                "cfg": g.to_dict(),
-            },
+            {"goals": goals.cpu(), "joint_names": list(self.robot_spec.joint_names_canonical),
+             "cfg": self.cfg.goal.to_dict()},
             tmp,
         )
         tmp.rename(path)
-        print(f"[joint_reach] wrote goal bank {path}", flush=True)
-        return bank
+        print(f"[joint_reach] wrote {what} {path}", flush=True)
+        return goals
+
+    def _load_goals(self) -> None:
+        g = self.cfg.goal
+        self._goal_bank = self._load_or_build(
+            g.bank_file, lambda: self.build_goal_bank(g.bank_size, g.bank_seed), "goal bank"
+        )
+        self._chains = self._load_or_build(
+            g.chain_file,
+            lambda: self.build_goal_chains(
+                self.chain_starts(self._goal_bank, g.chain_default_frac, g.chain_seed), g.chain_length, g.chain_seed
+            ),
+            "goal chains",
+        )
+        self._n_default_chains = int(round(g.chain_default_frac * self._chains.shape[0]))
+        print(
+            f"[joint_reach] goal bank {tuple(self._goal_bank.shape)}, chains {tuple(self._chains.shape)} "
+            f"({self._n_default_chains} from the default pose)", flush=True,
+        )
 
     # ------------------------------------------------------------------ goals
 
-    def _draw_goals(self, env_ids: torch.Tensor, allow_near: bool) -> None:
-        g = self.cfg.goal
-        n = env_ids.numel()
-        bank = self._goal_bank
-        new = bank[torch.randint(0, bank.shape[0], (n,), device=self.device)]
-        if allow_near and g.near_prob > 0.0:
-            near = torch.rand(n, device=self.device) < g.near_prob
-            if near.any():
-                ids = env_ids[near]
-                cand = bank[torch.randint(0, bank.shape[0], (ids.numel(), g.near_candidates), device=self.device)]
-                dist = (cand - self._goal[ids].unsqueeze(1)).abs().sum(dim=-1)
-                new[near] = cand[torch.arange(ids.numel(), device=self.device), dist.argmin(dim=-1)]
-        self._goal[env_ids] = new
-        lo_s, hi_s = g.hold_time_range_s
-        steps = torch.empty(n, device=self.device).uniform_(lo_s, hi_s) / self.step_dt
-        self._hold_len[env_ids] = steps.round().long().clamp(min=1)
+    def hold_steps(self, goal_from: torch.Tensor, goal_to: torch.Tensor, settle_s: torch.Tensor) -> torch.Tensor:
+        """Policy steps to hold `goal_to` after `goal_from`: the largest arm joint move at the action
+        pipeline's arm speed limit, plus `settle_s`."""
+        a = self.cfg.action
+        v = a.dof_speed_scale * a.arm_moving_average  # rad/s the joint targets can move
+        travel = (goal_to[:, :7] - goal_from[:, :7]).abs().max(dim=-1).values / v
+        return ((travel + settle_s) / self.step_dt).round().long().clamp(min=1)
+
+    def _set_goal(self, env_ids: torch.Tensor, goal_from: torch.Tensor) -> None:
+        """Write the chain goal at _chain_idx as the goal of `env_ids` and start its hold timer."""
+        lo_s, hi_s = self.cfg.goal.settle_time_range_s
+        goal = self._chains[self._chain_id[env_ids], self._chain_idx[env_ids]]
+        self._goal[env_ids] = goal
+        settle = torch.empty(env_ids.numel(), device=self.device).uniform_(lo_s, hi_s)
+        self._hold_len[env_ids] = self.hold_steps(goal_from, goal, settle)
         self._hold_left[env_ids] = self._hold_len[env_ids]
         self._seg_first_in_tol[env_ids] = -1
+
+    def _advance_goals(self, env_ids: torch.Tensor) -> None:
+        """Next goal along each env's chain, turning back at either end."""
+        length = self._chains.shape[1]
+        idx, direction = self._chain_idx[env_ids], self._chain_dir[env_ids]
+        nxt = idx + direction
+        turn = (nxt < 0) | (nxt >= length)
+        direction = torch.where(turn, -direction, direction)
+        self._chain_dir[env_ids] = direction
+        self._chain_idx[env_ids] = torch.where(turn, idx + direction, nxt).clamp(0, length - 1)
+        self._set_goal(env_ids, self._goal[env_ids].clone())
 
     def _close_segments(self, env_ids: torch.Tensor) -> None:
         """Tally the goal segments that end now (their hold time ran out)."""
@@ -269,6 +358,13 @@ class JointReachEnv(PlayEnv):
 
     # ------------------------------------------------------------------ hooks
 
+    def place_robot(self, env_ids: torch.Tensor, q_canon: torch.Tensor) -> None:
+        """Write a joint configuration (canonical order) as the robot state and the pipeline's targets."""
+        q = q_canon[:, self._perm_canon_to_lab]
+        self.robot.write_joint_state_to_sim(q, torch.zeros_like(q), env_ids=env_ids)
+        self._prev_targets[env_ids] = q
+        self._cur_targets[env_ids] = q
+
     def _reset_idx(self, env_ids) -> None:
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
@@ -276,30 +372,39 @@ class JointReachEnv(PlayEnv):
         DirectRLEnv._reset_idx(self, env_ids)
         n = env_ids.numel()
         g, rc = self.cfg.goal, self.cfg.reset
+        dev = self.device
+        n_chain, length = self._chains.shape[:2]
 
-        # Start: the default pose with Play's reset noise, or a bank configuration.
+        # Either the default pose (Play's reset noise) at the start of a default-seeded chain, or a
+        # random goal of a random chain, exactly.
+        from_default = torch.rand(n, device=dev) < g.default_start_prob
+        chain_id = torch.where(
+            from_default,
+            torch.randint(0, max(self._n_default_chains, 1), (n,), device=dev),
+            torch.randint(0, n_chain, (n,), device=dev),
+        )
+        idx = torch.where(from_default, torch.zeros_like(chain_id), torch.randint(0, length, (n,), device=dev))
         default = self.robot.data.default_joint_pos[env_ids]
         lower = self.robot.data.joint_pos_limits[env_ids, :, 0]
         upper = self.robot.data.joint_pos_limits[env_ids, :, 1]
         scale = torch.zeros_like(default)
         scale[:, self._arm_joint_ids] = rc.reset_dof_pos_random_interval_arm
         scale[:, self._hand_joint_ids] = rc.reset_dof_pos_random_interval_fingers
-        q = torch.lerp(default, lower + (upper - lower) * torch.rand_like(default), scale)
-        from_bank = torch.rand(n, device=self.device) < g.start_from_bank_prob
-        if from_bank.any():
-            pick = self._goal_bank[torch.randint(0, self._goal_bank.shape[0], (int(from_bank.sum()),), device=self.device)]
-            q[from_bank] = pick[:, self._perm_canon_to_lab]
-        q = q.clamp(lower, upper)
-        self.robot.write_joint_state_to_sim(q, torch.zeros_like(q), env_ids=env_ids)
-        self._prev_targets[env_ids] = q
-        self._cur_targets[env_ids] = q
+        q_lab = torch.lerp(default, lower + (upper - lower) * torch.rand_like(default), scale).clamp(lower, upper)
+        q = q_lab[:, self._perm_lab_to_canon]
+        q = torch.where(from_default.unsqueeze(1), q, self._chains[chain_id, idx])
+        self.place_robot(env_ids, q)
 
         _reset_table_pose(self, env_ids)
         self._park_object(env_ids)
 
-        self._goal[env_ids] = q[:, self._perm_lab_to_canon]
+        self._chain_id[env_ids] = chain_id
+        self._chain_idx[env_ids] = idx
+        self._chain_dir[env_ids] = torch.where(torch.rand(n, device=dev) < 0.5, 1, -1)
+        self._chain_dir[env_ids] = torch.where(from_default, torch.ones_like(chain_id), self._chain_dir[env_ids])
+        self._goal[env_ids] = q
         if not self.external_goals:
-            self._draw_goals(env_ids, allow_near=False)
+            self._advance_goals(env_ids)
         self._actions[env_ids] = 0.0
         self._prev_actions[env_ids] = 0.0
         self._action_queue[env_ids] = 0.0
@@ -388,7 +493,7 @@ class JointReachEnv(PlayEnv):
             ended = (self._hold_left <= 0).nonzero(as_tuple=False).squeeze(-1)
             if ended.numel() > 0:
                 self._close_segments(ended)
-                self._draw_goals(ended, allow_near=True)
+                self._advance_goals(ended)
         self._log_metrics()
         return reward
 

@@ -23,15 +23,36 @@ from ..play.play_env_cfg import (
 
 @configclass
 class GoalCfg:
-    """The goal bank and how goals are drawn from it."""
+    """Goal configurations: random-walk chains through collision-free configurations.
 
-    # Bank of collision-free goal configurations, canonical joint order, radians. Built at env start
-    # by JointReachEnv.build_goal_bank when the file does not exist, then reused.
+    The action pipeline moves the arm's joint targets at most dof_speed_scale x arm_moving_average
+    (0.15 rad/s), so goals drawn anywhere in the workspace (3.5 rad apart on average) cannot be reached
+    in a few seconds. Each env instead follows a chain whose consecutive goals differ by at most
+    `chain_arm_step_rad` per arm joint (hand joints redrawn over their whole range at every step), and
+    holds each goal for the time the arm needs to get there plus a settle time. Half the chains start at
+    the default pose, half at configurations of a global bank spread over the whole workspace.
+    """
+
+    # Global bank of collision-free configurations in the workspace (canonical order, rad): the
+    # chains' far-flung starting points. Built at env start when the file does not exist.
     bank_file: str = "outputs/joint_reach/goal_bank_s0_n50000.pt"
     bank_size: int = 50_000
     bank_seed: int = 0
-    # Arm joints are drawn uniformly inside their limits shrunk by this margin [deg]; hand joints over
-    # their full (human-like) range.
+    # Chains: one per env, `chain_length` goals each. Built at env start when the file does not exist.
+    chain_file: str = "outputs/joint_reach/goal_chains_s0_l48.pt"
+    chain_length: int = 48
+    chain_seed: int = 0
+    # Each chain step moves every arm joint by up to this times a per-step scale drawn from
+    # chain_step_scale_range [rad].
+    chain_arm_step_rad: float = 0.35
+    chain_step_scale_range: tuple[float, float] = (0.1, 1.0)
+    # Fraction of chains that start at the default pose (the rest start at global-bank configurations).
+    chain_default_frac: float = 0.5
+    # Give up extending chains after this many rounds; chains still short repeat their last goal.
+    max_chain_rounds: int = 1000
+
+    # Arm joints stay inside their limits shrunk by this margin [deg]; hand joints use their full
+    # (human-like) range.
     arm_limit_margin_deg: float = 5.0
     # Palm centre must lie over the table top, between these heights above it [m].
     palm_height_range: tuple[float, float] = (0.05, 0.50)
@@ -49,14 +70,12 @@ class GoalCfg:
     # The table's collision box [m] (assets.table_urdf), centred on the env origin in x and y.
     table_box_size: tuple[float, float, float] = (0.6, 0.4, 0.3)
 
-    # Time each goal is held before the next one is drawn [s], uniform.
-    hold_time_range_s: tuple[float, float] = (1.5, 3.0)
-    # Probability that a new goal is the nearest of `near_candidates` random bank entries to the
-    # current goal (small moves) instead of a uniformly random entry (large moves).
-    near_prob: float = 0.5
-    near_candidates: int = 32
-    # Probability that an episode starts at a random bank configuration instead of the default pose.
-    start_from_bank_prob: float = 0.5
+    # Hold time per goal = largest arm joint move / the pipeline's arm speed limit + a settle time
+    # drawn uniformly from this range [s].
+    settle_time_range_s: tuple[float, float] = (1.5, 2.5)
+    # Probability that an episode starts at the default pose at the start of a default-seeded chain;
+    # otherwise at a random goal of a random chain.
+    default_start_prob: float = 0.5
 
 
 @configclass
@@ -113,7 +132,8 @@ class JointReachEnvCfg(PlayFlexivWujiHumanLikeEnvCfg):
     goal: GoalCfg = GoalCfg()
     reach_reward: ReachRewardCfg = ReachRewardCfg()
     gain_dr: GainDRCfg = GainDRCfg()
-    termination: TerminationCfg = TerminationCfg(episode_length=600, max_consecutive_successes=0)
+    termination: TerminationCfg = TerminationCfg(max_consecutive_successes=0)
+    episode_length_s: float = 20.0
     # flat7DRABC's robot-side DR (A + B), none of the object terms. Gains are drawn by gain_dr.
     domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg(
         use_obs_delay=True,

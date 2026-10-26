@@ -2,7 +2,7 @@
 #
 # ClothSAPG.yaml's network and learner unchanged (MLP [1024, 1024, 512, 512] + LSTM 1024, input
 # normalisation, 6 SAPG blocks, horizon 32, minibatch 24576), so the deploy code that runs this policy
-# runs flat7's. Single GPU; the experiment recipe sets envs and block size.
+# runs flat7's. Rewards are not scaled down (scale_value 1.0). Single GPU; the experiment recipe sets envs and block size.
 
 params:
   seed: 42
@@ -63,7 +63,8 @@ params:
     value_bootstrap: True
     normalize_advantage: True
     reward_shaper:
-      scale_value: 0.01
+      scale_value: 1.0   # Play's 0.01 is for its ~100x larger rewards; here it left the task reward
+                         # (~-4 / step) no bigger than SAPG's entropy bonus
     num_actors: ${....env.scene.num_envs}
     gamma: 0.99
     tau: 0.95
