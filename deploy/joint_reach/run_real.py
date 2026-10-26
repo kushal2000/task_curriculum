@@ -24,6 +24,7 @@ Install (the robot PC; Python >= 3.12 for aioflexiv, no Isaac Sim):
     git submodule update --init third_party/aioflexiv third_party/aiowuji
     pip install torch numpy pyyaml omegaconf gym==0.23.1 -e rl_games -e third_party/aioflexiv -e third_party/aiowuji
 and copy the checkpoint and real_test_sequence.pt over (outputs/ and docs/results/ are not in git).
+--viser_port 8090 opens a live view (measured robot, goal ghost, fingertip goals); it also needs viser yourdfpy.
 Check the install with check_offline.py first.
 
 --mode replay sends the targets the sim recorded instead of running the policy (open loop), to tell a
@@ -48,7 +49,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from deploy.joint_reach.core import DEFAULT_SPEC, ActionPipeline, GoalSequence, Policy, Spec, build_obs  # noqa: E402
+from deploy.joint_reach.core import DEFAULT_SPEC, REPO, ActionPipeline, GoalSequence, Policy, Spec, build_obs  # noqa: E402
 
 
 class Abort(RuntimeError):
@@ -206,6 +207,8 @@ def _parse() -> argparse.Namespace:
     p.add_argument("--max_arm_track_err", type=float, default=0.15,
                    help="rad; abort if an arm joint lags its target by more (sim: < 0.02)")
     p.add_argument("--viewer", action="store_true", help="MuJoCo viewer for --arm mujoco")
+    p.add_argument("--viser_port", type=int, default=0,
+                   help="if set, a live viser view (measured robot + goal ghost) on this port, in its own process")
     p.add_argument("--log_dir", default="deploy/logs")
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     return p.parse_args()
@@ -277,12 +280,27 @@ async def run(args: argparse.Namespace) -> int:
     done_steps = 0
 
     async with contextlib.AsyncExitStack() as stack:
+        viewer = None
+        if args.viser_port:
+            from deploy.joint_reach.live_viser import LiveViewer
+
+            urdf = REPO / json.loads(Path(args.spec).read_text())["robot_urdf"]
+            viewer = LiveViewer(urdf, spec.joint_names, na, spec.arm_tol, spec.hand_tol, len(seq.goals),
+                                args.viser_port, ignored=off.tolist())
+            stack.callback(viewer.close)
+
+        async def mirror() -> None:  # the viewer during the move to the start pose
+            while True:
+                viewer.publish(np.concatenate([arm.read()[0], hand.read()[0]]), seq.start, 0, 0)
+                await asyncio.sleep(1 / 30)
+
         await arm.start()
         stack.push_async_callback(arm.stop)
         await hand.start()
         stack.push_async_callback(hand.stop)
 
         print("[jr] moving to the start pose")
+        mirror_task = asyncio.create_task(mirror()) if viewer is not None else None
         if isinstance(arm, FakeJoints):
             await arm.move_to(seq.start[:na])
         else:
@@ -292,6 +310,10 @@ async def run(args: argparse.Namespace) -> int:
         else:
             await hand.move_to(seq.start[na:], 0.5)
         await asyncio.sleep(args.settle_s)
+        if mirror_task is not None:
+            mirror_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await mirror_task
         arm.read(), hand.read()  # prime the hand's velocity difference
 
         pipe = ActionPipeline(spec, seq.start)
@@ -346,6 +368,8 @@ async def run(args: argparse.Namespace) -> int:
                           f"(worst {worst}) {'ok' if ok else 'MISS'}{sim_txt}", flush=True)
                     results.append({"goal": k, "arm_err_deg": ea, "hand_err_deg": eh, "reached": bool(ok),
                                     "joint_err_deg": np.degrees(err).tolist()})
+                if viewer is not None:
+                    viewer.publish(q, goal_at[t], k, 1, sum(r["reached"] for r in results), len(results))
 
                 t_next += period
                 wait = t_next - time.perf_counter()
@@ -365,6 +389,10 @@ async def run(args: argparse.Namespace) -> int:
                 qh, _ = hand.read()
                 arm.command(qa)
                 hand.command(qh)
+                if viewer is not None:
+                    viewer.publish(np.concatenate([qa, qh]), goal_at[max(done_steps - 1, 0)],
+                                   len(results) - 1 if results else 0, 2,
+                                   sum(r["reached"] for r in results), len(results))
             dts = np.diff(log["t_read"][:done_steps]) * 1e3
             timing = {"steps": done_steps, "overruns": overruns}
             if len(dts):
