@@ -1,0 +1,129 @@
+# JointReachSAPG: the joint-reach deployment test policy, trained from scratch.
+#
+# ClothSAPG.yaml's network and learner unchanged (MLP [1024, 1024, 512, 512] + LSTM 1024, input
+# normalisation, 6 SAPG blocks, horizon 32, minibatch 24576), so the deploy code that runs this policy
+# runs flat7's. Single GPU; the experiment recipe sets envs and block size.
+
+params:
+  seed: 42
+
+  env:
+    clip_observations: 10.0   # matches env.obs.clamp_abs_observations
+    clip_actions: 1.0
+
+  algo:
+    name: a2c_continuous
+
+  model:
+    name: continuous_a2c_logstd
+
+  network:
+    name: actor_critic
+    separate: False
+    space:
+      continuous:
+        mu_activation: None
+        sigma_activation: None
+        mu_init:
+          name: default
+        sigma_init:
+          name: const_initializer
+          val: 0
+        fixed_sigma: coef_cond    # SAPG requires coef_cond (not 'fixed')
+    mlp:
+      units: [1024, 1024, 512, 512]
+      activation: elu
+      d2rl: False
+      initializer:
+        name: default
+      regularizer:
+        name: None
+    rnn:
+      name: lstm
+      units: 1024
+      layers: 1
+      before_mlp: True
+      layer_norm: True
+
+  load_checkpoint: False
+  load_path: ''
+
+  config:
+    # Must start with `<int>_` — our vendored rl_games parses policy_idx from the prefix.
+    name: 0_joint_reach
+    full_experiment_name: ${.name}
+    env_name: rlgpu
+    device: 'cuda:0'
+    device_name: 'cuda:0'
+    multi_gpu: False
+    ppo: True
+    mixed_precision: True
+    normalize_input: True
+    normalize_value: True
+    value_bootstrap: True
+    normalize_advantage: True
+    reward_shaper:
+      scale_value: 0.01
+    num_actors: ${....env.scene.num_envs}
+    gamma: 0.99
+    tau: 0.95
+    learning_rate: 1e-4
+    lr_schedule: adaptive
+    schedule_type: standard
+    kl_threshold: 0.016
+    score_to_win: 1000000
+    max_epochs: 1000
+    save_best_after: 100
+    best_save_min_interval_s: 60.0   # >0: at most one best-reward checkpoint per this many seconds
+    save_frequency: 3000
+    periodic_save_every: 100         # >0: resumable nn/periodic_<name>_ep_<N>.pth every N epochs
+    periodic_keep: 15               # ...keeping only the newest this many
+    periodic_keep_epochs: []        # ...except these epochs, never deleted
+    snapshot_every: 100             # >0: weights-only nn/snap_<name>_ep_<N>.pth every N epochs, never deleted
+    print_stats: True
+    grad_norm: 1.0
+    entropy_coef: 0.0
+    truncate_grads: True
+    e_clip: 0.1
+    minibatch_size: 24576
+    mini_epochs: 2
+    critic_coef: 4.0
+    clip_value: True
+    horizon_length: 32
+    seq_length: 16
+    bounds_loss_coef: 0.0001
+
+    # Asymmetric critic (stateList > obsList)
+    central_value_config:
+      minibatch_size: 24576
+      mini_epochs: 2
+      learning_rate: 1e-4
+      kl_threshold: 0.016
+      clip_value: True
+      normalize_input: True
+      truncate_grads: True
+      network:
+        name: actor_critic
+        central_value: True
+        mlp:
+          units: [1024, 1024, 512, 512]
+          activation: elu
+          d2rl: False
+          initializer:
+            name: default
+          regularizer:
+            name: None
+
+    # === SAPG ===
+    use_others_experience: lf
+    off_policy_ratio: 1.0
+    expl_type: mixed_expl_learn_param
+    expl_reward_type: entropy
+    expl_reward_coef_embd_size: 32
+    expl_reward_coef_scale: 0.002
+    expl_coef_block_size: 4096
+
+    player:
+      deterministic: False
+      games_num: 100000
+      print_stats: False

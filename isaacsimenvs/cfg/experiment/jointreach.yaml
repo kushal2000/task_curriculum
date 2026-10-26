@@ -1,0 +1,21 @@
+# jointreach: the joint-reach deployment test policy on the Flexiv Rizon 4s + Wuji Hand 2 (human-like
+# limits), vendor MJCF hand gains with per-episode gain DR, flat7DRABC's robot-side DR (A + B).
+# 12288 envs: 24576 Flexiv + Wuji envs need ~90 GB of host RAM, more than bos14's nodes have free.
+# Trained from scratch (no --checkpoint): the observation is not the Play prior's.
+task: Isaacsimenvs-JointReachFlexivWujiHumanLike-Direct-v0
+
+env:
+  scene:
+    num_envs: 12288
+
+agent:
+  params:
+    config:
+      max_epochs: 2000
+      minibatch_size: 24576
+      central_value_config:
+        minibatch_size: 24576
+      expl_coef_block_size: 2048
+      best_save_min_interval_s: 60
+      periodic_save_every: 100
+      snapshot_every: 100
