@@ -33,8 +33,8 @@
 #SBATCH --partition=portal
 #SBATCH --time=72:00:00
 #SBATCH --gres=gpu:nvidia_rtx_6000_ada_generation:1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=128G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=80G
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --output=/share/portal/kk837/task_curriculum/slurm_logs/%x_%j.out

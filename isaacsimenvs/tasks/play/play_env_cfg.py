@@ -390,10 +390,12 @@ class ResetCfg:
     target_volume_mins: tuple[float, float, float] = (-0.35, -0.2, 0.6)
     target_volume_maxs: tuple[float, float, float] = (0.35, 0.2, 0.95)
     target_volume_region_scale: float = 1.0
-    # When set, each sampled goal's z is raised (past target_volume_maxs if need be) until the
-    # object at the goal orientation is this far (m) above the table top
-    # (utils/goal_table_clearance.py). None leaves goals where the sampler puts them.
-    goal_table_clearance_m: float | None = None
+    # When on, each sampled goal's z is raised (past target_volume_maxs if need be) until the
+    # object at the goal orientation is goal_table_clearance_m above the table top
+    # (utils/goal_table_clearance.py). Off leaves goals where the sampler puts them. (A switch and
+    # a float, not an optional float: the YAML overlay types each field by its default.)
+    use_goal_table_clearance: bool = False
+    goal_table_clearance_m: float = 0.01
 
     # Debug only — when set, every reset writes this exact env-local pose
     # to GoalViz instead of sampling. Format: (x, y, z, qw, qx, qy, qz).

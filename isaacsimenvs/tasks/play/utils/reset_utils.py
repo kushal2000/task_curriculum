@@ -369,7 +369,7 @@ def _reset_goal_pose(env, env_ids: torch.Tensor, mode: str) -> None:
     else:
         raise ValueError(f"unknown goal sampling mode: {mode}")
 
-    if cfg.goal_table_clearance_m is not None:
+    if cfg.use_goal_table_clearance:
         # Lift the goal off the table: how far the object reaches below its origin depends on the
         # goal orientation (_reset_table_pose has already set this reset's table height).
         floor_z = min_goal_z(

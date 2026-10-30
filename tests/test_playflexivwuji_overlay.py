@@ -29,7 +29,7 @@ REAL_TABLE = {
     "reset.table_reset_xy": [0.0, 0.29],
     "reset.target_volume_mins": [-0.35, 0.0, 0.35],
     "reset.target_volume_maxs": [0.35, 0.49, 0.7],
-    "reset.goal_table_clearance_m": 0.01,
+    "reset.use_goal_table_clearance": True,
 }
 #: Per Flexiv task YAML: its robot, and the leaves that must differ from Play.yaml with their values.
 VARIANTS = {
