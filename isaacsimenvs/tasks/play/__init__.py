@@ -105,6 +105,20 @@ gym.register(
     },
 )
 
+# Flexiv + right Wuji with human-like joint limits (flexiv_wuji.py RIGHT_HUMAN_LIKE_URDF).
+gym.register(
+    id="Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0",
+    entry_point="isaacsimenvs.tasks.play.play_env:PlayEnv",
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "isaacsimenvs.tasks.play.play_env_cfg:PlayFlexivWujiRightHumanLikeEnvCfg",
+        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "PlayFlexivWujiRightHumanLike.yaml"),
+        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
+    },
+)
+
 # Flexiv Rizon 4s carrying the Kuka's left Sharpa hand.
 gym.register(
     id="Isaacsimenvs-PlayFlexivSharpa-Direct-v0",

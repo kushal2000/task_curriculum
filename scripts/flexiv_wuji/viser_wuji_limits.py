@@ -32,7 +32,7 @@ from viser.extras import ViserUrdf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flexiv_wuji as fw  # noqa: E402
-from viser_compare import TABLE_COLOR, TABLE_SIZE, JointSliders  # noqa: E402
+from viser_compare import TABLE_COLOR, JointSliders  # noqa: E402
 
 SETUPS = ("vendor", "human_like")
 LABELS = {"vendor": "vendor limits", "human_like": "human-like limits"}
@@ -58,8 +58,8 @@ def main() -> None:
     server.scene.add_grid("/ground", width=4.0, height=4.0, cell_size=0.1)
     roots = {key: server.scene.add_frame(f"/{key}", show_axes=False) for key in SETUPS}
     tables = {
-        key: server.scene.add_box(f"/{key}/table", color=TABLE_COLOR, dimensions=TABLE_SIZE,
-                                  position=(0.0, 0.0, fw.TABLE_CENTER_Z))
+        key: server.scene.add_box(f"/{key}/table", color=TABLE_COLOR, dimensions=fw.FLEXIV_TABLE_SIZE,
+                                  position=fw.FLEXIV_TABLE_CENTER)
         for key in SETUPS
     }
     for key, text in LABELS.items():

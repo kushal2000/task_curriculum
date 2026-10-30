@@ -23,6 +23,7 @@ from isaaclab.sim.utils import find_matching_prim_paths, get_current_stage
 
 from ..robots import KUKA_SHARPA, RobotSpec
 from .generate_objects import generate_handle_head_urdfs
+from .goal_table_clearance import collision_corners
 
 
 # ----------------------------------------------------------------------------
@@ -106,6 +107,9 @@ def build_robot_articulation_usd_cfg(
                 stiffness=spec.hand_stiffness,
                 damping=spec.hand_damping,
                 armature=spec.hand_armature,
+                effort_limit_sim=spec.hand_effort_limit,
+                velocity_limit_sim=spec.hand_velocity_limit,
+                friction=spec.hand_friction,
             ),
         },
     )
@@ -1200,6 +1204,14 @@ def _apply_urdf_sdf_collision_markers(
         )
 
 
+def _urdf_box_size(urdf_path) -> tuple[float, float, float]:
+    """The table's collision ``<box size>`` (the single-box table URDFs)."""
+    boxes = ET.parse(urdf_path).getroot().findall("link/collision/geometry/box")
+    if len(boxes) != 1:
+        raise ValueError(f"{urdf_path}: expected one collision box, got {len(boxes)}")
+    return tuple(float(v) for v in boxes[0].get("size").split())
+
+
 def _generate_scaled_table_urdfs(
     base_urdf_path: str,
     num_variants: int,
@@ -1686,6 +1698,13 @@ def setup_scene(env) -> None:
 
     # 6. Per-env scale tensor for spawned Objects.
     _build_object_scale_tensor(env, object_scales_normalized, len(object_usd_paths))
+    # ... and each env's object collision-box corners and the table's half height, which keep
+    # goals clear of the table (reset.goal_table_clearance_m).
+    pool_corners = torch.stack([
+        torch.as_tensor(collision_corners(p), device=env.device) for p in env._object_urdf_paths
+    ])
+    env._object_collision_corners = pool_corners[env._object_asset_index_per_env]
+    env._table_half_height = _urdf_box_size(assets_cfg.table_urdf)[2] / 2
 
     # 7. Register with scene so DirectRLEnv refreshes their tensors each step.
     env.scene.articulations["robot"] = env.robot

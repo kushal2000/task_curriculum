@@ -6,6 +6,7 @@
 #
 # Intentional differences from Play.yaml (the allowlist):
 #   * `robot` — selects robots.FLEXIV_SHARPA (Rizon arm entries, Sharpa hand entries)
+#   * `assets.table_urdf`, `reset.table_*`, `reset.target_volume_*` — the real setup's table
 #   * `assets.robot_urdf` — written by scripts/flexiv_wuji/flexiv_wuji.py
 # The action space is the Kuka's 29 (7 arm + 22 hand), so it matches Play.yaml.
 robot: flexiv_sharpa
@@ -57,7 +58,7 @@ scene:
 # -----------------------------------------------------------------------------
 assets:
   robot_urdf: "assets/flexiv_wuji/rizon4s_left_sharpa.urdf"
-  table_urdf: "assets/urdf/table_narrow.urdf"
+  table_urdf: "assets/urdf/table_narrow_flexiv.urdf"
 
   object_name: "handle_head_primitives"
   handle_head_types: ["hammer", "screwdriver", "marker", "spatula", "eraser", "brush"]
@@ -123,16 +124,23 @@ reset:
   reset_dof_pos_random_interval_fingers: 0.1
   reset_dof_vel_random_interval: 0.5
 
-  table_reset_z: 0.38
+  # The real setup's table, measured from the robot frame (robot root at (0, 0.8, 0)): top 0.28 m
+  # above it, near side 0.31 m in front. The 4 cm slab (table_narrow_flexiv.urdf) is centred at
+  # y = 0.8 - 0.31 - 0.4/2 = 0.29, z = 0.28 - 0.02 = 0.26. Objects still start 0.10 m above the
+  # top, and the goal volume keeps Play's place relative to the table top centre, but for y_min,
+  # taken out to 0 (0.49 m past the table's near side).
+  table_reset_z: 0.26
   table_reset_z_range: 0.01
-  table_object_z_offset: 0.25
+  table_object_z_offset: 0.12
+  table_reset_xy: [0.0, 0.29]
 
   goal_sampling_type: delta           # "delta" | "absolute"
   delta_goal_distance: 0.1
   delta_rotation_degrees: 90.0
-  target_volume_mins: [-0.35, -0.2, 0.6]
-  target_volume_maxs: [0.35, 0.2, 0.95]
+  target_volume_mins: [-0.35, 0.0, 0.35]
+  target_volume_maxs: [0.35, 0.49, 0.7]
   target_volume_region_scale: 1.0
+  goal_table_clearance_m: 0.01      # goal object kept 1 cm above the table top
 
 # -----------------------------------------------------------------------------
 # 7) termination — end-of-episode conditions + tolerance curriculum

@@ -34,7 +34,8 @@ class RobotSpec:
     #: and the offset (in each one's frame) to the pad centre.
     fingertip_body_regex: str
     fingertip_link_names: tuple[str, ...]
-    fingertip_offset: tuple[float, float, float]
+    #: One offset for all five, or one per fingertip_link_names entry.
+    fingertip_offset: tuple[float, float, float] | tuple[tuple[float, float, float], ...]
     arm_stiffness: dict[str, float]
     arm_damping: dict[str, float]
     hand_stiffness: dict[str, float]
@@ -46,6 +47,17 @@ class RobotSpec:
     #: by post-merge_fixed_joints body name. scene_utils authors them as FilteredPairsAPI and
     #: fails if any name is not a body of the imported robot.
     self_collision_filter: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Hand drive limits and joint friction; None keeps what the robot's asset has.
+    hand_effort_limit: dict[str, float] | None = None
+    hand_velocity_limit: float | None = None
+    hand_friction: float | None = None
+
+    @property
+    def fingertip_offsets(self) -> tuple[tuple[float, float, float], ...]:
+        """The pad offset of each fingertip, in fingertip_link_names order."""
+        if isinstance(self.fingertip_offset[0], (int, float)):
+            return (tuple(self.fingertip_offset),) * len(self.fingertip_link_names)
+        return tuple(tuple(o) for o in self.fingertip_offset)
 
     @property
     def num_joints(self) -> int:
@@ -71,8 +83,13 @@ class RobotSpec:
         for table in ("hand_damping", "hand_armature"):
             if set(getattr(self, table)) != set(hand):
                 raise ValueError(f"{self.name}: {table} must cover exactly the hand joints")
+        if self.hand_effort_limit is not None:
+            if set(self.hand_effort_limit) != set(hand):
+                raise ValueError(f"{self.name}: hand_effort_limit must cover exactly the hand joints")
         if len(self.fingertip_link_names) != 5:
             raise ValueError(f"{self.name}: the task observes 5 fingertips")
+        if len(self.fingertip_offsets) != 5 or any(len(o) != 3 for o in self.fingertip_offsets):
+            raise ValueError(f"{self.name}: fingertip_offset must be one 3-vector or five")
 
 
 # ----------------------------------------------------------------------------
@@ -234,29 +251,29 @@ _WUJI_JOINTS = tuple(
     )
     for joint in joints
 )
-#: Provisional: the vendor MJCF's position-servo gains (wuji-description hand2_beta2
-#: mjcf/left.xml, <position kp kv>), in _WUJI_JOINTS order. These are the vendor's own model of
-#: the real hand and much softer than the Sharpa's (0.18-0.69 against 0.9-13.2 Nm/rad).
-_WUJI_KP = (
-    0.40844710645048043, 0.6858601063643346, 0.2391112196099482, 0.20736128319711747,
-    0.37352218155860073, 0.45592448909027794, 0.24368366649522863, 0.18026971340925335,
-    0.3687093483646485, 0.4164253443634641, 0.22218607502059182, 0.19427606072023446,
-    0.35718151495111794, 0.42977315313086895, 0.24930151196247122, 0.2285032688178066,
-    0.3655325975433942, 0.41393113081120425, 0.22729367621965954, 0.1964723550341816,
+#: Wuji's own Isaac Lab drives for the Hand 2 (wuji-technology/wuji-isaaclab@be53b71,
+#: src/wuji_isaaclab/tasks/reorient/config/wuji_hand2/hand2_constants.py HAND2_DRIVE, written for
+#: the right hand; the vendor MJCF is the same on both sides): (stiffness Nm/rad, damping Nm s/rad,
+#: effort limit Nm, armature kg m^2), in _WUJI_JOINTS order. About 3x stiffer than the vendor
+#: MJCF's position servos, which these replaced; the armature is the MJCF's. Their randomization
+#: of these is not copied.
+_WUJI_DRIVE = (
+    (1.354985, 0.04769, 1.02, 0.0005), (2.198821, 0.062838, 0.83, 0.0005),
+    (0.886467, 0.027982, 0.35, 0.0002), (0.654026, 0.020457, 0.21, 0.0002),
+    (1.345207, 0.047402, 1.05, 0.0005), (0.88946, 0.027239, 0.38, 0.0002),
+    (0.779361, 0.024489, 0.31, 0.0002), (0.656424, 0.020508, 0.30, 0.0002),
+    (1.299313, 0.045699, 1.06, 0.0005), (0.942641, 0.027846, 0.39, 0.0002),
+    (0.73725, 0.023408, 0.32, 0.0002), (0.710314, 0.022366, 0.29, 0.0002),
+    (1.276892, 0.046209, 1.02, 0.0005), (1.013334, 0.028704, 0.41, 0.0002),
+    (0.859159, 0.027436, 0.28, 0.0002), (0.648064, 0.020448, 0.30, 0.0002),
+    (1.102915, 0.043816, 0.87, 0.0005), (0.910201, 0.026593, 0.36, 0.0002),
+    (0.861968, 0.027476, 0.28, 0.0002), (0.656704, 0.020611, 0.30, 0.0002),
 )
-_WUJI_KV = (
-    0.020882010257063675, 0.030610939996373314, 0.010181475050560962, 0.00909698844675045,
-    0.01882274330029718, 0.019798167597016643, 0.010477031953162727, 0.008240212147903584,
-    0.01848622487024593, 0.018032947229953678, 0.009592200014076666, 0.009152994605972402,
-    0.018376606800780005, 0.01867700966212433, 0.01059512121009555, 0.009917602877441107,
-    0.018616960278988272, 0.018732177029667153, 0.00951005441616486, 0.009017295241756363,
-)
-#: Vendor MJCF armature: 0.0005 on the two thumb CMC joints and each finger's MCP flexion,
-#: the 0.0002 default elsewhere.
-_WUJI_ARMATURE = tuple(
-    0.0005 if name.endswith(("cmc_flex", "cmc_abd", "mcp_flex")) else 0.0002
-    for name in _WUJI_JOINTS
-)
+_WUJI_KP, _WUJI_KV, _WUJI_EFFORT, _WUJI_ARMATURE = zip(*_WUJI_DRIVE)
+#: Theirs too: no joint friction, and a velocity limit "not a hardware limit: it only has to stay
+#: above anything the fingers ever reach".
+_WUJI_FRICTION = 0.0
+_WUJI_VELOCITY_LIMIT = 100.0
 
 # Derived by scripts/flexiv_wuji/self_collision_pairs.py (tests/test_robot_specs.py reruns it):
 # each jointed pair, plus the palm (link7, into which l_wrist merges) with every finger's
@@ -310,17 +327,24 @@ FLEXIV_WUJI = RobotSpec(
         "l_thumb_distal", "l_pinky_distal",
     ),
     # The tip is 24.8 mm down each distal link's -z (29.8 on the thumb); the Sharpa's offset sits
-    # ~77% of the way to its tip, and this is the same fraction.
-    fingertip_offset=(0.0, 0.0, -0.019),
+    # ~77% of the way to its tip, and each finger's is the same fraction of its own -- on the
+    # thumb too, which a single 19 mm left inside the thumb (64% of the way).
+    fingertip_offset=(
+        (0.0, 0.0, -0.019), (0.0, 0.0, -0.019), (0.0, 0.0, -0.019),
+        (0.0, 0.0, -0.0229), (0.0, 0.0, -0.019),
+    ),
     arm_stiffness=dict(zip(_RIZON_JOINTS, _RIZON_K)),
     arm_damping=dict(zip(_RIZON_JOINTS, _RIZON_D)),
     hand_stiffness=dict(zip(_WUJI_JOINTS, _WUJI_KP)),
     hand_damping=dict(zip(_WUJI_JOINTS, _WUJI_KV)),
     hand_armature=dict(zip(_WUJI_JOINTS, _WUJI_ARMATURE)),
-    # viser_compare.py's IK match of the Kuka's default pose (flexiv_wuji.FLEXIV_DEFAULT_ARM_POS).
+    hand_effort_limit=dict(zip(_WUJI_JOINTS, _WUJI_EFFORT)),
+    hand_velocity_limit=_WUJI_VELOCITY_LIMIT,
+    hand_friction=_WUJI_FRICTION,
+    # The real robot's home pose with joint 7 at 120 deg, palm to the table (flexiv_wuji.FLEXIV_DEFAULT_ARM_POS).
     arm_default_joint_pos={
-        "joint1": -1.7604, "joint2": -0.2933, "joint3": 0.0197, "joint4": 1.4941,
-        "joint5": -1.6591, "joint6": 1.6462, "joint7": 0.0369,
+        "joint1": -2.0944, "joint2": 0.0, "joint3": 0.5236, "joint4": 1.7453,
+        "joint5": 2.618, "joint6": 1.3963, "joint7": 2.0944,
     },
     self_collision_filter=_WUJI_SELF_COLLISION_FILTER,
 )
@@ -334,6 +358,47 @@ FLEXIV_WUJI_HUMAN_LIKE = dataclasses.replace(
     FLEXIV_WUJI,
     name="flexiv_wuji_human_like",
     self_collision_filter=_WUJI_SELF_COLLISION_FILTER,
+)
+
+# ----------------------------------------------------------------------------
+# Flexiv Rizon 4s + right Wuji Hand 2, human-like limits (scripts/flexiv_wuji/flexiv_wuji.py
+# RIGHT_HUMAN_LIKE_URDF): FLEXIV_WUJI_HUMAN_LIKE with the hand mirrored. The r_ joints keep the
+# left's gains (the vendor MJCF's are the same on both sides); the mount is turned 180 deg about the
+# flange axis (RIGHT_MOUNT_RPY) so the palm faces the table at the same arm pose.
+# ----------------------------------------------------------------------------
+
+def _right(name: str) -> str:
+    return "r_" + name[2:] if name.startswith("l_") else name
+
+
+# self_collision_pairs.py derives exactly the left's pairs, renamed (tests/test_robot_specs.py reruns it).
+_WUJI_RIGHT_SELF_COLLISION_FILTER = {
+    _right(a): tuple(_right(b) for b in bs) for a, bs in _WUJI_SELF_COLLISION_FILTER.items()
+}
+
+FLEXIV_WUJI_RIGHT_HUMAN_LIKE = RobotSpec(
+    name="flexiv_wuji_right_human_like",
+    arm_joint_regex=FLEXIV_WUJI.arm_joint_regex,
+    hand_joint_regex="r_.*",
+    joint_names_canonical=_RIZON_JOINTS + tuple(_right(n) for n in _WUJI_JOINTS),
+    # The importer merges flange, r_mount and r_wrist into link7.
+    palm_body_name="link7",
+    # FLEXIV_WUJI's palm centre mirrored across the hand (canonical frame, palm side flipped); the
+    # same point over the table at the default pose. tests/test_robot_specs.py recomputes it.
+    palm_center_offset=(0.0018, -0.0149, 0.1948),
+    fingertip_body_regex="r_(thumb|index_finger|middle_finger|ring_finger|pinky)_distal",
+    fingertip_link_names=tuple(_right(n) for n in FLEXIV_WUJI.fingertip_link_names),
+    fingertip_offset=FLEXIV_WUJI.fingertip_offset,
+    arm_stiffness=FLEXIV_WUJI.arm_stiffness,
+    arm_damping=FLEXIV_WUJI.arm_damping,
+    hand_stiffness={_right(k): v for k, v in FLEXIV_WUJI.hand_stiffness.items()},
+    hand_damping={_right(k): v for k, v in FLEXIV_WUJI.hand_damping.items()},
+    hand_armature={_right(k): v for k, v in FLEXIV_WUJI.hand_armature.items()},
+    hand_effort_limit={_right(k): v for k, v in FLEXIV_WUJI.hand_effort_limit.items()},
+    hand_velocity_limit=FLEXIV_WUJI.hand_velocity_limit,
+    hand_friction=FLEXIV_WUJI.hand_friction,
+    arm_default_joint_pos=FLEXIV_WUJI.arm_default_joint_pos,
+    self_collision_filter=_WUJI_RIGHT_SELF_COLLISION_FILTER,
 )
 
 # ----------------------------------------------------------------------------
@@ -386,7 +451,8 @@ FLEXIV_SHARPA = RobotSpec(
 )
 
 ROBOT_SPECS: dict[str, RobotSpec] = {
-    spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_SHARPA)
+    spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE,
+                                 FLEXIV_WUJI_RIGHT_HUMAN_LIKE, FLEXIV_SHARPA)
 }
 
 

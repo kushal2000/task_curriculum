@@ -28,6 +28,11 @@ COMPOSED_URDF = ASSET_DIR / "rizon4s_left_wuji.urdf"
 FLEXIV_SHARPA_URDF = ASSET_DIR / "rizon4s_left_sharpa.urdf"
 #: COMPOSED_URDF with HUMAN_LIKE_LIMITS_DEG applied.
 HUMAN_LIKE_URDF = ASSET_DIR / "rizon4s_left_wuji_human_like_joint_limits.urdf"
+#: The same two with the right Wuji (gitignored, like the right hand's vendor files they are
+#: built from): RIGHT_MOUNT_RPY, HUMAN_LIKE_LIMITS_DEG on the r_ joints.
+WUJI_RIGHT_URDF = ASSET_DIR / "wuji_hand2" / "urdf" / "right_with_mount.urdf"
+RIGHT_COMPOSED_URDF = ASSET_DIR / "rizon4s_right_wuji.urdf"
+RIGHT_HUMAN_LIKE_URDF = ASSET_DIR / "rizon4s_right_wuji_human_like_joint_limits.urdf"
 KUKA_SHARPA_URDF = (
     REPO_ROOT
     / "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
@@ -48,6 +53,7 @@ KUKA_SHARPA_MOUNT_JOINT = "iiwa14_sharpa"
 FLEXIV_SHARPA_MOUNT_XYZ = (0.0, 0.0, 0.0)
 FLEXIV_SHARPA_MOUNT_RPY = (0.0, 0.0, -3.129)
 WUJI_ROOT_LINK = "l_mount"
+WUJI_RIGHT_ROOT_LINK = "r_mount"
 #: Link each hand's pose readout uses: the first link past the arm's mount.
 HAND_BASE_LINK = {"kuka_sharpa": "left_hand_C_MC", "flexiv_wuji": "l_wrist"}
 
@@ -56,6 +62,10 @@ HAND_BASE_LINK = {"kuka_sharpa": "left_hand_C_MC", "flexiv_wuji": "l_wrist"}
 #: Yaw (palm direction about the flange axis) and any adapter-plate offset are not yet measured.
 MOUNT_XYZ = (0.0, 0.0, 0.0)
 MOUNT_RPY = (3.141592653589793, 0.0, 0.0)
+#: The right hand's: the same flip, then turned 180 deg about the flange axis, so that at
+#: FLEXIV_DEFAULT_ARM_POS its palm faces the table as the left hand's does (with MOUNT_RPY it
+#: faces up). Not yet measured on hardware.
+RIGHT_MOUNT_RPY = (3.141592653589793, 0.0, 3.141592653589793)
 
 _FINGERS = ("index_finger", "middle_finger", "ring_finger", "pinky")
 #: HUMAN_LIKE_URDF's joint limits, (lower, upper) in degrees; None keeps the vendor's bound
@@ -74,6 +84,9 @@ HUMAN_LIKE_LIMITS_DEG: dict[str, tuple[float | None, float | None]] = {
     "l_thumb_mcp": (-10.0, None),
     "l_thumb_ip": (-15.0, None),
 }
+#: The right hand's: the same joints with r_ names. Its finger axes are flipped with its mirrored
+#: frames, so positive is flexion there too (tests/test_robot_specs.py checks it by FK).
+HUMAN_LIKE_LIMITS_DEG_RIGHT = {"r_" + name[2:]: lim for name, lim in HUMAN_LIKE_LIMITS_DEG.items()}
 
 # --- The RL env (isaacsimenvs/tasks/play), mirrored so this runs without Isaac Lab -----------
 
@@ -82,19 +95,29 @@ ROBOT_BASE_POS = (0.0, 0.8, 0.0)
 #: play_env_cfg.reset.table_reset_z: the table box's centre. The box is 0.3 m tall
 #: (table_narrow.urdf), so its top is at 0.53.
 TABLE_CENTER_Z = 0.38
+#: Play.yaml reset.target_volume_mins / _maxs (region scale 1): the box goal positions are
+#: sampled in, env coordinates.
+TARGET_VOLUME_MINS = (-0.35, -0.2, 0.6)
+TARGET_VOLUME_MAXS = (0.35, 0.2, 0.95)
+#: The Flexiv tasks' table (PlayFlexiv*.yaml): the real setup's, top 0.28 m above the robot frame
+#: and near side 0.31 m in front of it -- a 4 cm slab (table_narrow_flexiv.urdf) centred here.
+FLEXIV_TABLE_CENTER = (0.0, 0.29, 0.26)
+FLEXIV_TABLE_SIZE = (0.475, 0.4, 0.04)
+#: ... and their goal volume: Play's, moved with the table top, with y_min taken out to 0.
+FLEXIV_TARGET_VOLUME_MINS = (-0.35, 0.0, 0.35)
+FLEXIV_TARGET_VOLUME_MAXS = (0.35, 0.49, 0.7)
 #: scene_utils.ARM_DEFAULT_JOINT_POS, the pose every play-family env resets the Kuka to.
 KUKA_DEFAULT_ARM_POS = {
     "iiwa14_joint_1": -1.571, "iiwa14_joint_2": 1.571, "iiwa14_joint_3": 0.0,
     "iiwa14_joint_4": 1.376, "iiwa14_joint_5": 0.0, "iiwa14_joint_6": 1.485,
     "iiwa14_joint_7": 1.308,
 }
-#: The Flexiv counterpart of KUKA_DEFAULT_ARM_POS: viser_compare's "Match Kuka hand" IK, which
-#: puts the Wuji's canonical hand frame on the Sharpa's (0.0 mm, 0.1 deg) with the MOUNT_* above.
-#: Solved from upstream's home pose (initial_positions.yaml, joint 1 turned to -pi/2 to face the
-#: table); redo it if the mount or base changes.
+#: The Flexiv counterpart of KUKA_DEFAULT_ARM_POS: the real robot's home pose,
+#: (-120, 0, 30, 100, 150, 80, 100) deg, with joint 7 turned to 120 so the palm faces the table
+#: (5 deg off flat: the fingers pitch up 5 deg, which joint 7 cannot take out).
 FLEXIV_DEFAULT_ARM_POS = {
-    "joint1": -1.7604, "joint2": -0.2933, "joint3": 0.0197, "joint4": 1.4941,
-    "joint5": -1.6591, "joint6": 1.6462, "joint7": 0.0369,
+    "joint1": -2.0944, "joint2": 0.0, "joint3": 0.5236, "joint4": 1.7453,
+    "joint5": 2.618, "joint6": 1.3963, "joint7": 2.0944,
 }
 
 
@@ -117,18 +140,19 @@ def _rebase_meshes(root: ET.Element, src_dir: Path, dst_dir: Path) -> None:
 
 
 def compose_urdf(
-    mount_xyz=MOUNT_XYZ, mount_rpy=MOUNT_RPY, out: Path = COMPOSED_URDF
+    mount_xyz=MOUNT_XYZ, mount_rpy=MOUNT_RPY, out: Path = COMPOSED_URDF,
+    hand_urdf: Path = WUJI_URDF, hand_root_link: str = WUJI_ROOT_LINK,
 ) -> Path:
-    """Write the Rizon 4s with the Wuji hand fixed to its flange, as one URDF.
+    """Write the Rizon 4s with the Wuji hand (left by default) fixed to its flange, as one URDF.
 
     Upstream's ``world`` link and its fixed ``base_joint`` are dropped, so the root is
     ``base_link``, as ``iiwa14_link_0`` is the Kuka's.
     """
     arm = ET.parse(_require(FLEXIV_URDF)).getroot()
-    hand = ET.parse(_require(WUJI_URDF)).getroot()
+    hand = ET.parse(_require(hand_urdf)).getroot()
     out = Path(out)
     _rebase_meshes(arm, FLEXIV_URDF.parent, out.parent)
-    _rebase_meshes(hand, WUJI_URDF.parent, out.parent)
+    _rebase_meshes(hand, Path(hand_urdf).parent, out.parent)
 
     for el in list(arm):
         is_world = el.tag == "link" and el.get("name") == "world"
@@ -141,12 +165,12 @@ def compose_urdf(
     if clashes:
         raise ValueError(f"arm and hand share link/joint names: {sorted(clashes)}")
 
-    arm.set("name", "rizon4s_left_wuji")
+    arm.set("name", out.stem)
     for el in hand:
         arm.append(el)
     mount = ET.SubElement(arm, "joint", name="flange_to_wuji_mount", type="fixed")
     ET.SubElement(mount, "parent", link=FLANGE_LINK)
-    ET.SubElement(mount, "child", link=WUJI_ROOT_LINK)
+    ET.SubElement(mount, "child", link=hand_root_link)
     ET.SubElement(mount, "origin", xyz=_fmt(mount_xyz), rpy=_fmt(mount_rpy))
 
     ET.indent(arm, space="  ")
@@ -249,3 +273,8 @@ if __name__ == "__main__":
     print(f"wrote {path.relative_to(REPO_ROOT)}  (Kuka's Sharpa subtree on the Rizon flange)")
     path = restrict_limits(COMPOSED_URDF, HUMAN_LIKE_LIMITS_DEG, HUMAN_LIKE_URDF)
     print(f"wrote {path.relative_to(REPO_ROOT)}  ({len(HUMAN_LIKE_LIMITS_DEG)} joints restricted)")
+    path = compose_urdf(mount_rpy=RIGHT_MOUNT_RPY, out=RIGHT_COMPOSED_URDF, hand_urdf=WUJI_RIGHT_URDF,
+                        hand_root_link=WUJI_RIGHT_ROOT_LINK)
+    print(f"wrote {path.relative_to(REPO_ROOT)}  (right hand, mount rpy {RIGHT_MOUNT_RPY})")
+    path = restrict_limits(RIGHT_COMPOSED_URDF, HUMAN_LIKE_LIMITS_DEG_RIGHT, RIGHT_HUMAN_LIKE_URDF)
+    print(f"wrote {path.relative_to(REPO_ROOT)}  ({len(HUMAN_LIKE_LIMITS_DEG_RIGHT)} joints restricted)")

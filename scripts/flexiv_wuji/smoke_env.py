@@ -124,7 +124,7 @@ def run(env_cfg, agent_cfg) -> None:
 
     def fingertips():
         s = robot.data.body_state_w[0, inner._fingertip_body_ids]
-        off = torch.tensor(spec.fingertip_offset, device=device).expand(s.shape[0], 3)
+        off = torch.tensor(spec.fingertip_offsets, device=device)
         return s[:, :3] + quat_apply(s[:, 3:7], off) - origin
 
     # The distance-delta reward's fingertip distances, against the observed pad points: equal when

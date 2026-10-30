@@ -5,6 +5,7 @@
 #   sbatch scripts/cluster/sbatch_play_scratch.sh flexiv_wuji [run_name] [hydra overrides...]
 #   sbatch scripts/cluster/sbatch_play_scratch.sh kuka_sharpa [run_name] [hydra overrides...]
 #   sbatch scripts/cluster/sbatch_play_scratch.sh flexiv_wuji_human_like [run_name] [hydra overrides...]
+#   sbatch scripts/cluster/sbatch_play_scratch.sh flexiv_wuji_right_human_like [run_name] [hydra overrides...]
 #   sbatch scripts/cluster/sbatch_play_scratch.sh flexiv_sharpa [run_name] [hydra overrides...]
 #
 # WHY A KUKA CONTROL
@@ -20,9 +21,9 @@
 # WHAT IS CHANGED FROM THE RECIPE
 #
 # The random force/torque impulses on the object (domain_randomization.force_scale and
-# torque_scale, 20 and 2 by default) are off, on every robot. Everything else is PlaySAPG.yaml as
-# shipped, at SimToolReal's env count: 24576 envs on one GPU (pretrained_policy/config.yaml
-# numEnvs), i.e. 6 SAPG blocks of 4096 -- the 6 in the released checkpoint's (6, 29) sigma.
+# torque_scale, 20 and 2 by default) are off, on every robot, unless WRENCH_DR=on. Everything
+# else is PlaySAPG.yaml as shipped, at SimToolReal's env count: 24576 envs on one GPU
+# (pretrained_policy/config.yaml numEnvs), i.e. 6 SAPG blocks of 4096 -- the 6 in the released checkpoint's (6, 29) sigma.
 # Play.yaml's 8192 would give 2 blocks, a different exploration setup.
 #
 # The interactive viewer loads the robot from raw GitHub at this branch, so the branch -- and for
@@ -43,10 +44,11 @@ set -uo pipefail
 cd /share/portal/kk837/task_curriculum
 mkdir -p slurm_logs
 
-ROBOT="${1:?usage: sbatch_play_scratch.sh flexiv_wuji|flexiv_wuji_human_like|flexiv_sharpa|kuka_sharpa [run_name] [overrides...]}"
+ROBOT="${1:?usage: sbatch_play_scratch.sh flexiv_wuji|flexiv_wuji_human_like|flexiv_wuji_right_human_like|flexiv_sharpa|kuka_sharpa [run_name] [overrides...]}"
 case "$ROBOT" in
     flexiv_wuji) TASK=Isaacsimenvs-PlayFlexivWuji-Direct-v0 ;;
     flexiv_wuji_human_like) TASK=Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0 ;;
+    flexiv_wuji_right_human_like) TASK=Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 ;;
     flexiv_sharpa) TASK=Isaacsimenvs-PlayFlexivSharpa-Direct-v0 ;;
     kuka_sharpa) TASK=Isaacsimenvs-PlaySelfCollision-Direct-v0 ;;
     *) echo "unknown robot $ROBOT" >&2; exit 2 ;;
@@ -56,6 +58,14 @@ OVERRIDES=("${@:3}")
 SEED="${SEED:-42}"
 ENVS="${ENVS:-24576}"
 CAPTURE_INTERVAL="${CAPTURE_INTERVAL:-6000}"
+# off: the force/torque impulses are zeroed (the recipe change above); on: Play.yaml's 20 / 2.
+WRENCH_DR="${WRENCH_DR:-off}"
+case "$WRENCH_DR" in
+    off) WRENCH=(env.domain_randomization.force_scale=0.0 env.domain_randomization.torque_scale=0.0)
+         WANDB_GROUP="${WANDB_GROUP:-scratch_no_wrench}" ;;
+    on) WRENCH=(); WANDB_GROUP="${WANDB_GROUP:-scratch_wrench}" ;;
+    *) echo "WRENCH_DR must be on or off, got $WRENCH_DR" >&2; exit 2 ;;
+esac
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
 export OMNI_KIT_ACCEPT_EULA=YES
@@ -65,7 +75,7 @@ if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
     echo "[train] WARNING: branch $BRANCH is not on origin -- viewer meshes will 404." >&2
 fi
 
-echo "[train] robot=$ROBOT task=$TASK run=$RUN_NAME seed=$SEED envs=$ENVS host=$(hostname) branch=$BRANCH"
+echo "[train] robot=$ROBOT task=$TASK run=$RUN_NAME seed=$SEED envs=$ENVS wrench_dr=$WRENCH_DR host=$(hostname) branch=$BRANCH"
 echo "[train] commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain)" && echo YES || echo no)"
 echo "[train] overrides=${OVERRIDES[*]:-none}"
 nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader
@@ -82,10 +92,9 @@ nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader
     --capture_viewer_url_check warn \
     --wandb_activate \
     --wandb_project play_pretraining \
-    --wandb_group scratch_no_wrench \
+    --wandb_group "$WANDB_GROUP" \
     --wandb_name "$RUN_NAME" \
-    env.domain_randomization.force_scale=0.0 \
-    env.domain_randomization.torque_scale=0.0 \
+    "${WRENCH[@]}" \
     "env.scene.num_envs=${ENVS}" \
     "agent.params.config.name=0_${RUN_NAME}" \
     "agent.params.seed=${SEED}" \

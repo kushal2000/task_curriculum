@@ -95,10 +95,11 @@ def _perturb_quat(q_wxyz: torch.Tensor, max_deg: float) -> torch.Tensor:
 def _apply_local_offset(
     pos_w: torch.Tensor,
     rot_wxyz: torch.Tensor,
-    offset: tuple[float, float, float],
+    offset,
     batch_shape: tuple[int, ...],
 ) -> torch.Tensor:
-    """Apply one local-frame offset to batched world poses."""
+    """Apply a local-frame offset to batched world poses: one 3-vector, or any shape that
+    broadcasts to ``batch_shape + (3,)`` (e.g. one per fingertip)."""
     offset_t = torch.as_tensor(offset, device=pos_w.device, dtype=pos_w.dtype)
     offset_t = offset_t.expand(*batch_shape, 3)
     shifted = quat_apply(
@@ -174,7 +175,7 @@ def compute_intermediate_values(env) -> None:
     ft_pos_w = ft_state[:, :, 0:3]
     if rew_cfg.fingertip_distance_from_pad:
         ft_pos_w = _apply_local_offset(
-            ft_pos_w, ft_state[:, :, 3:7], env.robot_spec.fingertip_offset,
+            ft_pos_w, ft_state[:, :, 3:7], env.robot_spec.fingertip_offsets,
             (env.num_envs, NUM_FINGERTIPS),
         )
     ft_pos = ft_pos_w - env_origins.unsqueeze(1)
@@ -265,7 +266,7 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     ft_pos_w = _apply_local_offset(
         ft_body_pos_w,
         ft_body_rot_w,
-        env.robot_spec.fingertip_offset,
+        env.robot_spec.fingertip_offsets,
         (env.num_envs, NUM_FINGERTIPS),
     )
 

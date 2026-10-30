@@ -11,6 +11,7 @@ from isaaclab.utils.math import random_orientation
 
 from .action_utils import sample_log_uniform
 from .goal_sampling import sample_absolute_goal_pose, sample_delta_goal_pose
+from .goal_table_clearance import min_goal_z
 from .obs_utils import KEYPOINT_CORNERS, NUM_FINGERTIPS
 
 def allocate_state_buffers(env) -> None:
@@ -241,6 +242,7 @@ def _reset_table_pose(env, env_ids: torch.Tensor) -> None:
     env._table_z_per_env[env_ids] = table_z
 
     pos_local = torch.zeros(n, 3, device=env.device)
+    pos_local[:, :2] = torch.as_tensor(cfg.table_reset_xy, device=env.device, dtype=torch.float32)
     pos_local[:, 2] = table_z
 
     # XY position noise — per-env independent uniform half-widths.
@@ -248,8 +250,8 @@ def _reset_table_pose(env, env_ids: torch.Tensor) -> None:
     if xy_range[0] > 0.0 or xy_range[1] > 0.0:
         rx = torch.empty(n, device=env.device).uniform_(-xy_range[0], xy_range[0])
         ry = torch.empty(n, device=env.device).uniform_(-xy_range[1], xy_range[1])
-        pos_local[:, 0] = rx
-        pos_local[:, 1] = ry
+        pos_local[:, 0] += rx
+        pos_local[:, 1] += ry
 
     # Yaw noise — sample uniform [-r, r] degrees, build a z-axis rotation quat.
     yaw_range_deg = float(cfg.table_reset_yaw_range_deg)
@@ -284,8 +286,8 @@ def _reset_object_pose(env, env_ids: torch.Tensor) -> None:
         noise = torch.empty(n, 3, device=env.device).uniform_(-1.0, 1.0)
         pos_local = torch.stack(
             (
-                noise[:, 0] * cfg.reset_position_noise_x,
-                noise[:, 1] * cfg.reset_position_noise_y,
+                cfg.table_reset_xy[0] + noise[:, 0] * cfg.reset_position_noise_x,
+                cfg.table_reset_xy[1] + noise[:, 1] * cfg.reset_position_noise_y,
                 env._table_z_per_env[env_ids]
                 + cfg.table_object_z_offset
                 + noise[:, 2] * cfg.reset_position_noise_z,
@@ -366,6 +368,18 @@ def _reset_goal_pose(env, env_ids: torch.Tensor, mode: str) -> None:
         )
     else:
         raise ValueError(f"unknown goal sampling mode: {mode}")
+
+    if cfg.goal_table_clearance_m is not None:
+        # Lift the goal off the table: how far the object reaches below its origin depends on the
+        # goal orientation (_reset_table_pose has already set this reset's table height).
+        floor_z = min_goal_z(
+            new_quat,
+            env._object_collision_corners[env_ids],
+            env._table_z_per_env[env_ids] + env._table_half_height,
+            cfg.goal_table_clearance_m,
+        )
+        new_pos_local = new_pos_local.clone()
+        new_pos_local[:, 2] = torch.maximum(new_pos_local[:, 2], floor_z)
 
     pose = torch.cat([new_pos_local + env_origins, new_quat], dim=-1)
     env.goal_viz.write_root_pose_to_sim(pose, env_ids=env_ids)

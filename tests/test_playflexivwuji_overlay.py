@@ -1,9 +1,10 @@
-"""The Flexiv task YAMLs must not drift from Play.yaml except in the robot.
+"""The Flexiv task YAMLs must not drift from Play.yaml except in the robot and its table.
 
 The overlay loader reads one file with no inheritance, so the Flexiv task YAML is a full copy of
 Play's. The point of the Flexiv task is to train SimToolReal's recipe on a different robot; if a
 reward scale or reset range differed too, a gap between the two robots would no longer be about
-the robot. Same approach as test_playnewton_overlay.py.
+the robot. The one other difference is the table, moved to where the real Flexiv setup has
+it (and the goal volume with it). Same approach as test_playnewton_overlay.py.
 
 Kit-free by construction -- it reads YAML and nothing else.
 """
@@ -20,18 +21,36 @@ CFG = Path(__file__).resolve().parents[1] / "isaacsimenvs" / "cfg" / "task"
 
 #: Top-level keys a Flexiv task YAML may add: the robot selector.
 ALLOWED_EXTRA = {"robot"}
+#: The real Flexiv setup's table (every Flexiv task): where it is, and the goal volume moved with it.
+REAL_TABLE = {
+    "assets.table_urdf": "assets/urdf/table_narrow_flexiv.urdf",
+    "reset.table_reset_z": 0.26,
+    "reset.table_object_z_offset": 0.12,
+    "reset.table_reset_xy": [0.0, 0.29],
+    "reset.target_volume_mins": [-0.35, 0.0, 0.35],
+    "reset.target_volume_maxs": [0.35, 0.49, 0.7],
+    "reset.goal_table_clearance_m": 0.01,
+}
 #: Per Flexiv task YAML: its robot, and the leaves that must differ from Play.yaml with their values.
 VARIANTS = {
     "PlayFlexivWuji.yaml": ("flexiv_wuji", {
         "action_space": 27,
         "assets.robot_urdf": "assets/flexiv_wuji/rizon4s_left_wuji.urdf",
+        **REAL_TABLE,
     }),
     "PlayFlexivSharpa.yaml": ("flexiv_sharpa", {
         "assets.robot_urdf": "assets/flexiv_wuji/rizon4s_left_sharpa.urdf",
+        **REAL_TABLE,
+    }),
+    "PlayFlexivWujiRightHumanLike.yaml": ("flexiv_wuji_right_human_like", {
+        "action_space": 27,
+        "assets.robot_urdf": "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
+        **REAL_TABLE,
     }),
     "PlayFlexivWujiHumanLike.yaml": ("flexiv_wuji_human_like", {
         "action_space": 27,
         "assets.robot_urdf": "assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf",
+        **REAL_TABLE,
     }),
 }
 

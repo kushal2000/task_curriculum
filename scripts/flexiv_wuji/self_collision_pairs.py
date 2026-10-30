@@ -48,6 +48,7 @@ URDFS = {
     "kuka_sharpa": fw.KUKA_SHARPA_URDF,
     "flexiv_wuji": fw.COMPOSED_URDF,
     "flexiv_wuji_human_like": fw.HUMAN_LIKE_URDF,
+    "flexiv_wuji_right_human_like": fw.RIGHT_HUMAN_LIKE_URDF,
     "flexiv_sharpa": fw.FLEXIV_SHARPA_URDF,
 }
 #: Deeper than this counts as overlapping (onboard.py's threshold).
