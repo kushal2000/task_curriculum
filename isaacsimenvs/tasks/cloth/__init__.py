@@ -149,13 +149,14 @@ gym.register(
 )
 
 
-# The same five tasks on the Flexiv Rizon 4s + Wuji Hand 2, e.g.
+# The same five tasks on the Flexiv Rizon 4s + Wuji Hand 2 or the Kuka's Sharpa, e.g.
 # `Isaacsimenvs-FoldPoolPhysxFlexivWujiHumanLike-Direct-v0`: the task's own cfg and YAML, then a
 # robot overlay from `cfg/robot/` (robot spec, URDF, self-collision as the Flexiv Play tasks train).
 _ROBOT_VARIANTS = {
     "FlexivWuji": "flexiv_wuji",
     "FlexivWujiHumanLike": "flexiv_wuji_human_like",
     "FlexivWujiHumanLikeS2R": "flexiv_wuji_human_like_s2r",
+    "FlexivSharpa": "flexiv_sharpa",
 }
 for _task in ("Cloth", "RigidCloth", "FoldPool", "RigidClothPhysx", "FoldPoolPhysx"):
     _base = gym.spec(f"Isaacsimenvs-{_task}-Direct-v0")

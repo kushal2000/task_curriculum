@@ -1,0 +1,5 @@
+# flat7FlexivSharpa: the flat7 recipe (flat7.yaml) on the Flexiv Rizon 4s carrying the Kuka's
+# left Sharpa; only the robot differs. Start from the Flexiv + Sharpa Play prior
+# (--checkpoint pretrained_policy/flexiv_sharpa.pth --checkpoint_load_mode weights).
+base: flat7
+task: Isaacsimenvs-FoldPoolPhysxFlexivSharpa-Direct-v0

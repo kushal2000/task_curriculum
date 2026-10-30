@@ -1,0 +1,6 @@
+# Robot overlay: the Flexiv Rizon 4s carrying the Kuka's left Sharpa, as
+# Isaacsimenvs-PlayFlexivSharpa-Direct-v0 has it. See flexiv_wuji_human_like.yaml.
+robot: flexiv_sharpa
+robot_self_collision: true
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_left_sharpa.urdf"
