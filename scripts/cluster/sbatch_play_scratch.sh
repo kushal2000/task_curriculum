@@ -31,7 +31,7 @@
 
 #SBATCH --job-name=play_scratch
 #SBATCH --partition=portal
-#SBATCH --time=72:00:00
+#SBATCH --time=7-00:00:00
 #SBATCH --gres=gpu:nvidia_rtx_6000_ada_generation:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=80G

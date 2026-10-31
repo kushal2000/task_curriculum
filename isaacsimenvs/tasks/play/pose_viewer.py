@@ -203,13 +203,20 @@ def object_urdf_text_for_env(env, env_id: int) -> str:
 
 
 def table_urdf_for_env(env, env_id: int) -> tuple[str, Path]:
-    """Return the table URDF text assigned to one env."""
+    """Return the table URDF text assigned to one env: its scaled variant if the task made them,
+    else the task's own ``assets.table_urdf`` (the Flexiv tasks' is not Play's)."""
 
     table_paths = getattr(env, "_table_urdf_paths", None)
     if table_paths:
         urdf_path = Path(table_paths[env_id % len(table_paths)])
         return urdf_path.read_text(encoding="utf-8"), urdf_path
-    return TABLE_URDF_PATH.read_text(encoding="utf-8"), TABLE_URDF_PATH
+    cfg_path = getattr(getattr(getattr(env, "cfg", None), "assets", None), "table_urdf", None)
+    urdf_path = TABLE_URDF_PATH
+    if cfg_path:
+        urdf_path = Path(cfg_path)
+        if not urdf_path.is_absolute():
+            urdf_path = REPO_ROOT / urdf_path
+    return urdf_path.read_text(encoding="utf-8"), urdf_path
 
 
 def table_urdf_text_for_env(env, env_id: int) -> str:

@@ -213,3 +213,19 @@ def test_cloth_viewer_module_name_defeats_the_old_substring_test():
     """Pin the exact reason the old gate failed, so it cannot be reintroduced."""
     module_name = "isaacsimenvs.tasks.cloth.pose_viewer"
     assert "play.pose_viewer" not in module_name
+
+
+def test_viewer_draws_the_tasks_own_table():
+    """No scaled variants: the viewer reads the task's assets.table_urdf, not Play's table --
+    the Flexiv tasks' 4 cm slab drawn as Play's 30 cm box was a wrong viewer."""
+    from types import SimpleNamespace
+
+    from isaacsimenvs.tasks.play.pose_viewer import table_urdf_for_env
+
+    flexiv = SimpleNamespace(cfg=SimpleNamespace(assets=SimpleNamespace(
+        table_urdf="assets/urdf/table_narrow_flexiv.urdf")))
+    text, path = table_urdf_for_env(flexiv, 0)
+    assert path.name == "table_narrow_flexiv.urdf" and 'size="0.475 0.4 0.04"' in text
+    play = SimpleNamespace(cfg=SimpleNamespace(assets=SimpleNamespace(
+        table_urdf="assets/urdf/table_narrow.urdf")))
+    assert 'size="0.475 0.4 0.3"' in table_urdf_for_env(play, 0)[0]
