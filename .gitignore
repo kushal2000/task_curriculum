@@ -19,6 +19,7 @@ env/
 train_dir/
 outputs/
 deploy/logs/
+deploy/calibration/captures/
 wandb/
 # Ignore the CONTENTS, not the directory: git cannot re-include a file whose parent directory is
 # excluded, so `videos/` + `!videos/README.md` silently keeps the README untracked.
