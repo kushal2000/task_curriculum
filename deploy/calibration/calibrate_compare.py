@@ -12,6 +12,10 @@ ray cast from the camera over its color image. Both follow the extrinsics as you
 
     python deploy/calibration/calibrate_compare.py --arm <ROBOT_SN> --extrinsics deploy/calibration/extrinsics/left_camera_nov1.json
 
+A new camera: name a file that does not exist yet (and --serial if several cameras are plugged in). The
+camera starts at --start_xyz looking at the arm: drag the gizmo to where the camera really is, "aim at
+robot", "level to table", then fine-tune and "save", which creates the file.
+
 The hand is not connected: the sim draws it at default_q, so its fingers will not match.
 """
 
@@ -47,6 +51,17 @@ def pose_to_T(xyz, rpy_deg) -> np.ndarray:
     T = np.eye(4)
     T[:3, :3] = Rotation.from_euler("xyz", rpy_deg, degrees=True).as_matrix()
     T[:3, 3] = xyz
+    return T
+
+
+def look_at(eye: np.ndarray, target: np.ndarray) -> np.ndarray:
+    """T_base_cam at eye with the optical axis (z) on target and the image down (y) toward base -z."""
+    z = (target - eye) / np.linalg.norm(target - eye)
+    x = np.cross(z, [0.0, 0.0, 1.0])
+    x = x / np.linalg.norm(x) if np.linalg.norm(x) > 1e-6 else np.array([1.0, 0.0, 0.0])
+    T = np.eye(4)
+    T[:3, :3] = np.stack([x, np.cross(z, x), z], axis=1)
+    T[:3, 3] = eye
     return T
 
 
@@ -171,13 +186,18 @@ class App:
         self.renderer = SimRenderer(urdf, self.spec.joint_names)
 
         self.ext_path = Path(args.extrinsics)
-        ext = json.loads(self.ext_path.read_text())
-        self.T = self.T_saved = np.asarray(ext["T_base_cam"], float)
+        ext = json.loads(self.ext_path.read_text()) if self.ext_path.exists() else {}
         self.cam = RealSense(args.serial or ext.get("camera_serial"))
         self.cam.start()
         self.intr = self.cam.intrinsics.to_dict()
         print(f"[calib] {self.cam.name} {self.cam.serial}, extrinsics {self.ext_path}, arm {args.arm}", flush=True)
         self.robot = RobotProcess(self.spec, args.arm, args.arm_gain_scale, args.viewer, args.free_kd_scale)
+        if ext:
+            self.T = np.asarray(ext["T_base_cam"], float)
+        else:
+            print(f"[calib] no {self.ext_path} yet: the camera starts at {args.start_xyz} looking at the arm")
+            self.T = look_at(np.array(args.start_xyz), self._arm_center())
+        self.T_saved = self.T.copy()
 
         self.out = HERE / "compare" / datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.poses: list[tuple[np.ndarray, np.ndarray]] = []  # (color image, q) per captured pose
@@ -247,6 +267,8 @@ class App:
                 lambda _: self._job(lambda: self._level(+1)))
             self.table_on = g.add_checkbox("show table points", True)
             self.table_on.on_update(lambda _: self._show_table())
+            g.add_button("aim at robot", hint="keep the camera position, point it at the arm").on_click(
+                lambda _: self._set_T(look_at(self.T[:3, 3], self._arm_center())))
             g.add_button("reset to saved").on_click(lambda _: self._set_T(self.T_saved))
             g.add_button("save extrinsics", color="red").on_click(lambda _: self._job(self._save))
 
@@ -332,6 +354,9 @@ class App:
         self._status(f"leveled to plane {self.plane_k + 1}/{len(self.planes)} (cyan): turned "
                      f"{np.degrees(fix.magnitude()):.2f} deg. Not the table? try the next plane")
 
+    def _arm_center(self) -> np.ndarray:
+        return self.surface.sample(self.robot.q(), links=ARM_LINKS)[0].mean(0)
+
     def _show_table(self) -> None:
         if self.table_pts is not None:
             self.table_pts.visible = self.table_on.value
@@ -349,10 +374,12 @@ class App:
             "robot_urdf": json.loads(Path(self.args.spec).read_text())["robot_urdf"],
             "time": datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
         }
-        self.ext_path.rename(self.ext_path.with_name(f"{self.ext_path.stem}_prev.json"))  # keep the last one
+        self.ext_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.ext_path.exists():  # keep the last one
+            self.ext_path.rename(self.ext_path.with_name(f"{self.ext_path.stem}_prev.json"))
         self.ext_path.write_text(json.dumps(out, indent=1))
         self.T_saved = self.T.copy()
-        self._status(f"saved `{self.ext_path}` (previous: `{self.ext_path.stem}_prev.json`)")
+        self._status(f"saved `{self.ext_path}`")
 
     # ------------------------------------------------------------------ free drive and poses
 
@@ -499,8 +526,12 @@ def _parse() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--arm", required=True, help="robot serial, 'mujoco', or 'none' (no free drive / captures)")
-    p.add_argument("--extrinsics", required=True, help="extrinsics/<name>.json: the start pose, and where save writes")
-    p.add_argument("--serial", default=None, help="RealSense serial (default: the extrinsics' camera_serial)")
+    p.add_argument("--extrinsics", required=True,
+                   help="extrinsics/<name>.json: the start pose (if it exists) and where save writes")
+    p.add_argument("--serial", default=None,
+                   help="RealSense serial (default: the extrinsics' camera_serial, else the only one connected)")
+    p.add_argument("--start_xyz", type=float, nargs=3, default=[0.0, -1.6, 1.2],
+                   help="base-frame camera position [m] to start from when --extrinsics does not exist yet")
     p.add_argument("--spec", default=str(DEFAULT_SPEC))
     p.add_argument("--arm_gain_scale", type=float, default=1.0, help="x the sim's arm kp and kd when holding")
     p.add_argument("--free_kd_scale", type=float, default=0.2,
