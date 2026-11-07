@@ -1,6 +1,6 @@
 # Play policy on the Flexiv Rizon 4s + right Wuji Hand 2
 
-Deploys `nov6_dr.txt`: the SimToolReal-style Play policy (move a tool to a goal pose) trained on
+Deploys `pretrained_policy/nov6_dr.pth`: the SimToolReal-style Play policy (move a tool to a goal pose) trained on
 branch `kushal/2026-10-30_pretraining_real`, task `Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0`
 (right human-like Wuji, the real setup's table and home pose, all Play DR + wrench impulses).
 
@@ -33,7 +33,7 @@ Things the policy depends on that are easy to break:
 ## Real-robot sequence
 
 Robot PC: `.venv_deploy` (Python 3.12), this repo with `third_party/aioflexiv`, `third_party/aiowuji`,
-and `nov6_dr.txt` at the repo root. Each run logs to `deployment/simtoolreal/logs/`.
+and the checkpoint at `pretrained_policy/nov6_dr.pth` (gitignored). Each run logs to `deployment/simtoolreal/logs/`.
 
 ```bash
 R=deployment/simtoolreal/run.py; PY=.venv_deploy/bin/python
@@ -58,5 +58,20 @@ $PY $R --robot real --arm <ROBOT_SN> --hand <HAND_SN> --object fake --duration_s
 # 5. policy with the tracked object (FoundationPose backend: to do)
 ```
 
-Safety (abort by default): arm target > 25 deg from the measured angle, or > 10 deg for 0.5 s; palm
-centre < 2 cm above the table. Ctrl-C holds the measured pose.
+Safety (abort by default, `--on_safety count` to only count):
+- Arm target > 25 deg from the measured angle, or > 10 deg for 0.5 s.
+- Palm centre < 2 cm above the table.
+- Whole hand vs the real table (`table_guard.py`): the real table has training's top height and near edge
+  but is larger (`--table_x_half` 1 m, `--table_far_y` -1 m, env frame). Every wrist/hand mesh point
+  (convex hulls, 4 mm grid, 0.4 ms per pose) is checked each tick:
+  - measured pose: >= `--min_hand_height` (-1 cm: contact allowed, training's own reaches -0.7 cm);
+  - arm targets with the hand at its measured angles, over training's table: >= -`--max_press_depth`
+    (2 cm; training presses up to ~6 cm while grasping: 2.5% of steps > 2 cm, so raise it for the policy
+    once the hand is trusted); over the rest of the real table, which the policy never felt: >= -1 cm.
+- Replay preflight: before anything moves, every recorded step is checked the same way (and, with
+  `--hand dry_run`, with the hand open, since it does not follow its targets); a violation refuses the run
+  and suggests `--replay_max_s`.
+- Scripted moves (to the start pose, `go_home`: hand opens first, then a joint-space move) are checked
+  along the joint-space line first; if unsafe the arm holds and says so.
+- MuJoCo has no table, so policy runs there can trip the hand checks where the real table would stop
+  the hand. Ctrl-C holds the measured pose.

@@ -25,7 +25,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 DEFAULT_SPEC = HERE / "spec_flexiv_wuji_right_hl.json"
-DEFAULT_CKPT = REPO / "nov6_dr.txt"
+DEFAULT_CKPT = REPO / "pretrained_policy" / "nov6_dr.pth"
 NUM_OBS = 134
 NUM_ACTIONS = 27
 

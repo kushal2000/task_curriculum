@@ -13,7 +13,7 @@ next joint targets). check_offline.py replays those inputs through deployment/si
     cd <branch worktree>
     PYTHONPATH=$PWD:$PWD/rl_games .venv_isaacsim/bin/python \
         /home/yiboc/mit/task_curriculum_deployment/deployment/simtoolreal/record_sim_rollout.py --headless \
-        --checkpoint <nov6_dr.txt> --out <dir>
+        --checkpoint pretrained_policy/nov6_dr.pth --out <dir>
 
 --sweep_coefs 50,40,30,20,10,0 then runs every SAPG block for --sweep_steps on all envs and reports
 goals reached and object falls per block.

@@ -1,6 +1,6 @@
 """Export what the real-robot Play loop needs from the training env, as JSON, with no Isaac Sim.
 
-The Play policy in nov6_dr.txt was trained on Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 on
+The Play policy in pretrained_policy/nov6_dr.pth was trained on Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 on
 branch kushal/2026-10-30_pretraining_real (Flexiv Rizon 4s + RIGHT Wuji Hand 2, human-like limits,
 the real setup's table and home pose). This script reads that branch's files straight from git --
 robots.py (joint order, gains, palm / fingertip bodies and offsets, home pose), the task YAML (action
