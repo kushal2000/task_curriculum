@@ -56,6 +56,7 @@ ROOT = Path(__file__).resolve().parents[2]
 #: held folds on the VBD cloth summed over 4/1.5 cm x pinned/rand (docs/reports/4_physx/physx_generic_prior_runs.md);
 #: label = its cloth score at 4 cm, pinned / randomised.
 POLICIES = {
+    "Flexiv + Wuji Play prior (human-like limits; untrained on folds)": ("pretrained_policy/flexiv_wuji.pth", 0.0),
     "run 2: flat pool (s3; cloth 78/66%)": ("outputs/2026-10-06/14-53-54/0_pxpool_one_flat_s3_158376/nn/0_pxpool_one_flat_s3_158376.pth", 0.0),
     "run 1: pool + folded starts (s1; cloth 56/50%)": ("outputs/2026-10-06/14-33-35/0_pxpool_one_initfold_s1_158375/nn/0_pxpool_one_initfold_s1_158375.pth", 0.0),
     "run 3: box3-mid (s3; cloth 61/64%)": ("outputs/2026-10-06/13-32-04/0_pxchain_box3_s3_158324/nn/0_pxchain_box3_s3_158324.pth", 0.0),
@@ -77,6 +78,9 @@ _RIGID_BUF = "env.newton.per_env_triangle_pairs=2097152"
 
 #: Display name -> (gym task, extra hydra overrides). Newton; PHYSX_TASKS for the PhysX viewer.
 TASKS = {
+    "VBD cloth, Flexiv + Wuji human-like": ("Isaacsimenvs-ClothFlexivWujiHumanLike-Direct-v0", []),
+    "VBD cloth, Flexiv + Wuji vendor limits": ("Isaacsimenvs-ClothFlexivWuji-Direct-v0", []),
+    "fold pool, Flexiv + Wuji human-like": ("Isaacsimenvs-FoldPoolFlexivWujiHumanLike-Direct-v0", [_RIGID_BUF]),
     "fold pool (5 shapes, 10-20 cm)": ("Isaacsimenvs-FoldPool-Direct-v0", [_RIGID_BUF]),
     "VBD cloth": ("Isaacsimenvs-Cloth-Direct-v0", []),
     **{
@@ -85,6 +89,16 @@ TASKS = {
     },
 }
 PHYSX_TASKS = {
+    "fold pool 7 shapes flat (flat7), Flexiv + Wuji human-like": (
+        "Isaacsimenvs-FoldPoolPhysxFlexivWujiHumanLike-Direct-v0",
+        ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
+         "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
+    ),
+    "fold pool 7 shapes flat (flat7), Flexiv + Wuji vendor limits": (
+        "Isaacsimenvs-FoldPoolPhysxFlexivWuji-Direct-v0",
+        ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
+         "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
+    ),
     "fold pool (5 shapes, 10-20 cm)": ("Isaacsimenvs-FoldPoolPhysx-Direct-v0", []),
     # Run 1's training setup: 80% of episodes start partly folded, hinge damping 0.02.
     "fold pool + folded starts (run 1 setup)": (
@@ -647,7 +661,7 @@ def main() -> None:
         @g_restart.on_click
         def _(_e):
             task, ov = tasks[g_task.value]
-            if g_csize is not None and task == "Isaacsimenvs-Cloth-Direct-v0":
+            if g_csize is not None and task.startswith("Isaacsimenvs-Cloth"):
                 ov = [*ov, *CLOTH_SIZES[g_csize.value]]
             S.restart = (task, ov, int(g_nenv.value))
 
