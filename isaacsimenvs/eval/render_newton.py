@@ -689,7 +689,10 @@ def main() -> None:
             dr = env_cfg.domain_randomization
             dr.use_obs_delay = dr.use_action_delay = dr.use_object_state_delay_noise = False
             dr.object_scale_noise_multiplier_range = (1.0, 1.0)
-            dr.joint_velocity_obs_noise_std = 0.0
+            dr.joint_velocity_obs_noise_std = dr.joint_pos_obs_noise_std = dr.action_noise_std = 0.0
+            dr.object_pose_bias_xyz = (0.0, 0.0, 0.0)
+            dr.object_pose_bias_rot_degrees = 0.0
+            dr.robot_stiffness_scale_range = dr.robot_damping_scale_range = (1.0, 1.0)
             dr.force_scale = dr.torque_scale = 0.0
             print(
                 f"[render] reset randomisation KEPT: xy noise "
