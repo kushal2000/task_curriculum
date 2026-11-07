@@ -147,7 +147,13 @@ _PHYSICS_SPECS: dict[str, tuple[str, str, str]] = {
 }
 
 
-def build_robot_articulation_usd_cfg(usd_path: str) -> ArticulationCfg:
+def build_robot_articulation_usd_cfg(usd_path: str, arm_effort_limit=None) -> ArticulationCfg:
+    """``arm_effort_limit``: 7 drive force ceilings [N m] for the arm joints, or empty/None for the USD's."""
+    arm_effort = None
+    if arm_effort_limit:
+        if len(arm_effort_limit) != len(ARM_JOINT_STIFFNESS):
+            raise ValueError(f"arm_effort_limit needs {len(ARM_JOINT_STIFFNESS)} values, got {list(arm_effort_limit)}")
+        arm_effort = {name: float(v) for name, v in zip(ARM_JOINT_STIFFNESS, arm_effort_limit)}
     return ArticulationCfg(
         prim_path="/World/envs/env_.*/Robot",
         spawn=UsdFileCfg(usd_path=usd_path),
@@ -165,6 +171,7 @@ def build_robot_articulation_usd_cfg(usd_path: str) -> ArticulationCfg:
                 joint_names_expr=[ARM_JOINT_REGEX],
                 stiffness=ARM_JOINT_STIFFNESS,
                 damping=ARM_JOINT_DAMPING,
+                effort_limit_sim=arm_effort,
             ),
             "hand": ImplicitActuatorCfg(
                 joint_names_expr=[HAND_JOINT_REGEX],
@@ -1682,7 +1689,8 @@ def setup_scene(env) -> None:
     _materialize_env_prims(env)
 
     # 4. Spawn assets.
-    env.robot = Articulation(build_robot_articulation_usd_cfg(robot_usd_path))
+    env.robot = Articulation(build_robot_articulation_usd_cfg(
+        robot_usd_path, arm_effort_limit=list(env.cfg.action.arm_effort_limit)))
     env.table = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/Table", table_usd_paths))
     env.object = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/Object", object_usd_paths))
     env.goal_viz = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/GoalViz", goalviz_usd_paths))

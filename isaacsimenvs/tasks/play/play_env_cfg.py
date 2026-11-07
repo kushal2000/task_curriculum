@@ -314,6 +314,10 @@ class ActionCfg:
     arm_moving_average: float = 0.1
     hand_moving_average: float = 0.1
     dof_speed_scale: float = 1.5
+    arm_effort_limit: list[float] = []
+    """Per arm joint drive force ceiling [N m], joints 1..7, enforced by the PhysX drive. Empty keeps
+    the robot USD's (300 N m each, never reached). The robot has no gravity, so free motion needs
+    < 6 N m (p99) and every N m above that is the arm pushing the hand into something."""
 
 
 # ----------------------------------------------------------------------------
