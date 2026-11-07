@@ -1,0 +1,6 @@
+{
+ "flat_eraser": {
+  "scale": [2.5, 0.7, 1.25],
+  "source": "SimToolReal dextoolbench/objects.py: rescale_by_factor((0.10, 0.028, 0.05), 25); grasp box 10 x 2.8 x 5 cm; mesh assets/urdf/dextoolbench/eraser/flat_eraser/"
+ }
+}
