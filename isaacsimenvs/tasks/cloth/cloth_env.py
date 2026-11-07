@@ -35,6 +35,83 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
 
     cfg: ClothEnvCfg
 
+    def __init__(self, cfg: ClothEnvCfg, render_mode: str | None = None, **kwargs):
+        kappa = float(cfg.cloth.plastic_yield_curvature)
+        self._plasticity = None
+        restore = self._install_plasticity_at_capture(kappa) if kappa > 0.0 else None
+        try:
+            super().__init__(cfg, render_mode, **kwargs)
+        finally:
+            if restore is not None:
+                restore()
+        if kappa > 0.0 and self._plasticity is None:  # nothing was captured, so nothing installed it
+            self._install_plasticity(kappa)
+
+    def _install_plasticity_at_capture(self, kappa: float):
+        """Install plasticity right before Newton's first CUDA graph capture, so the graph holds it.
+
+        Installing after `super().__init__` and capturing again does not work: the re-captured
+        coupled step fails to instantiate ("invalid argument"), the back-to-back capture problem
+        `NewtonManager.start_simulation` documents. Every start runs `_capture_or_defer_graph` once
+        the model and solver exist, graph or not. Returns the undo."""
+        from isaaclab_newton.physics import NewtonManager
+
+        orig = NewtonManager.__dict__["_capture_or_defer_graph"]
+        env = self
+
+        def capture(cls):
+            if env._plasticity is None:
+                env._install_plasticity(kappa)
+            return orig.__func__(cls)
+
+        NewtonManager._capture_or_defer_graph = classmethod(capture)
+        return lambda: setattr(NewtonManager, "_capture_or_defer_graph", orig)
+
+    def _install_plasticity(self, kappa: float) -> None:
+        """Wrap the coupled solver's cloth entry so every VBD substep updates the rest angles."""
+        import numpy as np
+        import torch
+        from isaaclab_newton.physics import NewtonManager
+
+        from isaacsimenvs.tasks.cloth.utils.plasticity import BendingPlasticity
+
+        model = NewtonManager._model
+        plast = BendingPlasticity(model, kappa)
+        plast.wrap_solver(NewtonManager._solver.solver("cloth"))
+        ei = model.edge_indices.numpy()
+        world = model.particle_world.numpy()[ei[:, 2]]
+        world[(ei[:, 0] < 0) | (ei[:, 1] < 0)] = -1  # boundary edges never bend
+        # `self.device` may not exist yet: this can run inside `super().__init__`.
+        self._edge_env = torch.as_tensor(world, device=str(model.device), dtype=torch.long)
+        self._plast_resets_logged = 0
+        self._plasticity = plast
+        w = plast.hinge_width[world >= 0]
+        print(f"[cloth] plasticity: yield curvature {kappa:g} /m = {np.degrees(kappa * w.max()):.1f} deg per grid "
+              f"cell, {np.degrees(kappa * w.min()):.1f} deg per diagonal, {int((world >= 0).sum())} hinges", flush=True)
+
+    def _reset_idx(self, env_ids):
+        super()._reset_idx(env_ids)
+        if getattr(self, "_plasticity", None) is None:  # off, or a reset inside super().__init__
+            return
+        import torch
+        import warp as wp
+
+        dev = self._edge_env.device
+        ids = torch.arange(self.num_envs, device=dev) if env_ids is None else \
+            torch.as_tensor(env_ids, device=dev, dtype=torch.long).reshape(-1)
+        edges = torch.nonzero(torch.isin(self._edge_env, ids)).reshape(-1)
+        # Log the first few resets of envs that have run, as evidence the substep update is live.
+        log = self._plast_resets_logged < 3 and edges.numel() and getattr(self, "common_step_counter", 0) > 0
+        if log:
+            rest = wp.to_torch(self._plasticity.model.edge_rest_angle)[edges]
+            before = (float(rest.abs().max()) * 57.2958, int((rest.abs() > 0.1745).sum()))
+        self._plasticity.reset(wp.from_torch(edges.to(torch.int32)))
+        if log:
+            after = float(wp.to_torch(self._plasticity.model.edge_rest_angle)[edges].abs().max()) * 57.2958
+            print(f"[cloth] plasticity reset of {ids.numel()} envs: largest set angle {before[0]:.1f} deg, {before[1]} hinges "
+                  f"past 10 deg; after reset {after:.1f} deg", flush=True)
+            self._plast_resets_logged += 1
+
     @staticmethod
     def build_physics_cfg(cfg: "ClothEnvCfg"):
         """Coupled MJWarp (robot) + VBD (cloth) solve, sized for this env count."""

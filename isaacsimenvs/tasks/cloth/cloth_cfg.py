@@ -161,6 +161,16 @@ class ClothCfg:
     edge_kd: float = 1.0e-3
     """Bending damping. SIM1 Table 2 (was 1.0e-2 here)."""
 
+    plastic_yield_curvature: float = 0.0
+    """Bending plasticity: yield curvature [1/m], 0 = off (purely elastic, as before).
+
+    A hinge bent past ``kappa x hinge width`` (16.7 mm along the grid, 11.8 mm on the diagonals)
+    keeps the excess as a new rest angle, so a pressed fold stays folded instead of springing back
+    (``utils/plasticity.py``, after Narain et al. 2013). Reset to flat with the sheet.
+    It is a mesh-level parameter: in the scripted fold-press-release test
+    (``scripts/analysis/cloth_plasticity_probe.py``) 100 (95 deg per grid cell) holds a pressed
+    towel or cotton fold without changing the free drape; napkin and denim need 50, chiffon and silk 25."""
+
     # --- the fold -------------------------------------------------------------------------
     fold_axis: str = "x"
     """Axis normal to the fold line, in cloth-local coordinates: the ``+`` half folds onto ``-``."""
