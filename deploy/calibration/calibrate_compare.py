@@ -5,12 +5,14 @@ viser shows the robot at its measured joints, the live point cloud placed by the
 ray cast from the camera over its color image. Both follow the extrinsics as you tune them:
   - Extrinsics: drag the gizmo, step x/y/z and roll/pitch/yaw, or "level to table" (turns the camera so
     the table plane in the cloud is parallel to the base x-y plane); "save" writes --extrinsics (the old
-    one kept as <name>_prev.json).
+    one kept as <name>_prev.json). The "save as" box names the file (default: the --extrinsics name
+    with today's date, e.g. left_camera_nov7).
   - Compare: "free drive" turns the arm's stiffness off (light damping, the robot's gravity compensation
     on) so you can move it by hand. "capture this pose" holds the arm, waits --settle_s for you to let go,
-    and saves real | sim | overlay to compare/<time>/<k>.png and all.png; free drive then comes back on.
+    and saves real | sim | overlay to compare/<folder>/<k>.png and all.png (the "compare folder" box,
+    default <time>; a new name renames the folder at the next write); free drive then comes back on.
 
-    python deploy/calibration/calibrate_compare.py --arm <ROBOT_SN> --extrinsics deploy/calibration/extrinsics/left_camera_nov1.json
+    python deploy/calibration/calibrate_compare.py --arm <ROBOT_SN> --extrinsics deploy/calibration/extrinsics/left_camera_nov7.json
 
 A new camera: name a file that does not exist yet (and --serial if several cameras are plugged in). The
 camera starts at --start_xyz looking at the arm: drag the gizmo to where the camera really is, "aim at
@@ -24,6 +26,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import re
 import sys
 import threading
 import time
@@ -242,6 +245,8 @@ class App:
             self.free_on.on_update(lambda _: self._set_free())
             self.preview = g.add_image(np.zeros((90, 160, 3), np.uint8), label="sim over real", format="jpeg")
             self.preview_on = g.add_checkbox("live preview", True)
+            self.out_name = g.add_text("compare folder", self.out.name,
+                                       hint="compare/<this>; a rename applies at the next capture / re-render")
             g.add_button("capture this pose", color="green", disabled=not self.robot.can_move).on_click(
                 lambda _: self._job(self._capture))
             g.add_button("delete last pose").on_click(lambda _: self._job(self._delete_last))
@@ -270,6 +275,8 @@ class App:
             g.add_button("aim at robot", hint="keep the camera position, point it at the arm").on_click(
                 lambda _: self._set_T(look_at(self.T[:3, 3], self._arm_center())))
             g.add_button("reset to saved").on_click(lambda _: self._set_T(self.T_saved))
+            self.save_name = g.add_text("save as", dated_name(self.ext_path.stem),
+                                        hint=f"file name in {self.ext_path.parent}/ (.json added)")
             g.add_button("save extrinsics", color="red").on_click(lambda _: self._job(self._save))
 
         with g.add_folder("View", expand_by_default=False):
@@ -362,6 +369,10 @@ class App:
             self.table_pts.visible = self.table_on.value
 
     def _save(self) -> None:
+        name = self.save_name.value.strip().removesuffix(".json")
+        if not name or "/" in name:
+            raise ValueError(f"bad file name {name!r}")
+        self.ext_path = self.ext_path.with_name(f"{name}.json")
         x, y, z, w = Rotation.from_matrix(self.T[:3, :3]).as_quat()
         out = {
             "T_base_cam": self.T.tolist(),
@@ -410,7 +421,22 @@ class App:
             if self.free_on.value:
                 self.robot.set_free(True)
 
+    def _sync_out(self) -> None:
+        """Rename the compare folder to what the "compare folder" box says."""
+        name = self.out_name.value.strip()
+        if not name or "/" in name:
+            raise ValueError(f"bad folder name {name!r}")
+        new = self.out.with_name(name)
+        if new == self.out:
+            return
+        if new.exists():
+            raise FileExistsError(f"`{new}` exists")
+        if self.out.exists():
+            self.out.rename(new)
+        self.out = new
+
     def _delete_last(self) -> None:
+        self._sync_out()
         if self.poses:
             self.poses.pop()
             (self.out / f"{len(self.poses)}.png").unlink(missing_ok=True)
@@ -420,6 +446,7 @@ class App:
         """<out>/<k>.png per pose and all.png, rendered with the current extrinsics."""
         from PIL import Image
 
+        self._sync_out()
         self.out.mkdir(parents=True, exist_ok=True)
         rows = [side_by_side(img, *self.renderer.render(q, self.T, self.intr), f"pose {k}")
                 for k, (img, q) in enumerate(self.poses)]
@@ -520,6 +547,13 @@ class App:
         finally:
             self.robot.close()
             self.cam.stop()
+
+
+def dated_name(stem: str) -> str:
+    """left_camera_nov1 -> left_camera_<today>, e.g. left_camera_nov7 (a trailing _prev is dropped too)."""
+    base = re.sub(r"(_[a-z]{3}\d{1,2})?(_prev)?$", "", stem)
+    today = datetime.date.today()
+    return f"{base}_{today.strftime('%b').lower()}{today.day}"
 
 
 def _parse() -> argparse.Namespace:
