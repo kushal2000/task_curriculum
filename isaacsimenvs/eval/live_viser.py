@@ -13,6 +13,9 @@ player), a handful of envs at once; one of them is drawn. What can change WITHOU
 * rigid manipulands only: slat / fingertip friction, hinge damping and stiffness, contact margin,
   mass -- written through `RigidClothEnv._randomize_physics`, the same in-place path the training
   DR uses, so they take effect on the very next step
+* fold pool on PhysX: the damping of every hinge but the half fold's own
+  (`fold_pool.other_hinge_damping_scale`), and a hinge overlay -- red = the half fold's hinge, blue =
+  the others, grey = seams (loop joints, never damped)
 
 What needs a RESTART (the "Restart" button re-execs this process with the new task, ~2-3 min):
 the task itself (pool / one chain / VBD cloth), the number of envs, and the sheet sizes (Newton
@@ -62,6 +65,24 @@ POLICIES = {
     "previous best: PhysX stage 1 -> 2 (157622 s1; cloth 88/63%)": ("outputs/2026-10-05/23-51-55/0_pxpool_pxs1_arm1e3_e6144_s1_157622/nn/0_pxpool_pxs1_arm1e3_e6144_s1_157622.pth", 0.0),
 }
 
+#: No network: every action 0 -- the arm holds its pose (velocity-delta actions), the hand goes to the
+#: middle of its range. For looking at start states without a policy moving the sheet.
+ZERO_POLICY = "zero actions (arm holds still)"
+POLICIES[ZERO_POLICY] = (None, 0.0)
+
+#: Extra menu entries from a JSON file {display name: [checkpoint, coef]} named by $LIVE_VISER_POLICIES
+#: (survives the browser's restart, which re-execs with the same environment).
+if os.environ.get("LIVE_VISER_POLICIES"):
+    import json
+
+    with open(os.environ["LIVE_VISER_POLICIES"]) as _f:
+        _extra = json.load(_f)
+    # $LIVE_VISER_POLICIES_ONLY=1: the menu is the JSON's entries alone (no built-ins, no zero policy).
+    if os.environ.get("LIVE_VISER_POLICIES_ONLY") == "1":
+        POLICIES.clear()
+    for _k, _v in _extra.items():
+        POLICIES[_k] = (_v[0], float(_v[1]))
+
 #: Not in the menu; add one back to POLICIES to show it.
 ARCHIVED_POLICIES = {
     "stage-2 pool, box3-mid prior s3 (Newton)": ("outputs/2026-10-04/20-17-57/0_fp_box3_s3_156746/nn/0_fp_box3_s3_156746.pth", 0.0),
@@ -79,11 +100,17 @@ _RIGID_BUF = "env.newton.per_env_triangle_pairs=2097152"
 TASKS = {
     "fold pool (5 shapes, 10-20 cm)": ("Isaacsimenvs-FoldPool-Direct-v0", [_RIGID_BUF]),
     "VBD cloth": ("Isaacsimenvs-Cloth-Direct-v0", []),
+    # cloth.task=unfold: the + half starts folded over (cloth.unfold_start_deg), the goal is flat.
+    "UNFOLD: VBD cloth, folded start": ("Isaacsimenvs-Cloth-Direct-v0", ["env.cloth.task=unfold"]),
     **{
         f"chain {v}": ("Isaacsimenvs-RigidCloth-Direct-v0", [f"env.rigid_cloth.variant={v}", _RIGID_BUF])
         for v in ("box3-mid", "box2-surface", "cyl-mid-odd", "box-mid-odd", "box-surface")
     },
 }
+_POOL7 = "env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]"
+# RigidClothPhysx.yaml keeps friction DR ranges, which the PhysX env refuses at build (physx_envs.py).
+_PX_NO_FRIC_DR = ["env.rigid_cloth.randomization.slat_friction_scale=[1.0,1.0]",
+                  "env.rigid_cloth.randomization.fingertip_friction_scale=[1.0,1.0]"]
 PHYSX_TASKS = {
     "fold pool (5 shapes, 10-20 cm)": ("Isaacsimenvs-FoldPoolPhysx-Direct-v0", []),
     # Run 1's training setup: 80% of episodes start partly folded, hinge damping 0.02.
@@ -91,7 +118,39 @@ PHYSX_TASKS = {
         "Isaacsimenvs-FoldPoolPhysx-Direct-v0",
         ["env.fold_pool.init_fold_prob=0.8", "env.rigid_cloth.joint_damping=0.02"],
     ),
-    "chain box3-mid": ("Isaacsimenvs-RigidClothPhysx-Direct-v0", ["env.rigid_cloth.variant=box3-mid"]),
+    "chain box3-mid": ("Isaacsimenvs-RigidClothPhysx-Direct-v0", ["env.rigid_cloth.variant=box3-mid", *_PX_NO_FRIC_DR]),
+    # cloth.task=unfold on box2-mid: every episode starts with the half fold turned up 120-180 deg. Lower
+    # starts are free successes: a 20 cm sheet dropped at 75 deg lands flat, at 100 deg nearly flat.
+    "UNFOLD: box2-mid, folded start": (
+        "Isaacsimenvs-FoldPoolPhysx-Direct-v0",
+        ["env.cloth.task=unfold", "env.fold_pool.shapes=[box2-mid]", "env.fold_pool.init_fold_starts=target",
+         "env.fold_pool.init_fold_prob=1.0", "env.fold_pool.init_fold_deg=[120.0,180.0]"],
+    ),
+    # cloth.task=unfold on the box3-mid chain: both bar hinges at 90 deg (cloth.unfold_start_deg, 180 =
+    # the tightest fold), so the plies lie 2 mm apart face to face -- no overlap, unlike box2-mid's 180.
+    "UNFOLD: box3-mid chain, folded start": (
+        "Isaacsimenvs-RigidClothPhysx-Direct-v0",
+        ["env.rigid_cloth.variant=box3-mid", "env.cloth.task=unfold", *_PX_NO_FRIC_DR],
+    ),
+    # The 7-shape pool of the 10-12 fine-tunes (E1/E2/ft7c; the eval matrix's physx_pool7 / pool7of).
+    "fold pool, 7 shapes (E1/E2 setup)": ("Isaacsimenvs-FoldPoolPhysx-Direct-v0", [_POOL7]),
+    "fold pool, 7 shapes, other folds pre-folded": (
+        "Isaacsimenvs-FoldPoolPhysx-Direct-v0",
+        [_POOL7, "env.fold_pool.init_fold_starts=other", "env.fold_pool.init_fold_prob=1.0",
+         "env.fold_pool.init_fold_deg=[15.0,180.0]"],
+    ),
+    # The 2026-10-12 hinge arms (docs/reports/4_physx/hinge_physics.md): damping / armature.
+    **{
+        f"fold pool, hinge {name} (d {d} / arm {a})": (
+            "Isaacsimenvs-FoldPoolPhysx-Direct-v0",
+            [f"env.rigid_cloth.joint_damping={d}", f"env.physx_chain.hinge_armature={a}"],
+        )
+        for name, d, a in (("halfway", "0.001", "1e-4"), ("cloth-like", "0.0", "1e-5"), ("most cloth-like", "0.0", "0.0"))
+    },
+    # Only the half fold's hinge keeps the training damping; every other hinge swings 5x more freely.
+    "fold pool, 7 shapes, other hinges x0.2 damping": (
+        "Isaacsimenvs-FoldPoolPhysx-Direct-v0", [_POOL7, "env.fold_pool.other_hinge_damping_scale=0.2"],
+    ),
 }
 #: VBD cloth size -> hydra overrides (the large-cloth evals' settings, scripts/cluster/bos14_cloth_size_sweep.sh):
 #: grid spacing closest to the calibrated 16.67 mm (and >= the 16 mm particle thickness), reset centre
@@ -104,8 +163,12 @@ CLOTH_SIZES = {
     "20 cm": ["env.cloth.size=0.2", "env.cloth.resolution=13", "env.cloth.reset_offset_xy=[0.0,0.0707]"],
 }
 _TASK_KEYS = ("env.rigid_cloth.variant=", "env.newton.per_env_triangle_pairs=",
-              "env.fold_pool.init_fold_prob=", "env.rigid_cloth.joint_damping=",
-              "env.cloth.size=", "env.cloth.resolution=", "env.cloth.reset_offset_xy=")
+              "env.fold_pool.init_fold_prob=", "env.rigid_cloth.joint_damping=", "env.physx_chain.hinge_armature=",
+              "env.fold_pool.shapes=", "env.fold_pool.init_fold_starts=", "env.fold_pool.init_fold_deg=",
+              "env.cloth.size=", "env.cloth.resolution=", "env.cloth.reset_offset_xy=",
+              "env.fold_pool.other_hinge_damping_scale=",
+              "env.cloth.task=", "env.cloth.unfold_start_deg=",
+              "env.rigid_cloth.randomization.slat_friction_scale=", "env.rigid_cloth.randomization.fingertip_friction_scale=")
 #: PhysX has no friction DR (a tensor material write resets the combine modes; physx_envs).
 _PHYSX_NO = ("slat_friction_scale", "fingertip_friction_scale")
 
@@ -129,12 +192,24 @@ GOAL_RGB = (40, 200, 90)
 KP_RGB = (255, 165, 25)
 MOVING_RGB = (242, 77, 26)
 STATIONARY_RGB = (250, 199, 38)
+HINGE_FOLD_RGB = (225, 25, 25)
+HINGE_OTHER_RGB = (30, 105, 255)
+SEAM_RGB = (110, 110, 110)
+
+
+def _wxyz_to_mat(q) -> np.ndarray:
+    w, x, y, z = (float(v) for v in q)
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+        [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+        [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+    ])
 
 
 def _parse():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--task", default="Isaacsimenvs-FoldPool-Direct-v0")
-    p.add_argument("--policy", default="run 2: flat pool (s3; cloth 78/66%)", choices=list(POLICIES))
+    p.add_argument("--policy", default=next(iter(POLICIES)), choices=list(POLICIES))
     p.add_argument("--num_envs", type=int, default=8)
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--even_sizes", type=int, default=1,
@@ -345,6 +420,15 @@ def main() -> None:
     os.chdir(ROOT)
     physx = "Physx" in args.task
     tasks = PHYSX_TASKS if physx else TASKS
+    task_keys = _TASK_KEYS
+    # $LIVE_VISER_TASKS: a JSON {display name: [gym task, [hydra overrides]]} that replaces the task menu.
+    # Every key its entries set counts as a task choice, so a restart drops the old task's value.
+    if os.environ.get("LIVE_VISER_TASKS"):
+        import json
+
+        with open(os.environ["LIVE_VISER_TASKS"]) as f:
+            tasks = {k: (t, list(ov)) for k, (t, ov) in json.load(f).items()}
+        task_keys = _TASK_KEYS + tuple(sorted({o.split("=")[0] + "=" for _t, ov in tasks.values() for o in ov}))
     if physx:
         args.headless = True
     if not str(getattr(args, "device", "") or "").startswith("cuda"):
@@ -416,11 +500,15 @@ def main() -> None:
                 fpe.np = real_np
         inner = env.unwrapped
         n_env, device = inner.num_envs, inner.device
+        if physx and rigid:
+            # The physics sliders are point ranges, which PhysX's DR skips by default (physx_envs).
+            inner._dr_write_points = True
 
         origins = inner.scene.env_origins.detach().cpu().numpy()
         pool = [sh.name for sh in getattr(inner, "_pool", [])]
         sizes = getattr(inner, "_env_size_np", None)
 
+        hinge_geo = []
         if physx:
             px = _PhysxScene(inner)
             model = None
@@ -435,6 +523,23 @@ def main() -> None:
 
             def tail(label):
                 return label.split("/", 1)[-1]
+
+            # Per pool shape: (asset index, nominal size, [(child body, a, b, colour)]). Every plate's
+            # body frame is the sheet frame at rest (fold_shapes), so a hinge's two sheet-frame end
+            # points ARE its body-frame end points, at that env's size.
+            if pool:
+                from isaacsimenvs.tasks.cloth.utils import fold_shape_assets as fsa
+                from isaacsimenvs.tasks.cloth.utils import fold_shapes as fsh
+
+                names = [a[0] for a in px.assets]
+                for s_, sh in enumerate(inner._pool):
+                    k = names.index(f"fold_pool_{s_}")
+                    bodies = px.assets[k][4]
+                    fold = set(sh.folds[fsh.HALF_FOLD][0])
+                    segs = [(bodies.index(fsa.BODY_PREFIX + h.child), h.a, h.b,
+                             HINGE_FOLD_RGB if h.child in fold else HINGE_OTHER_RGB) for h in sh.hinges]
+                    segs += [(bodies.index(fsa.BODY_PREFIX + sm.plate1), sm.a, sm.b, SEAM_RGB) for sm in sh.seams]
+                    hinge_geo.append((k, float(sh.size), segs))
         else:
             import warp as wp
             from isaaclab_newton.physics.newton_manager import NewtonManager
@@ -507,9 +612,21 @@ def main() -> None:
         fold_label = {f"{pool[s]}: {f}": (s, k) for s, names in enumerate(fold_names) for k, f in enumerate(names)}
         players: dict[str, PretrainedPlayer] = {}
 
+        class _ZeroPlayer:
+            expl_coef = 0.0
+
+            def get_action(self, obs, deterministic=True):
+                return torch.zeros((n_env, int(inner.cfg.action_space)), device=device)
+
+            def reset_rnn(self, *_a):
+                pass
+
         def get_player(name):
             if name not in players:
                 ckpt, _ = POLICIES[name]
+                if ckpt is None:
+                    players[name] = _ZeroPlayer()
+                    return players[name]
                 players[name] = PretrainedPlayer(
                     config_path=args.policy_config, checkpoint_path=ckpt, num_envs=n_env,
                     device=args.device, num_observations=int(inner.cfg.observation_space),
@@ -606,6 +723,9 @@ def main() -> None:
             g_reset = server.gui.add_button("reset this env")
             g_reset_all = server.gui.add_button("reset all envs")
             g_kp = server.gui.add_checkbox("show keypoints / targets", True)
+            g_robot = server.gui.add_checkbox("show robot", True)
+            g_hinge = server.gui.add_checkbox(
+                "show hinges (red = half fold, blue = other hinges, grey = seams)", True) if hinge_geo else None
 
         with server.gui.add_folder("Policy"):
             g_pol = server.gui.add_dropdown("policy", list(POLICIES), initial_value=args.policy)
@@ -629,6 +749,28 @@ def main() -> None:
                     f"lay out ALL {sum(len(f) for f in fold_names)} start folds, one per env, at the start angle (pauses)")
                 g_pause = server.gui.add_slider("pause at episode step (0 = never; ~12 = landed)", 0, 60, 1, 0)
 
+        # VBD / single-chain unfold: the folded start's angle, applied at the next reset (`_fold_start`).
+        g_vang = g_vrand = None
+        vbd_fold = getattr(inner.object, "_fold_start", None)
+        if vbd_fold is not None:
+            with server.gui.add_folder("Unfold start", expand_by_default=True):
+                v_lo, v_hi = (float(v) for v in vbd_fold[1])
+                g_vrand = server.gui.add_checkbox(f"random angle ({v_lo:g}-{v_hi:g} deg)", v_lo != v_hi)
+                g_vang = server.gui.add_slider("start angle [deg] (next reset)", 0.0, 180.0, 1.0, v_hi)
+                g_pause = server.gui.add_slider("pause at episode step (0 = never; ~25 = landed on VBD)", 0, 60, 1, 0)
+
+            def write_vbd_angle():
+                ax, _rng, lift = inner.object._fold_start
+                v = float(g_vang.value)
+                inner.object._fold_start = (ax, [v_lo, v_hi] if g_vrand.value else [v, v], lift)
+
+            g_vang.on_update(lambda _e: write_vbd_angle())
+            g_vrand.on_update(lambda _e: write_vbd_angle())
+
+            @g_pause.on_update
+            def _(_e):
+                S.pause_at = int(g_pause.value)
+
         g_phys = {}
         if rigid:
             with server.gui.add_folder("Physics (rigid manipuland)"):
@@ -637,6 +779,11 @@ def main() -> None:
                     if physx and field in _PHYSX_NO:
                         continue
                     g_phys[field] = server.gui.add_slider(label, lo, hi, step, nom)
+                g_other = None
+                if hinge_geo:
+                    other_nom = float(inner.cfg.fold_pool.other_hinge_damping_scale)
+                    g_other = server.gui.add_slider(
+                        "other hinges' damping x (blue; the red half-fold hinge keeps 1x)", 0.0, 2.0, 0.05, other_nom)
                 g_apply = server.gui.add_button("apply now (all envs)")
                 g_nominal = server.gui.add_button("back to nominal")
 
@@ -650,6 +797,10 @@ def main() -> None:
             if g_csize is not None and task == "Isaacsimenvs-Cloth-Direct-v0":
                 ov = [*ov, *CLOTH_SIZES[g_csize.value]]
             S.restart = (task, ov, int(g_nenv.value))
+
+        @g_robot.on_update
+        def _(_e):
+            S.rebuild = True
 
         @g_env.on_update
         def _(_e):
@@ -769,7 +920,8 @@ def main() -> None:
 
         @g_speed.on_update
         def _(_e):
-            S.speed = float(g_speed.value)
+            # The browser can send 0 (slider dragged to the edge / typed) despite min 0.1; the loop divides by it.
+            S.speed = max(0.1, float(g_speed.value))
 
         if rigid:
             def write_ranges():
@@ -791,11 +943,21 @@ def main() -> None:
             def _(_e):
                 write_ranges()
 
+            if g_other is not None:
+                @g_other.on_update
+                def _(_e):
+                    # Read by `_other_hinge_range` at the next DR write; a fixed value replaces a range.
+                    inner.cfg.fold_pool.other_hinge_damping_scale = float(g_other.value)
+                    inner.cfg.fold_pool.other_hinge_damping_scale_range = None
+                    S.physics_dirty = True
+
             @g_nominal.on_click
             def _(_e):
                 for _, field, _lo, _hi, _st, nom in PHYSICS:
                     if field in g_phys:
                         g_phys[field].value = nom
+                if g_other is not None:
+                    g_other.value = other_nom
                 g_dr.value = False
                 write_ranges()
 
@@ -837,6 +999,7 @@ def main() -> None:
         clouds: dict[str, object] = {}
         root: dict[str, object] = {}
         world_keys: list = []
+        scene_world = 0  # the env world_keys belong to; the GUI thread can change S.world before the rebuild
 
         def is_body(s):
             return s.key is not None and (physx or s.key >= 0)
@@ -845,7 +1008,7 @@ def main() -> None:
             return f"b{k[0]}_{k[1]}" if physx else f"b{k}"
 
         def rebuild_scene():
-            nonlocal world_keys
+            nonlocal world_keys, scene_world
             # Everything drawn lives under /w, so dropping it clears the previous env completely.
             if "root" in root:
                 root["root"].remove()
@@ -856,9 +1019,12 @@ def main() -> None:
             o = origins[w]
             mine = shapes_of(w)
             world_keys = sorted({s.key for s in mine if is_body(s)})
+            scene_world = w
             for k in world_keys:
                 frames[k] = server.scene.add_frame(f"/w/{key_name(k)}", show_axes=False)
             for i, s in enumerate(mine):
+                if "Robot" in s.label and not g_robot.value:
+                    continue
                 parent = f"/w/{key_name(s.key)}" if is_body(s) else "/w/static"
                 pos = s.pos - (o if not is_body(s) else 0.0)
                 server.scene.add_mesh_simple(
@@ -875,7 +1041,7 @@ def main() -> None:
             return {k: (x[:3], (x[6], x[3], x[4], x[5])) for k, x in zip(world_keys, q)}
 
         def draw():
-            w = S.world
+            w = scene_world
             o = origins[w]
             if world_keys:
                 poses = body_poses(w)
@@ -906,6 +1072,13 @@ def main() -> None:
                         np.tile([255, 0, 0], (len(segs), 2, 1)).astype(np.uint8), thickness=0.004)
                 elif "pierce" in clouds:
                     clouds["pierce"].visible = False
+            if g_hinge is not None and g_hinge.value:
+                segs = hinge_segments(w)
+                if segs is not None:
+                    clouds["hinges"] = server.scene.add_line_segments(
+                        "/w/hinges", segs[0], segs[1], thickness=0.0025)
+            elif "hinges" in clouds:
+                clouds["hinges"].visible = False
             if g_kp.value and hasattr(inner, "fold_targets_w"):
                 goal = inner.fold_targets_w()[w].detach().cpu().numpy() - o
                 kp = inner.cloth_keypoints_w()[w].detach().cpu().numpy() - o
@@ -917,14 +1090,43 @@ def main() -> None:
                     "/w/kp", kp.astype(np.float32), np.tile(KP_RGB, (len(kp), 1)).astype(np.uint8),
                     point_size=0.005, point_shape="circle", precision="float32")
             else:
-                for h in clouds.values():
-                    h.visible = False
+                for name, h in clouds.items():
+                    if name != "hinges":
+                        h.visible = False
+
+        def hinge_segments(w):
+            """The active shape's hinge lines in env ``w`` (env frame): ``(points, colours)`` or None.
+
+            Each line is drawn on both faces of its child plate, just clear of the surface, so it shows
+            whichever way up the plate lies.
+            """
+            s = int(inner.object.active[w])
+            k, size0, segs = hinge_geo[s]
+            _n, asset, _r, inst, _b = px.assets[k]
+            if w not in inst:
+                return None
+            i = inst[w]
+            sc = float(sizes[w]) / size0 if sizes is not None else 1.0
+            slab = getattr(inner, "_env_slab_np", None)
+            lift = 0.5 * (float(slab[w]) if slab is not None else 0.002) + 0.001
+            links = [b for b, *_ in segs]
+            pos = asset.data.body_pos_w[i, links].detach().cpu().numpy() - origins[w]
+            quat = asset.data.body_quat_w[i, links].detach().cpu().numpy()
+            pts, cols = [], []
+            for (_b, a, b, rgb), p, q in zip(segs, pos, quat):
+                rot = _wxyz_to_mat(q)
+                for z in (lift, -lift):
+                    ends = np.array([[a[0] * sc, a[1] * sc, z], [b[0] * sc, b[1] * sc, z]])
+                    pts.append(ends @ rot.T + p)
+                    cols.append([rgb, rgb])
+            return np.asarray(pts, dtype=np.float32), np.asarray(cols, dtype=np.uint8)
 
         def hud_text():
             w = S.world
             st = S.stats[w]
             tol = float(inner.cfg.cloth.keypoint_tolerance)
             err = float(inner.fold_error()[w]) if hasattr(inner, "fold_error") else float("nan")
+            word = "unfold" if getattr(inner.cfg.cloth, "task", "fold") == "unfold" else "fold"
             lines = [
                 f"**{g_task.value if g_task else args.task}** -- {S.policy_name}, coef {S.coef:g}",
                 f"env {w}" + (f", {sizes[w] * 100:.1f} cm" if sizes is not None
@@ -933,8 +1135,8 @@ def main() -> None:
                 f"step {int(inner.episode_length_buf[w])} / {int(inner.max_episode_length)}",
                 *([(lambda si: f"start: **{fold_names[si[0]][si[1]]}** at {si[2]:.0f} deg"
                     if si[1] is not None else "start: **flat**")(start_info(w))] if start_tabs is not None else []),
-                f"fold error **{err * 1e3:.1f} mm** (tolerance {tol * 1e3:.1f} mm) "
-                + ("FOLDED" if err < tol else ""),
+                f"{word} error **{err * 1e3:.1f} mm** (tolerance {tol * 1e3:.1f} mm), footprint "
+                f"{float(inner.footprint_ratio()[w]):.2f} " + (f"{word.upper()}ED" if err < tol else ""),
                 f"this env: {st['folds']} folds / {st['episodes']} episodes, last: {st['last']}",
                 f"all envs: {sum(s['folds'] for s in S.stats)} folds / "
                 f"{sum(s['episodes'] for s in S.stats)} episodes",
@@ -952,6 +1154,11 @@ def main() -> None:
                     f"damping {d['hinge_damping']:.3g}, stiffness {d['hinge_stiffness']:.2g}, "
                     f"margin {d['contact_margin'] * 1e3:.1f} mm, mass x{d['mass']:.2f}"
                 )
+                if hinge_geo:
+                    lines.append(
+                        f"hinge damping: half fold (red) {d['hinge_damping']:.3g}, others (blue) "
+                        f"{d['hinge_damping'] * d.get('other_hinge_damping_scale', 1.0):.3g}, "
+                        f"seams (grey) 0")
             return "  \n".join(lines)
 
         # ------------------------------------------------------------------ loop
@@ -968,7 +1175,7 @@ def main() -> None:
                 status.content = f"**Restarting with {task}...** the page reconnects by itself in ~2-3 min."
                 time.sleep(0.5)
                 # Keep every override that is not a task choice (e.g. the contact buffer size).
-                keep = [a for a in hydra_args if not a.startswith(_TASK_KEYS)]
+                keep = [a for a in hydra_args if not a.startswith(task_keys)]
                 argv = [sys.executable, "-m", "isaacsimenvs.eval.live_viser", "--task", task,
                         "--policy", S.policy_name, "--num_envs", str(nenv), "--port", str(args.port),
                         "--even_sizes", str(args.even_sizes), *(["--headless"] if physx else []),

@@ -273,6 +273,11 @@ def _size_gpu_buffers(cfg) -> None:
 class _PhysxClothMixin:
     """PhysX construction and contact physics shared by the chain and the pool. First in the bases."""
 
+    #: Write every DR quantity on `_randomize_physics`, ranges that are a single point included. Off in
+    #: training (a point range is the build-time value, and skipping it saves the tensor writes); the
+    #: live viewer turns it on, since its sliders ARE point ranges.
+    _dr_write_points = False
+
     def _hinge_fold_masks(self) -> list:
         """Per manipuland articulation: which joints always keep ``rigid_cloth.joint_damping`` (a bool
         tensor over ``art.joint_names``; the rest take the other-hinge scale), or ``None`` = all do."""
@@ -552,7 +557,7 @@ class _PhysxClothMixin:
             return torch.empty(n, device=self.device).uniform_(float(lo_hi[0]), float(lo_hi[1]))
 
         def varies(lo_hi) -> bool:
-            return float(lo_hi[0]) != float(lo_hi[1])
+            return self._dr_write_points or float(lo_hi[0]) != float(lo_hi[1])
 
         arts = self._manipuland_arts()
         # Per articulation: which of `ids` it exists in, and its own instance rows for them.
