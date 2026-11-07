@@ -41,6 +41,8 @@ class FoldPoolTaskMixin:
     _pool_object_cls = PoolAsRigidObject
     #: Whether this backend can build envs that carry different shapes (``fold_pool.one_shape_per_env``).
     _supports_one_shape_per_env = False
+    #: Whether this backend's damping DR keeps per-hinge ratios (``fold_pool.other_hinge_damping_scale``).
+    _per_hinge_damping_dr = False
 
     def __init__(self, cfg, render_mode: str | None = None, **kwargs):
         p = cfg.fold_pool
@@ -114,6 +116,13 @@ class FoldPoolTaskMixin:
     def _pool_after_spawn(self) -> None:
         raise NotImplementedError
 
+    def _hinge_damping_factors(self, shape) -> dict[str, float]:
+        """``{hinge joint name: damping / rigid_cloth.joint_damping}`` for one pool shape: 1 on the
+        target half fold's hinges, ``fold_pool.other_hinge_damping_scale`` on every other one."""
+        fold = set(shape.folds[fs.HALF_FOLD][0])
+        other = float(self.cfg.fold_pool.other_hinge_damping_scale)
+        return {f"{fsa.JOINT_PREFIX}{h.child}": 1.0 if h.child in fold else other for h in shape.hinges}
+
     def _pool_articulation_cls(self):
         """The class each pool shape's articulation is built with."""
         from isaaclab.assets import Articulation
@@ -159,6 +168,16 @@ class FoldPoolTaskMixin:
         rd = r.randomization
         if rd.enabled and float(rd.hinge_stiffness[1]) > 0.0 and stiffness == 0.0:
             stiffness = 1.0e-9
+        if float(p.other_hinge_damping_scale) != 1.0 and rd.enabled and not self._per_hinge_damping_dr:
+            raise ValueError(
+                "fold_pool.other_hinge_damping_scale != 1 with physics randomisation on: this engine's "
+                "DR writes one damping to every hinge and would erase the per-hinge ratio"
+            )
+        if p.other_hinge_damping_scale_range is not None and not (rd.enabled and self._per_hinge_damping_dr):
+            raise ValueError(
+                "fold_pool.other_hinge_damping_scale_range needs rigid_cloth.randomization.enabled and an "
+                "engine whose DR writes per-hinge damping (PhysX)"
+            )
 
         park = torch.tensor(
             [
@@ -179,7 +198,9 @@ class FoldPoolTaskMixin:
                     "hinges": ImplicitActuatorCfg(
                         joint_names_expr=[f"{fsa.JOINT_PREFIX}.*"],
                         stiffness=stiffness,
-                        damping=r.joint_damping,
+                        damping={
+                            j: float(r.joint_damping) * f for j, f in self._hinge_damping_factors(sh).items()
+                        },
                         armature=r.joint_armature,
                         effort_limit_sim=None,
                     )
@@ -189,6 +210,22 @@ class FoldPoolTaskMixin:
             self.scene.articulations[f"fold_pool_{s}"] = art
             arts.append(art)
         self._pool_arts = arts
+        if p.other_hinge_damping_scale_range is not None:
+            lo, hi = (float(v) for v in p.other_hinge_damping_scale_range)
+            dist = "logU" if p.other_hinge_damping_scale_log else "U"
+            print(
+                f"[fold_pool] hinge damping: {float(r.joint_damping):g} on each shape's half-fold hinge, "
+                f"x {dist}[{lo:g}, {hi:g}] (per env, every reset) on the others",
+                flush=True,
+            )
+        elif float(p.other_hinge_damping_scale) != 1.0:
+            for sh in self._pool:
+                fold = sorted(j for j, f in self._hinge_damping_factors(sh).items() if f == 1.0)
+                print(
+                    f"[fold_pool] {sh.name}: damping {float(r.joint_damping):g} on {fold}, "
+                    f"x{float(p.other_hinge_damping_scale):g} on the other {len(sh.hinges) - len(fold)} hinge(s)",
+                    flush=True,
+                )
         self._pool_after_spawn()
 
         # Per-env geometry, as tensors: in-plane factor, size [m], and the reset-centre shift that
@@ -600,6 +637,17 @@ class FoldPoolTaskMixin:
         final["fold_steps"] = entered.float() * length
         final["fold_flat_start"] = flat_fold.float()
         final["fold_steps_flat_start"] = flat_fold.float() * length
+        u = getattr(self, "dr_sample", {}).get("other_hinge_damping_scale")
+        if self.cfg.fold_pool.other_hinge_damping_scale_range is not None and u is not None:
+            # This episode's draw (the next reset re-draws). Below the range's midpoint (geometric
+            # midpoint for a log-uniform draw) = "soft": `fold_hinge_soft` / `hinge_soft` is the fold
+            # rate on the softer half of the draws.
+            lo, hi = (float(v) for v in self.cfg.fold_pool.other_hinge_damping_scale_range)
+            mid = (lo * hi) ** 0.5 if self.cfg.fold_pool.other_hinge_damping_scale_log else 0.5 * (lo + hi)
+            soft = u < mid
+            final["other_hinge_u"] = u.clone()
+            final["hinge_soft"] = soft.float()
+            final["fold_hinge_soft"] = (entered & soft).float()
         return reward
 
     # ------------------------------------------------------------------ startup proofs

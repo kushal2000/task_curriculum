@@ -273,6 +273,63 @@ def _size_gpu_buffers(cfg) -> None:
 class _PhysxClothMixin:
     """PhysX construction and contact physics shared by the chain and the pool. First in the bases."""
 
+    def _hinge_fold_masks(self) -> list:
+        """Per manipuland articulation: which joints always keep ``rigid_cloth.joint_damping`` (a bool
+        tensor over ``art.joint_names``; the rest take the other-hinge scale), or ``None`` = all do."""
+        return [None] * len(self._manipuland_arts())
+
+    def _other_hinge_range(self):
+        """``(lo, hi)`` the other-hinge damping scale is drawn from at a reset, or ``None``."""
+        return None
+
+    def _other_hinge_log(self) -> bool:
+        """Whether ``_other_hinge_range`` is drawn log-uniformly (else uniformly)."""
+        return False
+
+    def _other_hinge_static(self) -> float:
+        """The other-hinge damping scale the actuators were built with."""
+        return 1.0
+
+    def _hinge_damping_rows(self) -> list:
+        """Per manipuland articulation: each joint's build-time damping as a multiple of
+        ``rigid_cloth.joint_damping`` (a tensor over ``art.joint_names``), or ``None`` for all 1."""
+        other = self._other_hinge_static()
+        return [
+            None if mask is None else torch.where(mask, 1.0, other)
+            for mask in self._hinge_fold_masks()
+        ]
+
+    def _check_hinge_damping_draw(self) -> None:
+        """Read every env's hinge damping back after a DR draw: fold hinges at the drawn damping, the
+        others at damping x that env's own other-hinge draw. Fatal on a mismatch."""
+        u = self.dr_sample["other_hinge_damping_scale"]
+        d = self.dr_sample["hinge_damping"]
+        all_ids = torch.arange(self.num_envs, device=self.device)
+        worst, n_rows = 0.0, 0
+        for k, (art, mask) in enumerate(zip(self._manipuland_arts(), self._hinge_fold_masks())):
+            if mask is None:
+                continue
+            keep, local = self._manipuland_rows(k, all_ids)
+            if local.numel() == 0:
+                continue
+            got = art.root_physx_view.get_dof_dampings()[local.long().cpu()].to(self.device)
+            uu = u if keep is None else u[keep.to(u.device)]
+            dd = d if keep is None else d[keep.to(d.device)]
+            want = dd.unsqueeze(1) * torch.where(mask.unsqueeze(0), 1.0, uu.unsqueeze(1))
+            worst = max(worst, float((got - want).abs().max()))
+            n_rows += int(local.numel())
+        if worst > 1e-6 * max(float(self.cfg.rigid_cloth.joint_damping), 1.0) or n_rows != self.num_envs:
+            raise RuntimeError(
+                f"[physx] other-hinge damping DR did not reach the simulator: worst error {worst:.3g} "
+                f"over {n_rows} rows for {self.num_envs} envs"
+            )
+        print(
+            f"[rigid_cloth] other-hinge damping DR read back in all {n_rows} envs: half-fold hinges at "
+            f"{float(d.min()):g}..{float(d.max()):g}, others x{float(u.min()):.3f}..{float(u.max()):.3f} "
+            f"(mean {float(u.mean()):.3f})",
+            flush=True,
+        )
+
     def __init__(self, cfg, render_mode: str | None = None, **kwargs):
         a = cfg.assets
         # The Play task's material pass writes every robot/table/object shape through the tensor API,
@@ -416,6 +473,18 @@ class _PhysxClothMixin:
                     f"[physx] {art.cfg.prim_path}: slat friction off by {bad_mu:.4f} or rest offset off "
                     f"by {bad_rest * 1e3:.3f} mm from what was authored"
                 )
+        # Hinge damping as the actuators wrote it, per joint (fold_pool.other_hinge_damping_scale).
+        damp_ratio = set()
+        for art, fac in zip(self._manipuland_arts(), self._hinge_damping_rows()):
+            got = art.root_physx_view.get_dof_dampings().cpu()
+            want = float(r.joint_damping) * (fac.cpu() if fac is not None else torch.ones(got.shape[1]))
+            if float((got - want).abs().max()) > 1e-6 * max(float(r.joint_damping), 1.0):
+                raise RuntimeError(
+                    f"[physx] {art.cfg.prim_path}: hinge damping {got[0].tolist()} in the simulator, "
+                    f"{want.tolist()} configured ({art.joint_names})"
+                )
+            damp_ratio |= {round(float(v), 4) for v in want / max(float(r.joint_damping), 1e-12)}
+        print(f"[rigid_cloth] hinge damping read back: {r.joint_damping:g} x {sorted(damp_ratio)}", flush=True)
         tips = self.robot.root_physx_view.get_material_properties()[0, :, 0]
         n_tip = int(((tips - r.fingertip_friction).abs() < 1e-4).sum())
         n_def = int(((tips - _DEFAULT_MU).abs() < 1e-4).sum())
@@ -448,9 +517,17 @@ class _PhysxClothMixin:
         }
         self.dr_sample["hinge_stiffness"] = torch.zeros(n, device=self.device)
         self.dr_sample["contact_margin"] = torch.full((n,), self._contact_margin, device=self.device)
+        # What the actuators were built with, until a draw replaces it.
+        self.dr_sample["hinge_damping"].fill_(float(self.cfg.rigid_cloth.joint_damping))
+        self.dr_sample["other_hinge_damping_scale"] = torch.full(
+            (n,), self._other_hinge_static(), device=self.device
+        )
         self._dr_ready = bool(self.cfg.rigid_cloth.randomization.enabled)
         if self._dr_ready:
             self._randomize_physics(torch.arange(n, device=self.device))
+            rng = self._other_hinge_range()
+            if rng is not None and float(rng[0]) != float(rng[1]):
+                self._check_hinge_damping_draw()
             rd = self.cfg.rigid_cloth.randomization
             print(
                 f"[rigid_cloth] physics randomisation ON, per env at every reset: hinge damping x"
@@ -499,14 +576,29 @@ class _PhysxClothMixin:
                 # The contact offset is fixed above the whole range (`_contact_offset_value`).
                 view.set_rest_offsets(rest, l_cpu)
             self.dr_sample["contact_margin"][ids] = margin
-        if varies(rd.hinge_damping_scale):
-            lo, hi = math.log(float(rd.hinge_damping_scale[0])), math.log(float(rd.hinge_damping_scale[1]))
-            damp = float(r.joint_damping) * torch.exp(torch.empty(n, device=self.device).uniform_(lo, hi))
-            for art, (keep, local, _l) in zip(arts, rows):
+        other_rng = self._other_hinge_range()
+        if varies(rd.hinge_damping_scale) or (other_rng is not None and varies(other_rng)):
+            if varies(rd.hinge_damping_scale):
+                lo, hi = math.log(float(rd.hinge_damping_scale[0])), math.log(float(rd.hinge_damping_scale[1]))
+                damp = float(r.joint_damping) * torch.exp(torch.empty(n, device=self.device).uniform_(lo, hi))
+            else:
+                damp = torch.full((n,), float(r.joint_damping), device=self.device)
+            # Every joint at `damp`, except the non-fold hinges at damp x this env's other-hinge draw.
+            if other_rng is None:
+                other = torch.ones(n, device=self.device)
+            elif self._other_hinge_log() and float(other_rng[0]) != float(other_rng[1]):
+                lo, hi = math.log(float(other_rng[0])), math.log(float(other_rng[1]))
+                other = torch.exp(torch.empty(n, device=self.device).uniform_(lo, hi))
+            else:
+                other = uni(other_rng)
+            for art, mask, (keep, local, _l) in zip(arts, self._hinge_fold_masks(), rows):
                 if local.numel():
-                    d = sel(damp, keep)
-                    art.write_joint_damping_to_sim(d.unsqueeze(1).expand(-1, art.num_joints), env_ids=local)
+                    d = sel(damp, keep).unsqueeze(1).expand(-1, art.num_joints)
+                    if mask is not None:
+                        d = d * torch.where(mask.unsqueeze(0), 1.0, sel(other, keep).unsqueeze(1))
+                    art.write_joint_damping_to_sim(d, env_ids=local)
             self.dr_sample["hinge_damping"][ids] = damp
+            self.dr_sample["other_hinge_damping_scale"][ids] = other
         if varies(rd.hinge_stiffness):
             stiff = uni(rd.hinge_stiffness)
             for art, (keep, local, _l) in zip(arts, rows):
@@ -587,6 +679,7 @@ class FoldPoolPhysxEnv(FoldPoolTaskMixin, RigidClothPhysxEnv):
     # PhysX parses every env on its own (`replicate_physics: false`), so an env can carry just one
     # shape: each shape's articulation then spans the envs that carry it.
     _supports_one_shape_per_env = True
+    _per_hinge_damping_dr = True
 
     def _manipuland_arts(self) -> list:
         return list(self._pool_arts)
@@ -690,6 +783,32 @@ class FoldPoolPhysxEnv(FoldPoolTaskMixin, RigidClothPhysxEnv):
     def _pool_after_spawn(self) -> None:
         # Sizes were authored per env in `_pool_spawn`; nothing to resize.
         pass
+
+    def _hinge_fold_masks(self) -> list:
+        if getattr(self, "_fold_masks", None) is None:
+            # By name, not by factor: the factor is 1 on every hinge when the static scale is 1.
+            self._fold_masks = [
+                torch.tensor(
+                    [j in {f"{fsa.JOINT_PREFIX}{c}" for c in sh.folds[fs.HALF_FOLD][0]} for j in art.joint_names],
+                    device=self.device,
+                )
+                for sh, art in zip(self._pool, self._pool_arts)
+            ]
+        return self._fold_masks
+
+    def _other_hinge_range(self):
+        # Re-read every call, so the live viewer's slider (a point range) lands at the next write.
+        p = self.cfg.fold_pool
+        if p.other_hinge_damping_scale_range is not None:
+            return tuple(float(v) for v in p.other_hinge_damping_scale_range)
+        return (float(p.other_hinge_damping_scale),) * 2
+
+    def _other_hinge_log(self) -> bool:
+        p = self.cfg.fold_pool
+        return p.other_hinge_damping_scale_range is not None and bool(p.other_hinge_damping_scale_log)
+
+    def _other_hinge_static(self) -> float:
+        return float(self.cfg.fold_pool.other_hinge_damping_scale)
 
     def _pool_plate_mass(self) -> torch.Tensor:
         total = torch.zeros(self.num_envs, device=self.device)

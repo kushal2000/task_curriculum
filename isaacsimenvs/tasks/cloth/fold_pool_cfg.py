@@ -93,7 +93,40 @@ class FoldPoolCfg:
       folds (corners, strips, diagonals, bottom-up), each part at its own angle. A shape whose only
       fold is the target (``box2``) starts flat."""
 
+    other_hinge_damping_scale: float = 1.0
+    """Damping of every hinge OUTSIDE the target half fold, as a multiple of
+    ``rigid_cloth.joint_damping``; the half fold's own hinge keeps 1x. 1 = every hinge alike.
+
+    Below 1 the corners, strips and diagonals swing more freely than the crease the task folds along.
+    Damping DR scales both by the same draw, so the ratio holds in every env. Seams (loop joints) carry
+    no drive and stay undamped either way. PhysX only when DR is on: Newton's DR writes one damping
+    to every hinge DOF and refuses a scale other than 1."""
+
+    other_hinge_damping_scale_range: list[float] | None = None
+    """Randomise ``other_hinge_damping_scale`` instead: drawn uniformly from ``[lo, hi]`` per env at
+    every reset (PhysX, with ``rigid_cloth.randomization.enabled``). ``None`` = the fixed scale. The
+    policy does not observe the draw. Evals disable randomisation and so run the fixed scale."""
+
+    other_hinge_damping_scale_log: bool = False
+    """Draw ``other_hinge_damping_scale_range`` log-uniformly instead (needs ``lo > 0``): a range
+    around 1 such as ``[0.2, 5]`` then makes the other hinges softer or stiffer than the half fold
+    equally often."""
+
     def __post_init__(self) -> None:
+        if float(self.other_hinge_damping_scale) < 0.0:
+            raise ValueError(
+                f"fold_pool.other_hinge_damping_scale must be >= 0, got {self.other_hinge_damping_scale}"
+            )
+        if self.other_hinge_damping_scale_range is not None:
+            lo, hi = (float(v) for v in self.other_hinge_damping_scale_range)
+            if not 0.0 <= lo <= hi:
+                raise ValueError(
+                    f"fold_pool.other_hinge_damping_scale_range must be 0 <= lo <= hi, got {[lo, hi]}"
+                )
+            if self.other_hinge_damping_scale_log and lo <= 0.0:
+                raise ValueError(
+                    f"fold_pool.other_hinge_damping_scale_log needs lo > 0, got {[lo, hi]}"
+                )
         if not 0.0 <= float(self.init_fold_prob) <= 1.0:
             raise ValueError(f"fold_pool.init_fold_prob must be in [0, 1], got {self.init_fold_prob}")
         if self.init_fold_starts not in ("single", "other"):

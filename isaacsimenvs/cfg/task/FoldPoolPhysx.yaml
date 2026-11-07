@@ -375,6 +375,9 @@ fold_pool:
   init_fold_prob: 0.0
   init_fold_deg: [15.0, 120.0]
   init_fold_starts: single         # other: non-target folds + combinations, each part its own angle
+  other_hinge_damping_scale: 1.0   # damping of every hinge but the half fold's, x rigid_cloth.joint_damping (PhysX DR keeps it)
+  other_hinge_damping_scale_range: null  # [lo, hi]: draw that scale per env at every reset (PhysX + DR only)
+  other_hinge_damping_scale_log: false   # draw that range log-uniformly (lo > 0)
 
 # -----------------------------------------------------------------------------
 # physx_chain -- the chain's contacts in PhysX terms (PhysxChainCfg)
