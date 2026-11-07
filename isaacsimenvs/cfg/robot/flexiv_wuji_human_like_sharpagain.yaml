@@ -1,0 +1,6 @@
+# Robot overlay: flexiv_wuji_human_like.yaml with the Sharpa's hand drive (robots.py
+# FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN: Sharpa stiffness, damping and URDF torque limits by joint role).
+robot: flexiv_wuji_human_like_sharpagain
+robot_self_collision: true
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf"

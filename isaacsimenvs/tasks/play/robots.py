@@ -446,8 +446,70 @@ FLEXIV_SHARPA = RobotSpec(
     palm_side_link_names=KUKA_SHARPA.palm_side_link_names,
 )
 
+# ----------------------------------------------------------------------------
+# Drive-swap controls: each hand with the other hand's drive (stiffness, damping and torque limit;
+# armature stays the hand's own, a motor property). Joints are matched by role; the Sharpa's two
+# joints without a Wuji counterpart take the weakest analogous Wuji joint: thumb MCP_AA <- thumb
+# mcp, pinky CMC <- pinky mcp_abd. Torque limits are the URDF ``effort`` of the source hand.
+# ----------------------------------------------------------------------------
+
+#: Wuji URDF effort [N m], _WUJI_JOINTS order (rizon4s_left_wuji_human_like_joint_limits.urdf).
+_WUJI_URDF_EFFORT = dict(zip(_WUJI_JOINTS, (
+    0.6, 0.6, 0.3, 0.3,
+    2.0, 0.2, 0.3, 0.3,
+    2.0, 0.2, 0.3, 0.3,
+    2.0, 0.2, 0.3, 0.3,
+    2.0, 0.2, 0.3, 0.3,
+)))
+#: Sharpa URDF effort [N m] (rizon4s_left_sharpa.urdf).
+_SHARPA_URDF_EFFORT = {
+    "left_1_thumb_CMC_FE": 3.3, "left_thumb_CMC_AA": 3.3, "left_thumb_MCP_FE": 1.864,
+    "left_thumb_MCP_AA": 1.864, "left_thumb_IP": 0.638,
+    **{f"left_{n}{f}_MCP_FE": 1.864 for n, f in (("2_", "index"), ("3_", "middle"), ("4_", "ring"))},
+    **{f"left_{f}_{j}": e for f in ("index", "middle", "ring", "pinky")
+       for j, e in (("MCP_AA", 1.864), ("PIP", 0.638), ("DIP", 0.189369))},
+    "left_5_pinky_CMC": 0.5285, "left_pinky_MCP_FE": 1.864,
+}
+#: Sharpa joint -> the Wuji joint of the same role.
+_SHARPA_TO_WUJI = {
+    "left_1_thumb_CMC_FE": "l_thumb_cmc_flex", "left_thumb_CMC_AA": "l_thumb_cmc_abd",
+    "left_thumb_MCP_FE": "l_thumb_mcp", "left_thumb_MCP_AA": "l_thumb_mcp", "left_thumb_IP": "l_thumb_ip",
+    "left_5_pinky_CMC": "l_pinky_mcp_abd",
+    **{s: f"l_{w}_{j}" for f, s_mcp, w in (("index", "left_2_index_MCP_FE", "index_finger"),
+                                            ("middle", "left_3_middle_MCP_FE", "middle_finger"),
+                                            ("ring", "left_4_ring_MCP_FE", "ring_finger"),
+                                            ("pinky", "left_pinky_MCP_FE", "pinky"))
+       for s, j in ((s_mcp, "mcp_flex"), (f"left_{f}_MCP_AA", "mcp_abd"),
+                    (f"left_{f}_PIP", "pip"), (f"left_{f}_DIP", "dip"))},
+}
+#: Wuji joint -> the Sharpa joint of the same role (the inverse, minus the two extra Sharpa joints).
+_WUJI_TO_SHARPA = {w: s for s, w in _SHARPA_TO_WUJI.items()
+                   if s not in ("left_thumb_MCP_AA", "left_5_pinky_CMC")}
+
+# Flexiv + Wuji (human-like limits) with the Sharpa's drive.
+FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN = dataclasses.replace(
+    FLEXIV_WUJI_HUMAN_LIKE,
+    name="flexiv_wuji_human_like_sharpagain",
+    hand_stiffness={w: KUKA_SHARPA.hand_stiffness[_WUJI_TO_SHARPA[w]] for w in _WUJI_JOINTS},
+    hand_damping={w: KUKA_SHARPA.hand_damping[_WUJI_TO_SHARPA[w]] for w in _WUJI_JOINTS},
+    hand_effort_limit={w: _SHARPA_URDF_EFFORT[_WUJI_TO_SHARPA[w]] for w in _WUJI_JOINTS},
+)
+# Flexiv + Sharpa with the Wuji's drive (vendor MJCF gains, as FLEXIV_WUJI_HUMAN_LIKE runs).
+FLEXIV_SHARPA_WUJIGAIN = dataclasses.replace(
+    FLEXIV_SHARPA,
+    name="flexiv_sharpa_wujigain",
+    hand_stiffness={s: FLEXIV_WUJI_HUMAN_LIKE.hand_stiffness[_SHARPA_TO_WUJI[s]]
+                    for s in KUKA_SHARPA.hand_joint_names},
+    hand_damping={s: FLEXIV_WUJI_HUMAN_LIKE.hand_damping[_SHARPA_TO_WUJI[s]]
+                  for s in KUKA_SHARPA.hand_joint_names},
+    hand_effort_limit={s: _WUJI_URDF_EFFORT[_SHARPA_TO_WUJI[s]] for s in KUKA_SHARPA.hand_joint_names},
+)
+
 ROBOT_SPECS: dict[str, RobotSpec] = {
-    spec.name: spec for spec in (KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_HUMAN_LIKE_S2R, FLEXIV_SHARPA)
+    spec.name: spec for spec in (
+        KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_HUMAN_LIKE_S2R, FLEXIV_SHARPA,
+        FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN, FLEXIV_SHARPA_WUJIGAIN,
+    )
 }
 
 

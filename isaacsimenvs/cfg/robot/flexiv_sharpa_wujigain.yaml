@@ -1,0 +1,6 @@
+# Robot overlay: flexiv_sharpa.yaml with the Wuji's hand drive (robots.py FLEXIV_SHARPA_WUJIGAIN:
+# vendor MJCF stiffness / damping and Wuji URDF torque limits by joint role).
+robot: flexiv_sharpa_wujigain
+robot_self_collision: true
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_left_sharpa.urdf"
