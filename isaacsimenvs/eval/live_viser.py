@@ -152,20 +152,35 @@ PHYSX_TASKS = {
         "Isaacsimenvs-FoldPoolPhysx-Direct-v0", [_POOL7, "env.fold_pool.other_hinge_damping_scale=0.2"],
     ),
 }
-#: VBD cloth size -> hydra overrides (the large-cloth evals' settings, scripts/cluster/bos14_cloth_size_sweep.sh):
-#: grid spacing closest to the calibrated 16.67 mm (and >= the 16 mm particle thickness), reset centre
-#: moved toward the robot by (size - 0.10) * sqrt(2) / 2 like the pool's reach_shift.
-CLOTH_SIZES = {
-    "10 cm (standard)": [],
-    "12.5 cm": ["env.cloth.size=0.125", "env.cloth.resolution=8", "env.cloth.reset_offset_xy=[0.0,0.0177]"],
-    "15 cm": ["env.cloth.size=0.15", "env.cloth.resolution=10", "env.cloth.reset_offset_xy=[0.0,0.0354]"],
-    "17.5 cm": ["env.cloth.size=0.175", "env.cloth.resolution=11", "env.cloth.reset_offset_xy=[0.0,0.0530]"],
-    "20 cm": ["env.cloth.size=0.2", "env.cloth.resolution=13", "env.cloth.reset_offset_xy=[0.0,0.0707]"],
+#: VBD cloth variant -> hydra overrides, applied on restart. Sizes are the large-cloth evals' settings
+#: (scripts/cluster/bos14_cloth_size_sweep.sh, bos14_vbd_param_sweep.sh): grid spacing closest to the
+#: calibrated 16.67 mm (and >= the 16 mm particle thickness), reset centre moved toward the robot by
+#: (size - 0.10) * sqrt(2) / 2 like the pool's reach_shift. The other entries are the one-knob points of
+#: the 10-19 VBD parameter sweep; the label carries its VBD 1.5 cm pinned score (192 episodes) for
+#: flat7 s2 ep3400 / flat7DRABC s3 ep1200 / the VBD-trained reference.
+CLOTH_VARIANTS = {
+    "default (10 cm; 77/92/82%)": [],
+    "bending edge_ke 1e-4 (default 8e-4; 65/88/67%)": ["env.cloth.edge_ke=0.0001"],
+    "bending edge_ke 4e-3 (59/92/95%)": ["env.cloth.edge_ke=0.004"],
+    "bending edge_ke 2e-2 (2/1/0%)": ["env.cloth.edge_ke=0.02"],
+    "hand-cloth friction mu 0.1 (default 0.25; 77/84/89%)": ["env.cloth.soft_contact_mu=0.1"],
+    "hand-cloth friction mu 0.5 (39/65/84%)": ["env.cloth.soft_contact_mu=0.5"],
+    "hand-cloth friction mu 1.0 (10/9/36%)": ["env.cloth.soft_contact_mu=1.0"],
+    "size 12.5 cm": ["env.cloth.size=0.125", "env.cloth.resolution=8", "env.cloth.reset_offset_xy=[0.0,0.0177]"],
+    "size 13 cm (7/34/34%)": ["env.cloth.size=0.13", "env.cloth.resolution=9", "env.cloth.reset_offset_xy=[0.0,0.0212]"],
+    "size 15 cm": ["env.cloth.size=0.15", "env.cloth.resolution=10", "env.cloth.reset_offset_xy=[0.0,0.0354]"],
+    "size 16 cm (3/6/2%)": ["env.cloth.size=0.16", "env.cloth.resolution=11", "env.cloth.reset_offset_xy=[0.0,0.0424]"],
+    "size 17.5 cm": ["env.cloth.size=0.175", "env.cloth.resolution=11", "env.cloth.reset_offset_xy=[0.0,0.0530]"],
+    "size 20 cm (1/0/1%)": ["env.cloth.size=0.2", "env.cloth.resolution=13", "env.cloth.reset_offset_xy=[0.0,0.0707]"],
+    "grid resolution 5 (default 7; 37/55/31%)": ["env.cloth.resolution=5"],
+    "grid resolution 9 (15/62/28%)": ["env.cloth.resolution=9"],
+    "grid resolution 11 (7/37/18%)": ["env.cloth.resolution=11"],
 }
 _TASK_KEYS = ("env.rigid_cloth.variant=", "env.newton.per_env_triangle_pairs=",
               "env.fold_pool.init_fold_prob=", "env.rigid_cloth.joint_damping=", "env.physx_chain.hinge_armature=",
               "env.fold_pool.shapes=", "env.fold_pool.init_fold_starts=", "env.fold_pool.init_fold_deg=",
               "env.cloth.size=", "env.cloth.resolution=", "env.cloth.reset_offset_xy=",
+              "env.cloth.edge_ke=", "env.cloth.soft_contact_mu=",
               "env.fold_pool.other_hinge_damping_scale=",
               "env.cloth.task=", "env.cloth.unfold_start_deg=",
               "env.rigid_cloth.randomization.slat_friction_scale=", "env.rigid_cloth.randomization.fingertip_friction_scale=")
@@ -701,9 +716,9 @@ def main() -> None:
             g_task = server.gui.add_dropdown("task", task_names, initial_value=cur_task)
             g_csize = None
             if not physx:
-                size_now = next((k for k, ov in CLOTH_SIZES.items() if ov and all(o in hydra_args for o in ov)),
-                                "10 cm (standard)")
-                g_csize = server.gui.add_dropdown("VBD cloth size (on restart)", list(CLOTH_SIZES),
+                size_now = next((k for k, ov in CLOTH_VARIANTS.items() if ov and all(o in hydra_args for o in ov)),
+                                next(iter(CLOTH_VARIANTS)))
+                g_csize = server.gui.add_dropdown("VBD cloth variant (on restart)", list(CLOTH_VARIANTS),
                                                   initial_value=size_now)
             g_nenv = server.gui.add_number("num envs", args.num_envs, min=1, max=64, step=1)
             g_restart = server.gui.add_button("Restart with this task (~2-3 min)")
@@ -795,7 +810,7 @@ def main() -> None:
         def _(_e):
             task, ov = tasks[g_task.value]
             if g_csize is not None and task == "Isaacsimenvs-Cloth-Direct-v0":
-                ov = [*ov, *CLOTH_SIZES[g_csize.value]]
+                ov = [*ov, *CLOTH_VARIANTS[g_csize.value]]
             S.restart = (task, ov, int(g_nenv.value))
 
         @g_robot.on_update
@@ -1130,7 +1145,8 @@ def main() -> None:
             lines = [
                 f"**{g_task.value if g_task else args.task}** -- {S.policy_name}, coef {S.coef:g}",
                 f"env {w}" + (f", {sizes[w] * 100:.1f} cm" if sizes is not None
-                              else f", sheet {float(inner.cfg.cloth.size) * 100:g} cm")
+                              else f", sheet {float(inner.cfg.cloth.size) * 100:g} cm, grid {inner.cfg.cloth.resolution}, "
+                                   f"edge_ke {float(inner.cfg.cloth.edge_ke):g}, mu {float(inner.cfg.cloth.soft_contact_mu):g}")
                 + (f", shape **{pool[int(inner.object.active[w])]}**" if pool else ""),
                 f"step {int(inner.episode_length_buf[w])} / {int(inner.max_episode_length)}",
                 *([(lambda si: f"start: **{fold_names[si[0]][si[1]]}** at {si[2]:.0f} deg"
