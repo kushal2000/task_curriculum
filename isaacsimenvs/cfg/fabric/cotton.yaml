@@ -1,0 +1,14 @@
+# Cotton.
+# Where each value comes from: isaacsimenvs/tasks/cloth/utils/fabrics.py
+cloth:
+  density: 0.1
+  tri_ke: 56.0
+  tri_ka: 56.0
+  edge_ke: 0.000728
+  edge_kd: 5.0e-05
+  soft_contact_mu: 0.25
+  self_contact_radius: 0.002
+plastic_yield_curvature: 100.0
+literature:
+  bending_rigidity: 5.0e-06   # B [N m], KES / cantilever
+  tri_range: [1100.0, 6100.0]   # tri_ke = tri_ka = 3E/8 from tensile data (10-31), not applied
