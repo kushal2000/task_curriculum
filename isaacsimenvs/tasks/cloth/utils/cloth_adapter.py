@@ -28,9 +28,11 @@ cloth cannot be rigidly moved to an arbitrary one.
 
 from __future__ import annotations
 
+import math
+
 import torch
 
-__all__ = ["ClothAsRigidObject"]
+__all__ = ["ClothAsRigidObject", "fold_rest"]
 
 
 def _mat_to_wxyz(r: torch.Tensor) -> torch.Tensor:
@@ -91,6 +93,26 @@ def task_yaw(root_pose: torch.Tensor) -> torch.Tensor:
     return torch.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
 
 
+def fold_rest(rest: torch.Tensor, angle: torch.Tensor, axis: int, lift: float) -> torch.Tensor:
+    """The rest sheet with its ``+`` half turned up about the centre line by ``angle`` [rad].
+
+    ``rest`` ``(P, 3)`` local, crease at coordinate 0 along ``axis``; ``angle`` ``(n,)``; returns
+    ``(n, P, 3)``. The ``+`` half turns rigidly about an axis ``lift / 2`` above the crease, so at
+    180 deg it lies reflected onto the ``-`` half exactly ``lift`` above it (no ply interpenetration),
+    and at 0 deg it is the rest sheet. Particles on the crease line itself stay put.
+    """
+    n = angle.shape[0]
+    out = rest.unsqueeze(0).expand(n, -1, -1).clone()
+    moving = rest[:, axis] > 1e-9
+    r = 0.5 * float(lift)
+    a = rest[moving, axis].unsqueeze(0)                    # (1, M) distance past the crease
+    c, s = torch.cos(angle).unsqueeze(1), torch.sin(angle).unsqueeze(1)
+    # (a, -r) about the pivot (0, r), turned by `angle` from +axis toward +z.
+    out[:, moving, axis] = a * c + r * s
+    out[:, moving, 2] = rest[moving, 2].unsqueeze(0) + a * s + r * (1.0 - c)
+    return out
+
+
 class ClothAsRigidObject:
     """Adapt a cloth ``DeformableObject`` to the rigid-object reads the Play task performs."""
 
@@ -107,7 +129,10 @@ class ClothAsRigidObject:
         mass: float,
         device,
         reset_offset_xy=(0.0, 0.0),
+        fold_start=None,
     ) -> None:
+        """``fold_start``: ``None`` (reset flat) or ``(axis, (lo_deg, hi_deg), lift)`` -- reset with
+        the ``+`` half turned up by an angle drawn uniformly per reset (``fold_rest``)."""
         self._cloth = cloth
         self._num_envs = num_envs
         self._device = device
@@ -121,6 +146,7 @@ class ClothAsRigidObject:
         self._reset_offset = torch.tensor(
             [float(reset_offset_xy[0]), float(reset_offset_xy[1])], device=device, dtype=torch.float32
         )
+        self._fold_start = fold_start
         self.data = _ClothData(self)
 
     # ---------------------------------------------------------------- particle access
@@ -208,9 +234,15 @@ class ClothAsRigidObject:
         cos_y = torch.cos(yaw).unsqueeze(1)   # (n, 1), broadcast over particles
         sin_y = torch.sin(yaw).unsqueeze(1)
 
-        rest_x = self._rest_local[:, 0].unsqueeze(0)   # (1, P)
-        rest_y = self._rest_local[:, 1].unsqueeze(0)
-        rest_z = self._rest_local[:, 2].unsqueeze(0)
+        if self._fold_start is None:
+            local = self._rest_local.unsqueeze(0)      # (1, P, 3)
+        else:  # task: unfold -- the + half starts turned up about the crease
+            axis, (lo, hi), lift = self._fold_start
+            ang = torch.empty(len(env_ids), device=self._device).uniform_(
+                math.radians(float(lo)), math.radians(float(hi))
+            )
+            local = fold_rest(self._rest_local, ang, axis, lift)   # (n, P, 3)
+        rest_x, rest_y, rest_z = local[..., 0], local[..., 1], local[..., 2]
         rotated = torch.stack(
             (
                 rest_x * cos_y - rest_y * sin_y,
@@ -220,7 +252,7 @@ class ClothAsRigidObject:
             dim=-1,
         )                                              # (n, P, 3)
 
-        # (len(env_ids), P, 3): the flat rest sheet yawed, then translated to each requested centre.
+        # (len(env_ids), P, 3): the (rest or folded) sheet yawed, then translated to each centre.
         target = rotated + centre.unsqueeze(1)
         self._cloth.write_nodal_pos_to_sim_index(target, env_ids)
         self._cloth.write_nodal_velocity_to_sim_index(torch.zeros_like(target), env_ids)

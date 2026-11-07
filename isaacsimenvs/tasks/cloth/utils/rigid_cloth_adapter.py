@@ -307,6 +307,30 @@ class ChainAsRigidObject(ClothAsRigidObject):
             device=self._device,
             dtype=torch.float32,
         )
+        # task: unfold -- see `set_fold_start`. `None` resets flat.
+        self._fold_q: torch.Tensor | None = None
+        self._start_q: torch.Tensor | None = None
+        # Per-env start angle [deg] set by the task's unfold curriculum (`set_start_deg`); `None` draws
+        # from the `_fold_start` range.
+        self._start_deg: torch.Tensor | None = None
+
+    def set_fold_start(self, fold_q: torch.Tensor, deg) -> None:
+        """Reset folded instead of flat: ``fold_q`` (one entry per articulation joint) is the full
+        fold, scaled per reset by an angle drawn uniformly from ``deg = [lo, hi]`` over 180.
+
+        Called by the task AFTER its flat-sheet placement check. ``_fold_start[1]`` holds the range
+        (the viewer edits it live); ``_start_q`` holds each env's start for ``_stop``.
+        """
+        self._fold_q = fold_q.to(self._device, torch.float32)
+        self._start_q = torch.zeros((self._num_envs, self._fold_q.shape[0]), device=self._device)
+        self._fold_start = (None, list(deg), None)
+
+    def set_start_deg(self, env_ids: torch.Tensor, deg: torch.Tensor) -> None:
+        """The next reset of ``env_ids`` starts folded by ``deg`` [deg] instead of a ``_fold_start``
+        draw. Set before the reset that uses it (the unfold curriculum's per-env angle)."""
+        if self._start_deg is None:
+            self._start_deg = torch.zeros(self._num_envs, device=self._device)
+        self._start_deg[env_ids] = deg.to(self._device, torch.float32)
 
     def write_root_pose_to_sim(self, root_pose: torch.Tensor, env_ids=None) -> None:
         """Restore the chain flat, centred on the requested XY, at the requested yaw.
@@ -343,6 +367,14 @@ class ChainAsRigidObject(ClothAsRigidObject):
         pose[:, 4] = quat[:, 2]
         pose[:, 5] = quat[:, 3]
         pose[:, 6] = quat[:, 0]
+
+        if self._fold_q is not None:
+            _axis, (lo, hi), _lift = self._fold_start
+            if self._start_deg is not None:
+                deg = self._start_deg[env_ids]
+            else:
+                deg = torch.empty(env_ids.shape[0], device=self._device).uniform_(float(lo), float(hi))
+            self._start_q[env_ids] = (deg / 180.0).unsqueeze(1) * self._fold_q
 
         self._write_root_pose(pose, env_ids)
         self._stop(env_ids)
@@ -446,7 +478,9 @@ class ChainAsRigidObject(ClothAsRigidObject):
     def _write_flat_joints(self, env_ids: torch.Tensor) -> None:
         nj = self._art.num_joints
         zeros_j = torch.zeros((env_ids.shape[0], nj), device=self._device, dtype=torch.float32)
-        self._write_joints(zeros_j, zeros_j, env_ids)
+        # The episode's start: flat, or the unfold task's folded start. The drive target stays flat.
+        start = zeros_j if self._fold_q is None else self._start_q[env_ids]
+        self._write_joints(start, zeros_j, env_ids)
         # The hinges are passive, but Isaac Lab still holds a position TARGET per joint and it is
         # not reset by `write_joint_state_to_sim`. Left at a previous episode's value, a drive with
         # any stiffness would immediately pull the sheet back into last episode's fold.

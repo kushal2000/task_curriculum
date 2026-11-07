@@ -223,7 +223,17 @@ def main() -> None:
         # tasks are untouched).
         _has_fold = hasattr(inner, "fold_error") and hasattr(inner, "footprint_ratio")
         best_fold_err = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
-        best_footprint = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
+        # Unfold succeeds on a LARGE footprint, so its best is the maximum.
+        _unfold = _has_fold and getattr(inner.cfg.cloth, "task", "fold") == "unfold"
+        best_footprint = (
+            torch.full((num_envs,), float("-inf") if _unfold else float("inf"), device=device)
+            if _has_fold else None
+        )
+        # Unfold: the sheet's height range and lowest-point lift over the table on its LAST step
+        # (`flat_on_table`, cached pre-reset by `_get_dones`), NaN while censored.
+        _has_flat = _has_fold and getattr(inner.cfg.cloth, "task", "fold") in ("unfold", "mixed")
+        final_spread = torch.full((num_envs,), float("nan"), device=device) if _has_flat else None
+        final_lift = torch.full((num_envs,), float("nan"), device=device) if _has_flat else None
         reason = {name: torch.zeros(num_envs, dtype=torch.bool, device=device) for name in REASONS}
         # Any OTHER `done_<name>` the env publishes, per env -- e.g. the fold pool's
         # `shape_<shape>` / `fold_<shape>`, which is what splits a result by shape. Discovered from
@@ -272,7 +282,9 @@ def main() -> None:
                   )
                   fp = inner.footprint_ratio()
                   best_footprint = torch.where(
-                      ~contributed, torch.minimum(best_footprint, fp), best_footprint
+                      ~contributed,
+                      (torch.maximum if _unfold else torch.minimum)(best_footprint, fp),
+                      best_footprint,
                   )
 
               done = (terminated.bool() | truncated.bool()) & ~contributed
@@ -285,6 +297,9 @@ def main() -> None:
                   length[idx] = steps_alive[idx]
                   for name in REASONS:
                       reason[name][idx] = final[f"done_{name}"][idx].bool()
+                  if final_spread is not None:
+                      final_spread[idx] = inner._flat_spread[idx]
+                      final_lift[idx] = inner._flat_lift[idx]
                   for key, value in final.items():
                       name = key[len("done_"):]
                       if key.startswith("done_") and name not in REASONS:
@@ -385,18 +400,28 @@ def main() -> None:
             tol = float(inner.cfg.cloth.keypoint_tolerance)
             result["fold"] = {
                 "keypoint_tolerance": tol,
+                "task": "unfold" if _unfold else "fold",
                 "max_folded_footprint": float(inner.cfg.cloth.max_folded_footprint),
+                "min_unfolded_footprint": float(getattr(inner.cfg.cloth, "min_unfolded_footprint", 1.0)),
                 # Best (minimum) over the episode, per env: the closest the policy ever came.
                 "best_fold_err": [round(float(v), 4) for v in fe],
                 "best_footprint": [round(float(v), 4) for v in fp],
                 "best_fold_err_mean": round(float(fe.mean()), 4),
                 "best_fold_err_min": round(float(fe.min()), 4),
+                **({
+                    "unfold_on_table": bool(inner.cfg.cloth.unfold_on_table),
+                    "on_table_max_spread": float(inner.cfg.cloth.on_table_max_spread),
+                    "on_table_max_lift": float(inner.cfg.cloth.on_table_max_lift),
+                    "final_flat_spread": [round(float(v), 4) for v in final_spread.cpu()],
+                    "final_flat_lift": [round(float(v), 4) for v in final_lift.cpu()],
+                } if final_spread is not None else {}),
                 "envs_within_tolerance": int((fe < tol).sum()),
                 # A fold has to satisfy BOTH conditions at once; these counts are per-condition and
                 # over the whole episode, so they are an upper bound on how close it came, not
                 # evidence that both held on the same step.
                 "envs_within_footprint": int(
-                    (fp < float(inner.cfg.cloth.max_folded_footprint)).sum()
+                    (fp > float(inner.cfg.cloth.min_unfolded_footprint)).sum() if _unfold
+                    else (fp < float(inner.cfg.cloth.max_folded_footprint)).sum()
                 ),
             }
 

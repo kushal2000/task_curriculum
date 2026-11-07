@@ -53,6 +53,9 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         # That is how a 30 mm radius ended up on a 12.5 mm grid, every particle overlapping its
         # neighbours, which the solver expresses as instability rather than as a config error.
         self.cfg.cloth._check_thickness()
+        self.cfg.cloth.check_task()
+        if self.cfg.cloth.task == "mixed":
+            raise NotImplementedError("cloth.task=mixed is for the PhysX pool and chain; the VBD sheet runs fold or unfold")
         from isaaclab.assets import DeformableObject, DeformableObjectCfg
         from isaaclab.sim.utils import find_matching_prims
         from pxr import Sdf, UsdGeom, UsdShade
@@ -145,6 +148,12 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
             mass=area_density * c.size * c.size,
             device=self.device,
             reset_offset_xy=c.reset_offset_xy,
+            # task: unfold -- reset with the + half folded over, the plies one self-contact radius
+            # apart (where cloth-on-cloth contact settles; see `_init_fold_targets`).
+            fold_start=(
+                (0 if c.fold_axis == "x" else 1, list(c.unfold_start_deg), c.self_contact_radius)
+                if c.task == "unfold" else None
+            ),
         )
         self._write_object_scale()
 

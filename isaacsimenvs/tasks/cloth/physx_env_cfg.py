@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from isaaclab.utils import configclass
 
+from isaacsimenvs.curriculum import CurriculumCfg
 from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
 from isaacsimenvs.tasks.cloth.fold_pool_cfg import FoldPoolCfg
 from isaacsimenvs.tasks.cloth.rigid_cloth_cfg import RigidClothCfg
@@ -102,6 +103,20 @@ class RigidClothPhysxEnvCfg(PlayEnvCfg):
     cloth: ClothCfg = ClothCfg()
     rigid_cloth: RigidClothCfg = RigidClothCfg()
     physx_chain: PhysxChainCfg = PhysxChainCfg()
+    curriculum: CurriculumCfg = CurriculumCfg(
+        # Off unless a run turns it on; then ``cloth.task: unfold`` only. Difficulty 0..1 is the
+        # folded start's angle over ``cloth.unfold_curriculum_deg`` (open -> closed), on a 5 deg grid.
+        enabled=False,
+        init_range=(0.0, 0.0),
+        final_range=(0.0, 1.0),
+        mode="adaptive",
+        difficulty_levels=13,
+        adapt_step=1.0 / 12.0,
+        # One 10 s episode per env between checks (600 policy steps at 60 Hz).
+        adapt_interval=600,
+        adapt_success_threshold=0.5,
+        adapt_min_episodes=1000,
+    )
 
 
 @configclass

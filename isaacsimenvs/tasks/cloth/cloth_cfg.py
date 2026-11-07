@@ -184,6 +184,57 @@ class ClothCfg:
     folded flap settles wherever the drape puts it, and demanding rigid-body precision from a
     sheet would measure the tolerance rather than the fold."""
 
+    task: str = "fold"
+    """``fold``: start flat, fold the ``+`` half onto ``-``. ``unfold``: start with the ``+`` half
+    folded over, open it flat.
+
+    Unfold keeps everything else: the keypoints, the stationary-half frame and the reward. Only the
+    target (the flat rest pose instead of its reflection), the goal marker's orientation and the
+    footprint condition (``min_unfolded_footprint``) change. The folded start comes from
+    ``unfold_start_deg`` on the VBD sheet and the single chain, and from
+    ``fold_pool.init_fold_starts: target`` on the pool.
+
+    ``mixed`` (PhysX pool and chain only): every episode draws its own task, unfold with
+    ``unfold_prob``, fold otherwise. Target, goal attitude, success test and start follow the
+    episode's task; the curriculum (if on) scores and opens the unfold episodes only."""
+
+    unfold_prob: float = 0.5
+    """``task: mixed`` only: the share of episodes that are unfolds."""
+
+    min_unfolded_footprint: float = 0.9
+    """``task: unfold`` only: smallest sheet extent along the fold axis, as a fraction of ``size``,
+    that counts as unfolded (flat = 1.0, a half fold = 0.5)."""
+
+    unfold_on_table: bool = False
+    """``task: unfold`` (and the unfold episodes of ``mixed``): success also needs the sheet to lie
+    flat ON THE TABLE (``ClothTaskMixin.flat_on_table``). Without it the flat target rides on the
+    stationary half's live frame, tilt and height included, so a sheet held open in the air or
+    tilted against the fingers passes. Off by default, so earlier results keep their meaning."""
+
+    on_table_max_spread: float = 0.015
+    """``unfold_on_table``: largest height range over all particles (max z - min z) [m] that
+    counts as flat. A level sheet at rest has ~0; 1.5 cm is about one VBD sheet thickness, a 9 deg
+    tilt on a 10 cm sheet. Measured on old unfold successes (docs/results/flat_on_table): rigid
+    sheets still tilted span 6-14 cm, VBD wrinkles pass 49 / 78 / 91 % at 1 / 1.5 / 2 cm."""
+
+    on_table_max_lift: float = 0.015
+    """``unfold_on_table``: largest height of the LOWEST particle above the table's collision
+    surface [m]. At rest the particles sit above it by the contact offset: the VBD sheet ~6 mm
+    (particle radius), the plates half their thickness."""
+
+    unfold_start_deg: list[float] = [180.0, 180.0]
+    """``task: unfold``, VBD sheet and single chain: the angle the ``+`` half starts turned up about
+    the crease [deg], drawn uniformly per episode. 180 = folded flat onto the other half: one
+    ``self_contact_radius`` above it (VBD), the chain's tightest fold (``chain_fold_angles``; on
+    ``box3-mid`` both bar hinges at 90, plies 2 mm apart). The pool reads ``fold_pool.init_fold_deg``."""
+
+    unfold_curriculum_deg: list[float] = [120.0, 180.0]
+    """``task: unfold`` with ``curriculum.enabled`` (PhysX envs): the folded start's angle [deg] at
+    difficulty 0 and 1. Each episode starts at ``lo + d * (hi - lo)`` with ``d`` drawn by the shared
+    curriculum (``isaacsimenvs/curriculum``), in place of ``unfold_start_deg`` /
+    ``fold_pool.init_fold_deg``. At 180 the plies touch and there is no gap for a finger to get
+    under the top one; a more open start leaves one."""
+
     # --- coupling (defaults carried from the cable result) --------------------------------
     proxy_mode: str = "staggered"
     """See `docs/phase4_cable_env.md`. `lagged` syncs the hand's *begin* pose with its *end*
@@ -450,6 +501,30 @@ class ClothCfg:
                 f"{self.table_half_thickness:.3f}."
             )
         self._check_thickness()
+        self.check_task()
+
+    def check_task(self) -> None:
+        """Validate the fold/unfold switch. Called again at env build: Hydra assigns CLI overrides
+        AFTER ``__post_init__`` (see ``cloth_env._install_cloth``)."""
+        if self.task not in ("fold", "unfold", "mixed"):
+            raise ValueError(f"cloth.task must be fold, unfold or mixed, got {self.task!r}")
+        if self.task == "mixed" and not 0.0 < float(self.unfold_prob) < 1.0:
+            raise ValueError(f"cloth.unfold_prob must be in (0, 1) for task mixed, got {self.unfold_prob}")
+        lo, hi = (float(v) for v in self.unfold_start_deg)
+        if not 0.0 < lo <= hi <= 180.0:
+            raise ValueError(f"cloth.unfold_start_deg must be 0 < lo <= hi <= 180, got {[lo, hi]}")
+        lo, hi = (float(v) for v in self.unfold_curriculum_deg)
+        if not 0.0 < lo <= hi <= 180.0:
+            raise ValueError(f"cloth.unfold_curriculum_deg must be 0 < lo <= hi <= 180, got {[lo, hi]}")
+        if not 0.5 < float(self.min_unfolded_footprint) <= 1.0:
+            raise ValueError(
+                f"cloth.min_unfolded_footprint must be in (0.5, 1], got {self.min_unfolded_footprint}"
+            )
+        if not (float(self.on_table_max_spread) > 0.0 and float(self.on_table_max_lift) > 0.0):
+            raise ValueError(
+                f"cloth.on_table_max_spread / on_table_max_lift must be > 0, got "
+                f"{self.on_table_max_spread} / {self.on_table_max_lift}"
+            )
 
     def _check_thickness(self) -> None:
         """Warn when particle DIAMETER exceeds grid spacing. No longer an error.

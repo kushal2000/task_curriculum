@@ -316,13 +316,16 @@ class FoldPoolTaskMixin:
         """Per shape, its start folds as ``(F, num_joints)`` hinge directions plus ``(F, num_joints)``
         part indices (which of the start's independently drawn angles each hinge takes), and the
         startup proof. ``init_fold_starts: single`` has one part per start; ``other`` uses
-        ``FoldShape.start_poses`` and may leave a shape with no start (``F = 0``: always flat).
+        ``FoldShape.start_poses`` and may leave a shape with no start (``F = 0``: always flat);
+        ``target`` is the half fold alone.
 
         Off (``_start_tables = None``) unless ``fold_pool.init_fold_prob > 0``.
         """
         p = self.cfg.fold_pool
         self._start_folded = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         self._start_tables = None
+        if self._unfold or self._mixed:
+            self._check_unfold_starts()
         if float(p.init_fold_prob) <= 0.0:
             return
         prefix = fsa.JOINT_PREFIX
@@ -331,6 +334,11 @@ class FoldPoolTaskMixin:
             joints = list(self._pool_arts[s].joint_names)
             if p.init_fold_starts == "other":
                 poses = sh.start_poses()
+            elif p.init_fold_starts == "target":
+                d = sh.start_folds().get(fs.HALF_FOLD)
+                if d is None:
+                    raise ValueError(f"[fold_pool] {sh.name}: its half fold is not a single-stage up fold")
+                poses = {fs.HALF_FOLD: (tuple(d),)}
             else:
                 poses = {n: (tuple(d),) for n, d in sh.start_folds().items()}
                 if not poses:
@@ -358,12 +366,37 @@ class FoldPoolTaskMixin:
         self._calibrate_start_signs()
         self._verify_start_folds(math.radians(hi))
 
+    def _check_unfold_starts(self) -> None:
+        """``cloth.task: unfold`` needs every episode to start with the target half fold turned up,
+        far enough that the start does not already pass: a far corner sits ``size * sin(angle / 2)``
+        from its flat target."""
+        p, c = self.cfg.fold_pool, self.cfg.cloth
+        if p.init_fold_starts != "target" or float(p.init_fold_prob) != 1.0:
+            raise ValueError(
+                "cloth.task=unfold needs fold_pool.init_fold_starts=target and fold_pool.init_fold_prob=1.0, "
+                f"got {p.init_fold_starts!r} / {p.init_fold_prob}"
+            )
+        lo = math.radians(float(p.init_fold_deg[0]))
+        if getattr(self.cfg, "curriculum", None) is not None and self.cfg.curriculum.enabled:
+            lo = min(lo, math.radians(float(c.unfold_curriculum_deg[0])))
+        worst = float(self._env_size.min()) * math.sin(0.5 * lo)
+        if worst <= float(c.keypoint_tolerance):
+            raise ValueError(
+                f"unfold start at {math.degrees(lo):g} deg on a {float(self._env_size.min()) * 100:.1f} cm "
+                f"sheet is already within {float(c.keypoint_tolerance) * 1e3:.0f} mm of flat "
+                f"({worst * 1e3:.1f} mm): raise fold_pool.init_fold_deg[0]"
+            )
+
     def _draw_start_folds(self, env_ids: torch.Tensor, draw: torch.Tensor) -> None:
         p = self.cfg.fold_pool
         n = int(env_ids.numel())
         folded = torch.rand(n, device=self.device) < float(p.init_fold_prob)
+        if self._mixed:  # the episode's task decides: unfolds start folded, folds flat
+            folded = self._unfold_envs()[env_ids].clone()
         lo, hi = (math.radians(float(v)) for v in p.init_fold_deg)
         ang = torch.empty((n, self._start_num_parts), device=self.device).uniform_(lo, hi)
+        if getattr(self, "_unfold_cur", False):  # the unfold curriculum's angle, one per env
+            ang[:] = torch.deg2rad(self._unfold_start_deg(env_ids)).unsqueeze(1)
         ang *= folded.unsqueeze(1)
         for s, (table, part) in enumerate(zip(self._start_tables, self._start_parts)):
             on = draw == s
@@ -508,6 +541,8 @@ class FoldPoolTaskMixin:
             env_ids = torch.arange(self.num_envs, device=self.device)
         ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long).reshape(-1)
         if getattr(self, "_pool_ready", False):
+            self._unfold_curriculum_reset(ids)
+            self._draw_task(ids)
             self._draw(ids)
         super()._reset_idx(env_ids)
 
@@ -540,8 +575,13 @@ class FoldPoolTaskMixin:
         self._corner_rest_offsets = self._corner_rest_offsets.unsqueeze(0) * s3
         self._mv_folded_rest = self._mv_folded_rest.unsqueeze(0) * s3
         self._kp_folded_rest = self._kp_folded_rest.unsqueeze(0) * s3
+        self._mv_flat_rest = self._mv_flat_rest.unsqueeze(0) * s3
+        self._kp_flat_rest = self._kp_flat_rest.unsqueeze(0) * s3
         self._st_rest_centroid = self._st_rest_centroid.unsqueeze(0) * s3[:, 0]
         self._st_rest_centred = self._st_rest_centred.unsqueeze(0) * s3
+
+    def _task_span(self) -> torch.Tensor:
+        return self._env_size
 
     def _scale3(self) -> torch.Tensor:
         """``(N, 1, 3)``: in-plane factor on x and y, 1 on z."""
@@ -585,6 +625,9 @@ class FoldPoolTaskMixin:
         return (coord.amax(dim=1) - coord.amin(dim=1)) / self._env_size
 
     def fold_fraction(self) -> torch.Tensor:
+        if self._unfold:
+            return ClothTaskMixin.fold_fraction(self)
+        unfold_frac = (1.0 - self.fold_error() / self._env_size).clamp(0.0, 1.0) if self._mixed else None
         rest = (
             torch.tensor(
                 [self._cloth_rest_local[i] for i in self._cloth_kp_idx],
@@ -602,7 +645,8 @@ class FoldPoolTaskMixin:
             + (self.scene.env_origins + self.object.centre_offset).unsqueeze(1)
         )
         span = (start - self.fold_targets_w()).norm(dim=-1).amax(dim=-1).clamp(min=1e-6)
-        return (1.0 - self.fold_error() / span).clamp(0.0, 1.0)
+        frac = (1.0 - self.fold_error() / span).clamp(0.0, 1.0)
+        return frac if unfold_frac is None else self._by_task(unfold_frac, frac)
 
     def _get_dones(self):
         terminated, truncated = super()._get_dones()

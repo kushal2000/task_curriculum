@@ -91,7 +91,9 @@ class FoldPoolCfg:
       one angle (the 2026-10-06 runs).
     * ``other``: ``FoldShape.start_poses`` -- every legal combination of the NON-target single-stage
       folds (corners, strips, diagonals, bottom-up), each part at its own angle. A shape whose only
-      fold is the target (``box2``) starts flat."""
+      fold is the target (``box2``) starts flat.
+    * ``target``: the target half fold only, all its hinges at one angle, up to 180 deg. The start
+      of ``cloth.task: unfold``, which requires it (with ``init_fold_prob`` 1)."""
 
     other_hinge_damping_scale: float = 1.0
     """Damping of every hinge OUTSIDE the target half fold, as a multiple of
@@ -129,10 +131,12 @@ class FoldPoolCfg:
                 )
         if not 0.0 <= float(self.init_fold_prob) <= 1.0:
             raise ValueError(f"fold_pool.init_fold_prob must be in [0, 1], got {self.init_fold_prob}")
-        if self.init_fold_starts not in ("single", "other"):
-            raise ValueError(f"fold_pool.init_fold_starts must be single or other, got {self.init_fold_starts!r}")
+        if self.init_fold_starts not in ("single", "other", "target"):
+            raise ValueError(
+                f"fold_pool.init_fold_starts must be single, other or target, got {self.init_fold_starts!r}"
+            )
         lo, hi = (float(v) for v in self.init_fold_deg)
-        top = 180.0 if self.init_fold_starts == "other" else 180.0 - 1e-6
+        top = 180.0 if self.init_fold_starts in ("other", "target") else 180.0 - 1e-6
         if not 0.0 <= lo <= hi <= top:
             raise ValueError(
                 f"fold_pool.init_fold_deg must be 0 <= lo <= hi {'<=' if top == 180.0 else '<'} 180 "
