@@ -1,0 +1,128 @@
+# Deploy settings for the SimToolReal Play policy on Flexiv Rizon 4s + right Wuji Hand 2.
+#
+# Two kinds of numbers:
+#   - this file: choices you make when deploying (which robot, gains, safety limits, ...). Edit freely.
+#   - spec file (spec_path below): facts copied from the training env (joint limits, obs layout,
+#     action pipeline, goal sampling, ...). Never edit by hand; regenerate it from the training branch.
+#
+# Every node reads this file. Override any value on the command line with dotted keys, e.g.
+#   python run.py robot.mode=home robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>
+#   python run.py run.duration_s=30 record.name=try1
+# A key that is not in this file is an error. utils/config.py prints the merged config.
+#
+# Frames: "env" = the training env's frame. Robot base at (0, 0.8, 0), table top at z = 0.28 m.
+# Lengths in metres, angles in degrees unless the name says otherwise.
+
+spec_path: deploy/simtoolreal/spec/spec_flexiv_wuji_right_hl.json   # robot URDF next to it
+
+# ------------------------------------------------------------------------------------------- bus
+# The processes talk over ZMQ (utils/link.py). Each publisher binds its own port; anyone may subscribe.
+# Every pose on the bus is in the robot base frame.
+bus:
+  host: 127.0.0.1           # the machine the publishers run on
+  object_pose_port: 5560    # perception.py -> object_pose, camera_image
+  joint_state_port: 5561    # robot.py -> joint_state
+  policy_port: 5562         # policy.py -> joint_target, goal_pose
+
+# ----------------------------------------------------------------------------------------- run
+# run.py: robot.py in robot.mode, + viewer.py / recorder.py, + policy.py in policy mode
+run:
+  viewer: true              # start viewer.py; it stays open after robot and policy stop
+  confirm_hardware: true    # type 'go' before real hardware moves
+  duration_s: 300.0         # policy time to run
+  max_goals: 0              # stop after this many goals reached (0 = no limit)
+  on_episode_end: stop      # when a goal times out or the object falls off the table: stop | next_goal
+  seed: 0                   # goal sampling
+
+# --------------------------------------------------------------------------------------- policy
+policy:
+  checkpoint: pretrained_policy/nov6_dr.pth
+  config: pretrained_policy/config.yaml
+  expl_coef: 0.0            # SAPG block; 0 = the last block (task reward only)
+  joint_state_max_age_s: 0.05   # stop when the newest joint_state is older (robot.py died / stalled)
+
+# ---------------------------------------------------------------------------------------- robot
+robot:
+  mode: policy              # policy | home | free_drive (robot.py's docstring, the README)
+  arm: mujoco               # robot serial number | mujoco (aioflexiv's MuJoCo Rizon)
+  hand: fake                # hand serial number | auto | dry_run (connected, never enabled) | fake (no hand)
+  hand_sn: null             # serial for hand: dry_run
+  mujoco_viewer: false
+
+  arm_gain_scale: 1.0       # real arm kp, kd = sim kp, kd x this
+  # Sim hand gains are Nm/rad; the Wuji firmware takes A/rad. kp_A = kp_Nm / (1.95 Kt), Kt unknown.
+  hand_kp_per_nm: 2.0       # UNVERIFIED guess until aiowuji sysid measures Kt
+  hand_kd_per_nm: 1.4142    # sqrt(2)
+  hand_effort_limit: 0.5    # A (aiowuji default 0.5, max 1.5)
+
+  move_speed: 0.3           # home: arm joint speed limit, rad/s (joint-space move, no table avoidance)
+  hand_move_speed: 0.5      # home, and policy's start: hand joint speed limit, rad/s
+  free_drive_kd_scale: 0.2  # free_drive: arm damping = sim damping x this (kp = 0)
+  home_tolerance_arm_deg: 3.0    # every arm joint this close to spec default_q
+  home_tolerance_hand_deg: 15.0  # every hand joint (not checked with hand: dry_run, it hangs limp)
+  rate_hz: 200.0            # joint_state publish / target forward loop
+  target_timeout_s: 0.1     # no new joint_target for this long -> hold the measured pose
+
+  # policy mode safety. A trip: hold the measured pose (the hand keeps its grip), ignore every later
+  # target, report it in joint_state ("tripped"; policy.py then stops). Ctrl-C to end.
+  max_arm_tracking_deg: 25.0     # any arm joint this far from the target it is being sent
+                                 #   (training: < ~19 when the hand presses; mujoco test, no object: 3.2)
+  max_target_step_arm_deg: 2.0   # a new target this far from the last one sent, any arm joint
+                                 #   (training's action pipeline: at most 0.143 deg per policy step)
+  max_target_step_hand_deg: 20.0 # ... any hand joint (pipeline: at most 0.1 x the joint's range per
+                                 #   step, 12.5 deg for thumb_cmc_abd; mujoco test: 11.2)
+
+# --------------------------------------------------------------------------------------- object
+object:
+  name: flat_eraser         # one of `objects` below
+
+# Known objects. scale = DexToolBench Object.scale; grasp box = scale x 4 cm.
+# mesh: DexToolBench's, in metres, in the object frame the policy was trained with. FoundationPose
+# returns the pose of this mesh's frame, so never re-centre or re-export it.
+objects:
+  flat_eraser:
+    scale: [2.5, 0.7, 1.25]   # 10 x 2.8 x 5 cm grasp box
+    mesh: deploy/simtoolreal/objects/flat_eraser/flat_eraser.obj   # 12.5 x 2.8 x 5 cm, x from -2.75 to 9.75 cm
+
+# ----------------------------------------------------------------------------------- perception
+perception:
+  source: camera            # camera (RealSense + FoundationPose) | fake (a fixed pose, no camera)
+  max_age_s: 0.2            # policy.py treats an older pose as "object lost"
+
+  # camera (runs in the FoundationPose environment on the robot PC)
+  foundationpose_dir: null  # TODO: the FoundationPose checkout on the robot PC (has estimater.py, generate_mask.py)
+  extrinsics: null          # TODO: deploy/calibration/extrinsics/<name>.json from calibrate_compare.py (T_base_cam)
+  camera_serial: null       # null = the only RealSense connected
+  camera_width: 640         # FoundationPose crops around the object, so a small image is enough
+  camera_height: 480        #   (upstream: 960 x 540 from a ZED)
+  camera_fps: 60            # 6 | 15 | 30 | 60 (D435 at 640 x 480). Pose rate = min(this, FoundationPose's speed)
+  register_iters: 5         # FoundationPose refine iterations at the first frame (upstream default)
+  track_iters: 2            # ... at every later frame (upstream default)
+  image_hz: 10.0            # camera_image for the viewer (JPEG); 0 = off
+  image_jpeg_quality: 80
+
+  # fake: [x, y, z, qw, qx, qy, qz] in the robot base frame. Default: lying flat at the training
+  # table's centre (env (0, 0.29), top z 0.28 + half of 5 cm).
+  fake_pose_base: [0.0, -0.51, 0.305, 1.0, 0.0, 0.0, 0.0]
+  fake_hz: 30.0
+
+# ----------------------------------------------------------------------------------------- goals
+goals:
+  timeout_steps: 0          # steps per goal before it counts as failed; 0 = training's 600 (10 s)
+  success_tolerance: null   # m before keypoint_scale; null = training's final 0.01
+
+# ---------------------------------------------------------------------------------------- record
+# recorder.py: started by run.py when record.name is set, e.g. run.py record.name=eraser_try1
+record:
+  name: null                # null = do not record. Else -> <dir>/<date>_<time>_<name>.jsonl
+  camera: false             # also record camera_image (10 Hz JPEG, ~24 MB/min)
+  dir: deploy/simtoolreal/recordings
+  video_fps: 30             # replay.py's mp4 export
+  video_height: 480         # px; the 3D view is 4:3, the camera image is scaled to the same height
+
+# ---------------------------------------------------------------------------------------- viewer
+# viewer.py: a live viser page of everything on the bus (only listens, never publishes)
+viewer:
+  port: 8091                # http://<robot PC>:8091
+  hz: 30.0                  # scene redraws per second
+  stale_s: 0.5              # a topic with nothing newer is marked stale in the status panel

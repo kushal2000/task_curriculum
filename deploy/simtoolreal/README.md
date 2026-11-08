@@ -1,0 +1,193 @@
+# SimToolReal deploy: Flexiv Rizon 4s + right Wuji Hand 2
+
+Runs the SimToolReal Play policy (`pretrained_policy/nov6_dr.pth`: move a tool to a goal pose) on the
+real robot. Trained on branch `kushal/2026-10-30_pretraining_real`, task
+`Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0`.
+
+## How it runs
+
+Each part is its own process (a "node"). They talk over ZMQ on one machine: every publisher binds
+its own port, and any number of processes can subscribe. Every pose on the bus is in the robot base
+frame. The topics and their fields are listed in [utils/link.py](utils/link.py).
+
+```
+perception.py ──object_pose, camera_image──┐
+(RealSense + FoundationPose)               │
+                                           ▼
+robot.py ──joint_state──────────────▶ policy.py ──joint_target──▶ robot.py
+(Flexiv + Wuji, 200 Hz)               (60 Hz)  ──goal_pose
+
+viewer.py, recorder.py: subscribe to everything, publish nothing
+run.py: the entry point; starts viewer, recorder, robot (in robot.mode), and the policy in policy mode
+```
+
+| node | runs in | what |
+|---|---|---|
+| [run.py](run.py) | `.venv_deploy` | the entry point: starts the nodes for a robot.mode, ends them on Ctrl-C |
+| [perception.py](perception.py) | FoundationPose env, robot PC GPU | RealSense → FoundationPose → `object_pose` (+ `camera_image` for the viewer); `perception.source=fake`: a fixed pose, no camera (any env) |
+| [robot.py](robot.py) | `.venv_deploy` | arm (aioflexiv; or its MuJoCo arm) + hand (aiowuji; or `fake`, no hand); modes `home`, `free_drive`, `policy` |
+| [policy.py](policy.py) | `.venv_deploy` | observation → LSTM → joint targets; goals and the goal test |
+| [viewer.py](viewer.py) | `.venv_deploy` | live viser page: robot, targets, object, goal, camera, topic status |
+| [recorder.py](recorder.py) | `.venv_deploy` | every message → `recordings/<date>_<time>_<name>.jsonl` |
+| [replay.py](replay.py) | `.venv_deploy` | plays a recording in viser; exports an mp4 |
+
+Other folders: `utils/` (helpers used by several nodes, see [utils/\_\_init\_\_.py](utils/__init__.py)),
+`spec/` (facts exported from the training env, and the robot URDF), `objects/` (object meshes),
+`checks/` (offline checks against a recorded sim rollout, and the scripts that make the spec and
+the rollout).
+
+## Config
+
+Every node reads [config.yaml](config.yaml). Override any value on the command line with dotted keys:
+`run.py robot.mode=home robot.arm=<ROBOT_SN>`. A key that is not in the file is an error (a typo
+stops the run instead of being ignored). To print the merged config:
+`.venv_deploy/bin/python deploy/simtoolreal/utils/config.py <overrides>`.
+
+The spec json (`spec/`) is not a setting: it is copied from the training env. Never edit it by hand.
+
+## Setup on the robot PC
+
+- `.venv_deploy` (Python 3.12) with this repo's `third_party/aioflexiv` and `third_party/aiowuji`, plus
+  `pip install pyzmq "viser==1.1.0" yourdfpy`.
+- The FoundationPose environment (the `kushal2000/FoundationPose` checkout), plus
+  `pip install pyzmq omegaconf pyrealsense2`.
+- The checkpoint at `pretrained_policy/nov6_dr.pth` (gitignored).
+- The robot meshes for the viewer: `scripts/flexiv_wuji/fetch_assets.sh` (the right hand is gitignored).
+- In `config.yaml`, fill in the two TODOs: `perception.foundationpose_dir` (the checkout) and
+  `perception.extrinsics` (the camera pose from `deploy/calibration/calibrate_compare.py`).
+- The hand and its mount must be set up as the Flexiv tool payload. Flexiv compensates gravity
+  with it; without it the arm sags in free drive.
+
+## Run without hardware
+
+MuJoCo arm, fake hand, fixed object. Two terminals, from the repo root:
+
+```bash
+PY=.venv_deploy/bin/python; D=deploy/simtoolreal
+$PY $D/perception.py perception.source=fake
+$PY $D/run.py robot.arm=mujoco robot.hand=fake run.duration_s=30   # viewer at http://localhost:8091
+```
+
+The object does not move here, so no goal is ever reached; each goal times out after 10 s.
+
+## Run on the robot
+
+```bash
+PY=.venv_deploy/bin/python; D=deploy/simtoolreal
+ARM="robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>"
+
+# 1. get the robot to home (the training start pose, spec default_q)
+$PY $D/run.py robot.mode=home $ARM             # move there (joint-space line, no table avoidance)
+$PY $D/run.py robot.mode=free_drive $ARM       # or: move it by hand; prints how far each joint is from home
+
+# 2. perception (FoundationPose env): draw a box around the object in the window, then it tracks
+<foundationpose python> $D/perception.py
+
+# 3. the policy run (robot.mode=policy is the default)
+$PY $D/run.py $ARM record.name=eraser_try1     # record.camera=true: also the camera images
+                                               # run.viewer=false: no viewer; no record.name: no recording
+```
+
+| robot.mode | run.py starts | the robot |
+|---|---|---|
+| `policy` (default) | viewer, recorder, robot, then policy | refuses to start with the arm away from home; follows the policy |
+| `home` | viewer, recorder, robot | moves to home, then robot.py exits |
+| `free_drive` | viewer, recorder, robot | movable by hand until Ctrl-C |
+
+The viewer (http://<robot PC>:8091) starts unless `run.viewer=false`; the recorder only with
+`record.name`. In every mode the viewer stays up after the robot stops, until Ctrl-C.
+
+run.py asks you to type `go` on real hardware, with a warning for the mode. The robot refuses to start with the arm away from
+home, then brings the hand home itself (it went limp when the last run ended). The policy waits
+for the robot's first joint_state. For the first runs, use `robot.hand=dry_run robot.hand_sn=<HAND_SN>`:
+the hand is connected but never enabled.
+
+**How a run ends.**
+- The policy ends (duration, max goals, goal timeout, object off the table, safety trip): the robot
+  holds where it is.
+- The Flexiv E-stop or enabling button: it stops only the arm. robot.py sees the arm's torque loop
+  stop, stops the hand itself and exits; the policy then stops (no more joint_state).
+- In both cases the viewer and the recorder stay up, so you can look at what happened.
+- Ctrl-C on run.py ends everything, in this order: policy, robot (holds, then stops; stopping the
+  hand disables it, so the fingers go limp), recorder, viewer.
+
+The nodes can also run one by one, each in its own terminal (`robot.py robot.mode=...`,
+`viewer.py`, `policy.py`, `recorder.py record.name=...`): that is all run.py does.
+
+## robot modes
+
+| mode | what |
+|---|---|
+| `home` | Hand to home first (it opens and lets go), then the arm, both jerk-limited at `move_speed` / `hand_move_speed`; checks it got there, then exits |
+| `free_drive` | Arm: kp 0, light damping, gravity compensated, movable by hand. Hand: connected, never enabled. Publishes `joint_state` and prints the distance to home every second |
+| `policy` | Forwards `joint_target` at 200 Hz. No new target for 0.1 s: holds the measured pose until targets come back |
+
+Home is the training env's start pose: arm −120, 0, 30, 100, 150, 80, 120°, hand all 0. It is not
+aioflexiv's own home.
+
+## Safety (policy mode)
+
+| check | when | limit |
+|---|---|---|
+| arm tracking: any arm joint vs the target it is being sent | every tick | 25° (training reaches ~19° when the hand presses) |
+| target jump: a new target vs the last one sent | before it is sent | arm 2°, hand 20° per step (training's action pipeline: 0.14° and 12.5° at most) |
+
+A trip holds the measured pose (the hand keeps its grip) and ignores every later target. robot.py puts
+the reason in `joint_state` (`tripped`), so policy.py stops and the viewer shows it. Ctrl-C to end.
+
+## Recording and replay
+
+`run.py record.name=<name>` starts recorder.py for that run. It writes every message, as sent, to
+`recordings/<date>_<time>_<name>.jsonl` (gitignored). Line 1 is the run's full config. Size: about
+25 MB/min, and about 25 MB/min more with `record.camera=true`. recorder.py can also run on its own,
+e.g. to record a free-drive session.
+
+```bash
+$PY $D/replay.py $D/recordings/<file>.jsonl        # http://localhost:8091: time slider, play, speed
+```
+
+To export a video, set the 3D view in the browser, then click "export mp4". The browser tab renders
+every frame, the camera image goes on the right, and the video is saved next to the recording.
+
+## Checks
+
+`checks/check_rec1.py` runs the deploy code on a rollout recorded in the training env
+(`docs/results/simtoolreal/rec1`) and compares the numbers.
+
+| | max error |
+|---|---|
+| FK (palm, fingertips), the 134 observation numbers | ~1e-6 |
+| action → joint targets | 1e-7 |
+| goal-test keypoint distance | 6e-8 |
+| network actions, CPU vs the sim's GPU | mean 0.004, max 0.09 |
+| own goal sampler vs training's rules (2000 goals) | no rule broken |
+
+Run it after any change to `utils/observation.py`, `utils/robot_model.py`, `utils/goals.py` or
+`policy.py`, and after a new checkpoint or spec. The rollout (32 MB) is gitignored, so it runs only
+where the rollout is.
+
+| script | what | runs in |
+|---|---|---|
+| `checks/record_sim_rollout.py` | records the policy in the training env, every step → `rollout.npz` (cluster: `scripts/cluster/bos14_simtoolreal_record.sh`) | the training branch's worktree, Isaac Sim |
+| `checks/export_spec.py` | reads the training branch from git → `spec/` (spec json + URDF); `--rollout_meta` adds the fingertip order | `.venv_deploy`, no Isaac Sim |
+
+## Things the policy depends on that are easy to break
+
+- **Fingertip order.** The observation lists the fingertips in PhysX body order (index, middle,
+  pinky, ring, thumb), with the pad offsets applied by position, so the ring finger gets the thumb's
+  22.9 mm. The spec's `fingertip_obs_*` fields hold this; do not "fix" it.
+- **Object frame.** FoundationPose returns the pose of the mesh's own frame, and the keypoints sit
+  around that frame's origin. Use DexToolBench's mesh unchanged (`objects/`). Its origin is not the
+  mesh centre.
+- **Gravity.** The sim robot has no gravity: Flexiv must compensate it, with the hand as the tool payload.
+
+## Not verified yet
+
+- perception.py has never run: it needs the robot PC's GPU and camera. On its first run, check in
+  the viewer that the tracked mesh sits on the real object.
+- Hand gains: `robot.hand_kp_per_nm` 2.0 is a guess until the Wuji torque constant is measured.
+- Hand velocity: `hand_velocity()` in robot.py is a placeholder (a position difference) until it is
+  measured on the hand.
+- How long robot.py takes to see a Flexiv E-stop.
+- The mp4 export's 3D rendering. It needs a browser, so it was tested only with a stand-in.
+- Nothing has run on the real robot yet. All tests so far used the MuJoCo arm and a fake hand.

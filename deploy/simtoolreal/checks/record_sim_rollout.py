@@ -1,4 +1,4 @@
-"""Record the Play policy in the training env, every step, for check_offline.py; optionally compare SAPG blocks.
+"""Record the Play policy in the training env, every step, for check_rec1.py; optionally compare SAPG blocks.
 
 Runs on the TRAINING branch's code (kushal/2026-10-30_pretraining_real), not this one: the env it
 builds is the one the checkpoint was trained in. Randomization is off (protocol.disable_randomization:
@@ -8,11 +8,12 @@ as in training, and the success tolerance is pinned to training's final 0.01 m.
 Every step it saves what the real loop will measure (joint angles and velocities, previous targets,
 object, goal, object scales), what the sim computed from it (the 134-dim policy observation, the palm
 and fingertip body poses, the keypoint distance and goal-hit test) and what came out (the action, the
-next joint targets). check_offline.py replays those inputs through deployment/simtoolreal/core.py.
+next joint targets). check_rec1.py runs those inputs through the deploy code. On the cluster:
+scripts/cluster/bos14_simtoolreal_record.sh. By hand:
 
     cd <branch worktree>
     PYTHONPATH=$PWD:$PWD/rl_games .venv_isaacsim/bin/python \
-        /home/yiboc/mit/task_curriculum_deployment/deployment/simtoolreal/record_sim_rollout.py --headless \
+        /home/yiboc/mit/task_curriculum_deployment/deploy/simtoolreal/checks/record_sim_rollout.py --headless \
         --checkpoint pretrained_policy/nov6_dr.pth --out <dir>
 
 --sweep_coefs 50,40,30,20,10,0 then runs every SAPG block for --sweep_steps on all envs and reports
@@ -29,7 +30,7 @@ import time
 from pathlib import Path
 
 TASK = "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0"
-DEPLOY_REPO = Path(__file__).resolve().parents[2]
+DEPLOY_REPO = Path(__file__).resolve().parents[3]   # deploy/simtoolreal/checks -> repo root
 
 
 def main() -> None:

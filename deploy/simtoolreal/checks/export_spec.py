@@ -6,12 +6,15 @@ the real setup's table and home pose). This script reads that branch's files str
 robots.py (joint order, gains, palm / fingertip bodies and offsets, home pose), the task YAML (action
 pipeline, obs layout, keypoints, table, goal sampling, success test, DR) and the robot URDF (joint
 limits, arm effort limits) -- and writes them in one file, in the policy's joint order. The deploy
-code then holds no hand-copied numbers. The URDF is copied next to the spec for the FK.
+code then holds no hand-copied numbers. Writes spec/ (the spec json, and the URDF for the FK).
 
 Static on purpose: the joint limits here are the URDF's, which PhysX normally keeps as they are;
-step 2 (recording a sim rollout and replaying it through the deploy obs code) checks that.
+check_rec1.py (a sim rollout run through the deploy code) checks that. --rollout_meta adds the
+fingertip order the observation really uses, which only the sim rollout shows. The spec in spec/
+was made with:
 
-    .venv_deploy/bin/python deployment/simtoolreal/export_spec.py
+    .venv_deploy/bin/python deploy/simtoolreal/checks/export_spec.py \
+        --rollout_meta docs/results/simtoolreal/rec1/rollout_meta.json
 """
 
 from __future__ import annotations
@@ -27,8 +30,8 @@ from pathlib import Path
 
 import yaml
 
-HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[1]
+HERE = Path(__file__).resolve().parent     # deploy/simtoolreal/checks
+REPO = HERE.parents[2]
 DEFAULT_REF = "origin/kushal/2026-10-30_pretraining_real"
 TASK = "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0"
 TASK_YAML = "isaacsimenvs/cfg/task/PlayFlexivWujiRightHumanLike.yaml"
@@ -80,7 +83,7 @@ def urdf_joints(urdf_text: str) -> dict[str, dict]:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--ref", default=DEFAULT_REF, help="git ref of the training branch")
-    p.add_argument("--out", type=Path, default=HERE / "spec_flexiv_wuji_right_hl.json")
+    p.add_argument("--out", type=Path, default=HERE.parent / "spec" / "spec_flexiv_wuji_right_hl.json")
     p.add_argument("--rollout_meta", type=Path, default=None,
                    help="rollout_meta.json from record_sim_rollout.py: adds the fingertip order the "
                         "observation really uses (PhysX body order) and the offset applied at each position")

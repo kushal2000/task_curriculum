@@ -119,3 +119,17 @@ class RealSense:
         with self._lock:
             depth, color, t = self._latest
         return self._frame(depth, color, t)
+
+    def latest_rgbd(self) -> tuple[np.ndarray, np.ndarray, float]:
+        """(rgb (H, W, 3) uint8, depth (H, W) float32 m with 0 where invalid, t) of the newest frame,
+        depth aligned to the color image."""
+        with self._lock:
+            depth, color, t = self._latest
+        depth = depth.copy()
+        depth[~np.isfinite(depth) | (depth < self.min_depth) | (depth > self.max_depth)] = 0.0
+        return color, depth, t
+
+    def K(self) -> np.ndarray:
+        """3x3 color camera matrix (after start())."""
+        i = self.intrinsics
+        return np.array([[i.fx, 0.0, i.cx], [0.0, i.fy, i.cy], [0.0, 0.0, 1.0]])
