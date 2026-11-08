@@ -50,12 +50,14 @@ The spec json (`spec/`) is not a setting: it is copied from the training env. Ne
 
 - `.venv_deploy` (Python 3.12) with this repo's `third_party/aioflexiv` and `third_party/aiowuji`, plus
   `pip install pyzmq "viser==1.1.0" yourdfpy`.
-- The FoundationPose environment (the `kushal2000/FoundationPose` checkout), plus
-  `pip install pyzmq omegaconf pyrealsense2`.
+- The FoundationPose environment (conda env `foundationpose`, the `kushal2000/FoundationPose` checkout at
+  `~/FoundationPose`), plus `pip install pyzmq omegaconf pyrealsense2`.
 - The checkpoint at `pretrained_policy/nov6_dr.pth` (gitignored).
 - The robot meshes for the viewer: `scripts/flexiv_wuji/fetch_assets.sh` (the right hand is gitignored).
-- In `config.yaml`, fill in the two TODOs: `perception.foundationpose_dir` (the checkout) and
-  `perception.extrinsics` (the camera pose from `deploy/calibration/calibrate_compare.py`).
+- In `config.yaml`: `perception.foundationpose_dir` (the checkout) and `perception.extrinsics` (the
+  camera pose from `deploy/calibration/calibrate_compare.py`; now `left_camera_nov7.json`, D415
+  821312062243). perception.py opens the camera named in the extrinsics file and refuses another;
+  after moving the camera, calibrate again and point `perception.extrinsics` at the new file.
 - The hand and its mount must be set up as the Flexiv tool payload. Flexiv compensates gravity
   with it; without it the arm sags in free drive.
 
@@ -81,8 +83,8 @@ ARM="robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>"
 $PY $D/run.py robot.mode=home $ARM             # move there (joint-space line, no table avoidance)
 $PY $D/run.py robot.mode=free_drive $ARM       # or: move it by hand; prints how far each joint is from home
 
-# 2. perception (FoundationPose env): draw a box around the object in the window, then it tracks
-<foundationpose python> $D/perception.py
+# 2. perception (FoundationPose env): click 4 corners of a box around the object, then it tracks
+~/miniconda3/envs/foundationpose/bin/python $D/perception.py
 
 # 3. the policy run (robot.mode=policy is the default)
 $PY $D/run.py $ARM record.name=eraser_try1     # record.camera=true: also the camera images
@@ -153,6 +155,9 @@ eraser must lie where the sim's did; nothing checks it.
    ```
    Before `go`, run.py prints where the eraser goes (in the robot base frame). The viewer draws the
    sim's eraser in blue and its goal in orange.
+   The sim's eraser lies on the bare table (z 0.28). Measured on Nov 8, the black foam pad there has
+   its top about 3 cm higher (base z ~0.32, the table ~0.29): take it away, or the eraser sits 3 cm
+   higher than the targets expect.
 
 ## Safety (policy and openloop modes)
 
@@ -213,7 +218,8 @@ where the rollout is.
 
 ## Not verified yet
 
-- perception.py has never run: it needs the robot PC's GPU and camera. On its first run, check in
+- perception.py has run on the robot PC (D415, 640 x 480: 60 Hz, ~12 ms from frame to pose), but
+  only on a mask of the empty foam pad, not on the eraser. On its first run with the eraser, check in
   the viewer that the tracked mesh sits on the real object.
 - Hand gains: `robot.hand_kp_per_nm` 2.0 is a guess until the Wuji torque constant is measured.
 - Hand velocity: `hand_velocity()` in robot.py is a placeholder (a position difference) until it is

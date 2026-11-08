@@ -3,15 +3,16 @@
 perception.source=camera (default): RealSense -> FoundationPose. Runs in the FoundationPose
 environment on the robot PC (needs its GPU), from the repo root:
 
-    <foundationpose python> deploy/simtoolreal/perception.py
+    ~/miniconda3/envs/foundationpose/bin/python deploy/simtoolreal/perception.py
 
-  1. First frame: an OpenCV window opens; draw a box around the object, SAM turns it into a mask,
-     FoundationPose registers the pose. The window then closes.
+  It opens the camera the extrinsics file was calibrated for (its camera_serial), and refuses another.
+  1. First frame: an OpenCV window opens; click 4 corners of a box around the object, SAM turns it
+     into a mask, FoundationPose registers the pose. The window then closes.
   2. Every later frame: FoundationPose tracks from the last pose; the pose goes out over ZMQ, and
      the color image (camera_image) at image_hz for the viewer.
 
-  Follows upstream's live_tracking_with_ros.py (github.com/kushal2000/FoundationPose), with a
-  RealSense instead of a ZED and ZMQ instead of ROS. Frames: FoundationPose gives T_cam_obj (cam =
+  Follows upstream's live_tracking.py (github.com/kushal2000/FoundationPose, RealSense, UDP), with
+  ZMQ instead of UDP. Frames: FoundationPose gives T_cam_obj (cam =
   the color optical frame, as calibrate_compare.py calibrates it); T_base_obj = T_base_cam @ T_cam_obj.
 
 perception.source=fake: a fixed pose (perception.fake_pose_base), no camera, to test without one:
@@ -20,6 +21,7 @@ perception.source=fake: a fixed pose (perception.fake_pose_base), no camera, to 
 """
 
 import json
+import logging
 import sys
 import time
 from pathlib import Path
@@ -54,15 +56,26 @@ def track_camera(cfg, pub) -> None:
     if p.foundationpose_dir is None or p.extrinsics is None:
         raise SystemExit("[perception] set perception.foundationpose_dir and perception.extrinsics "
                          "(config.yaml or the command line)")
-    T_base_cam = np.asarray(json.loads(repo_path(p.extrinsics).read_text())["T_base_cam"], dtype=float)  # extrinsics
+    fp_dir = Path(p.foundationpose_dir).expanduser()
+    if not (fp_dir / "estimater.py").is_file():
+        raise SystemExit(f"[perception] perception.foundationpose_dir={fp_dir}: no estimater.py there")
+    calib_path = repo_path(p.extrinsics)
+    calib = json.loads(calib_path.read_text())
+    T_base_cam = np.asarray(calib["T_base_cam"], dtype=float)  # extrinsics
+    calib_serial = calib.get("camera_serial")
     mesh_path = repo_path(cfg.objects[cfg.object.name].mesh)
 
-    cam = RealSense(serial=p.camera_serial, width=p.camera_width, height=p.camera_height, fps=p.camera_fps)
+    # the extrinsics belong to one camera: open that one, and refuse another
+    serial = p.camera_serial or calib_serial
+    if calib_serial is not None and serial != calib_serial:
+        raise SystemExit(f"[perception] perception.camera_serial={serial}, but {calib_path.name} is for "
+                         f"camera {calib_serial}")
+    cam = RealSense(serial=serial, width=p.camera_width, height=p.camera_height, fps=p.camera_fps)
     cam.start()
     K = cam.K()  # intrinsics
     print(f"[perception] {cam.name} {cam.serial}, {p.camera_width}x{p.camera_height} at {p.camera_fps} fps, "
-          f"mesh {mesh_path.name}", flush=True)
-    est = load_foundationpose(p.foundationpose_dir, mesh_path)
+          f"extrinsics {calib_path.name}, mesh {mesh_path.name}", flush=True)
+    est = load_foundationpose(fp_dir, mesh_path)
     try:
         # 1. register on the first frame
         rgb, depth, t = cam.latest_rgbd()
@@ -96,12 +109,15 @@ def track_camera(cfg, pub) -> None:
         cam.stop()
 
 
-def load_foundationpose(fp_dir: str, mesh_path: Path):
+def load_foundationpose(fp_dir: Path, mesh_path: Path):
     """Build FoundationPose for one mesh. Imports from the FoundationPose checkout."""
-    sys.path.insert(0, fp_dir)
+    sys.path.insert(0, str(fp_dir))
     import nvdiffrast.torch as dr
     import trimesh
     from estimater import FoundationPose, PoseRefinePredictor, ScorePredictor
+    from Utils import set_logging_format
+
+    set_logging_format(level=logging.WARNING)   # its INFO lines: dozens per frame
 
     mesh = trimesh.load(str(mesh_path), process=False)   # process=False: keep the mesh frame as is
     return FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, mesh=mesh,
@@ -110,12 +126,25 @@ def load_foundationpose(fp_dir: str, mesh_path: Path):
 
 
 def select_mask(rgb: np.ndarray) -> np.ndarray:
-    """OpenCV window: draw a box around the object -> SAM mask (H, W) bool. The window closes itself."""
+    """OpenCV window: click 4 corners of a box around the object -> SAM mask (H, W) bool. The window
+    closes itself.
+
+    FoundationPose's refiner makes CUDA the default tensor type, which stops transformers from loading
+    SAM. CPU defaults while SAM runs, then back (as upstream live_tracking.py).
+    """
     import cv2
+    import torch
     from generate_mask import generate_binary_mask_box   # from the FoundationPose checkout
 
-    mask = generate_binary_mask_box(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), polygon_refinement=True)
-    if mask is None or not mask.any():
+    cuda_default = torch.tensor(0.0).is_cuda
+    if cuda_default:
+        torch.set_default_tensor_type(torch.FloatTensor)
+    try:
+        mask = generate_binary_mask_box(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), polygon_refinement=True)
+    finally:
+        if cuda_default:
+            torch.set_default_tensor_type(torch.cuda.FloatTensor)
+    if mask is None or not np.any(mask):
         raise SystemExit("[perception] empty mask, nothing selected")
     return mask > 0
 

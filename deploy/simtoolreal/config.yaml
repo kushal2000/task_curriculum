@@ -90,9 +90,9 @@ perception:
   max_age_s: 0.2            # policy.py treats an older pose as "object lost"
 
   # camera (runs in the FoundationPose environment on the robot PC)
-  foundationpose_dir: null  # TODO: the FoundationPose checkout on the robot PC (has estimater.py, generate_mask.py)
-  extrinsics: null          # TODO: deploy/calibration/extrinsics/<name>.json from calibrate_compare.py (T_base_cam)
-  camera_serial: null       # null = the only RealSense connected
+  foundationpose_dir: ~/FoundationPose   # the kushal2000/FoundationPose checkout (estimater.py, generate_mask.py, weights/)
+  extrinsics: deploy/calibration/extrinsics/left_camera_nov7.json   # T_base_cam from calibrate_compare.py (D415 821312062243)
+  camera_serial: null       # null = the extrinsics file's camera_serial; perception.py refuses any other camera
   camera_width: 640         # FoundationPose crops around the object, so a small image is enough
   camera_height: 480        #   (upstream: 960 x 540 from a ZED)
   camera_fps: 60            # 6 | 15 | 30 | 60 (D435 at 640 x 480). Pose rate = min(this, FoundationPose's speed)
