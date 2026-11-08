@@ -117,7 +117,7 @@ record:
   name: null                # null = do not record. Else -> <dir>/<date>_<time>_<name>.jsonl
   camera: false             # also record camera_image (10 Hz JPEG, ~24 MB/min)
   dir: deploy/simtoolreal/recordings
-  video_fps: 30             # replay.py's mp4 export
+  video_fps: 30             # playback.py's mp4 export
   video_height: 480         # px; the 3D view is 4:3, the camera image is scaled to the same height
 
 # ---------------------------------------------------------------------------------------- viewer

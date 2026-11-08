@@ -11,7 +11,7 @@ Subscribes  joint_state  -> the robot, at its measured joint angles
 
 The scene is in the env frame (the training env's): table and robot base where training had them.
 The status panel lists each topic's age and rate, and the object -> goal distance against the
-success threshold. replay.py draws recordings with the same build_scene / draw.
+success threshold. playback.py draws recordings with the same build_scene / draw.
 """
 
 import sys

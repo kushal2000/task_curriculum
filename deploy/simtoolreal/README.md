@@ -29,7 +29,7 @@ run.py: the entry point; starts viewer, recorder, robot (in robot.mode), and the
 | [policy.py](policy.py) | `.venv_deploy` | observation → LSTM → joint targets; goals and the goal test |
 | [viewer.py](viewer.py) | `.venv_deploy` | live viser page: robot, targets, object, goal, camera, topic status |
 | [recorder.py](recorder.py) | `.venv_deploy` | every message → `recordings/<date>_<time>_<name>.jsonl` |
-| [replay.py](replay.py) | `.venv_deploy` | plays a recording in viser; exports an mp4 |
+| [playback.py](playback.py) | `.venv_deploy` | plays a recording back in viser; exports an mp4; never moves the robot |
 
 Other folders: `utils/` (helpers used by several nodes, see [utils/\_\_init\_\_.py](utils/__init__.py)),
 `spec/` (facts exported from the training env, and the robot URDF), `objects/` (object meshes),
@@ -135,7 +135,7 @@ aioflexiv's own home.
 A trip holds the measured pose (the hand keeps its grip) and ignores every later target. robot.py puts
 the reason in `joint_state` (`tripped`), so policy.py stops and the viewer shows it. Ctrl-C to end.
 
-## Recording and replay
+## Recording and playback
 
 `run.py record.name=<name>` starts recorder.py for that run. It writes every message, as sent, to
 `recordings/<date>_<time>_<name>.jsonl` (gitignored). Line 1 is the run's full config. Size: about
@@ -143,7 +143,7 @@ the reason in `joint_state` (`tripped`), so policy.py stops and the viewer shows
 e.g. to record a free-drive session.
 
 ```bash
-$PY $D/replay.py $D/recordings/<file>.jsonl        # http://localhost:8091: time slider, play, speed
+$PY $D/playback.py $D/recordings/<file>.jsonl      # http://localhost:8091: time slider, play, speed
 ```
 
 To export a video, set the 3D view in the browser, then click "export mp4". The browser tab renders

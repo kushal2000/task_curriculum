@@ -1,6 +1,6 @@
-"""Replay a recording (recorder.py) in viser, and export it as an mp4.
+"""Play back a recording (recorder.py) in viser, and export it as an mp4. Never moves the robot.
 
-    .venv_deploy/bin/python deploy/simtoolreal/replay.py <recording.jsonl> [viewer.port=8092]
+    .venv_deploy/bin/python deploy/simtoolreal/playback.py <recording.jsonl> [viewer.port=8092]
 
 Open the page: the scene is the live viewer's (viewer.py), at the time on the slider. "play" runs it
 at the chosen speed. "export mp4": set the 3D view in the browser first; every frame is rendered by
@@ -95,7 +95,7 @@ def main() -> None:
     t0 = min(times[0] for times, _ in rec.values())
     duration = max(times[-1] for times, _ in rec.values()) - t0
     counts = ", ".join(f"{k} {len(v[1])}" for k, v in rec.items())
-    print(f"[replay] {path.name}: {duration:.1f} s; {counts}", flush=True)
+    print(f"[playback] {path.name}: {duration:.1f} s; {counts}", flush=True)
 
     server = viser.ViserServer(host="0.0.0.0", port=cfg.viewer.port)
     scene = build_scene(server, spec, repo_path(cfg.objects[cfg.object.name].mesh))
@@ -105,7 +105,7 @@ def main() -> None:
     speed = server.gui.add_dropdown("speed", ("0.25", "0.5", "1", "2", "4"), initial_value="1")
     export = server.gui.add_button("export mp4 (uses this tab's 3D view)")
     note = server.gui.add_markdown("")
-    busy = threading.Lock()   # the export and the replay loop both move the scene
+    busy = threading.Lock()   # the export and the playback loop both move the scene
 
     @export.on_click
     def _(event) -> None:
@@ -119,7 +119,7 @@ def main() -> None:
         finally:
             busy.release()
 
-    print(f"[replay] http://localhost:{cfg.viewer.port}", flush=True)
+    print(f"[playback] http://localhost:{cfg.viewer.port}", flush=True)
     shown, camera_seq, dt = None, None, 1.0 / cfg.viewer.hz
     while True:
         t_tick = time.perf_counter()
