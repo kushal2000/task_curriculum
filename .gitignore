@@ -94,3 +94,8 @@ assets/flexiv_wuji/wuji_hand2/mjcf/right*
 docs/results/rigid_cloth_env_probe_*.json
 docs/results/rigid_cloth_arm_*.json
 docs/results/rigid_cloth_spawn_*.json
+
+# SimToolReal deploy: sim rollouts recorded in the training env (rec1 for checks/check_rec1.py, lift1
+# for robot.mode=openloop: npz, json, mp4; tens of MB). Regenerate with deploy/simtoolreal/checks/.
+docs/results/simtoolreal/
+/lift1.zip
