@@ -8,4 +8,5 @@ robot_model  forward kinematics: palm, fingertips
 observation  the policy's 134-number observation
 goals        sample goals, test whether the object reached one
 fake_hand    a stand-in for the Wuji hand driver when no hand is connected (robot.hand=fake)
+openloop     the sim rollout robot.mode=openloop sends (checks/record_lift.py), where to put the object
 """

@@ -10,8 +10,12 @@ Every message has seq (counts up from 0, the sender counts) and t (time.time(), 
 | camera_image | perception.py (camera)      | object_pose_port   | jpeg (base64 text); t = camera frame time      |
 | joint_state  | robot.py                    | joint_state_port   | q (27), dq (27), tripped (None or the safety   |
 |              |                             |                    | trip's reason); t = when measured              |
-| joint_target | policy.py                   | policy_port        | targets (27); t = when sent                    |
-| goal_pose    | policy.py                   | policy_port        | pos (3), quat_wxyz (4), goal_index; t = sent   |
+| joint_target | policy.py; robot.py in      | policy_port        | targets (27); t = when sent                    |
+|              | robot.mode=openloop         |                    |                                               |
+| goal_pose    | policy.py; robot.py         | policy_port        | pos (3), quat_wxyz (4), goal_index; t = sent   |
+|              | (openloop: the sim's goal)  |                    |                                               |
+| sim_object_  | robot.py (openloop)         | policy_port        | pos (3), quat_wxyz (4): where the sim rollout  |
+| pose         |                             |                    | had the object at this step; t = sent          |
 
 Poses are in the robot base frame; joints in the spec's joint order (7 arm, then 20 hand), rad.
 
@@ -48,7 +52,8 @@ NODES_DIR = Path(__file__).resolve().parents[1]   # deploy/simtoolreal
 
 # every topic -> its publisher's port key in config.yaml `bus`
 TOPIC_PORTS = {"joint_state": "joint_state_port", "joint_target": "policy_port", "goal_pose": "policy_port",
-               "object_pose": "object_pose_port", "camera_image": "object_pose_port"}
+               "sim_object_pose": "policy_port", "object_pose": "object_pose_port",
+               "camera_image": "object_pose_port"}
 
 
 def open_publisher(port: int) -> zmq.Socket:

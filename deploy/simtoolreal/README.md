@@ -19,13 +19,14 @@ robot.py ──joint_state──────────────▶ policy.p
 
 viewer.py, recorder.py: subscribe to everything, publish nothing
 run.py: the entry point; starts viewer, recorder, robot (in robot.mode), and the policy in policy mode
+robot.mode=openloop: no policy, no perception; robot.py sends a sim rollout's joint_target itself
 ```
 
 | node | runs in | what |
 |---|---|---|
 | [run.py](run.py) | `.venv_deploy` | the entry point: starts the nodes for a robot.mode, ends them on Ctrl-C |
 | [perception.py](perception.py) | FoundationPose env, robot PC GPU | RealSense → FoundationPose → `object_pose` (+ `camera_image` for the viewer); `perception.source=fake`: a fixed pose, no camera (any env) |
-| [robot.py](robot.py) | `.venv_deploy` | arm (aioflexiv; or its MuJoCo arm) + hand (aiowuji; or `fake`, no hand); modes `home`, `free_drive`, `policy` |
+| [robot.py](robot.py) | `.venv_deploy` | arm (aioflexiv; or its MuJoCo arm) + hand (aiowuji; or `fake`, no hand); modes `home`, `free_drive`, `policy`, `openloop` |
 | [policy.py](policy.py) | `.venv_deploy` | observation → LSTM → joint targets; goals and the goal test |
 | [viewer.py](viewer.py) | `.venv_deploy` | live viser page: robot, targets, object, goal, camera, topic status |
 | [recorder.py](recorder.py) | `.venv_deploy` | every message → `recordings/<date>_<time>_<name>.jsonl` |
@@ -93,6 +94,7 @@ $PY $D/run.py $ARM record.name=eraser_try1     # record.camera=true: also the ca
 | `policy` (default) | viewer, recorder, robot, then policy | refuses to start with the arm away from home; follows the policy |
 | `home` | viewer, recorder, robot | moves to home, then robot.py exits |
 | `free_drive` | viewer, recorder, robot | movable by hand until Ctrl-C |
+| `openloop` | viewer, recorder, robot | refuses to start with the arm away from home; sends a sim rollout's joint targets, then holds the last one |
 
 The viewer (http://<robot PC>:8091) starts unless `run.viewer=false`; the recorder only with
 `record.name`. In every mode the viewer stays up after the robot stops, until Ctrl-C.
@@ -121,11 +123,38 @@ The nodes can also run one by one, each in its own terminal (`robot.py robot.mod
 | `home` | Hand to home first (it opens and lets go), then the arm, both jerk-limited at `move_speed` / `hand_move_speed`; checks it got there, then exits |
 | `free_drive` | Arm: kp 0, light damping, gravity compensated, movable by hand. Hand: connected, never enabled. Publishes `joint_state` and prints the distance to home every second |
 | `policy` | Forwards `joint_target` at 200 Hz. No new target for 0.1 s: holds the measured pose until targets come back |
+| `openloop` | Hand to home, then sends target k of `openloop.path` from k/60 s on, with no feedback, and the same safety checks as `policy`. After the last one it holds it until Ctrl-C |
 
 Home is the training env's start pose: arm −120, 0, 30, 100, 150, 80, 120°, hand all 0. It is not
 aioflexiv's own home.
 
-## Safety (policy mode)
+## Open loop: lift the eraser 10 cm without camera or policy
+
+The policy runs only in sim. Its joint targets are then sent to the real robot unchanged. The real
+eraser must lie where the sim's did; nothing checks it.
+
+1. Record the rollout in the training env (Isaac Sim, the training branch's worktree):
+   ```bash
+   OUT=$PWD/docs/results/simtoolreal/lift1 EXTRA_ARGS="--num_envs 256 --candidates 16" \
+       sbatch scripts/cluster/bos14_simtoolreal_lift.sh
+   ```
+   [checks/record_lift.py](checks/record_lift.py): the env's eraser box pinned to the DexToolBench
+   mesh (12.5 x 2.8 x 5 cm, 70 g), lying flat at the table centre, the goal 10 cm above it.
+   - The policy runs in every env. It often drops the box and grasps it again; that needs
+     feedback, so only envs that lift and hold without a drop are kept.
+   - Each kept rollout's targets are sent open loop in sim, from the same start, to several envs;
+     the one that works most often is saved to `openloop.npz`.
+   - Its targets are then sent to boxes placed off by up to 2 cm / 20 deg, and with the hand's
+     gains x0.5 to x2: `robustness.json` says how exactly the real eraser has to be placed.
+2. On the robot PC (copy `openloop.npz` to `openloop.path`):
+   ```bash
+   $PY $D/run.py robot.mode=home $ARM
+   $PY $D/run.py robot.mode=openloop $ARM record.name=lift_try1
+   ```
+   Before `go`, run.py prints where the eraser goes (in the robot base frame). The viewer draws the
+   sim's eraser in blue and its goal in orange.
+
+## Safety (policy and openloop modes)
 
 | check | when | limit |
 |---|---|---|
@@ -168,6 +197,7 @@ where the rollout is.
 
 | script | what | runs in |
 |---|---|---|
+| `checks/record_lift.py` | the lift rollout for `robot.mode=openloop`, and its open-loop test in sim (cluster: `scripts/cluster/bos14_simtoolreal_lift.sh`) | the training branch's worktree, Isaac Sim |
 | `checks/record_sim_rollout.py` | records the policy in the training env, every step → `rollout.npz` (cluster: `scripts/cluster/bos14_simtoolreal_record.sh`) | the training branch's worktree, Isaac Sim |
 | `checks/export_spec.py` | reads the training branch from git → `spec/` (spec json + URDF); `--rollout_meta` adds the fingertip order | `.venv_deploy`, no Isaac Sim |
 

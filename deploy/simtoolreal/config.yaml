@@ -43,7 +43,7 @@ policy:
 
 # ---------------------------------------------------------------------------------------- robot
 robot:
-  mode: policy              # policy | home | free_drive (robot.py's docstring, the README)
+  mode: policy              # policy | home | free_drive | openloop (robot.py's docstring, the README)
   arm: mujoco               # robot serial number | mujoco (aioflexiv's MuJoCo Rizon)
   hand: fake                # hand serial number | auto | dry_run (connected, never enabled) | fake (no hand)
   hand_sn: null             # serial for hand: dry_run
@@ -105,6 +105,12 @@ perception:
   # table's centre (env (0, 0.29), top z 0.28 + half of 5 cm).
   fake_pose_base: [0.0, -0.51, 0.305, 1.0, 0.0, 0.0, 0.0]
   fake_hz: 30.0
+
+# -------------------------------------------------------------------------------------- openloop
+# robot.mode=openloop: send a sim rollout's joint targets with no feedback (no policy, no camera).
+# Made by checks/record_lift.py (cluster: scripts/cluster/bos14_simtoolreal_lift.sh).
+openloop:
+  path: docs/results/simtoolreal/lift1/openloop.npz
 
 # ----------------------------------------------------------------------------------------- goals
 goals:

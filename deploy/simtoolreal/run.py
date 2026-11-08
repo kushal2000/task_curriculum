@@ -15,6 +15,8 @@ policy in policy mode.
 | policy     | viewer, recorder, robot, then policy     | refuses to start away from home; follows   |
 | home       | viewer, recorder, robot                  | moves to home, then robot.py exits          |
 | free_drive | viewer, recorder, robot                  | movable by hand until Ctrl-C               |
+| openloop   | viewer, recorder, robot                  | refuses to start away from home; sends a   |
+|            |                                          | sim rollout's targets (openloop.path)      |
 (recorder only with record.name; viewer unless run.viewer=false.) Viewer and recorder start first,
 so they listen from the beginning; the policy waits for the robot's first joint_state.
 
@@ -34,13 +36,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))    # deploy/simtoolreal
 from robot import MODES                                       # noqa: E402
-from utils.config import load_config                          # noqa: E402
+from utils.config import load_config, repo_path               # noqa: E402
 from utils.link import start_node, stop_node                  # noqa: E402
 
 # asked before real hardware moves
 CONFIRM_WARNINGS = {"home": "the arm moves in a straight joint-space line, NOT around the table",
                     "free_drive": "the arm goes soft: the hand must be the Flexiv tool payload, or it sags",
-                    "policy": "the policy drives the robot"}
+                    "policy": "the policy drives the robot",
+                    "openloop": "a sim rollout's joint targets drive the robot, blind: the object must be "
+                                "where the sim had it"}
 
 
 def main() -> None:
@@ -48,6 +52,11 @@ def main() -> None:
     mode = cfg.robot.mode
     if mode not in MODES:
         raise SystemExit(f"[run] robot.mode={mode}: {' | '.join(MODES)}")
+    if mode == "openloop":                              # where to put the object, before 'go'
+        from utils.openloop import load_rollout, placement_text
+        from utils.spec import load_spec
+        print(placement_text(load_rollout(repo_path(cfg.openloop.path), load_spec(repo_path(cfg.spec_path)))),
+              flush=True)
     if cfg.robot.arm != "mujoco" and cfg.run.confirm_hardware:
         answer = input(f"[run] {mode}, arm {cfg.robot.arm}, hand {cfg.robot.hand}: {CONFIRM_WARNINGS[mode]}. "
                        "Type 'go': ")

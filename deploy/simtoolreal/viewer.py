@@ -7,6 +7,8 @@ Subscribes  joint_state  -> the robot, at its measured joint angles
             joint_target -> a green see-through robot at the policy's targets
             object_pose  -> the object mesh
             goal_pose    -> an orange see-through object mesh
+            sim_object_pose -> a blue see-through object mesh: where the sim rollout had the object
+                            (robot.mode=openloop)
             camera_image -> the camera image in the side panel (if perception sends it)
 
 The scene is in the env frame (the training env's): table and robot base where training had them.
@@ -54,8 +56,10 @@ def build_scene(server, spec, mesh_path: Path) -> dict:
     goal = server.scene.add_mesh_simple("/goal", vertices=mesh.vertices, faces=mesh.faces,
                                         color=(0.95, 0.6, 0.1), opacity=0.4)
     server.scene.add_frame("/goal/axes", axes_length=0.06, axes_radius=0.002)
+    sim_obj = server.scene.add_mesh_simple("/sim_object", vertices=mesh.vertices, faces=mesh.faces,
+                                           color=(0.2, 0.45, 0.95), opacity=0.4, visible=False)
     return {
-        "robot": robot, "ghost": ghost, "object": obj, "goal": goal,
+        "robot": robot, "ghost": ghost, "object": obj, "goal": goal, "sim_object": sim_obj,
         # viser's joint order -> index in the spec's joint order
         "order": [list(spec["joint_names"]).index(j) for j in robot.get_actuated_joint_names()],
         "show_targets": server.gui.add_checkbox("show joint targets (green)", True),
@@ -75,10 +79,11 @@ def draw(server, scene: dict, spec, msgs: dict) -> None:
         scene["ghost"].show_visual = show
         if show:
             scene["ghost"].update_cfg(msgs["joint_target"]["targets"][order])
-        for topic in ("object_pose", "goal_pose"):
+        for topic, name in (("object_pose", "object"), ("goal_pose", "goal"), ("sim_object_pose", "sim_object")):
             if msgs.get(topic) is not None:
-                handle = scene["object" if topic == "object_pose" else "goal"]
+                handle = scene[name]
                 handle.position, handle.wxyz = base_to_env(spec, msgs[topic]["pos"], msgs[topic]["quat_wxyz"])
+                handle.visible = True
 
 
 def goal_text(spec, last: dict, tolerance: float) -> str:

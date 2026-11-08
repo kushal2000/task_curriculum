@@ -7,6 +7,9 @@ robot.mode  home        hand, then arm, to home (spec default_q, the training st
             free_drive  arm movable by hand (kp 0, Flexiv compensates gravity); hand never enabled
             policy      the arm must be at home; the hand is brought home; then forward policy.py's
                         joint_target, with two safety checks (check_tracking, check_target_step)
+            openloop    as policy, but the targets come from a sim rollout (openloop.path, made by
+                        checks/record_lift.py), sent one per policy step with no feedback; this node
+                        then also publishes joint_target, goal_pose and sim_object_pose itself
 
 Every mode publishes joint_state at rate_hz, and ends (Ctrl-C, or the arm's torque loop stopped:
 E-stop / enabling button / fault) by holding the measured pose and then stopping both: the hand goes
@@ -27,9 +30,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))    # deploy/simtoolreal
 from utils.config import load_config, repo_path                                  # noqa: E402
 from utils.fake_hand import FakeHand                                             # noqa: E402
 from utils.link import age, open_publisher, open_subscriber, recv_latest, send   # noqa: E402
+from utils.openloop import load_rollout                                          # noqa: E402
 from utils.spec import load_spec                                                 # noqa: E402
 
-MODES = ("policy", "home", "free_drive")
+MODES = ("policy", "home", "free_drive", "openloop")
+AT_HOME_MODES = ("policy", "openloop")   # refuse to start with the arm away from home
 ARM, HAND = slice(0, 7), slice(7, None)   # spec joint order: 7 arm joints, then 20 hand joints
 ARM_STOPPED = "arm torque loop stopped (E-stop, enabling button or fault)"
 
@@ -182,18 +187,26 @@ async def free_drive(cfg, spec, arm, hand) -> str:
         set_arm_gains(arm, cfg.robot, spec)
 
 
+async def hand_to_home(rc, spec, arm, hand, mode: str) -> str | None:
+    """The hand went limp when the last run stopped: bring it home. Returns why not, or None."""
+    if hand.dry_run:
+        return None
+    print(f"[robot] {mode}: hand to home ...", flush=True)
+    await hand.move(clip_hand(spec["default_q"][HAND]), max_velocity=rc.hand_move_speed)
+    q = read_q(arm, hand)
+    if q is None:
+        return ARM_STOPPED
+    if far := home_errors(rc, spec, q, check_hand=True):
+        return f"hand did not reach home: {', '.join(far)}"
+    return None
+
+
 async def follow_policy(cfg, spec, arm, hand, status: dict) -> str:
     """Forward joint_target to the robot until Ctrl-C, with the two safety checks.
     No new target for target_timeout_s: hold. A safety trip: hold, ignore every later target."""
     rc = cfg.robot
-    if not hand.dry_run:   # the hand went limp when the last run stopped: bring it home
-        print("[robot] policy: hand to home ...", flush=True)
-        await hand.move(clip_hand(spec["default_q"][HAND]), max_velocity=rc.hand_move_speed)
-        q = read_q(arm, hand)
-        if q is None:
-            return ARM_STOPPED
-        if far := home_errors(rc, spec, q, check_hand=True):
-            return f"hand did not reach home: {', '.join(far)}"
+    if (why := await hand_to_home(rc, spec, arm, hand, "policy")) is not None:
+        return why
 
     sub = open_subscriber(cfg.bus.host, cfg.bus.policy_port, "joint_target")
     commanded = read_q(arm, hand)         # what the robot is being sent (at start: where it is)
@@ -227,6 +240,68 @@ async def follow_policy(cfg, spec, arm, hand, status: dict) -> str:
         sub.close(linger=0)
 
 
+def send_openloop(pub, roll: dict, k: int, seq: int, targets: bool = True) -> None:
+    """Step k of the rollout on the bus: its joint targets, the sim's goal, where the sim object was."""
+    now = time.time()
+    if targets:
+        send(pub, "joint_target", {"seq": seq, "t": now, "targets": roll["targets"][k]})
+    send(pub, "goal_pose", {"seq": seq, "t": now, "pos": roll["goal"][0], "quat_wxyz": roll["goal"][1],
+                            "goal_index": 0})
+    send(pub, "sim_object_pose", {"seq": seq, "t": now, "pos": roll["object_pos"][k],
+                                  "quat_wxyz": roll["object_quat"][k], "step": k})
+
+
+async def play_openloop(cfg, spec, arm, hand, status: dict) -> str:
+    """Send the rollout's joint targets, target k from k * dt after the start, with the two safety
+    checks; after the last one, keep holding it (the object stays lifted) until Ctrl-C.
+    A safety trip: hold the measured pose, send nothing more."""
+    rc = cfg.robot
+    roll = load_rollout(repo_path(cfg.openloop.path), spec)
+    targets, dt, n = roll["targets"], roll["dt"], len(roll["targets"])
+    pub = open_publisher(cfg.bus.policy_port)
+
+    async def announce() -> None:   # the viewer shows where the object goes while the hand moves home
+        seq = 0
+        while True:
+            send_openloop(pub, roll, 0, seq, targets=False)
+            seq += 1
+            await asyncio.sleep(0.1)
+
+    announcer = asyncio.create_task(announce())
+    try:
+        why = await hand_to_home(rc, spec, arm, hand, "openloop")
+        announcer.cancel()
+        if why is not None:
+            return why
+        print(f"[robot] openloop: sending {n} targets ({n * dt:.1f} s) from {roll['path']}", flush=True)
+        commanded = read_q(arm, hand)
+        t0, sent, ended = time.perf_counter(), -1, False
+        while (q := read_q(arm, hand)) is not None:
+            tick = int((time.perf_counter() - t0) / dt)
+            k = min(tick, n - 1)
+            if not status.get("tripped"):
+                trip = check_tracking(rc, spec, commanded, q)
+                if trip is None and tick != sent:
+                    trip = check_target_step(rc, spec, commanded, targets[k])
+                if trip:
+                    status["tripped"] = trip
+                    print(f"[robot] SAFETY TRIP at {tick * dt:.2f} s: {trip}. Holding. Ctrl-C to end.", flush=True)
+                    commanded = hold(arm, hand)
+                elif tick != sent:
+                    commanded = targets[k]
+                    command(arm, hand, commanded)
+                    send_openloop(pub, roll, k, tick)
+                    sent = tick
+                    if k == n - 1 and not ended:
+                        ended = True
+                        print("[robot] openloop: last target sent; holding it. Ctrl-C to end.", flush=True)
+            await asyncio.sleep(1.0 / rc.rate_hz)
+        return ARM_STOPPED
+    finally:
+        announcer.cancel()
+        pub.close(linger=0)
+
+
 # ------------------------------------------------------------------------------------------ main
 
 async def main() -> None:
@@ -245,16 +320,18 @@ async def main() -> None:
     publisher = asyncio.create_task(publish_joint_state(cfg, spec, arm, hand, status))
     reason = "?"
     try:
-        # policy mode checks only the arm here: it brings the hand home itself
-        far = home_errors(rc, spec, read_q(arm, hand), check_hand=not hand.dry_run and rc.mode != "policy")
+        # policy and openloop check only the arm here: they bring the hand home themselves
+        far = home_errors(rc, spec, read_q(arm, hand), check_hand=not hand.dry_run and rc.mode not in AT_HOME_MODES)
         print(f"[robot] mode {rc.mode}; arm {rc.arm}, hand {rc.hand}; "
               f"{'at home' if not far else 'away from home: ' + ', '.join(far)}. Ctrl-C stops.", flush=True)
-        if rc.mode == "policy" and far:
+        if rc.mode in AT_HOME_MODES and far:
             raise SystemExit("[robot] not at home: run robot.mode=home (or free_drive) first")
         if rc.mode == "home":
             reason = await go_home(cfg, spec, arm, hand)
         elif rc.mode == "free_drive":
             reason = await free_drive(cfg, spec, arm, hand)
+        elif rc.mode == "openloop":
+            reason = await play_openloop(cfg, spec, arm, hand, status)
         else:
             reason = await follow_policy(cfg, spec, arm, hand, status)
     except (KeyboardInterrupt, asyncio.CancelledError):
