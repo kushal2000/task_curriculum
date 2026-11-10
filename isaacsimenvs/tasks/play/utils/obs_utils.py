@@ -27,6 +27,9 @@ PALM_CENTER_OFFSET: tuple[float, float, float] = KUKA_SHARPA.palm_center_offset
 # Shift fingertip body origins to the approximate pad centers.
 FINGERTIP_OFFSET: tuple[float, float, float] = KUKA_SHARPA.fingertip_offset
 
+# Where Play puts the robot base (scene_utils default); palm_pos is observed relative to it.
+PLAY_ROBOT_ROOT_POS: tuple[float, float, float] = (0.0, 0.8, 0.0)
+
 # Object-frame keypoint corners before scaling.
 KEYPOINT_CORNERS: tuple[tuple[int, int, int], ...] = (
     (1, 1, 1),
@@ -266,6 +269,12 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         palm_pos_w, palm_rot, env.robot_spec.palm_center_offset, (env.num_envs,)
     )
     palm_pos = palm_center_pos_w - env_origins
+    # Observed as if the robot base were at Play's position: the robot's own frame, plus that
+    # offset. Zero unless cfg.robot_root_pos moves the base.
+    palm_pos_obs = palm_pos - (
+        torch.as_tensor(env.cfg.robot_root_pos, device=palm_pos.device, dtype=palm_pos.dtype)
+        - torch.as_tensor(PLAY_ROBOT_ROOT_POS, device=palm_pos.device, dtype=palm_pos.dtype)
+    )
 
     ft_state = env.robot.data.body_state_w[:, env._fingertip_body_ids, :]  # (N, 5, 13)
     ft_body_pos_w = ft_state[:, :, 0:3]
@@ -334,7 +343,7 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         "joint_pos": joint_pos,
         "joint_vel": joint_vel,
         "prev_action_targets": prev_targets_canon,
-        "palm_pos": palm_pos,
+        "palm_pos": palm_pos_obs,
         "palm_rot": palm_rot_xyzw,
         "palm_vel": palm_vel,
         "object_rot": obj_rot_xyzw,

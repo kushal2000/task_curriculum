@@ -570,6 +570,11 @@ class PlayEnvCfg(DirectRLEnvCfg):
     # setup. Off here, where this port has always run (docs/phase1_baseline.md), so the Kuka eval
     # and the tasks built on Play are unchanged; the tasks that train from scratch turn it on.
     robot_self_collision: bool = False
+    # Robot base position in the env frame. Play's (0, 0.8, 0) puts the table where SimToolReal has
+    # it; a robot overlay moves the base to put the table where a real setup has it (relative to the
+    # robot) without moving the table and what sits on it. The observed palm_pos is expressed as if
+    # the base were at Play's position (obs_utils.PLAY_ROBOT_ROOT_POS), i.e. in the robot's frame.
+    robot_root_pos: tuple[float, float, float] = (0.0, 0.8, 0.0)
 
     # --- DirectRLEnvCfg required fields ---
     decimation: int = 2  # 2 physics substeps per policy step

@@ -81,13 +81,15 @@ _PHYSICS_SPECS: dict[str, tuple[str, str, str]] = {
 
 
 def build_robot_articulation_usd_cfg(
-    usd_path: str, spec: RobotSpec = KUKA_SHARPA
+    usd_path: str,
+    spec: RobotSpec = KUKA_SHARPA,
+    root_pos: tuple[float, float, float] = (0.0, 0.8, 0.0),
 ) -> ArticulationCfg:
     return ArticulationCfg(
         prim_path="/World/envs/env_.*/Robot",
         spawn=UsdFileCfg(usd_path=usd_path),
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.8, 0.0),
+            pos=tuple(float(v) for v in root_pos),
             rot=(1.0, 0.0, 0.0, 0.0),
             joint_pos={
                 **spec.arm_default_joint_pos,
@@ -107,6 +109,8 @@ def build_robot_articulation_usd_cfg(
                 damping=spec.hand_damping,
                 armature=spec.hand_armature,
                 effort_limit_sim=spec.hand_effort_limit or None,
+                velocity_limit_sim=spec.hand_velocity_limit,
+                friction=spec.hand_friction,
             ),
         },
     )
@@ -1674,7 +1678,8 @@ def setup_scene(env) -> None:
     _materialize_env_prims(env)
 
     # 4. Spawn assets.
-    env.robot = Articulation(build_robot_articulation_usd_cfg(robot_usd_path, spec=env.robot_spec))
+    env.robot = Articulation(build_robot_articulation_usd_cfg(
+        robot_usd_path, spec=env.robot_spec, root_pos=env.cfg.robot_root_pos))
     env.table = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/Table", table_usd_paths))
     env.object = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/Object", object_usd_paths))
     env.goal_viz = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/GoalViz", goalviz_usd_paths))

@@ -34,7 +34,8 @@ class RobotSpec:
     #: and the offset (in each one's frame) to the pad centre.
     fingertip_body_regex: str
     fingertip_link_names: tuple[str, ...]
-    fingertip_offset: tuple[float, float, float]
+    #: One offset for all five, or one per ``fingertip_link_names`` entry.
+    fingertip_offset: tuple[float, float, float] | tuple[tuple[float, float, float], ...]
     arm_stiffness: dict[str, float]
     arm_damping: dict[str, float]
     hand_stiffness: dict[str, float]
@@ -55,6 +56,9 @@ class RobotSpec:
     #: Hand joint torque limits [N m]; empty keeps the URDF's ``effort``. Both backends apply it
     #: (PhysX via ``effort_limit_sim``, Newton via the drives' ``maxForce``).
     hand_effort_limit: dict[str, float] = field(default_factory=dict)
+    #: Hand joint velocity limit [rad/s] and joint friction; None keeps the asset's.
+    hand_velocity_limit: float | None = None
+    hand_friction: float | None = None
 
     @property
     def num_joints(self) -> int:
@@ -90,6 +94,11 @@ class RobotSpec:
             raise ValueError(f"{self.name}: hand_effort_limit must be empty or cover exactly the hand joints")
         if len(self.fingertip_link_names) != 5:
             raise ValueError(f"{self.name}: the task observes 5 fingertips")
+        off = self.fingertip_offset
+        if not (len(off) == 3 and all(isinstance(v, (int, float)) for v in off)) and not (
+            len(off) == 5 and all(len(o) == 3 for o in off)
+        ):
+            raise ValueError(f"{self.name}: fingertip_offset must be one 3-vector or five")
 
 
 # ----------------------------------------------------------------------------
