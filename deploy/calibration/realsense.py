@@ -129,6 +129,13 @@ class RealSense:
         depth[~np.isfinite(depth) | (depth < self.min_depth) | (depth > self.max_depth)] = 0.0
         return color, depth, t
 
+    def latest_color(self) -> tuple[np.ndarray, float]:
+        """(rgb (H, W, 3) uint8, t) of the newest frame, without the depth work of latest_rgbd. Each new
+        frame is a new array, so it can be kept or sent without copying."""
+        with self._lock:
+            _, color, t = self._latest
+        return color, t
+
     def K(self) -> np.ndarray:
         """3x3 color camera matrix (after start())."""
         i = self.intrinsics

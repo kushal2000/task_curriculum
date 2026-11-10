@@ -23,6 +23,7 @@ bus:
   object_pose_port: 5560    # perception.py -> object_pose, camera_image
   joint_state_port: 5561    # robot.py -> joint_state
   policy_port: 5562         # policy.py -> joint_target, goal_pose
+  camera_frame_port: 5563   # perception.py -> camera_frame (every camera frame, raw, for the recorder)
 
 # ----------------------------------------------------------------------------------------- run
 # run.py: robot.py in robot.mode, + viewer.py / recorder.py, + policy.py in policy mode
@@ -100,6 +101,7 @@ perception:
   track_iters: 2            # ... at every later frame (upstream default)
   image_hz: 10.0            # camera_image for the viewer (JPEG); 0 = off
   image_jpeg_quality: 80
+  frame_stream: true        # also send every camera frame raw (camera_frame) for recorder.py record.camera
 
   # fake: [x, y, z, qw, qx, qy, qz] in the robot base frame. Default: lying flat at the training
   # table's centre (env (0, 0.29), top z 0.28 + half of 5 cm).
@@ -121,9 +123,11 @@ goals:
 # recorder.py: started by run.py when record.name is set, e.g. run.py record.name=eraser_try1
 record:
   name: null                # null = do not record. Else -> <dir>/<date>_<time>_<name>.jsonl
-  camera: false             # also record camera_image (10 Hz JPEG, ~24 MB/min)
+  camera: false             # also record every camera frame (camera_frame) -> <file>.camera.mp4 (H.264)
+  camera_codec: libx264     # libx264 (CPU, ~0.4 core at 640x480 60 fps) | h264_nvenc (GPU; this ffmpeg needs driver >= 610)
+  camera_quality: 23        # x264 -crf / nvenc -cq: lower = better and bigger; 18 ~ visually lossless
   dir: deploy/simtoolreal/recordings
-  video_fps: 30             # playback.py's mp4 export
+  video_fps: 60             # playback.py's mp4 export
   video_height: 480         # px; the 3D view is 4:3, the camera image is scaled to the same height
 
 # ---------------------------------------------------------------------------------------- viewer

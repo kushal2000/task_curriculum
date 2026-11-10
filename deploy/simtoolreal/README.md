@@ -11,7 +11,7 @@ its own port, and any number of processes can subscribe. Every pose on the bus i
 frame. The topics and their fields are listed in [utils/link.py](utils/link.py).
 
 ```
-perception.py ──object_pose, camera_image──┐
+perception.py ──object_pose, camera_image──┐   (+ camera_frame: every frame, raw, for the recorder)
 (RealSense + FoundationPose)               │
                                            ▼
 robot.py ──joint_state──────────────▶ policy.py ──joint_target──▶ robot.py
@@ -49,7 +49,8 @@ The spec json (`spec/`) is not a setting: it is copied from the training env. Ne
 ## Setup on the robot PC
 
 - `.venv_deploy` (Python 3.12) with this repo's `third_party/aioflexiv` and `third_party/aiowuji`, plus
-  `pip install pyzmq "viser==1.1.0" yourdfpy`.
+  `pip install pyzmq "viser==1.1.0" yourdfpy imageio-ffmpeg` (imageio-ffmpeg: the ffmpeg that
+  recorder.py and playback.py encode mp4s with).
 - The FoundationPose environment (conda env `foundationpose`, the `kushal2000/FoundationPose` checkout at
   `~/FoundationPose`), plus `pip install pyzmq omegaconf pyrealsense2`.
 - The checkpoint at `pretrained_policy/nov6_dr.pth` (gitignored).
@@ -173,15 +174,22 @@ the reason in `joint_state` (`tripped`), so policy.py stops and the viewer shows
 
 `run.py record.name=<name>` starts recorder.py for that run. It writes every message, as sent, to
 `recordings/<date>_<time>_<name>.jsonl` (gitignored). Line 1 is the run's full config. Size: about
-25 MB/min, and about 25 MB/min more with `record.camera=true`. recorder.py can also run on its own,
-e.g. to record a free-drive session.
+25 MB/min. recorder.py can also run on its own, e.g. to record a free-drive session.
+
+`record.camera=true` also records the camera: perception.py sends every camera frame raw
+(`camera_frame`, 640 x 480 at 60 fps, whatever FoundationPose's rate), and recorder.py encodes them
+to `<same name>.camera.mp4` (H.264, `record.camera_codec`, `record.camera_quality`; libx264 at about
+0.4 of a CPU core). The .jsonl gets each frame's time, so playback lines the video up with the rest.
+Recordings from before Nov 9 evening have the viewer's 10 Hz JPEGs in the .jsonl instead; playback
+reads those too.
 
 ```bash
 $PY $D/playback.py $D/recordings/<file>.jsonl      # http://localhost:8091: time slider, play, speed
 ```
 
 To export a video, set the 3D view in the browser, then click "export mp4". The browser tab renders
-every frame, the camera image goes on the right, and the video is saved next to the recording.
+every frame, the camera image goes on the right, and the video is saved next to the recording
+(`<recording>.mp4`, H.264 at `record.video_fps`).
 
 ## Checks
 

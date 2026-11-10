@@ -7,7 +7,9 @@ Every message has seq (counts up from 0, the sender counts) and t (time.time(), 
 | topic        | sender                      | port               | fields                                        |
 |--------------|-----------------------------|--------------------|-----------------------------------------------|
 | object_pose  | perception.py               | object_pose_port   | pos (3), quat_wxyz (4); t = camera frame time  |
-| camera_image | perception.py (camera)      | object_pose_port   | jpeg (base64 text); t = camera frame time      |
+| camera_image | perception.py (camera)      | object_pose_port   | jpeg (base64 text), image_hz; for the viewer   |
+| camera_frame | perception.py (camera)      | camera_frame_port  | every camera frame, raw RGB (binary, see        |
+|              |                             |                    | send_frame); width, height; for the recorder   |
 | joint_state  | robot.py                    | joint_state_port   | q (27), dq (27), tripped (None or the safety   |
 |              |                             |                    | trip's reason); t = when measured              |
 | joint_target | policy.py; robot.py in      | policy_port        | targets (27); t = when sent                    |
@@ -54,6 +56,8 @@ NODES_DIR = Path(__file__).resolve().parents[1]   # deploy/simtoolreal
 TOPIC_PORTS = {"joint_state": "joint_state_port", "joint_target": "policy_port", "goal_pose": "policy_port",
                "sim_object_pose": "policy_port", "object_pose": "object_pose_port",
                "camera_image": "object_pose_port"}
+# camera_frame is not in TOPIC_PORTS: it is binary (send_frame / recv_frame), not "<topic> <json>"
+FRAME_TOPIC, FRAME_PORT = "camera_frame", "camera_frame_port"
 
 
 def open_publisher(port: int) -> zmq.Socket:
@@ -66,6 +70,24 @@ def open_publisher(port: int) -> zmq.Socket:
 def send(sock: zmq.Socket, topic: str, msg: dict) -> None:
     """Send one message. Never waits: with no subscriber it is dropped."""
     sock.send_string(f"{topic} {json.dumps(msg, default=_to_json)}")
+
+
+def send_frame(sock: zmq.Socket, seq: int, t: float, rgb: np.ndarray) -> None:
+    """One camera frame, raw: [b"camera_frame ", json {seq, t, width, height}, the RGB bytes]. Never waits."""
+    h, w = rgb.shape[:2]
+    header = json.dumps({"seq": seq, "t": t, "width": w, "height": h}).encode()
+    sock.send_multipart([f"{FRAME_TOPIC} ".encode(), header, np.ascontiguousarray(rgb, np.uint8)], copy=False)
+
+
+def recv_frame(sock: zmq.Socket) -> tuple[dict, np.ndarray] | None:
+    """The next queued camera frame without waiting: (header, rgb (H, W, 3) uint8), or None.
+    Subscribe with open_subscriber(host, port, FRAME_TOPIC, latest_only=False)."""
+    try:
+        _, header, data = sock.recv_multipart(zmq.NOBLOCK)
+    except zmq.Again:
+        return None
+    header = json.loads(header)
+    return header, np.frombuffer(data, np.uint8).reshape(header["height"], header["width"], 3)
 
 
 def open_subscriber(host: str, port: int, topic: str, latest_only: bool = True) -> zmq.Socket:

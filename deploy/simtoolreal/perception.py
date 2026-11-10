@@ -10,6 +10,9 @@ environment on the robot PC (needs its GPU), from the repo root:
      into a mask, FoundationPose registers the pose. The window then closes.
   2. Every later frame: FoundationPose tracks from the last pose; the pose goes out over ZMQ, and
      the color image (camera_image) at image_hz for the viewer.
+  3. With perception.frame_stream (default on), a thread sends every camera frame raw (camera_frame,
+     camera_frame_port) at the camera's fps, whatever FoundationPose's speed; recorder.py
+     record.camera=true encodes them to an mp4. Nothing listening: the frames are dropped.
 
   Follows upstream's live_tracking.py (github.com/kushal2000/FoundationPose, RealSense, UDP), with
   ZMQ instead of UDP. Frames: FoundationPose gives T_cam_obj (cam =
@@ -23,6 +26,7 @@ perception.source=fake: a fixed pose (perception.fake_pose_base), no camera, to 
 import json
 import logging
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -32,7 +36,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))               # deploy/simtoolreal
 sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.calibration
 from utils.config import load_config, repo_path                      # noqa: E402
-from utils.link import encode_jpeg, open_publisher, send             # noqa: E402
+from utils.link import FRAME_PORT, encode_jpeg, open_publisher, send, send_frame   # noqa: E402
 
 
 def publish_fake(cfg, pub) -> None:
@@ -76,6 +80,9 @@ def track_camera(cfg, pub) -> None:
     print(f"[perception] {cam.name} {cam.serial}, {p.camera_width}x{p.camera_height} at {p.camera_fps} fps, "
           f"extrinsics {calib_path.name}, mesh {mesh_path.name}", flush=True)
     est = load_foundationpose(fp_dir, mesh_path)
+    stop_frames = threading.Event()
+    if p.frame_stream:
+        threading.Thread(target=stream_frames, args=(cam, cfg.bus[FRAME_PORT], stop_frames), daemon=True).start()
     try:
         # 1. register on the first frame
         rgb, depth, t = cam.latest_rgbd()
@@ -106,7 +113,22 @@ def track_camera(cfg, pub) -> None:
                       f"latency {1000 * (time.time() - t):.0f} ms", flush=True)
                 n, t_print = 0, time.time()
     finally:
+        stop_frames.set()
         cam.stop()
+
+
+def stream_frames(cam, port: int, stop: threading.Event) -> None:
+    """Every new camera frame -> camera_frame (raw RGB), until stop. Its own socket (one per thread)."""
+    pub = open_publisher(port)
+    seq, last_t = 0, None
+    while not stop.is_set():
+        rgb, t = cam.latest_color()
+        if t == last_t:
+            time.sleep(0.002)
+            continue
+        last_t = t
+        send_frame(pub, seq, t, rgb)
+        seq += 1
 
 
 def load_foundationpose(fp_dir: Path, mesh_path: Path):

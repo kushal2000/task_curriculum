@@ -6,7 +6,7 @@ policy in policy mode.
     (start perception.py)                # 2.
     $PY $R $ARM                          # 3. robot.mode=policy (the default): the policy run
         record.name=eraser_try1          record it (recordings/<date>_<time>_eraser_try1.jsonl)
-        record.camera=true               ... with the camera images
+        record.camera=true               ... with the camera video (<name>.camera.mp4)
         run.viewer=false                 no viewer
         run.duration_s=60, ...           any other config key
 

@@ -5,7 +5,10 @@
 Open the page: the scene is the live viewer's (viewer.py), at the time on the slider. "play" runs it
 at the chosen speed. "export mp4": set the 3D view in the browser first; every frame is rendered by
 that browser tab (viser get_render) at record.video_fps, the camera image (if recorded) is put on
-its right, and the video is written next to the recording (<recording>.mp4).
+its right, and the video is written next to the recording (<recording>.mp4, H.264).
+
+The camera image comes from <recording>.camera.mp4 (record.camera=true, every camera frame), or, in
+recordings made before that, from the 10 Hz JPEGs (camera_image) in the .jsonl.
 
 The config comes from the recording (spec, object, success tolerance as they were); command-line
 overrides apply on top (e.g. viewer.port, record.video_fps).
@@ -22,8 +25,9 @@ from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))    # deploy/simtoolreal
 from utils.config import repo_path                            # noqa: E402
-from utils.link import decode_jpeg, from_json                 # noqa: E402
+from utils.link import FRAME_TOPIC, decode_jpeg, from_json    # noqa: E402
 from utils.spec import load_spec                              # noqa: E402
+from utils.video import VideoReader, VideoWriter              # noqa: E402
 from viewer import build_scene, draw, goal_text, success_tolerance   # noqa: E402
 
 
@@ -49,35 +53,65 @@ def at(rec: dict, t: float) -> dict:
     return out
 
 
-def export_mp4(client, server, scene, spec, rec, t0: float, duration: float, cfg, out: Path, progress) -> None:
+class CameraSource:
+    """The camera image at time t: from <recording>.camera.mp4 if the recording has camera_frame,
+    else from its camera_image JPEGs (older recordings), else none (bool(self) is False)."""
+
+    def __init__(self, path: Path, rec: dict) -> None:
+        self.video, self.jpegs = None, None
+        video_path = path.with_suffix(".camera.mp4")
+        if FRAME_TOPIC in rec and video_path.exists():
+            times, msgs = rec[FRAME_TOPIC]
+            order = np.array([m["frame"] for m in msgs])
+            self.video = VideoReader(video_path, times[np.argsort(order)])
+        elif "camera_image" in rec:
+            self.jpegs = rec["camera_image"]
+
+    def __bool__(self) -> bool:
+        return self.video is not None or self.jpegs is not None
+
+    def at(self, t: float) -> tuple[int | None, np.ndarray | None]:
+        """(a key that changes when the image does, the RGB image); (None, None) before the first."""
+        if self.video is not None:
+            k = self.video.index_at(t)
+            return (k, self.video.frame(k)) if k >= 0 else (None, None)
+        if self.jpegs is not None:
+            times, msgs = self.jpegs
+            i = np.searchsorted(times, t, side="right") - 1
+            return (msgs[i]["seq"], decode_jpeg(msgs[i]["jpeg"])) if i >= 0 else (None, None)
+        return None, None
+
+
+def export_mp4(client, server, scene, spec, rec, camera: CameraSource, t0: float, duration: float, cfg, out: Path,
+               progress) -> None:
     """Render every frame in the client's browser and write the mp4."""
     import cv2
 
     fps, h = cfg.record.video_fps, cfg.record.video_height
     w3d = int(round(h * 4 / 3))
-    has_camera = "camera_image" in rec
-    width = w3d + (w3d if has_camera else 0)
-    writer = cv2.VideoWriter(str(out), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, h))
+    width = w3d + (w3d if camera else 0)
+    writer = VideoWriter(out, width, h, fps, "libx264", 20)
     n = int(duration * fps) + 1
-    camera, camera_seq = np.zeros((h, w3d, 3), np.uint8), None
+    image, image_key = np.zeros((h, w3d, 3), np.uint8), None
     try:
         for k in range(n):
-            msgs = at(rec, t0 + k / fps)
+            t = t0 + k / fps
+            msgs = at(rec, t)
             draw(server, scene, spec, msgs)
             server.flush()
             frame = client.get_render(height=h, width=w3d)[:, :, :3]
-            if has_camera and msgs["camera_image"] is not None and msgs["camera_image"]["seq"] != camera_seq:
-                img = decode_jpeg(msgs["camera_image"]["jpeg"])
-                camera = cv2.resize(img, (int(img.shape[1] * h / img.shape[0]), h))[:, :w3d]
-                camera = np.pad(camera, ((0, 0), (0, w3d - camera.shape[1]), (0, 0)))
-                camera_seq = msgs["camera_image"]["seq"]
-            if has_camera:
-                frame = np.hstack([frame, camera])
-            writer.write(np.ascontiguousarray(frame[:, :, ::-1]))
+            if camera:
+                key, img = camera.at(t)
+                if key is not None and key != image_key:
+                    image = cv2.resize(img, (int(img.shape[1] * h / img.shape[0]), h))[:, :w3d]
+                    image = np.pad(image, ((0, 0), (0, w3d - image.shape[1]), (0, 0)))
+                    image_key = key
+                frame = np.hstack([frame, image])
+            writer.write(frame)
             if k % fps == 0:
                 progress(f"exporting: {k / fps:.0f} / {duration:.0f} s")
     finally:
-        writer.release()
+        writer.close()
     progress(f"saved **{out}** ({n} frames)")
 
 
@@ -91,6 +125,7 @@ def main() -> None:
     cfg = OmegaConf.merge(OmegaConf.create(config), OmegaConf.from_dotlist(sys.argv[2:]))
     spec = load_spec(repo_path(cfg.spec_path))
     tolerance = success_tolerance(cfg, spec)
+    camera = CameraSource(path, rec)
 
     t0 = min(times[0] for times, _ in rec.values())
     duration = max(times[-1] for times, _ in rec.values()) - t0
@@ -115,7 +150,7 @@ def main() -> None:
         try:
             def progress(text: str) -> None:
                 note.content = text
-            export_mp4(event.client, server, scene, spec, rec, t0, duration, cfg, path.with_suffix(".mp4"), progress)
+            export_mp4(event.client, server, scene, spec, rec, camera, t0, duration, cfg, path.with_suffix(".mp4"), progress)
         finally:
             busy.release()
 
@@ -132,10 +167,10 @@ def main() -> None:
                 shown = slider.value
                 msgs = at(rec, t0 + shown)
                 draw(server, scene, spec, msgs)
-                cam = msgs.get("camera_image")
-                if cam is not None and cam["seq"] != camera_seq:
-                    scene["image"].image = decode_jpeg(cam["jpeg"])
-                    camera_seq = cam["seq"]
+                key, img = camera.at(t0 + shown)
+                if key is not None and key != camera_seq:
+                    scene["image"].image = img
+                    camera_seq = key
                 scene["status"].content = f"t = {shown:.2f} s / {duration:.1f} s\n\n" + goal_text(spec, msgs, tolerance)
             finally:
                 busy.release()
