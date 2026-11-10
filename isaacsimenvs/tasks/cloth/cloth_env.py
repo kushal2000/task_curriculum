@@ -39,13 +39,170 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         kappa = float(cfg.cloth.plastic_yield_curvature)
         self._plasticity = None
         restore = self._install_plasticity_at_capture(kappa) if kappa > 0.0 else None
+        restore_sdf = self._install_full_surface_sdf(cfg) if cfg.cloth.full_surface_contact else None
+        c = cfg.cloth
+        restore_mu = (
+            self._install_cloth_friction(cfg) if (c.self_contact_mu > 0.0 or c.table_contact_mu > 0.0) else None
+        )
         try:
             super().__init__(cfg, render_mode, **kwargs)
         finally:
-            if restore is not None:
-                restore()
+            for undo in (restore, restore_sdf, restore_mu):
+                if undo is not None:
+                    undo()
+        if restore_mu is not None:
+            from isaaclab_newton.physics import NewtonManager
+            from newton._src.solvers.coupled.solver_coupled import SolverCoupled
+
+            SolverCoupled._cloth_friction_apply(NewtonManager._solver)  # (3)
         if kappa > 0.0 and self._plasticity is None:  # nothing was captured, so nothing installed it
             self._install_plasticity(kappa)
+
+    @staticmethod
+    def _install_cloth_friction(cfg: ClothEnvCfg):
+        """Cloth-only shape frictions for ``cloth.self_contact_mu`` / ``cloth.table_contact_mu``.
+
+        ``build_physics`` sets ``model.soft_contact_mu`` to the cloth-on-cloth value, which VBD's
+        self-contact reads raw. Cloth-vs-shape contacts use ``sqrt(soft_contact_mu * shape_mu)``,
+        so the cloth solver's ModelView gets its OWN ``shape_material_mu``: the parent's value
+        scaled by ``mu_cal / mu_cc`` (``mu_cal`` = the preset's ``soft_contact_mu``), which keeps
+        every hand pairing where the preset calibrated it, and ``T**2 / mu_cc`` on the table's
+        shapes when ``table_contact_mu`` = T. The rigid solver keeps the parent's frictions.
+
+        Timing matters: the task writes its frictions (robot 0.5, fingertips 1.5) into the PARENT
+        model after start-up and ``notify_solver`` then re-projects shape attributes into every
+        view (``SolverCoupled._refresh_model_view_overrides``), which would overwrite a rescale
+        done once at construction. So: (1) ``NewtonVBDManager._create_solver`` is wrapped to make
+        sure the view owns a copy before the solver (and any CUDA graph) exists; (2) the rescale is
+        re-applied after every view refresh, IN PLACE so captured graphs keep the same pointer;
+        (3) ``ClothEnv.__init__`` applies it once more at the end. Returns the undo for (1)."""
+        import re
+
+        import numpy as np
+        import newton
+        import warp as wp
+        from isaaclab_contrib.deformable.vbd_manager import NewtonVBDManager
+        from newton._src.solvers.coupled.solver_coupled import SolverCoupled
+
+        c = cfg.cloth
+        mu_cal = float(c.soft_contact_mu)
+        mu_cc = float(c.self_contact_mu) if c.self_contact_mu > 0.0 else mu_cal
+        table_t = float(c.table_contact_mu)
+
+        def apply(solver) -> None:
+            for entry in getattr(solver, "_entries", {}).values():
+                if not isinstance(entry.solver, newton.solvers.SolverVBD):
+                    continue
+                view = entry.view
+                parent = view.parent
+                if "shape_material_mu" not in view.overrides:
+                    raise RuntimeError("cloth view has no own shape_material_mu; rescaling would write the rigid model")
+                pmu = parent.shape_material_mu.numpy().astype(np.float64)
+                if view.shape_material_mu.shape[0] != pmu.shape[0]:
+                    raise RuntimeError("cloth view shape layout differs from the model's; cannot map frictions")
+                new = pmu * (mu_cal / mu_cc)
+                labels = list(parent.body_label)
+                sb = parent.shape_body.numpy()
+                # Same match as the proxy set's `/World/envs/env_.*/Table` (a regex SEARCH: the table
+                # body may sit below the Table prim).
+                table = np.array([b >= 0 and re.search(r"/World/envs/env_[^/]+/Table", str(labels[b])) is not None
+                                  for b in sb], dtype=bool)
+                if table_t > 0.0:
+                    if not table.any():
+                        raise RuntimeError("cloth.table_contact_mu is set but no table shapes matched; body labels like "
+                                           f"{[str(l) for l in labels[:3]]} ... {[str(l) for l in labels if 'able' in str(l)][:4]}")
+                    new[table] = table_t**2 / mu_cc
+                view.shape_material_mu.assign(wp.array(new.astype(np.float32), dtype=float, device=view.shape_material_mu.device))
+                eff = np.sqrt(mu_cc * new)
+                hand = (~table) & (sb >= 0)
+                print(f"[cloth] friction: cloth-on-cloth {mu_cc:.3f} (model.soft_contact_mu "
+                      f"{float(view.soft_contact_mu):.3f}); cloth-on-hand {sorted({round(float(v), 3) for v in eff[hand]})}; "
+                      f"cloth-on-table {sorted({round(float(v), 3) for v in eff[table]})} ({int(table.sum())} shapes)",
+                      flush=True)
+
+        # (2) persistent, process-wide: re-apply after every view refresh.
+        if not getattr(SolverCoupled, "_cloth_friction_wrapped", False):
+            orig_refresh = SolverCoupled._refresh_model_view_overrides
+
+            def _refresh(self, flags):
+                orig_refresh(self, flags)
+                fn = getattr(SolverCoupled, "_cloth_friction_apply", None)
+                if fn is not None:
+                    fn(self)
+
+            SolverCoupled._refresh_model_view_overrides = _refresh
+            SolverCoupled._cloth_friction_wrapped = True
+        SolverCoupled._cloth_friction_apply = staticmethod(apply)
+
+        # (1) the view must own its array before the solver is built.
+        orig = NewtonVBDManager.__dict__["_create_solver"]
+
+        def _create(cls, model, solver_cfg):
+            if hasattr(model, "_cow_array"):
+                model._cow_array("shape_material_mu")
+            return orig.__get__(None, cls)(model, solver_cfg)
+
+        NewtonVBDManager._create_solver = classmethod(_create)
+
+        def undo() -> None:
+            NewtonVBDManager._create_solver = orig
+
+        return undo
+
+    @staticmethod
+    def _install_full_surface_sdf(cfg: ClothEnvCfg):
+        """Give every mesh shape the cloth can touch a volume SDF, before ``ModelBuilder.finalize``.
+
+        ``cloth.full_surface_contact`` makes the proxy pipeline sample each participating rigid
+        mesh's SDF for edge/face contacts, and Newton raises on a mesh without one. Participating =
+        the proxy bodies (``ClothCfg.proxy_body_patterns``) plus static shapes that collide with
+        particles; the coupler clears collision flags on every other shape. Wraps
+        ``NewtonManager._prepare_builder_for_finalize`` (the coupler manager reaches it via
+        ``super()``); returns the undo."""
+        import re
+
+        import newton
+        from isaaclab_newton.physics import NewtonManager
+
+        c = cfg.cloth
+        pats = [re.compile(p) for p in c.proxy_body_patterns()]
+        mesh_types = (int(newton.GeoType.MESH), int(newton.GeoType.CONVEX_MESH))
+        collide_particles = int(newton.ShapeFlags.COLLIDE_PARTICLES)
+        res = int(c.full_surface_sdf_resolution) or None
+        orig = NewtonManager.__dict__["_prepare_builder_for_finalize"]
+
+        def _prep(cls, builder) -> None:
+            orig.__get__(None, cls)(builder)
+            body_label = builder.body_label
+            n, kinds = 0, {}
+            for s in range(builder.shape_count):
+                if int(builder.shape_type[s]) not in mesh_types:
+                    continue
+                b = int(builder.shape_body[s])
+                if b >= 0:
+                    lab = body_label[b] or ""
+                    if not any(p.search(lab) for p in pats):
+                        continue
+                    key = lab.rsplit("/", 1)[-1]
+                elif int(builder.shape_flags[s]) & collide_particles:
+                    key = "static:" + str((builder.shape_label[s] or "").rsplit("/", 1)[-1])
+                else:
+                    continue
+                builder.shape_force_sdf[s] = True
+                if res is not None:
+                    builder.shape_sdf_max_resolution[s] = res
+                n += 1
+                kinds[key] = kinds.get(key, 0) + 1
+            per_world = {k: v for k, v in sorted(kinds.items())[:24]}
+            print(f"[cloth] full_surface_contact: SDF on {n} mesh shapes (max_resolution "
+                  f"{res or 'default'}); by body: {per_world}", flush=True)
+
+        NewtonManager._prepare_builder_for_finalize = classmethod(_prep)
+
+        def undo() -> None:
+            NewtonManager._prepare_builder_for_finalize = orig
+
+        return undo
 
     def _install_plasticity_at_capture(self, kappa: float):
         """Install plasticity right before Newton's first CUDA graph capture, so the graph holds it.

@@ -134,6 +134,13 @@ def main() -> None:
         "collision shapes differ in type, and the procedural tool pool mixes boxes and capsules.",
     )
     parser.add_argument(
+        "--pinned",
+        action="store_true",
+        help="Train on the eval's 'pinned' protocol: every domain-randomisation and reset-noise source "
+        "off and the object's start pose fixed (eval/protocol.py disable_randomization), so training "
+        "and pinned-eval starts are identical by construction.",
+    )
+    parser.add_argument(
         "--distributed",
         action="store_true",
         help="Multi-GPU training under torchrun. Binds this rank to cuda:$LOCAL_RANK and sets "
@@ -226,10 +233,13 @@ def main() -> None:
         # was hit once already in the throughput benchmark (docs/phase4_cable_env.md:664).
         import torch
 
-        from isaacsimenvs.eval.protocol import use_single_object_variant
+        from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
 
         if args_cli.single_variant:
             use_single_object_variant()
+        if args_cli.pinned:
+            disable_randomization(env_cfg)
+            print(f"[train] pinned: DR and reset noise off, start pose {env_cfg.reset.fixed_start_pose}", flush=True)
 
         # Only rank 0 may own side-effecting, singleton outputs: wandb runs and viewer HTML.
         # Without this all four ranks create the SAME wandb run id and the server rejects the

@@ -245,6 +245,70 @@ class ClothCfg:
     ``fold_pool.init_fold_deg``. At 180 the plies touch and there is no gap for a finger to get
     under the top one; a more open start leaves one."""
 
+    # --- release-and-persist (ClothTaskMixin, fold task) ----------------------------------
+    release_persist: bool = False
+    """Score a fold only once it SURVIVES THE HAND LEAVING. Off: the episode ends and
+    ``reward.reach_goal_bonus`` pays on ``termination.success_steps`` of the fold criterion, hand on
+    the cloth (every result before 2026-11-08). On:
+
+        r += I_fold * [ (1 - I_rel) * r_release + I_rel * I_nc * r_persist ]
+
+    ``I_nc`` = hand clear of the cloth (``hand_cloth_distance() > release_clearance``); ``I_rel``
+    latches once folded AND clear for ``release_latch_steps``. ``r_release`` = the one-shot
+    ``release_bonus`` on the latch plus ``release_dist_rew_scale * max(d - d*, 0)``, a ratchet on the
+    clearance ``d`` (capped at ``release_clearance``) against its running max ``d*``, tracked only
+    while folded. ``r_persist`` = ``persist_rew_per_step`` while folded and clear, and
+    ``persist_bonus`` once that has held ``persist_window_steps`` (success: episode ends). Losing
+    the fold after the latch pays ``persist_fail_penalty`` and ends the episode. The fold entry
+    (``success_steps`` held) pays ``fold_entry_bonus`` once and no longer ends the episode."""
+
+    release_clearance: float = 0.03
+    """Hand-to-cloth distance [m] that counts as no contact: nearest fingertip/palm BODY ORIGIN to
+    the nearest particle. The origins sit ~1 cm inside the finger surface, so 3 cm is a clear gap."""
+    release_latch_steps: int = 3
+    release_fold_tolerance: float = 0.0
+    """Keypoint error [m] the fold must be under for the release to LATCH (with the hand clear for
+    ``release_latch_steps``). 0 = the fold criterion's own ``keypoint_tolerance``. Tighter (e.g.
+    0.010 against 0.015) makes the policy let go of a cleaner fold, leaving margin for the drift
+    after release; the persist window still only needs ``keypoint_tolerance``."""
+    fold_entry_bonus: float = 1000.0
+    """Fold entry (the `success_steps` hold), paid once. 1000 = the old `reach_goal_bonus`: at 300
+    the denim pilot (job 28395821) stopped folding, entry 100% -> ~47% by epoch 60."""
+    release_bonus: float = 300.0
+    release_dist_rew_scale: float = 3000.0
+    """Per metre of new clearance; at most ``release_clearance * scale`` = 90 per episode."""
+    persist_rew_per_step: float = 2.0
+    persist_bonus: float = 1000.0
+    persist_window_steps: int = 180
+    """Policy steps (3 s at 60 Hz) the fold must stay folded with the hand clear. 180 since 2026-11-10
+    (60 = 1 s before; release runs passed 180 explicitly)."""
+    persist_fail_penalty: float = -300.0
+    persist_fail_terminates: bool = True
+    """End the episode when the fold is lost after release. False (renders) keeps it running to the
+    timeout, so what happens after a spring-back (re-press, further opening) stays on screen."""
+    persist_consecutive: bool = True
+    """True: the persist window must be ``persist_window_steps`` IN A ROW of folded & hand-clear;
+    any re-touch or fold loss resets the count. False: re-touching only pauses it, so a policy can
+    collect the window across several presses."""
+    release_touch: str = "contact"
+    """What counts as the hand TOUCHING the cloth for the release latch and the persist window.
+    Default ``contact`` since 2026-11-10; ``origin`` reproduces every result before then: a ``release_contact_bodies`` origin within
+    ``release_clearance`` of a particle -- blind to a finger segment or the palm side lying on the
+    sheet away from its origin. ``contact``: any hand-cloth contact record the cloth solver holds this
+    step (particle, edge or face -- the ``full_surface_contact`` records VBD consumes) with its gap,
+    computed as VBD does, under ``release_touch_gap``. Every robot shape that collides with the cloth
+    counts, so no part of the hand can be on the sheet. The clearance ratchet reward still uses the
+    origin distance."""
+    release_touch_gap: float = 0.002
+    """``release_touch=contact``: a contact record counts as touching while ``gap = n . (x - x_body)
+    - radius - shape_margin`` [m] is below this. VBD applies force at gap < 0; the 2 mm slack also
+    catches a hand resting on the sheet between solver iterations."""
+    release_contact_bodies: str = ""
+    """Regex of robot bodies whose origins define the hand-cloth distance. Empty = the 5 fingertip
+    DP links + the palm (iiwa14_link_7, the wrist flange), which misses the PP/MP finger segments
+    and the finger bases. ``left_.*|iiwa14_link_7`` covers every hand link: the palm meshes belong to
+    iiwa14_link_7 (the hand is mounted on the flange), so ``left_.*`` alone misses the palm."""
+
     # --- coupling (defaults carried from the cable result) --------------------------------
     proxy_mode: str = "staggered"
     """See `docs/phase4_cable_env.md`. `lagged` syncs the hand's *begin* pose with its *end*
@@ -350,6 +414,29 @@ class ClothCfg:
     configuration that does not run. Our per-shape frictions stay as the rigid-tool task sets
     them."""
 
+    self_contact_mu: float = 0.0
+    """Cloth-on-cloth friction coefficient (ply on ply). 0 = ``soft_contact_mu`` (previous behaviour).
+
+    Newton's VBD self-contact uses the raw ``model.soft_contact_mu``, while every cloth-vs-shape
+    contact uses ``sqrt(soft_contact_mu * shape_mu)``. The fabric presets calibrate
+    ``soft_contact_mu`` for cloth-on-table, which left ply-on-ply as the LOWEST friction in the
+    scene (big napkin 0.265 against 0.36 table, 0.63 fingertips), so a pressed fold slid apart.
+
+    When > 0: ``model.soft_contact_mu`` becomes this value and ``ClothEnv`` rescales every
+    shape's friction IN THE CLOTH SOLVER'S VIEW ONLY by ``soft_contact_mu / self_contact_mu``, so
+    each cloth-vs-shape coefficient stays ``sqrt(soft_contact_mu * shape_mu)``. The rigid solver
+    (robot vs table) keeps the original shape frictions."""
+
+    table_contact_mu: float = 0.0
+    """Effective cloth-on-table friction coefficient. 0 = keep ``sqrt(soft_contact_mu *
+    table_friction)`` (0.36 for the measured presets). Applied in the cloth solver's view only, on
+    its BOX shapes (the table); the rigid solver's table friction is unchanged."""
+
+    friction_epsilon: float = 0.0
+    """``SolverVBD(friction_epsilon=...)`` [m/s]: relative tangential speed below which friction is
+    smoothed into a stiff spring (stick). 0 = Newton's default (1e-2). Smaller = less creep under a
+    sustained tangential load, and a stiffer friction Hessian."""
+
     rigid_contact_k_start: float = 1.0e2
     """Body-particle contact penalty SEED for AVBD ramping [N/m].
 
@@ -435,6 +522,34 @@ class ClothCfg:
 
     proxy_table: bool = True
     """The table must be in the proxy set or the sheet falls through it."""
+
+    full_surface_contact: bool = False
+    """Cloth EDGES and TRIANGLE INTERIORS collide with the proxy shapes, not only its particles.
+
+    Newton 1.5.2 ``CollisionPipeline(enable_rigid_soft_full_surface_contact=True)``: SDF-based
+    edge/face soft contacts (Macklin et al. 2020 local optimisation), consumed by ``SolverVBD``.
+    Targets the finger pierce (docs/reports/4_physx/cloth_finger_pierce.md): per-particle contact
+    lets a fingertip push the particle under it aside and reach the table between particles.
+
+    Every participating mesh shape (hand proxy links, a mesh table) needs a volume SDF, which
+    ``ClothEnv`` provisions before finalize (``shape_force_sdf``). Rigid-rigid contacts run in
+    Newton's pipeline too (``use_mujoco_contacts: false``), so those SDFs can change hand-table
+    contact as well. Off by default, so earlier results keep their meaning."""
+
+    full_surface_sdf_resolution: int = 0
+    """``max_resolution`` of the provisioned SDFs (multiple of 8); 0 = Newton's default."""
+
+    def proxy_body_patterns(self) -> list[str]:
+        """Body-path regexes of the rigid shapes the cloth feels (the proxy set)."""
+        finger = r"/World/envs/env_.*/Robot/left_(thumb|index|middle|ring|pinky)_"
+        out = [finger + ("(DP|MP|PP)" if self.proxy_links != "tips" else "(DP)")]
+        if self.proxy_links == "hand":
+            # The palm body is `iiwa14_link_7`; the URDF's `left_hand_C_MC` is merged away by the
+            # importer and matches nothing.
+            out.append(r"/World/envs/env_.*/Robot/(iiwa14_link_7|left_thumb_MC|left_pinky_MC)")
+        if self.proxy_table:
+            out.append(r"/World/envs/env_.*/Table")
+        return out
 
     color: tuple[float, float, float] = (0.85, 0.35, 0.55)
 
@@ -597,17 +712,9 @@ class ClothCfg:
         )
 
         rigid_bodies = [r"/World/envs/env_.*/Robot"]
-        finger = r"/World/envs/env_.*/Robot/left_(thumb|index|middle|ring|pinky)_"
-        proxy_bodies = [finger + ("(DP|MP|PP)" if self.proxy_links != "tips" else "(DP)")]
-        if self.proxy_links == "hand":
-            # The palm body is `iiwa14_link_7`; the URDF's `left_hand_C_MC` is merged away by the
-            # importer and matches nothing.
-            proxy_bodies.append(
-                r"/World/envs/env_.*/Robot/(iiwa14_link_7|left_thumb_MC|left_pinky_MC)"
-            )
+        proxy_bodies = self.proxy_body_patterns()
         if self.proxy_table:
             rigid_bodies.append(r"/World/envs/env_.*/Table")
-            proxy_bodies.append(r"/World/envs/env_.*/Table")
 
         budget = self.triangle_pair_budget(newton_cfg, num_envs)
 
@@ -650,6 +757,8 @@ class ClothCfg:
         #     setting here that could plausibly weaken the grip rather than strengthen it.
         vbd.particle_conservative_bound_relaxation = self.conservative_bound_relaxation
         vbd.rigid_avbd_beta = self.rigid_avbd_beta
+        if self.friction_epsilon > 0.0:
+            vbd.friction_epsilon = self.friction_epsilon
 
         solver = CouplerProxyCfg(
             entries=[
@@ -693,6 +802,8 @@ class ClothCfg:
                     collision_pipeline=NewtonCollisionPipelineCfg(
                         rigid_contact_max=newton_cfg.rigid_contact_max,
                         max_triangle_pairs=budget,
+                        # Edge/face soft contacts -- see `full_surface_contact`.
+                        enable_rigid_soft_full_surface_contact=self.full_surface_contact,
                     ),
                 )
             ],
@@ -702,7 +813,9 @@ class ClothCfg:
                 # `soft_contact_kd` was previously left at the `NewtonModelCfg` default (1.0e-2)
                 # because this call only passed `ke` and `mu`.
                 soft_contact_kd=self.soft_contact_kd,
-                soft_contact_mu=self.soft_contact_mu,
+                # Self-contact reads this raw; cloth-vs-shape pairs are rescaled in the cloth view
+                # (`ClothEnv._install_cloth_friction`) so they keep using `soft_contact_mu`.
+                soft_contact_mu=self.self_contact_mu if self.self_contact_mu > 0.0 else self.soft_contact_mu,
             ),
         )
 
