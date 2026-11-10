@@ -16,7 +16,8 @@ E-stop / enabling button / fault) by holding the measured pose and then stopping
 limp. The Flexiv E-stop stops only the arm; this node then stops the hand.
 
 Gains: the arm runs aioflexiv's joint impedance, tau = kp (q* - q) - kd dq (Flexiv adds gravity),
-with the sim's kp, kd (Nm/rad). The Wuji firmware takes A/rad: kp, kd = sim x hand_kp/kd_per_nm.
+with the sim's kp, kd (Nm/rad). The Wuji firmware takes A/rad: kp, kd = sim / (hand_kp/kd_scale x Kt),
+Kt per joint from the aiowuji sysid (robot.hand_kt).
 """
 
 import asyncio
@@ -60,10 +61,19 @@ def open_hand(cfg, spec, never_enable: bool = False):
     """aiowuji WujiController, or a FakeHand. never_enable: connect but never enable (as dry_run)."""
     if cfg.hand == "fake":
         return FakeHand(spec["default_q"][HAND])
-    from aiowuji import WujiController
+    from aiowuji import JOINT_NAMES, WujiController
     serial = cfg.hand_sn if cfg.hand == "dry_run" else (None if cfg.hand == "auto" else str(cfg.hand))
-    return WujiController(serial, kp=spec["stiffness"][HAND] * cfg.hand_kp_per_nm,
-                          kd=spec["damping"][HAND] * cfg.hand_kd_per_nm, effort_limit=cfg.hand_effort_limit,
+    effort = np.full(len(JOINT_NAMES), float(cfg.hand_effort_limit))
+    for name, amps in (cfg.hand_effort_limit_joints or {}).items():
+        if name not in JOINT_NAMES:
+            raise SystemExit(f"[robot] robot.hand_effort_limit_joints: unknown joint {name!r}; one of {JOINT_NAMES}")
+        effort[JOINT_NAMES.index(name)] = float(amps)
+    hand_kt = dict(cfg.hand_kt or {})
+    if set(hand_kt) != set(JOINT_NAMES):
+        raise SystemExit(f"[robot] robot.hand_kt needs exactly the aiowuji joints {JOINT_NAMES}; got {sorted(hand_kt)}")
+    kt = np.array([float(hand_kt[n]) for n in JOINT_NAMES])     # N m/A
+    return WujiController(serial, kp=spec["stiffness"][HAND] / (cfg.hand_kp_scale * kt),
+                          kd=spec["damping"][HAND] / (cfg.hand_kd_scale * kt), effort_limit=effort,
                           dry_run=cfg.hand == "dry_run" or never_enable)
 
 

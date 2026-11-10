@@ -229,7 +229,8 @@ where the rollout is.
 - perception.py has run on the robot PC (D415, 640 x 480: 60 Hz, ~12 ms from frame to pose), but
   only on a mask of the empty foam pad, not on the eraser. On its first run with the eraser, check in
   the viewer that the tracked mesh sits on the real object.
-- Hand gains: `robot.hand_kp_per_nm` 2.0 is a guess until the Wuji torque constant is measured.
+- Hand gains: converted with the sysid's per-joint Kt (`robot.hand_kt`); not yet checked on the robot
+  that the hand tracks like the sim.
 - Hand velocity: `hand_velocity()` in robot.py is a placeholder (a position difference) until it is
   measured on the hand.
 - How long robot.py takes to see a Flexiv E-stop.

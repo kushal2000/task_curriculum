@@ -51,10 +51,36 @@ robot:
   mujoco_viewer: false
 
   arm_gain_scale: 1.0       # real arm kp, kd = sim kp, kd x this
-  # Sim hand gains are Nm/rad; the Wuji firmware takes A/rad. kp_A = kp_Nm / (1.95 Kt), Kt unknown.
-  hand_kp_per_nm: 2.0       # UNVERIFIED guess until aiowuji sysid measures Kt
-  hand_kd_per_nm: 1.4142    # sqrt(2)
-  hand_effort_limit: 0.5    # A (aiowuji default 0.5, max 1.5)
+  # Sim hand gains are Nm/rad; the Wuji firmware takes A/rad and applies ~1.95x the documented law:
+  #   kp_A = kp_Nm / (hand_kp_scale * Kt),  kd_A = kd_Nm / (hand_kd_scale * Kt)
+  # Kt (N m/A, per joint) and the scales come from the aiowuji sysid fit of this hand (WH2KA01260825022,
+  # firmware 2.10.0, fingers-up + palm-down runs, --fit-gear): wuji_hand2_sysid_data_2026-10-14.zip,
+  # reference/mujoco_fit_params.json.
+  hand_kp_scale: 1.9662     # firmware_law.kp_scale
+  hand_kd_scale: 1.9438     # firmware_law.kd_scale
+  hand_kt:                  # N m/A, aiowuji names
+    thumb_S1: 0.4390
+    thumb_S2: 0.2042
+    thumb_S3: 0.2546
+    thumb_S4: 0.2219
+    index_S1: 0.5986
+    index_S2: 0.2324
+    index_S3: 0.1795
+    index_S4: 0.1350
+    middle_S1: 0.6611
+    middle_S2: 0.2009
+    middle_S3: 0.1636
+    middle_S4: 0.1138
+    ring_S1: 0.5567
+    ring_S2: 0.2053
+    ring_S3: 0.1686
+    ring_S4: 0.1635
+    pinky_S1: 0.4777
+    pinky_S2: 0.1090
+    pinky_S3: 0.1002
+    pinky_S4: 0.1570
+  hand_effort_limit: 1.0    # A (aiowuji default 0.5, max 1.5)
+  hand_effort_limit_joints: {}  # per-joint exceptions, aiowuji names (thumb_S1 ... pinky_S4), A
 
   move_speed: 0.3           # home: arm joint speed limit, rad/s (joint-space move, no table avoidance)
   hand_move_speed: 0.5      # home, and policy's start: hand joint speed limit, rad/s
