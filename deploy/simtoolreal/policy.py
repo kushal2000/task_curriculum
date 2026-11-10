@@ -74,14 +74,17 @@ def action_to_targets(spec: dict, prev_targets: np.ndarray, action: np.ndarray) 
 
 
 def wait_for_inputs(sub_state, sub_object, timeout_s: float = 30.0) -> tuple[dict, dict]:
-    """Block until the first joint_state and object_pose have arrived."""
+    """Block until robot.py is ready (hand home, forwarding targets) and an object_pose has arrived.
+    Starting earlier takes prev_targets from a hand still moving home: the first targets then jump."""
     state = obj = None
     t_end = time.time() + timeout_s
     while state is None or obj is None:
         if time.time() > t_end:
-            missing = [name for name, m in (("joint_state", state), ("object_pose", obj)) if m is None]
+            missing = [name for name, m in (("ready joint_state", state), ("object_pose", obj)) if m is None]
             raise SystemExit(f"[policy] no {' and no '.join(missing)} after {timeout_s:.0f} s: is the publisher running?")
-        state = recv_latest(sub_state) or state
+        new = recv_latest(sub_state)
+        if new is not None and new.get("ready"):
+            state = new
         obj = recv_latest(sub_object) or obj
         time.sleep(0.01)
     return state, obj
@@ -113,7 +116,7 @@ def main() -> None:
     sub_state = open_subscriber(bus.host, bus.joint_state_port, "joint_state")
     sub_object = open_subscriber(bus.host, bus.object_pose_port, "object_pose")
 
-    print("[policy] waiting for joint_state and object_pose ...", flush=True)
+    print("[policy] waiting for robot.py ready (hand home) and object_pose ...", flush=True)
     state, obj = wait_for_inputs(sub_state, sub_object)
 
     # start: targets = where the robot is; a first goal; empty LSTM memory

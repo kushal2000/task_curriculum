@@ -11,7 +11,8 @@ Every message has seq (counts up from 0, the sender counts) and t (time.time(), 
 | camera_frame | perception.py (camera)      | camera_frame_port  | every camera frame, raw RGB (binary, see        |
 |              |                             |                    | send_frame); width, height; for the recorder   |
 | joint_state  | robot.py                    | joint_state_port   | q (27), dq (27), tripped (None or the safety   |
-|              |                             |                    | trip's reason); t = when measured              |
+|              |                             |                    | trip's reason), ready (policy mode: hand home, |
+|              |                             |                    | forwarding targets); t = when measured         |
 | joint_target | policy.py; robot.py in      | policy_port        | targets (27); t = when sent                    |
 |              | robot.mode=openloop         |                    |                                               |
 | goal_pose    | policy.py; robot.py         | policy_port        | pos (3), quat_wxyz (4), goal_index; t = sent   |

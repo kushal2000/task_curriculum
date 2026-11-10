@@ -118,14 +118,16 @@ def hand_velocity(q: np.ndarray, t: float, memo: dict, window_s: float) -> np.nd
 
 
 async def publish_joint_state(cfg, spec, arm, hand, status: dict) -> None:
-    """joint_state at rate_hz until cancelled or the arm stops. status["tripped"]: a safety trip's reason."""
+    """joint_state at rate_hz until cancelled or the arm stops. status["tripped"]: a safety trip's reason;
+    status["ready"]: policy mode has brought the hand home and now forwards joint_target."""
     pub = open_publisher(cfg.bus.joint_state_port)
     memo, seq = {}, 0
     try:
         while (q := read_q(arm, hand)) is not None:
             now = time.time()
             dq = np.r_[arm.state["qvel"], hand_velocity(q[HAND], now, memo, spec["policy_dt"])]
-            send(pub, "joint_state", {"seq": seq, "t": now, "q": q, "dq": dq, "tripped": status.get("tripped")})
+            send(pub, "joint_state", {"seq": seq, "t": now, "q": q, "dq": dq, "tripped": status.get("tripped"),
+                                     "ready": bool(status.get("ready"))})
             seq += 1
             await asyncio.sleep(1.0 / cfg.robot.rate_hz)
     finally:
@@ -220,6 +222,7 @@ async def follow_policy(cfg, spec, arm, hand, status: dict) -> str:
 
     sub = open_subscriber(cfg.bus.host, cfg.bus.policy_port, "joint_target")
     commanded = read_q(arm, hand)         # what the robot is being sent (at start: where it is)
+    status["ready"] = True                # policy.py starts only now, from this pose (not mid hand-move)
     target, last_seq, following = None, None, False
     try:
         while (q := read_q(arm, hand)) is not None:
