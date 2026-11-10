@@ -76,8 +76,17 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         from isaacsimenvs.tasks.cloth.utils.plasticity import BendingPlasticity
 
         model = NewtonManager._model
-        plast = BendingPlasticity(model, kappa)
-        plast.wrap_solver(NewtonManager._solver.solver("cloth"))
+        cloth_solver = NewtonManager._solver.solver("cloth")
+        # SolverCoupled runs the VBD entry on a ModelView with its OWN projected edge_rest_angle:
+        # the yield update must write that array (the model's alone never reaches the solver, which
+        # left every env sheet purely elastic), mirrored to the model's for refreshes and readers.
+        views = [e.view for e in getattr(NewtonManager._solver, "_entries", {}).values() if e.solver is cloth_solver]
+        solver_rest = views[0].edge_rest_angle if views else None
+        plast = BendingPlasticity(model, kappa, solver_rest_angle=solver_rest)
+        plast.wrap_solver(cloth_solver)
+        print(f"[cloth] plasticity writes the cloth solver's edge_rest_angle "
+              f"({'its own view copy, mirrored to the model' if plast.mirror is not None else 'shared with the model'})",
+              flush=True)
         ei = model.edge_indices.numpy()
         world = model.particle_world.numpy()[ei[:, 2]]
         world[(ei[:, 0] < 0) | (ei[:, 1] < 0)] = -1  # boundary edges never bend

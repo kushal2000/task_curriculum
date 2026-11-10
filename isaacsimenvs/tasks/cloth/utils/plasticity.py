@@ -108,11 +108,21 @@ class BendingPlasticity:
     :meth:`reset` (all edges, or the ids of some) when a sheet is put back flat.
     """
 
-    def __init__(self, model, yield_curvature, rest_q=None) -> None:
+    def __init__(self, model, yield_curvature, rest_q=None, solver_rest_angle=None) -> None:
+        """``solver_rest_angle``: the ``edge_rest_angle`` array the cloth SOLVER reads, when that is
+        not ``model.edge_rest_angle`` -- under ``SolverCoupled`` the VBD entry runs on a ModelView
+        that owns a projected copy, so writing the model's array alone never reaches the solver.
+        The yield update then runs on the solver's array and is mirrored to the model's (which a
+        view refresh projects back over the copy)."""
         self.model = model
         self.edge_indices = model.edge_indices
         self.num_edges = int(model.edge_count)
         self.device = model.device
+        #: The array the yield update writes (what the solver bends against) and its mirror.
+        self.rest_angle = model.edge_rest_angle if solver_rest_angle is None else solver_rest_angle
+        self.mirror = None if self.rest_angle.ptr == model.edge_rest_angle.ptr else model.edge_rest_angle
+        if self.rest_angle.shape != model.edge_rest_angle.shape:
+            raise ValueError("solver edge_rest_angle has a different edge layout from the model's")
         #: The build-time rest angles, restored by `reset`.
         self.initial_rest = wp.clone(model.edge_rest_angle)
         self.hinge_width = self._hinge_width(model.particle_q.numpy() if rest_q is None else np.asarray(rest_q))
@@ -142,22 +152,28 @@ class BendingPlasticity:
         wp.launch(
             _yield_kernel,
             dim=self.num_edges,
-            inputs=[state.particle_q, self.edge_indices, self.yield_angle, self.model.edge_rest_angle],
+            inputs=[state.particle_q, self.edge_indices, self.yield_angle, self.rest_angle],
             device=self.device,
         )
+        if self.mirror is not None:
+            wp.copy(self.mirror, self.rest_angle)
 
     def reset(self, edge_ids=None) -> None:
         """Restore the build-time rest angles of ``edge_ids`` (a warp int32 array or anything numpy
         takes; ``None`` = every edge)."""
         if edge_ids is None:
-            wp.copy(self.model.edge_rest_angle, self.initial_rest)
+            wp.copy(self.rest_angle, self.initial_rest)
+            if self.mirror is not None:
+                wp.copy(self.mirror, self.initial_rest)
             return
         if not isinstance(edge_ids, wp.array):
             edge_ids = wp.array(np.asarray(edge_ids, dtype=np.int32).reshape(-1), dtype=wp.int32, device=self.device)
         if edge_ids.shape[0] == 0:
             return
-        wp.launch(_restore_kernel, dim=edge_ids.shape[0], inputs=[edge_ids, self.initial_rest, self.model.edge_rest_angle],
-                  device=self.device)
+        for target in (self.rest_angle, self.mirror):
+            if target is not None:
+                wp.launch(_restore_kernel, dim=edge_ids.shape[0], inputs=[edge_ids, self.initial_rest, target],
+                          device=self.device)
 
     def wrap_solver(self, solver) -> None:
         """Run :meth:`apply` on the output state after every ``solver.step`` (each VBD substep).
