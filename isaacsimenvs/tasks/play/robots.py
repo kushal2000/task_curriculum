@@ -514,10 +514,61 @@ FLEXIV_SHARPA_WUJIGAIN = dataclasses.replace(
     hand_effort_limit={s: _WUJI_URDF_EFFORT[_SHARPA_TO_WUJI[s]] for s in KUKA_SHARPA.hand_joint_names},
 )
 
+# ----------------------------------------------------------------------------
+# Flexiv Rizon 4s + RIGHT Wuji Hand 2, human-like limits, as the real robot is set up: the
+# robot of kushal/2026-10-30_pretraining_real (cdf26eb, Isaacsimenvs-PlayFlexivWujiRightHumanLike):
+# the human-like hand mirrored (r_ joints), mounted 180 deg about the flange axis so the palm faces
+# the table at the same arm pose; Wuji's HAND2_DRIVE on the hand (_WUJI_S2R_DRIVE, no joint
+# friction, 100 rad/s); the real robot's home pose; per-finger pad offsets (thumb 22.9 mm, the same
+# 77% of its longer distal link). Where the table sits relative to it is the env's
+# ``robot_root_pos`` (cfg/robot/flexiv_wuji_right_human_like.yaml).
+# ----------------------------------------------------------------------------
+
+def _right(name: str) -> str:
+    return "r_" + name[2:] if name.startswith("l_") else name
+
+
+_WUJI_RIGHT_JOINTS = tuple(_right(n) for n in _WUJI_JOINTS)
+
+FLEXIV_WUJI_RIGHT_HUMAN_LIKE = RobotSpec(
+    name="flexiv_wuji_right_human_like",
+    arm_joint_regex=FLEXIV_WUJI.arm_joint_regex,
+    hand_joint_regex="r_.*",
+    joint_names_canonical=_RIZON_JOINTS + _WUJI_RIGHT_JOINTS,
+    # The importer merges flange, r_mount and r_wrist into link7.
+    palm_body_name="link7",
+    # FLEXIV_WUJI's palm centre mirrored across the hand (the branch's value).
+    palm_center_offset=(0.0018, -0.0149, 0.1948),
+    fingertip_body_regex="r_(thumb|index_finger|middle_finger|ring_finger|pinky)_distal",
+    # PhysX find_bodies order, as on the left hand (smoke-checked on this URDF).
+    fingertip_link_names=tuple(_right(n) for n in FLEXIV_WUJI.fingertip_link_names),
+    # index, middle, pinky, ring: 19 mm; thumb (last): 22.9 mm.
+    fingertip_offset=((0.0, 0.0, -0.019),) * 4 + ((0.0, 0.0, -0.0229),),
+    arm_stiffness=FLEXIV_WUJI.arm_stiffness,
+    arm_damping=FLEXIV_WUJI.arm_damping,
+    hand_stiffness={j: d[0] for j, d in zip(_WUJI_RIGHT_JOINTS, _WUJI_S2R_DRIVE)},
+    hand_damping={j: d[1] for j, d in zip(_WUJI_RIGHT_JOINTS, _WUJI_S2R_DRIVE)},
+    hand_effort_limit={j: d[2] for j, d in zip(_WUJI_RIGHT_JOINTS, _WUJI_S2R_DRIVE)},
+    hand_armature={_right(k): v for k, v in FLEXIV_WUJI.hand_armature.items()},
+    hand_velocity_limit=100.0,
+    hand_friction=0.0,
+    # The real robot's home pose, (-120, 0, 30, 100, 150, 80, 120) deg: palm to the table.
+    arm_default_joint_pos={
+        "joint1": -2.0944, "joint2": 0.0, "joint3": 0.5236, "joint4": 1.7453,
+        "joint5": 2.618, "joint6": 1.3963, "joint7": 2.0944,
+    },
+    # The left's pairs, renamed (the branch's self_collision_pairs.py derives exactly these).
+    self_collision_filter={
+        _right(a): tuple(_right(b) for b in bs) for a, bs in _WUJI_SELF_COLLISION_FILTER.items()
+    },
+    finger_segment_regex={k: "r_" + v[2:] for k, v in FLEXIV_WUJI.finger_segment_regex.items()},
+    palm_side_link_names=(),
+)
+
 ROBOT_SPECS: dict[str, RobotSpec] = {
     spec.name: spec for spec in (
         KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_HUMAN_LIKE_S2R, FLEXIV_SHARPA,
-        FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN, FLEXIV_SHARPA_WUJIGAIN,
+        FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN, FLEXIV_SHARPA_WUJIGAIN, FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
     )
 }
 

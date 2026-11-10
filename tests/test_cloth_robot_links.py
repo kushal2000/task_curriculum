@@ -12,15 +12,18 @@ from pathlib import Path
 
 import pytest
 
-from isaacsimenvs.tasks.play.robots import FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, KUKA_SHARPA
+from isaacsimenvs.tasks.play.robots import (
+    FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_RIGHT_HUMAN_LIKE, KUKA_SHARPA,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 URDFS = {
     "kuka_sharpa": "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf",
     "flexiv_wuji": "assets/flexiv_wuji/rizon4s_left_wuji.urdf",
     "flexiv_wuji_human_like": "assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf",
+    "flexiv_wuji_right_human_like": "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
 }
-SPECS = [KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE]
+SPECS = [KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_RIGHT_HUMAN_LIKE]
 
 
 def _bodies(spec) -> set[str]:
@@ -37,7 +40,7 @@ def test_finger_segments_are_the_finger_bodies(spec):
     fingers = {b for b in bodies if pattern.fullmatch(b)}
     for segment, regex in spec.finger_segment_regex.items():
         assert any(re.fullmatch(regex, b) for b in bodies), f"{spec.name}: no {segment} body"
-    hand = {b for b in bodies if b.startswith(("left_", "l_"))}
+    hand = {b for b in bodies if b.startswith(("left_", "l_", "r_"))}
     palm_side = {spec.palm_body_name, *spec.palm_side_link_names}
     assert palm_side <= bodies, f"{spec.name}: palm-side bodies {palm_side - bodies} are not bodies"
     # Every hand body is a finger segment or palm-side, bar the Sharpa's knuckle-joint links (*_VL),

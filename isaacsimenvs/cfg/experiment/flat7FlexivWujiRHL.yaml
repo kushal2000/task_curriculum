@@ -1,0 +1,5 @@
+# flat7FlexivWujiRHL: the flat7 recipe (flat7.yaml) on the Flexiv Rizon 4s + RIGHT Wuji Hand 2 with
+# human-like joint limits, in the real setup's geometry (cfg/robot/flexiv_wuji_right_human_like.yaml);
+# only the robot differs.
+base: flat7
+task: Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHumanLike-Direct-v0

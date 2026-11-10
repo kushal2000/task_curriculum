@@ -159,6 +159,7 @@ _ROBOT_VARIANTS = {
     "FlexivSharpa": "flexiv_sharpa",
     "FlexivWujiHumanLikeSharpaGain": "flexiv_wuji_human_like_sharpagain",
     "FlexivSharpaWujiGain": "flexiv_sharpa_wujigain",
+    "FlexivWujiRightHumanLike": "flexiv_wuji_right_human_like",
 }
 for _task in ("Cloth", "RigidCloth", "FoldPool", "RigidClothPhysx", "FoldPoolPhysx"):
     _base = gym.spec(f"Isaacsimenvs-{_task}-Direct-v0")

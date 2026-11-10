@@ -1,0 +1,14 @@
+# Robot overlay: the Flexiv Rizon 4s + RIGHT Wuji Hand 2 with human-like joint limits, as the real
+# robot is set up (robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE; kushal/2026-10-30_pretraining_real's
+# Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0): HAND2_DRIVE hand gains, the real home pose.
+#
+# The real table relative to the robot: top 0.28 m above the robot frame, near side 0.31 m in
+# front. The cloth tasks' tables are 0.4 m deep, centred on the env origin with their top at
+# table_reset_z + 0.15 = 0.53 m, so the BASE moves instead of the table and the sheet:
+# y = 0.2 + 0.31 = 0.51, z = 0.53 - 0.28 = 0.25. The observed palm_pos stays in Play's frame
+# (base at (0, 0.8, 0)), where the real-setup Play policies and the deploy code have it.
+robot: flexiv_wuji_right_human_like
+robot_self_collision: true
+robot_root_pos: [0.0, 0.51, 0.25]
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"

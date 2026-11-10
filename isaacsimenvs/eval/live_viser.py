@@ -100,6 +100,7 @@ _RIGID_BUF = "env.newton.per_env_triangle_pairs=2097152"
 
 #: Display name -> (gym task, extra hydra overrides). Newton; PHYSX_TASKS for the PhysX viewer.
 TASKS = {
+    "VBD cloth, Flexiv + right Wuji human-like (real setup)": ("Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0", []),
     "VBD cloth, Flexiv + Wuji human-like": ("Isaacsimenvs-ClothFlexivWujiHumanLike-Direct-v0", []),
     "VBD cloth, Flexiv + Wuji vendor limits": ("Isaacsimenvs-ClothFlexivWuji-Direct-v0", []),
     "fold pool, Flexiv + Wuji human-like": ("Isaacsimenvs-FoldPoolFlexivWujiHumanLike-Direct-v0", [_RIGID_BUF]),
@@ -111,6 +112,11 @@ TASKS = {
     },
 }
 PHYSX_TASKS = {
+    "fold pool 7 shapes flat (flat7), Flexiv + right Wuji human-like (real setup)": (
+        "Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHumanLike-Direct-v0",
+        ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
+         "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
+    ),
     "fold pool 7 shapes flat (flat7), Flexiv + Wuji human-like": (
         "Isaacsimenvs-FoldPoolPhysxFlexivWujiHumanLike-Direct-v0",
         ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",

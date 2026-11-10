@@ -11,6 +11,7 @@ Kit-free: ``robots.py`` is stdlib-only and is loaded off disk. The model files c
 from __future__ import annotations
 
 import math
+from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
 
@@ -37,7 +38,8 @@ def _joints(urdf_path) -> dict[str, ET.Element]:
 def test_specs_are_registered_and_kuka_is_unchanged_in_shape() -> None:
     assert set(robots.ROBOT_SPECS) == {
         "kuka_sharpa", "flexiv_wuji", "flexiv_wuji_human_like", "flexiv_wuji_human_like_s2r",
-        "flexiv_sharpa", "flexiv_wuji_human_like_sharpagain", "flexiv_sharpa_wujigain"}
+        "flexiv_sharpa", "flexiv_wuji_human_like_sharpagain", "flexiv_sharpa_wujigain",
+        "flexiv_wuji_right_human_like"}
     assert robots.KUKA_SHARPA.num_joints == 29  # the released checkpoint's action size
     assert SPEC.num_joints == 27
 
@@ -218,6 +220,33 @@ def test_human_like_spec_is_the_flexiv_wuji_but_for_its_name() -> None:
 
     human = robots.FLEXIV_WUJI_HUMAN_LIKE
     assert dataclasses.replace(human, name=SPEC.name) == SPEC
+
+
+RIGHT_URDF = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
+
+
+def test_right_hand_spec_matches_its_urdf() -> None:
+    """Joints, home pose inside the limits, fingertip / palm / filter bodies all exist in the right
+    URDF; hand drive is the S2R one, renamed."""
+    spec = robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE
+    joints = _joints(RIGHT_URDF)
+    actuated = [n for n, j in joints.items() if j.get("type") != "fixed"]
+    assert sorted(actuated) == sorted(spec.joint_names_canonical)
+    for name, q in spec.arm_default_joint_pos.items():
+        limit = joints[name].find("limit")
+        assert float(limit.get("lower")) <= q <= float(limit.get("upper")), name
+    for name in spec.hand_joint_names:
+        limit = joints[name].find("limit")
+        assert float(limit.get("lower")) <= 0.0 <= float(limit.get("upper")), name
+    bodies = {"base_link"} | {j.find("child").get("link") for j in joints.values() if j.get("type") != "fixed"}
+    assert set(spec.fingertip_link_names) <= bodies
+    assert spec.palm_body_name in bodies
+    assert set(spec.self_collision_filter) <= bodies
+    assert all(set(v) <= bodies for v in spec.self_collision_filter.values())
+    s2r = robots.FLEXIV_WUJI_HUMAN_LIKE_S2R
+    for table in ("hand_stiffness", "hand_damping", "hand_effort_limit", "hand_armature"):
+        assert list(getattr(spec, table).values()) == list(getattr(s2r, table).values()), table
+    assert [n[2:] for n in spec.hand_joint_names] == [n[2:] for n in s2r.hand_joint_names]
 
 
 needs_flexiv_sharpa = pytest.mark.skipif(
