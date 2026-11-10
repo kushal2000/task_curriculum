@@ -63,6 +63,28 @@ POLICIES = {
     "previous best: PhysX stage 1 -> 2 (157622 s1; cloth 88/63%)": ("outputs/2026-10-05/23-51-55/0_pxpool_pxs1_arm1e3_e6144_s1_157622/nn/0_pxpool_pxs1_arm1e3_e6144_s1_157622.pth", 0.0),
 }
 
+#: Extra menu entries from a JSON file {display name: [checkpoint, coef(, [task menu names])]} named by
+#: $LIVE_VISER_POLICIES (survives the browser's restart, which re-execs with the same environment). With the
+#: optional third element the policy is listed only while one of those $LIVE_VISER_TASKS entries is loaded.
+POLICY_TASKS: dict[str, set[str]] = {}
+if os.environ.get("LIVE_VISER_POLICIES"):
+    import json
+
+    with open(os.environ["LIVE_VISER_POLICIES"]) as _f:
+        _extra = json.load(_f)
+    # $LIVE_VISER_POLICIES_ONLY=1: the menu is the JSON's entries alone (no built-ins).
+    if os.environ.get("LIVE_VISER_POLICIES_ONLY") == "1":
+        POLICIES.clear()
+    for _k, _v in _extra.items():
+        POLICIES[_k] = (_v[0], float(_v[1]))
+        if len(_v) > 2:
+            POLICY_TASKS[_k] = set(_v[2])
+
+
+def policies_for(task_name: str) -> list[str]:
+    """Menu entries usable with the task menu entry `task_name` (all of them if none is task-bound)."""
+    return [k for k in POLICIES if k not in POLICY_TASKS or task_name in POLICY_TASKS[k]] or list(POLICIES)
+
 #: Not in the menu; add one back to POLICIES to show it.
 ARCHIVED_POLICIES = {
     "stage-2 pool, box3-mid prior s3 (Newton)": ("outputs/2026-10-04/20-17-57/0_fp_box3_s3_156746/nn/0_fp_box3_s3_156746.pth", 0.0),
@@ -148,7 +170,7 @@ STATIONARY_RGB = (250, 199, 38)
 def _parse():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--task", default="Isaacsimenvs-FoldPool-Direct-v0")
-    p.add_argument("--policy", default="run 2: flat pool (s3; cloth 78/66%)", choices=list(POLICIES))
+    p.add_argument("--policy", default=next(iter(POLICIES)), choices=list(POLICIES))
     p.add_argument("--num_envs", type=int, default=8)
     p.add_argument("--port", type=int, default=8080)
     p.add_argument("--even_sizes", type=int, default=1,
@@ -359,6 +381,15 @@ def main() -> None:
     os.chdir(ROOT)
     physx = "Physx" in args.task
     tasks = PHYSX_TASKS if physx else TASKS
+    task_keys = _TASK_KEYS
+    # $LIVE_VISER_TASKS: a JSON {display name: [gym task, [hydra overrides]]} that replaces the task menu.
+    # Every key its entries set counts as a task choice, so a restart drops the old task's value.
+    if os.environ.get("LIVE_VISER_TASKS"):
+        import json
+
+        with open(os.environ["LIVE_VISER_TASKS"]) as f:
+            tasks = {k: (t, list(ov)) for k, (t, ov) in json.load(f).items()}
+        task_keys = _TASK_KEYS + tuple(sorted({o.split("=")[0] + "=" for _t, ov in tasks.values() for o in ov}))
     if physx:
         args.headless = True
     if not str(getattr(args, "device", "") or "").startswith("cuda"):
@@ -433,6 +464,10 @@ def main() -> None:
 
         origins = inner.scene.env_origins.detach().cpu().numpy()
         pool = [sh.name for sh in getattr(inner, "_pool", [])]
+        # One shape per env (PhysX ``fold_pool.one_shape_per_env``): env w can only run the shapes
+        # with carried[shape, w]. None when every env carries every shape.
+        carried = getattr(getattr(inner.object, "_mesh", None), "carried", None) if pool else None
+        carried = None if carried is None or bool(carried.all()) else carried.cpu().numpy()
         sizes = getattr(inner, "_env_size_np", None)
 
         if physx:
@@ -539,6 +574,8 @@ def main() -> None:
                 orig_draw(env_ids)  # random draw first, then override the pinned envs
                 forced = [(int(e), pool.index(S.shape_choice[int(e)])) for e in env_ids.tolist()
                           if S.shape_choice[int(e)] != "random"]
+                if carried is not None:  # "apply to ALL" / layout may name shapes an env lacks
+                    forced = [(e, k) for e, k in forced if carried[k, e]]
                 if forced:
                     ids = torch.tensor([e for e, _ in forced], device=device)
                     shp = torch.tensor([k for _, k in forced], device=device)
@@ -609,6 +646,8 @@ def main() -> None:
                 s = f"env {w}"
                 if sizes is not None:
                     s += f" ({sizes[w] * 100:.1f} cm)"
+                if carried is not None:
+                    s += " (" + "/".join(pool[k] for k in np.flatnonzero(carried[:, w])) + ")"
                 return s
 
             g_env = server.gui.add_dropdown("show env", [env_label(w) for w in range(n_env)])
@@ -622,7 +661,7 @@ def main() -> None:
             g_kp = server.gui.add_checkbox("show keypoints / targets", True)
 
         with server.gui.add_folder("Policy"):
-            g_pol = server.gui.add_dropdown("policy", list(POLICIES), initial_value=args.policy)
+            g_pol = server.gui.add_dropdown("policy", policies_for(cur_task), initial_value=args.policy)
             g_coef = server.gui.add_slider("SAPG coef (0 = block 5, 50 = block 0)", 0.0, 50.0, 10.0, S.coef)
             g_det = server.gui.add_checkbox("deterministic actions", True)
             g_play = server.gui.add_checkbox("playing", True)
@@ -663,7 +702,8 @@ def main() -> None:
             task, ov = tasks[g_task.value]
             if g_csize is not None and task.startswith("Isaacsimenvs-Cloth"):
                 ov = [*ov, *CLOTH_SIZES[g_csize.value]]
-            S.restart = (task, ov, int(g_nenv.value))
+            ok = policies_for(g_task.value)  # the next task's menu may not list the current policy
+            S.restart = (task, ov, int(g_nenv.value), S.policy_name if S.policy_name in ok else ok[0])
 
         @g_env.on_update
         def _(_e):
@@ -685,7 +725,14 @@ def main() -> None:
         if g_shape is not None:
             @g_shape.on_update
             def _(_e):
-                S.shape_choice[S.world] = g_shape.value
+                v = g_shape.value
+                if carried is not None and v != "random" and not carried[pool.index(v), S.world]:
+                    # This env cannot run that shape: show the first env that carries it instead.
+                    w2 = int(np.flatnonzero(carried[pool.index(v)])[0])
+                    S.shape_choice[w2] = v
+                    g_env.value = env_label(w2)
+                    return
+                S.shape_choice[S.world] = v
                 fc = S.fold_choice[S.world]
                 if fc in fold_label and pool[fold_label[fc][0]] != g_shape.value:
                     S.fold_choice[S.world] = "random"  # a fold of another shape no longer applies
@@ -851,6 +898,10 @@ def main() -> None:
         clouds: dict[str, object] = {}
         root: dict[str, object] = {}
         world_keys: list = []
+        # The env the scene was last built for. The env dropdown sets S.world from the GUI thread,
+        # so drawing must not read S.world: between that write and the next rebuild, world_keys
+        # still belong to the previous env (on a one-shape-per-env pool, a shape that env lacks).
+        scene_w = [0]
 
         def is_body(s):
             return s.key is not None and (physx or s.key >= 0)
@@ -866,7 +917,7 @@ def main() -> None:
             root["root"] = server.scene.add_frame("/w", show_axes=False)
             frames.clear()
             clouds.clear()
-            w = S.world
+            w = scene_w[0] = S.world
             o = origins[w]
             mine = shapes_of(w)
             world_keys = sorted({s.key for s in mine if is_body(s)})
@@ -889,7 +940,7 @@ def main() -> None:
             return {k: (x[:3], (x[6], x[3], x[4], x[5])) for k, x in zip(world_keys, q)}
 
         def draw():
-            w = S.world
+            w = scene_w[0]
             o = origins[w]
             if world_keys:
                 poses = body_poses(w)
@@ -978,13 +1029,13 @@ def main() -> None:
         dt = float(inner.step_dt)
         while True:
             if S.restart is not None:
-                task, ov, nenv = S.restart
+                task, ov, nenv, pol = S.restart
                 status.content = f"**Restarting with {task}...** the page reconnects by itself in ~2-3 min."
                 time.sleep(0.5)
                 # Keep every override that is not a task choice (e.g. the contact buffer size).
-                keep = [a for a in hydra_args if not a.startswith(_TASK_KEYS)]
+                keep = [a for a in hydra_args if not a.startswith(task_keys)]
                 argv = [sys.executable, "-m", "isaacsimenvs.eval.live_viser", "--task", task,
-                        "--policy", S.policy_name, "--num_envs", str(nenv), "--port", str(args.port),
+                        "--policy", pol, "--num_envs", str(nenv), "--port", str(args.port),
                         "--even_sizes", str(args.even_sizes), *(["--headless"] if physx else []),
                         *keep, *ov]
                 sys.stdout.flush()
