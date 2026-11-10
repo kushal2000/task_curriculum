@@ -258,8 +258,12 @@ def send_openloop(pub, roll: dict, k: int, seq: int, targets: bool = True) -> No
     now = time.time()
     if targets:
         send(pub, "joint_target", {"seq": seq, "t": now, "targets": roll["targets"][k]})
-    send(pub, "goal_pose", {"seq": seq, "t": now, "pos": roll["goal"][0], "quat_wxyz": roll["goal"][1],
-                            "goal_index": 0})
+    if roll.get("goals") is not None:   # a goal sequence (record_lift.py --goals train)
+        pos, quat = roll["goals"][0][k], roll["goals"][1][k]
+        index = int(np.count_nonzero(np.any(np.diff(roll["goals"][0][:k + 1], axis=0) != 0, axis=1)))
+    else:
+        pos, quat, index = roll["goal"][0], roll["goal"][1], 0
+    send(pub, "goal_pose", {"seq": seq, "t": now, "pos": pos, "quat_wxyz": quat, "goal_index": index})
     send(pub, "sim_object_pose", {"seq": seq, "t": now, "pos": roll["object_pos"][k],
                                   "quat_wxyz": roll["object_quat"][k], "step": k})
 

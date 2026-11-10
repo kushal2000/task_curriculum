@@ -3,6 +3,7 @@
 Sampling (training's reset_utils._reset_goal_pose):
     pos, quat = first_goal(spec, rng, corners)                  # uniform in the target volume, random rotation
     pos, quat = next_goal(spec, rng, corners, pos, quat)        # the last goal moved a little
+    clearance=<m>: the object's lowest corner at least this far above the table top (default: training's)
 
 Success (training's compute_intermediate_values + termination_utils):
     near = is_near(spec, obj_pos, obj_quat, goal_pos, goal_quat, tolerance)
@@ -27,16 +28,17 @@ def object_corners(mesh_path) -> np.ndarray:
     return np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
 
 
-def first_goal(spec: dict, rng: np.random.Generator, corners: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def first_goal(spec: dict, rng: np.random.Generator, corners: np.ndarray,
+               clearance: float | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Uniform in the target volume, uniformly random rotation."""
     lo, hi = _volume(spec)
     pos = lo + (hi - lo) * rng.random(3)
     quat = random_quat(rng)
-    return _above_table(spec, corners, pos, quat), quat
+    return _above_table(spec, corners, pos, quat, clearance), quat
 
 
 def next_goal(spec: dict, rng: np.random.Generator, corners: np.ndarray,
-              pos: np.ndarray, quat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+              pos: np.ndarray, quat: np.ndarray, clearance: float | None = None) -> tuple[np.ndarray, np.ndarray]:
     """The last goal moved by up to delta_goal_distance per axis (kept in the volume) and turned by up
     to delta_rotation_degrees about a random axis."""
     lo, hi = _volume(spec)
@@ -46,7 +48,7 @@ def next_goal(spec: dict, rng: np.random.Generator, corners: np.ndarray,
     axis /= np.linalg.norm(axis)
     angle = (rng.random() * 2 - 1) * np.radians(spec["delta_rotation_degrees"])
     new_quat = quat_mul(quat_from_angle_axis(angle, axis), quat)
-    return _above_table(spec, corners, new_pos, new_quat), new_quat
+    return _above_table(spec, corners, new_pos, new_quat, clearance), new_quat
 
 
 def keypoint_distance(spec: dict, obj_pos, obj_quat, goal_pos, goal_quat) -> float:
@@ -70,10 +72,27 @@ def _volume(spec: dict) -> tuple[np.ndarray, np.ndarray]:
     return centre - half, centre + half
 
 
-def _above_table(spec: dict, corners: np.ndarray, pos: np.ndarray, quat: np.ndarray) -> np.ndarray:
-    """Raise pos until the object's lowest corner is goal_table_clearance_m above the table top."""
-    if not spec["use_goal_table_clearance"]:
-        return pos
+def _above_table(spec: dict, corners: np.ndarray, pos: np.ndarray, quat: np.ndarray,
+                 clearance: float | None = None) -> np.ndarray:
+    """Raise pos until the object's lowest corner is clearance (None: the spec's goal_table_clearance_m)
+    above the table top. An explicit clearance applies even if training turned the clearance off."""
+    if clearance is None:
+        if not spec["use_goal_table_clearance"]:
+            return pos
+        clearance = spec["goal_table_clearance_m"]
     lowest = quat_apply(np.broadcast_to(quat, corners.shape[:-1] + (4,)), corners)[:, 2].min()
-    min_z = spec["table_top_z_env"] + spec["goal_table_clearance_m"] - lowest
+    min_z = spec["table_top_z_env"] + clearance - lowest
     return np.array([pos[0], pos[1], max(pos[2], min_z)])
+
+
+def rollout_goals(path) -> tuple[list[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]:
+    """The goals of a sim rollout (checks/record_lift.py --goals train: openloop.npz), in the order the
+    sim had them, each once; and the object's start pose. Env frame, the mesh's own frame (the one
+    perception reports), wxyz."""
+    d = np.load(path)
+    if "goals_mesh_pos" not in d.files:
+        raise SystemExit(f"[policy] {path}: no goals_mesh_pos (recorded without --goals train)")
+    pos, quat = d["goals_mesh_pos"].astype(np.float64), d["goals_quat"].astype(np.float64)
+    change = np.r_[True, np.any(np.abs(np.diff(np.c_[pos, quat], axis=0)) > 1e-9, axis=1)]
+    goals = [(pos[i], quat[i]) for i in np.flatnonzero(change)]
+    return goals, (d["start_mesh_pos"].astype(np.float64), d["start_quat"].astype(np.float64))

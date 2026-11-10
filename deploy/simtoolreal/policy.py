@@ -27,7 +27,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))    # deploy/simtoolreal
 from utils.config import REPO, load_config, repo_path                            # noqa: E402
-from utils.goals import first_goal, is_near, next_goal, object_corners           # noqa: E402
+from utils.goals import first_goal, is_near, next_goal, object_corners, rollout_goals   # noqa: E402
 from utils.link import age, open_publisher, open_subscriber, recv_latest, send   # noqa: E402
 from utils.observation import NUM_OBS, build_obs                                 # noqa: E402
 from utils.robot_model import load_robot_model                                   # noqa: E402
@@ -121,7 +121,15 @@ def main() -> None:
 
     # start: targets = where the robot is; a first goal; empty LSTM memory
     prev_targets = state["q"].copy()
-    goal_pos, goal_quat = first_goal(spec, rng, corners)
+    if cfg.goals.from_rollout:
+        # a sim rollout's goals, in its order; after the last one the run stops
+        fixed_goals, _ = rollout_goals(repo_path(cfg.goals.from_rollout))
+        goal_pos, goal_quat = fixed_goals[0]
+        print(f"[policy] {len(fixed_goals)} goals from {cfg.goals.from_rollout}", flush=True)
+    else:
+        fixed_goals = None
+        goal_pos, goal_quat = first_goal(spec, rng, corners, cfg.goals.table_clearance_m)
+    goal_index = 0
     with torch.no_grad():
         net.get_action(torch.zeros(1, NUM_OBS), deterministic=True)   # warm up (the first call is slow)
     net.reset_rnn()                                                    # ... and forget it
@@ -168,7 +176,15 @@ def main() -> None:
                         stop_reason = ended
                         break
                 if reached or ended:
-                    goal_pos, goal_quat = next_goal(spec, rng, corners, goal_pos, goal_quat)
+                    goal_index += 1
+                    if fixed_goals is None:
+                        goal_pos, goal_quat = next_goal(spec, rng, corners, goal_pos, goal_quat,
+                                                        cfg.goals.table_clearance_m)
+                    elif goal_index == len(fixed_goals):
+                        stop_reason = "all rollout goals done"
+                        break
+                    else:
+                        goal_pos, goal_quat = fixed_goals[goal_index]
                     near_steps = steps_on_goal = 0
 
             # 3. observation -> network -> targets

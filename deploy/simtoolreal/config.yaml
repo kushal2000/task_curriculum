@@ -144,6 +144,11 @@ openloop:
 goals:
   timeout_steps: 0          # steps per goal before it counts as failed; 0 = training's 600 (10 s)
   success_tolerance: null   # m before keypoint_scale; null = training's final 0.01
+  table_clearance_m: null   # goals: the object's lowest corner at least this far above the training table
+                            #   top (env z 0.28, base z 0.28); null = training's 0.01. Raise it for a
+                            #   board on the table, e.g. 0.13 = 10 cm above a 3 cm foam board
+  from_rollout: null        # an openloop.npz (record_lift.py --goals train): use its goals, in its order,
+                            #   instead of sampling; the run stops after the last. Overrides run.seed
 
 # ---------------------------------------------------------------------------------------- record
 # recorder.py: started by run.py when record.name is set, e.g. run.py record.name=eraser_try1
