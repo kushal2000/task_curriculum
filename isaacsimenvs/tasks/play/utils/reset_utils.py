@@ -167,6 +167,8 @@ def allocate_state_buffers(env) -> None:
         env._robot_base_damping = (damp.torch if hasattr(damp, "torch") else damp).clone()
         env._arm_joint_mask = torch.zeros(env._robot_base_stiffness.shape[1], dtype=torch.bool, device=env.device)
         env._arm_joint_mask[env._arm_joint_ids] = True
+    _init_spring_drive(env)
+    _init_hand_dynamics_dr(env)
     _print_dr_summary(env)
 
     # --- Wrench DR state (Phase C/D) ---
@@ -215,6 +217,58 @@ def allocate_state_buffers(env) -> None:
 
     # set the reward buffer to 0
     env.reward_buf = torch.zeros(env.num_envs, device=env.device)
+
+
+def _init_spring_drive(env) -> None:
+    """The hand's passive spring (``RobotSpec.hand_spring_stiffness``), per sim joint.
+
+    ``env._spring_ks`` / ``env._spring_ref`` (J,) in sim joint order, ``None`` without a spring.
+    PlayEnv applies ``ks (ref - q)`` as a joint effort every physics step
+    (``action_utils.hand_spring_effort``); the drives carry the PD gains only.
+    """
+    spec = env.robot_spec
+    env._spring_ks = env._spring_ref = None
+    if not spec.hand_spring_stiffness:
+        return
+    names = list(env.robot.data.joint_names)
+    env._spring_ks = torch.tensor([float(spec.hand_spring_stiffness.get(n, 0.0)) for n in names], device=env.device)
+    env._spring_ref = torch.tensor([float(spec.hand_spring_ref.get(n, 0.0)) for n in names], device=env.device)
+    hand = env._hand_joint_ids
+    stiff = env.robot.data.joint_stiffness
+    kp = (stiff.torch if hasattr(stiff, "torch") else stiff)[0, hand]
+    ratio = env._spring_ks[hand] / kp
+    print(
+        f"[spring] passive hand spring on {int((env._spring_ks > 0).sum())} joints as a joint effort: ks "
+        f"{float(env._spring_ks[hand].min()):.4f}-{float(env._spring_ks[hand].max()):.4f} N m/rad, "
+        f"ks / kp {float(ratio.min()):.3f}-{float(ratio.max()):.3f}",
+        flush=True,
+    )
+
+
+def _init_hand_dynamics_dr(env) -> None:
+    """Nominal hand joint friction and torque limits for ``hand_{friction,effort_limit}_scale_range``."""
+    dr = env.cfg.domain_randomization
+    env._hand_friction_dr = tuple(float(v) for v in dr.hand_friction_scale_range) != (1.0, 1.0)
+    env._hand_effort_dr = tuple(float(v) for v in dr.hand_effort_limit_scale_range) != (1.0, 1.0)
+    if not (env._hand_friction_dr or env._hand_effort_dr):
+        return
+    if not hasattr(env.robot, "root_physx_view"):
+        raise NotImplementedError(
+            "hand_friction_scale_range / hand_effort_limit_scale_range are PhysX only (the Newton "
+            "articulation has no dynamic joint friction); set them to [1.0, 1.0] here."
+        )
+    data = env.robot.data
+    env._hand_friction_base = data.joint_friction_coeff.clone()
+    env._hand_dyn_friction_base = data.joint_dynamic_friction_coeff.clone()
+    env._hand_effort_base = data.joint_effort_limits.clone()
+    hand = env._hand_joint_ids
+    print(
+        f"[dr] hand dynamics: friction x{tuple(dr.hand_friction_scale_range)} per env and joint on "
+        f"{float(env._hand_friction_base[0, hand].min()):.4f}-{float(env._hand_friction_base[0, hand].max()):.4f} N m, "
+        f"torque limit x{tuple(dr.hand_effort_limit_scale_range)} per env on "
+        f"{float(env._hand_effort_base[0, hand].min()):.3f}-{float(env._hand_effort_base[0, hand].max()):.3f} N m",
+        flush=True,
+    )
 
 
 def _randomize_robot_dof_state(env, env_ids: torch.Tensor) -> None:
@@ -444,40 +498,86 @@ def reset_env_state(env, env_ids: torch.Tensor) -> None:
 
 
 def _draw_episode_dr(env, env_ids: torch.Tensor) -> None:
-    """Re-draw the per-episode DR terms for ``env_ids``: fixed lags, object pose bias, PD gains."""
-    dr = env.cfg.domain_randomization
-    n = env_ids.numel()
-    if dr.delay_mode == "per_episode":
-        for idx, queue in (
-            (env._obs_delay_idx, env._obs_queue),
-            (env._action_delay_idx, env._action_queue),
-            (env._object_delay_idx, env._object_state_queue),
-        ):
-            idx[env_ids] = torch.randint(0, queue.shape[1], (n,), device=env.device)
-    elif dr.delay_mode != "per_step":
-        raise ValueError(f"domain_randomization.delay_mode must be per_step or per_episode, got {dr.delay_mode!r}")
+    """Re-draw every per-episode DR term for ``env_ids``.
 
-    bxyz = torch.as_tensor(tuple(dr.object_pose_bias_xyz), device=env.device, dtype=torch.float32)
-    if bool((bxyz != 0).any()):
-        env._object_bias_pos[env_ids] = (torch.rand(n, 3, device=env.device) * 2.0 - 1.0) * bxyz
+    The order of the draws is fixed (it sets the RNG stream): fixed lags, object pose bias,
+    robot PD gains, hand joint dynamics.
+    """
+    dr = env.cfg.domain_randomization
+    _draw_delay_lags(env, env_ids, dr)
+    _draw_object_pose_bias(env, env_ids, dr)
+    _draw_robot_gains(env, env_ids, dr)
+    _draw_hand_dynamics(env, env_ids, dr)
+
+
+def _symmetric_uniform(n: int, k: int | None, half_xyz, device) -> torch.Tensor:
+    """Uniform in ``+-half_xyz`` per axis: ``(n, 3)``, or ``(n, k, 3)`` when ``k`` is given."""
+    half = torch.as_tensor(tuple(float(v) for v in half_xyz), device=device, dtype=torch.float32)
+    shape = (n, 3) if k is None else (n, k, 3)
+    return (torch.rand(*shape, device=device) * 2.0 - 1.0) * half
+
+
+def _draw_delay_lags(env, env_ids, dr) -> None:
+    """``delay_mode: per_episode``: one fixed lag per env for the obs, action and object queues."""
+    if dr.delay_mode == "per_step":
+        return
+    if dr.delay_mode != "per_episode":
+        raise ValueError(f"domain_randomization.delay_mode must be per_step or per_episode, got {dr.delay_mode!r}")
+    n = env_ids.numel()
+    for idx, queue in (
+        (env._obs_delay_idx, env._obs_queue),
+        (env._action_delay_idx, env._action_queue),
+        (env._object_delay_idx, env._object_state_queue),
+    ):
+        idx[env_ids] = torch.randint(0, queue.shape[1], (n,), device=env.device)
+
+
+def _draw_object_pose_bias(env, env_ids, dr) -> None:
+    """Pose-level object DR: a per-episode position and rotation bias on the observed object."""
+    n = env_ids.numel()
+    if any(float(v) != 0.0 for v in dr.object_pose_bias_xyz):
+        env._object_bias_pos[env_ids] = _symmetric_uniform(n, None, dr.object_pose_bias_xyz, env.device)
     if float(dr.object_pose_bias_rot_degrees) > 0.0:
         ident = torch.zeros(n, 4, device=env.device)
         ident[:, 0] = 1.0
         env._object_bias_quat[env_ids] = _perturb_quat(ident, float(dr.object_pose_bias_rot_degrees))
 
+
+def _draw_robot_gains(env, env_ids, dr) -> None:
+    """PD gain DR: one stiffness and one damping factor per env, arm and hand separately."""
     k_rng = tuple(float(v) for v in dr.robot_stiffness_scale_range)
     d_rng = tuple(float(v) for v in dr.robot_damping_scale_range)
-    if k_rng != (1.0, 1.0) or d_rng != (1.0, 1.0):
-        scale = torch.empty(n, 4, device=env.device)
-        scale[:, 0:2].uniform_(*k_rng)
-        scale[:, 2:4].uniform_(*d_rng)
-        env._robot_gain_scale[env_ids] = scale
-        arm = env._arm_joint_mask.unsqueeze(0)
-        k = env._robot_base_stiffness[env_ids] * torch.where(arm, scale[:, 0:1], scale[:, 1:2])
-        d = env._robot_base_damping[env_ids] * torch.where(arm, scale[:, 2:3], scale[:, 3:4])
-        # The plain (not `_index`) writers: the Isaac Lab in the PhysX venv predates the `_index` API.
-        env.robot.write_joint_stiffness_to_sim(k.contiguous(), env_ids=env_ids)
-        env.robot.write_joint_damping_to_sim(d.contiguous(), env_ids=env_ids)
+    if k_rng == (1.0, 1.0) and d_rng == (1.0, 1.0):
+        return
+    scale = torch.empty(env_ids.numel(), 4, device=env.device)  # arm k, hand k, arm d, hand d
+    scale[:, 0:2].uniform_(*k_rng)
+    scale[:, 2:4].uniform_(*d_rng)
+    env._robot_gain_scale[env_ids] = scale
+    arm = env._arm_joint_mask.unsqueeze(0)
+    k = env._robot_base_stiffness[env_ids] * torch.where(arm, scale[:, 0:1], scale[:, 1:2])
+    d = env._robot_base_damping[env_ids] * torch.where(arm, scale[:, 2:3], scale[:, 3:4])
+    # The plain (not `_index`) writers: the Isaac Lab in the PhysX venv predates the `_index` API.
+    env.robot.write_joint_stiffness_to_sim(k.contiguous(), env_ids=env_ids)
+    env.robot.write_joint_damping_to_sim(d.contiguous(), env_ids=env_ids)
+
+
+def _draw_hand_dynamics(env, env_ids, dr) -> None:
+    """Hand sysid DR (PhysX): Coulomb friction per env and joint, torque limit per env."""
+    n, hand = env_ids.numel(), env._hand_joint_ids
+    if env._hand_friction_dr:
+        f = torch.empty(n, len(hand), device=env.device).uniform_(*(float(v) for v in dr.hand_friction_scale_range))
+        static = env._hand_friction_base[env_ids].clone()
+        dynamic = env._hand_dyn_friction_base[env_ids].clone()
+        static[:, hand] *= f
+        dynamic[:, hand] *= f  # the same factor, so dynamic <= static still holds
+        env.robot.write_joint_friction_coefficient_to_sim(
+            static, joint_dynamic_friction_coeff=dynamic, env_ids=env_ids
+        )
+    if env._hand_effort_dr:
+        e = torch.empty(n, 1, device=env.device).uniform_(*(float(v) for v in dr.hand_effort_limit_scale_range))
+        limit = env._hand_effort_base[env_ids].clone()
+        limit[:, hand] *= e
+        env.robot.write_joint_effort_limit_to_sim(limit, env_ids=env_ids)
 
 
 def _print_dr_summary(env) -> None:

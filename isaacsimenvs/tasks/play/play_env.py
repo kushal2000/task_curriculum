@@ -12,7 +12,7 @@ from isaaclab.envs import DirectRLEnv
 
 from .play_env_cfg import PlayEnvCfg
 from .robots import get_robot_spec
-from .utils.action_utils import apply_action_pipeline, apply_wrench_dr
+from .utils.action_utils import apply_action_pipeline, apply_wrench_dr, hand_spring_effort
 from .utils.logging_utils import log_step_metrics
 from .utils.obs_utils import (
     build_observations,
@@ -66,6 +66,10 @@ class PlayEnv(DirectRLEnv):
     def _apply_action(self) -> None:
         # Called decimation times per policy step; idempotent.
         self.robot.set_joint_position_target(self._cur_targets)
+        # The hand's passive spring, from this physics step's q (decimation re-reads it).
+        spring = hand_spring_effort(self)
+        if spring is not None:
+            self.robot.set_joint_effort_target(spring)
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         update_tolerance_curriculum(self)

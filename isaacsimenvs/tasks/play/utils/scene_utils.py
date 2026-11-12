@@ -105,12 +105,14 @@ def build_robot_articulation_usd_cfg(
             ),
             "hand": ImplicitActuatorCfg(
                 joint_names_expr=[spec.hand_joint_regex],
-                stiffness=spec.hand_stiffness,
+                stiffness=spec.hand_stiffness,  # PD only; the passive spring is a joint effort (PlayEnv)
                 damping=spec.hand_damping,
                 armature=spec.hand_armature,
                 effort_limit_sim=spec.hand_effort_limit or None,
                 velocity_limit_sim=spec.hand_velocity_limit,
                 friction=spec.hand_friction,
+                dynamic_friction=spec.hand_dynamic_friction,
+                viscous_friction=spec.hand_viscous_friction,
             ),
         },
     )

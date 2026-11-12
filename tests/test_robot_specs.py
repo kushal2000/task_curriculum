@@ -10,6 +10,7 @@ Kit-free: ``robots.py`` is stdlib-only and is loaded off disk. The model files c
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from pathlib import Path
 import sys
@@ -39,7 +40,7 @@ def test_specs_are_registered_and_kuka_is_unchanged_in_shape() -> None:
     assert set(robots.ROBOT_SPECS) == {
         "kuka_sharpa", "flexiv_wuji", "flexiv_wuji_human_like", "flexiv_wuji_human_like_s2r",
         "flexiv_sharpa", "flexiv_wuji_human_like_sharpagain", "flexiv_sharpa_wujigain",
-        "flexiv_wuji_right_human_like"}
+        "flexiv_wuji_right_human_like", "flexiv_wuji_right_real"}
     assert robots.KUKA_SHARPA.num_joints == 29  # the released checkpoint's action size
     assert SPEC.num_joints == 27
 
@@ -295,7 +296,42 @@ def test_flexiv_sharpa_filter_covers_its_derivation() -> None:
     pairs = lambda m: {frozenset((a, b)) for a, bs in m.items() for b in bs}  # noqa: E731
     assert pairs(derived) <= pairs(robots.FLEXIV_SHARPA.self_collision_filter)
 
+
 REAL_URDF = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
+SYSID_JSON = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json"
+
+
+def test_right_real_spec_is_the_sysid_fit() -> None:
+    """FLEXIV_WUJI_RIGHT_REAL = the right human-like spec, with the sysid fit's armature, friction
+    and passive damping, and torque limit 1.0 A x Kt; everything else unchanged."""
+    import json
+
+    if not SYSID_JSON.exists():
+        pytest.skip(f"{SYSID_JSON.name} is kept out of git (.gitignore); put the fit there to run this")
+    real, base = robots.FLEXIV_WUJI_RIGHT_REAL, robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE
+    fit = json.loads(SYSID_JSON.read_text())
+    assert fit["handedness"] == "right"
+    by_joint = {v["mjcf_joint"]: v for v in fit["joints"].values()}
+    # The replay's per-type friction scale (S index from the fit's joint key, e.g. "index_S3").
+    per_type = {"thumb": (0.8, 0.8, 0.8, 1.0), "finger": (1.0, 0.8, 0.8, 0.6)}
+    fscale = {v["mjcf_joint"]: per_type["thumb" if key.startswith("thumb") else "finger"][int(key[-1]) - 1]
+              for key, v in fit["joints"].items()}
+    assert set(by_joint) == set(real.hand_joint_names)
+    for j, v in by_joint.items():
+        assert real.hand_armature[j] == pytest.approx(v["armature"], rel=1e-3), j
+        assert real.hand_friction[j] == pytest.approx(v["frictionloss"] * fscale[j], rel=1e-3), j
+        assert real.hand_dynamic_friction[j] == pytest.approx(v["frictionloss"] * fscale[j], rel=1e-3), j
+        assert real.hand_viscous_friction[j] == pytest.approx(v["damping"], rel=1e-3), j
+        assert real.hand_effort_limit[j] == pytest.approx(1.0 * v["gear"], rel=1e-3), j
+        assert real.hand_spring_stiffness[j] == pytest.approx(v["stiffness"], rel=1e-3), j
+        assert real.hand_spring_ref[j] == pytest.approx(v["springref"], rel=1e-3, abs=1e-6), j
+    # The checklist's example: index DIP (S4) limit 0.13 N m.
+    assert real.hand_effort_limit["r_index_finger_dip"] == pytest.approx(0.135, abs=1e-3)
+    changed = {"name", "hand_armature", "hand_effort_limit", "hand_friction", "hand_dynamic_friction",
+               "hand_viscous_friction", "hand_spring_stiffness", "hand_spring_ref"}
+    for f in dataclasses.fields(base):
+        if f.name not in changed:
+            assert getattr(real, f.name) == getattr(base, f.name), f.name
 
 
 def test_right_real_urdf_limits() -> None:
@@ -326,3 +362,32 @@ def test_right_real_urdf_limits() -> None:
         lim = real[name].find("limit")
         # 0.1 rad: the arm reset noise (reset_dof_pos_random_interval_arm).
         assert float(lim.get("lower")) + 0.1 <= q <= float(lim.get("upper")) - 0.1, name
+
+
+def test_hand_spring_effort() -> None:
+    """The spring effort is ks (ref - q) per env and joint, zero on spring-free joints, None without."""
+    import types
+
+    import torch
+
+    au = load_module("isaacsimenvs/tasks/play/utils/action_utils.py", "action_utils_spring")
+    gen = torch.Generator().manual_seed(0)
+    n, j = 8, 27
+    ks = torch.rand(j, generator=gen) * 0.2
+    ks[:7] = 0.0  # the arm: no spring
+    ref = torch.randn(j, generator=gen) * 0.3
+    q = torch.randn(n, j, generator=gen)
+    env = types.SimpleNamespace(_spring_ks=ks, _spring_ref=ref, robot=types.SimpleNamespace(
+        data=types.SimpleNamespace(joint_pos=q)))
+    tau = au.hand_spring_effort(env)
+    assert torch.allclose(tau, ks * (ref - q))
+    assert torch.equal(tau[:, :7], torch.zeros(n, 7))
+    assert au.hand_spring_effort(types.SimpleNamespace(_spring_ks=None)) is None
+
+
+def test_only_right_real_has_a_spring() -> None:
+    for name, spec in robots.ROBOT_SPECS.items():
+        if name == "flexiv_wuji_right_real":
+            assert len(spec.hand_spring_stiffness) == len(spec.hand_joint_names)
+        else:
+            assert not spec.hand_spring_stiffness, name

@@ -492,6 +492,12 @@ class DomainRandomizationCfg:
     # hand, stiffness and damping each get their own factor. (1, 1) = nominal gains, no writes.
     robot_stiffness_scale_range: tuple[float, float] = (1.0, 1.0)
     robot_damping_scale_range: tuple[float, float] = (1.0, 1.0)
+    # Per-episode hand joint dynamics factors, on the robot spec's (sysid) values. PhysX only.
+    # Coulomb friction (static and dynamic together): one factor per env AND hand joint (the fit's
+    # error is per joint). Torque limit (the drives' maxForce, i.e. the PD's clip; the passive
+    # spring is outside it): one factor per env for every hand joint (the current limit is shared).
+    hand_friction_scale_range: tuple[float, float] = (1.0, 1.0)
+    hand_effort_limit_scale_range: tuple[float, float] = (1.0, 1.0)
 
     # Random force/torque impulses on the object body.
     force_scale: float = 20.0

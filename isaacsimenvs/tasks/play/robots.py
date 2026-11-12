@@ -56,9 +56,21 @@ class RobotSpec:
     #: Hand joint torque limits [N m]; empty keeps the URDF's ``effort``. Both backends apply it
     #: (PhysX via ``effort_limit_sim``, Newton via the drives' ``maxForce``).
     hand_effort_limit: dict[str, float] = field(default_factory=dict)
-    #: Hand joint velocity limit [rad/s] and joint friction; None keeps the asset's.
+    #: Hand joint velocity limit [rad/s] and joint friction; None keeps the asset's. Friction is an
+    #: EFFORT [N m] from Isaac Sim 5.0 on (a unitless coefficient before): static breakaway, Coulomb
+    #: once moving, and a viscous term [N m s/rad]. One value for every hand joint, or one per joint.
     hand_velocity_limit: float | None = None
-    hand_friction: float | None = None
+    hand_friction: float | dict[str, float] | None = None
+    hand_dynamic_friction: float | dict[str, float] | None = None
+    hand_viscous_friction: float | dict[str, float] | None = None
+    #: Passive joint spring per hand joint: stiffness [N m / rad] and rest angle [rad]; empty for
+    #: none. Applied as a joint effort ``ks (ref - q)`` every physics step (PlayEnv._apply_action,
+    #: ``action_utils.hand_spring_effort``), next to the PD drive, NOT folded into it: the drive's
+    #: maxForce (``hand_effort_limit``) clips only the PD, as the firmware's current limit does on the
+    #: real hand, where the spring is mechanical. Folded in, the spring was clipped with the PD and
+    #: a saturated flexion got the spring's 20-30% of the limit back for free.
+    hand_spring_stiffness: dict[str, float] = field(default_factory=dict)
+    hand_spring_ref: dict[str, float] = field(default_factory=dict)
 
     @property
     def num_joints(self) -> int:
@@ -92,6 +104,16 @@ class RobotSpec:
                 raise ValueError(f"{self.name}: {table} must cover exactly the hand joints")
         if self.hand_effort_limit and set(self.hand_effort_limit) != set(hand):
             raise ValueError(f"{self.name}: hand_effort_limit must be empty or cover exactly the hand joints")
+        for table in ("hand_friction", "hand_dynamic_friction", "hand_viscous_friction"):
+            value = getattr(self, table)
+            if isinstance(value, dict) and set(value) != set(hand):
+                raise ValueError(f"{self.name}: a per-joint {table} must cover exactly the hand joints")
+        if set(self.hand_spring_stiffness) != set(self.hand_spring_ref):
+            raise ValueError(f"{self.name}: hand_spring_stiffness and hand_spring_ref need the same joints")
+        if self.hand_spring_stiffness and set(self.hand_spring_stiffness) != set(hand):
+            raise ValueError(f"{self.name}: hand_spring_stiffness must be empty or cover exactly the hand joints")
+        if any(v < 0.0 for v in self.hand_spring_stiffness.values()):
+            raise ValueError(f"{self.name}: hand_spring_stiffness must be >= 0")
         if len(self.fingertip_link_names) != 5:
             raise ValueError(f"{self.name}: the task observes 5 fingertips")
         off = self.fingertip_offset
@@ -565,10 +587,106 @@ FLEXIV_WUJI_RIGHT_HUMAN_LIKE = RobotSpec(
     palm_side_link_names=(),
 )
 
+# ----------------------------------------------------------------------------
+# FLEXIV_WUJI_RIGHT_HUMAN_LIKE with the real hand's identified joint dynamics and the real robot's
+# limits (the "real" variant; cfg/robot/flexiv_wuji_right_real.yaml):
+#   * hand armature, joint friction and passive damping from the sysid of the deployed right hand
+#     (firmware 2.10.0; aiowuji sysid_fit.py MuJoCo fit of the 2026-09-30 fingers-up and 2026-10-09
+#     palm-down runs, assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json, kept out of git).
+#     MuJoCo `frictionloss` is a Coulomb torque [N m]; Isaac Sim >= 5.0 joint friction is an effort
+#     too, so it is used as both the static and the dynamic friction. MuJoCo joint `damping` is
+#     passive, so it goes in as viscous friction and the PD damping stays HAND2_DRIVE's (the deploy
+#     converts that kd to A s/rad). The fit's passive springs are applied as a joint effort
+#     outside the PD (_WUJI_RIGHT_SPRING, RobotSpec.hand_spring_stiffness).
+#   * hand torque limit = the deploy's 1.0 A current limit x each joint's identified torque constant
+#     (the fit's `gear`, N m/A; deploy config.yaml hand_kt). The firmware multiplies the PD output by
+#     ~1.97 BEFORE clipping the current, so that factor changes the gain conversion, not the limit.
+#   * arm limits 5 deg inside the spec on both sides and finger PIP <= 100 deg: in the URDF
+#     (rizon4s_right_wuji_real_limits.urdf), not here.
+# The PD gains, geometry, home pose and collision filter are FLEXIV_WUJI_RIGHT_HUMAN_LIKE's.
+# ----------------------------------------------------------------------------
+
+#: Per hand joint: (torque constant N m/A, armature kg m^2, passive damping N m s/rad, Coulomb
+#: friction N m), the sysid fit rounded to 4 significant figures (tests/test_robot_specs.py checks
+#: it against the JSON).
+_WUJI_RIGHT_SYSID = {
+    "r_thumb_cmc_flex": (0.439, 0.0001347, 4.39e-06, 0.05382),  # thumb_S1
+    "r_thumb_cmc_abd": (0.2042, 6.801e-05, 8.075e-06, 0.04521),  # thumb_S2
+    "r_thumb_mcp": (0.2546, 7.132e-05, 2.546e-06, 0.02253),  # thumb_S3
+    "r_thumb_ip": (0.2219, 0.0002385, 2.359e-06, 0.05255),  # thumb_S4
+    "r_index_finger_mcp_flex": (0.5986, 0.0003551, 1.064e-05, 0.0783),  # index_S1
+    "r_index_finger_mcp_abd": (0.2324, 0.0001063, 0.003128, 0.02839),  # index_S2
+    "r_index_finger_pip": (0.1795, 2.622e-05, 2.901e-06, 0.01979),  # index_S3
+    "r_index_finger_dip": (0.135, 4.875e-05, 4.08e-06, 0.01011),  # index_S4
+    "r_middle_finger_mcp_flex": (0.6611, 0.0004131, 6.611e-06, 0.07499),  # middle_S1
+    "r_middle_finger_mcp_abd": (0.2009, 6.992e-05, 0.002858, 0.02198),  # middle_S2
+    "r_middle_finger_pip": (0.1636, 1.913e-05, 2.555e-06, 0.01594),  # middle_S3
+    "r_middle_finger_dip": (0.1138, 2.834e-05, 0.001117, 0.00786),  # middle_S4
+    "r_ring_finger_mcp_flex": (0.5567, 0.0002835, 5.886e-06, 0.07003),  # ring_S1
+    "r_ring_finger_mcp_abd": (0.2053, 4.993e-05, 0.001846, 0.01984),  # ring_S2
+    "r_ring_finger_pip": (0.1686, 3.891e-05, 0.001516, 0.01526),  # ring_S3
+    "r_ring_finger_dip": (0.1635, 4.443e-05, 0.0004419, 0.0138),  # ring_S4
+    "r_pinky_mcp_flex": (0.4777, 0.0001032, 0.0008498, 0.03306),  # pinky_S1
+    "r_pinky_mcp_abd": (0.109, 7.36e-05, 0.004938, 0.01344),  # pinky_S2
+    "r_pinky_pip": (0.1002, 2.487e-05, 0.000616, 0.0146),  # pinky_S3
+    "r_pinky_dip": (0.157, 5.652e-05, 0.004776, 0.01838),  # pinky_S4
+}
+#: Per hand joint: the sysid fit's passive spring (stiffness N m/rad, rest angle rad), 4 significant
+#: figures. Replayed in PhysX (docs/results/flexiv_right_sysid_replay, 11-10) it halves the tracking
+#: error against the real trials: 23.6 -> 14.3 mrad at dt 1/120 (12.0 at 1/1000, = the MuJoCo fit).
+_WUJI_RIGHT_SPRING = {
+    "r_thumb_cmc_flex": (0.0843, 0.0619),  # thumb_S1
+    "r_thumb_cmc_abd": (0.06436, 0.2691),  # thumb_S2
+    "r_thumb_mcp": (0.02401, 0.2373),  # thumb_S3
+    "r_thumb_ip": (0.0197, 0.2892),  # thumb_S4
+    "r_index_finger_mcp_flex": (0.1053, 0.2061),  # index_S1
+    "r_index_finger_mcp_abd": (0.05887, 0.0683),  # index_S2
+    "r_index_finger_pip": (0.01922, 0.002333),  # index_S3
+    "r_index_finger_dip": (0.0119, 0.1165),  # index_S4
+    "r_middle_finger_mcp_flex": (0.1447, 0.2237),  # middle_S1
+    "r_middle_finger_mcp_abd": (0.05022, -0.0176),  # middle_S2
+    "r_middle_finger_pip": (0.01633, 0.01584),  # middle_S3
+    "r_middle_finger_dip": (0.01095, 0.1609),  # middle_S4
+    "r_ring_finger_mcp_flex": (0.1296, 0.05509),  # ring_S1
+    "r_ring_finger_mcp_abd": (0.03698, 0.06116),  # ring_S2
+    "r_ring_finger_pip": (0.01341, 0.07124),  # ring_S3
+    "r_ring_finger_dip": (0.01487, 0.09207),  # ring_S4
+    "r_pinky_mcp_flex": (0.1199, 0.1068),  # pinky_S1
+    "r_pinky_mcp_abd": (0.04985, -0.01235),  # pinky_S2
+    "r_pinky_pip": (0.01597, -0.0003289),  # pinky_S3
+    "r_pinky_dip": (0.0224, 0.062),  # pinky_S4
+}
+#: Coulomb-friction scale per joint type, on the fit's frictionloss (static and dynamic alike), for
+#: PhysX at dt 1/120 WITH the spring: the light PIP/DIP stick more at 1/120 than at 1/1000, which this
+#: undoes. The replay's "Rs" variant: 13.3 mrad over all trials vs 14.3 at x1 (S3/S4 11.6/12.4 ->
+#: 6.6/7.4 mrad). Finger S1 (MCP flex) x1, S2 (abduction) / S3 (PIP) x0.8, S4 (DIP) x0.6; thumb
+#: S1-S3 x0.8, S4 (IP) x1.
+_WUJI_FRICTION_SCALE_FINGER = (1.0, 0.8, 0.8, 0.6)
+_WUJI_FRICTION_SCALE_THUMB = (0.8, 0.8, 0.8, 1.0)
+_WUJI_RIGHT_FRICTION_SCALE = {
+    j: (_WUJI_FRICTION_SCALE_THUMB if k < 4 else _WUJI_FRICTION_SCALE_FINGER)[k % 4]
+    for k, j in enumerate(_WUJI_RIGHT_SYSID)  # thumb S1..S4, then index, middle, ring, pinky
+}
+#: The deploy's hand current limit [A] (deploy/simtoolreal/config.yaml hand_effort_limit).
+WUJI_HAND_CURRENT_LIMIT_A = 1.0
+
+FLEXIV_WUJI_RIGHT_REAL = dataclasses.replace(
+    FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
+    name="flexiv_wuji_right_real",
+    hand_armature={j: v[1] for j, v in _WUJI_RIGHT_SYSID.items()},
+    hand_effort_limit={j: WUJI_HAND_CURRENT_LIMIT_A * v[0] for j, v in _WUJI_RIGHT_SYSID.items()},
+    hand_friction={j: v[3] * _WUJI_RIGHT_FRICTION_SCALE[j] for j, v in _WUJI_RIGHT_SYSID.items()},
+    hand_dynamic_friction={j: v[3] * _WUJI_RIGHT_FRICTION_SCALE[j] for j, v in _WUJI_RIGHT_SYSID.items()},
+    hand_viscous_friction={j: v[2] for j, v in _WUJI_RIGHT_SYSID.items()},
+    hand_spring_stiffness={j: v[0] for j, v in _WUJI_RIGHT_SPRING.items()},
+    hand_spring_ref={j: v[1] for j, v in _WUJI_RIGHT_SPRING.items()},
+)
+
 ROBOT_SPECS: dict[str, RobotSpec] = {
     spec.name: spec for spec in (
         KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_HUMAN_LIKE_S2R, FLEXIV_SHARPA,
         FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN, FLEXIV_SHARPA_WUJIGAIN, FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
+        FLEXIV_WUJI_RIGHT_REAL,
     )
 }
 

@@ -160,6 +160,7 @@ _ROBOT_VARIANTS = {
     "FlexivWujiHumanLikeSharpaGain": "flexiv_wuji_human_like_sharpagain",
     "FlexivSharpaWujiGain": "flexiv_sharpa_wujigain",
     "FlexivWujiRightHumanLike": "flexiv_wuji_right_human_like",
+    "FlexivWujiRightReal": "flexiv_wuji_right_real",
     "FlexivWujiRightHLRL": "flexiv_wuji_right_hl_reallimits",
 }
 for _task in ("Cloth", "RigidCloth", "FoldPool", "RigidClothPhysx", "FoldPoolPhysx"):

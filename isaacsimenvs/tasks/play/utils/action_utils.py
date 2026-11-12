@@ -137,4 +137,20 @@ def apply_wrench_dr(env) -> None:
     )
 
 
-__all__ = ["apply_action_pipeline", "apply_wrench_dr", "sample_log_uniform"]
+__all__ = ["apply_action_pipeline", "apply_wrench_dr", "hand_spring_effort", "sample_log_uniform"]
+
+
+def hand_spring_effort(env) -> torch.Tensor | None:
+    """The hand's passive spring as a joint effort, ``ks (ref - q)`` (N, J) in sim joint order.
+
+    ``None`` when the robot has no spring (``RobotSpec.hand_spring_stiffness`` empty). Applied with
+    ``set_joint_effort_target`` every physics step: an implicit actuator passes the effort target
+    through unclipped (PhysX ``set_dof_actuation_forces``, Newton ``joint_f``), so the drive's
+    maxForce limits only the PD, as the firmware's current limit does on the real hand.
+    """
+    ks = getattr(env, "_spring_ks", None)
+    if ks is None:
+        return None
+    q = env.robot.data.joint_pos
+    q = q.torch if hasattr(q, "torch") else q
+    return ks * (env._spring_ref - q)

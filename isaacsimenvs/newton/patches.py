@@ -1349,6 +1349,14 @@ def _write_missing_properties(articulation) -> None:
              "write_joint_armature_to_sim_index"),
             ("joint_friction_coeff", getattr(actuator, "friction", None),
              "write_joint_friction_coefficient_to_sim_index"),
+            # Viscous joint friction (passive damping), only where the actuator cfg sets it (the
+            # RobotSpec's hand_viscous_friction): writing the actuator's default 0 elsewhere could
+            # overwrite a USD-authored value. MJWarp has one Coulomb term, so the cfg's
+            # dynamic_friction has nowhere to go; the static value above is the frictionloss.
+            ("joint_viscous_friction_coeff",
+             getattr(actuator, "viscous_friction", None)
+             if getattr(getattr(actuator, "cfg", None), "viscous_friction", None) is not None else None,
+             "write_joint_viscous_friction_coefficient_to_sim_index"),
         ):
             if value is None:
                 continue

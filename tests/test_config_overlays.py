@@ -181,7 +181,7 @@ EXPERIMENT_TASKS = {
 }
 # The robot-swapped ids (tasks/cloth/__init__.py) share their base task's cfg and agent YAML.
 for _robot in ("FlexivWuji", "FlexivWujiHumanLike", "FlexivWujiHumanLikeS2R", "FlexivSharpa",
-               "FlexivWujiRightHumanLike", "FlexivWujiRightHLRL"):
+               "FlexivWujiRightHumanLike", "FlexivWujiRightReal", "FlexivWujiRightHLRL"):
     EXPERIMENT_TASKS[f"Isaacsimenvs-FoldPoolPhysx{_robot}-Direct-v0"] = EXPERIMENT_TASKS[
         "Isaacsimenvs-FoldPoolPhysx-Direct-v0"
     ]

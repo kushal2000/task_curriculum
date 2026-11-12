@@ -1,0 +1,10 @@
+# Robot overlay: flexiv_wuji_right_human_like.yaml's robot and real-setup geometry, with the REAL
+# hand's identified joint dynamics and the real robot's joint limits (robots.FLEXIV_WUJI_RIGHT_REAL:
+# sysid armature / friction / passive damping, torque limit 1.0 A x Kt; URDF: arm limits 5 deg
+# inside the spec, finger PIP <= 100 deg). Same table geometry: top 0.33 m above the robot frame,
+# near side 0.31 m in front (see the human-like overlay for the derivation).
+robot: flexiv_wuji_right_real
+robot_self_collision: true
+robot_root_pos: [0.0, 0.51, 0.20]
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
