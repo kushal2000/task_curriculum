@@ -33,7 +33,12 @@ class RigidClothRandomizationCfg:
     """Multiplies ``slat_friction`` (slat vs table and non-fingertip links)."""
     fingertip_friction_scale: tuple[float, float] = (0.7, 1.4)
     """Multiplies ``fingertip_slat_friction``. Written on the fingertips, so with
-    ``friction_priority`` it also moves that env's fingertip-table friction by the same factor."""
+    ``friction_priority`` it also moves that env's fingertip-table friction by the same factor.
+    Under PhysX ``physx_chain.friction_model: cloth_min`` it multiplies the WHOLE robot's friction
+    (``assets.finger_tip_friction``), drawn once per env at startup."""
+    table_friction_scale: tuple[float, float] = (1.0, 1.0)
+    """PhysX ``physx_chain.friction_model: cloth_min`` only: multiplies ``assets.table_friction``,
+    drawn once per env at startup."""
     hinge_damping_scale: tuple[float, float] = (0.5, 3.0)
     """Log-uniform multiplier on ``joint_damping``. The floor is 0.5, not lower: the hinge is only
     stable at ``dt = 1/120`` because of this damping, and at a 0.3 floor one env in 32 went
@@ -128,9 +133,10 @@ class RigidClothCfg:
     expressed as a kinematic limit, so the plies cannot interpenetrate even before contact is
     resolved."""
 
-    slat_friction: float | None = None
-    """Friction a slat feels against the table and the non-fingertip robot links. ``None``
-    computes it: :func:`rigid_cloth.cloth_effective_friction` against the table, i.e.
+    slat_friction: float = -1.0
+    """Friction a slat feels against the table and the non-fingertip robot links. Negative
+    computes it (a float sentinel, not ``None``: the config checker refuses a float override of a
+    ``None`` default, so a recipe could not set it): :func:`rigid_cloth.cloth_effective_friction` against the table, i.e.
     ``sqrt(0.25 * 0.5) = 0.354`` -- Newton's VBD mixes a particle's ``soft_contact_mu`` with a
     shape's by geometric mean (``_average_contact_material``), so that is what the sheet feels.
 
@@ -213,8 +219,8 @@ class RigidClothCfg:
             raise ValueError(f"joint_armature must be >= 0, got {self.joint_armature}")
         if self.joint_stiffness < 0.0:
             raise ValueError(f"joint_stiffness must be >= 0, got {self.joint_stiffness}")
-        if self.slat_friction is not None and self.slat_friction < 0.0:
-            raise ValueError(f"slat_friction must be >= 0, got {self.slat_friction}")
+        if self.slat_friction < 0.0 and self.slat_friction != -1.0:
+            raise ValueError(f"slat_friction must be >= 0 (or -1: computed), got {self.slat_friction}")
 
     # --- derived
 
@@ -225,7 +231,7 @@ class RigidClothCfg:
     @property
     def friction(self) -> float:
         """The slat friction actually applied, resolving ``None``."""
-        if self.slat_friction is not None:
+        if self.slat_friction >= 0.0:
             return float(self.slat_friction)
         return rc.cloth_effective_friction(rc.CLOTH_REFERENCE["shape_mu"]["table"])
 

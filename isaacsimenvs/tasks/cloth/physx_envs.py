@@ -68,6 +68,7 @@ __all__ = [
     "RigidClothPhysxEnv",
     "author_articulation_props",
     "bind_material_in_every_env",
+    "bind_materials",
     "prepare_collider_asset",
 ]
 
@@ -190,21 +191,38 @@ def bind_material_in_every_env(
     Sdf-level, into ``usd_bulk.bulk_edit_layer``: at 24k envs this is ~10^5-10^6 specs, which the
     Usd API -- or Sdf edits made on Kit's root layer, O(N^2) -- take many minutes over.
     """
+    envs = list(range(num_envs)) if env_ids is None else [int(i) for i in env_ids]
+    return bind_materials(
+        stage,
+        ((f"/World/envs/env_{i}/{asset}/{rel}", material_path) for i in envs for rel in rel_paths),
+        tag=f"bind_{asset}",
+    )
+
+
+def bind_materials(stage, bindings, tag: str = "bind") -> int:
+    """Bind each ``(prim_path, material_path)`` in ``bindings`` (physics purpose), all in ONE
+    ``usd_bulk.bulk_edit_layer``. Returns the number of bindings.
+
+    One layer per call matters: each layer is inserted into the stage's sublayers, which recomposes
+    the stage, so 112 calls (7 pool shapes x 16 friction buckets) took 8.5 min at 1536 envs where
+    one call per shape took 25 s.
+    """
     from pxr import Sdf
 
-    target = Sdf.Path(material_path)
     schemas = Sdf.TokenListOp.Create(prependedItems=["MaterialBindingAPI"])
-    envs = list(range(num_envs)) if env_ids is None else [int(i) for i in env_ids]
-    with bulk_edit_layer(stage, f"bind_{asset}") as layer:
-        for i in envs:
-            for rel in rel_paths:
-                spec = Sdf.CreatePrimInLayer(layer, f"/World/envs/env_{i}/{asset}/{rel}")
-                spec.SetInfo("apiSchemas", schemas)
-                rs = spec.relationships.get("material:binding:physics")
-                if rs is None:
-                    rs = Sdf.RelationshipSpec(spec, "material:binding:physics", custom=False)
-                rs.targetPathList.explicitItems = [target]
-    return len(envs) * len(rel_paths)
+    targets: dict[str, Sdf.Path] = {}
+    count = 0
+    with bulk_edit_layer(stage, tag) as layer:
+        for prim_path, material_path in bindings:
+            target = targets.setdefault(material_path, Sdf.Path(material_path))
+            spec = Sdf.CreatePrimInLayer(layer, prim_path)
+            spec.SetInfo("apiSchemas", schemas)
+            rs = spec.relationships.get("material:binding:physics")
+            if rs is None:
+                rs = Sdf.RelationshipSpec(spec, "material:binding:physics", custom=False)
+            rs.targetPathList.explicitItems = [target]
+            count += 1
+    return count
 
 
 def author_articulation_props(
@@ -278,7 +296,10 @@ class _PhysxClothMixin:
         # The Play task's material pass writes every robot/table/object shape through the tensor API,
         # which resets combine modes (see the module docstring). Contacts are authored in USD instead,
         # so it must not run; the colliders it would have set to 0.5 keep PhysX's default 0.5.
-        for name in ("robot_friction", "table_friction"):
+        model = str(cfg.physx_chain.friction_model)
+        if model not in ("priority", "cloth_min"):
+            raise ValueError(f"physx_chain.friction_model must be priority or cloth_min, got {model!r}")
+        for name in ("robot_friction", "table_friction") if model == "priority" else ():
             if abs(float(getattr(a, name)) - _DEFAULT_MU) > 1e-9:
                 raise ValueError(
                     f"assets.{name}={getattr(a, name)}: the PhysX fold tasks leave robot links and the "
@@ -293,13 +314,15 @@ class _PhysxClothMixin:
         print(f"[physx] hinge armature {cfg.rigid_cloth.joint_armature:g} kg m^2", flush=True)
         _size_gpu_buffers(cfg)
         rd = cfg.rigid_cloth.randomization
-        if rd.enabled and (
+        if model == "priority" and rd.enabled and (
             tuple(rd.slat_friction_scale) != (1.0, 1.0) or tuple(rd.fingertip_friction_scale) != (1.0, 1.0)
+            or tuple(rd.table_friction_scale) != (1.0, 1.0)
         ):
             raise NotImplementedError(
                 "friction DR on PhysX: a tensor-API material write resets the combine modes that "
                 "match the cloth's friction, so it would silently average instead. Set "
-                "rigid_cloth.randomization.{slat,fingertip}_friction_scale to [1.0, 1.0]."
+                "rigid_cloth.randomization.{slat,fingertip,table}_friction_scale to [1.0, 1.0], or use "
+                "physx_chain.friction_model: cloth_min."
             )
         super().__init__(cfg, render_mode, **kwargs)
 
@@ -325,6 +348,9 @@ class _PhysxClothMixin:
 
         r, pc = self.cfg.rigid_cloth, self.cfg.physx_chain
         stage = get_current_stage()
+        if pc.friction_model == "cloth_min":
+            self._bind_cloth_min_materials(stage)
+            return
         slat = "/World/PhysicsMaterials/slat"
         tip = "/World/PhysicsMaterials/fingertip"
         define_scene_material(
@@ -360,6 +386,104 @@ class _PhysxClothMixin:
                 f"({'per unit mass' if pc.slat_compliant_acceleration else 'force'})"
                 if pc.slat_compliant_stiffness > 0.0 else "rigid"
             ),
+            flush=True,
+        )
+
+    def _draw_friction_buckets(self, scale, gen) -> tuple[torch.Tensor, torch.Tensor]:
+        """``(bucket multipliers (B,), env -> bucket (N,))`` for one friction, cloth_min model."""
+        rd, n = self.cfg.rigid_cloth.randomization, self.num_envs
+        lo, hi = float(scale[0]), float(scale[1])
+        if not rd.enabled or lo == hi:
+            return torch.tensor([lo if rd.enabled else 1.0]), torch.zeros(n, dtype=torch.long)
+        b = max(1, int(self.cfg.physx_chain.friction_buckets))
+        return torch.linspace(lo, hi, b), torch.randint(0, b, (n,), generator=gen)
+
+    def _bind_cloth_min_materials(self, stage) -> None:
+        """``physx_chain.friction_model: cloth_min``: one ``min`` slat material per friction bucket,
+        bound to the slats of the envs drawn into it. The robot's and the table's (average-mode)
+        frictions are tensor-written once the simulator runs (``_write_cloth_min_frictions``)."""
+        r, pc, a = self.cfg.rigid_cloth, self.cfg.physx_chain, self.cfg.assets
+        rd = r.randomization
+        n = self.num_envs
+        gen = torch.Generator().manual_seed(int(pc.friction_seed))
+        s_mult, s_idx = self._draw_friction_buckets(rd.slat_friction_scale, gen)
+        f_mult, f_idx = self._draw_friction_buckets(rd.fingertip_friction_scale, gen)
+        t_mult, t_idx = self._draw_friction_buckets(rd.table_friction_scale, gen)
+        self._fric_slat = float(r.friction) * s_mult[s_idx]                # (N,) cpu
+        self._fric_robot = float(a.finger_tip_friction) * f_mult[f_idx]
+        self._fric_table = float(a.table_friction) * t_mult[t_idx]
+        paths = []
+        for b, m in enumerate(s_mult.tolist()):
+            path = f"/World/PhysicsMaterials/slat_{b}"
+            define_scene_material(
+                stage, path, mu=float(r.friction) * m, combine=pc.slat_friction_combine,
+                compliant_stiffness=pc.slat_compliant_stiffness, compliant_damping=pc.slat_compliant_damping,
+                compliant_acceleration=pc.slat_compliant_acceleration,
+            )
+            paths.append(path)
+        # Every env's slats to its bucket's material, all pool shapes, in ONE layer (bind_materials).
+        s_idx_list = s_idx.tolist()
+        bindings = []
+        for k, art in enumerate(self._manipuland_arts()):
+            asset = art.cfg.prim_path.rsplit("/", 1)[-1]
+            envs = self._manipuland_envs(k)
+            rels = collider_paths(stage, f"/World/envs/env_{envs[0]}/{asset}")
+            if not rels:
+                raise RuntimeError(f"[physx] no collider under env_{envs[0]}/{asset}")
+            bindings.extend(
+                (f"/World/envs/env_{int(i)}/{asset}/{rel}", paths[s_idx_list[int(i)]])
+                for i in envs for rel in rels
+            )
+        slats = bind_materials(stage, bindings, tag="bind_slats_cloth_min")
+        self._fingertip_colliders = 0
+        print(
+            f"[physx] friction model cloth_min: bound {slats} slat colliders to {len(paths)} "
+            f"'{pc.slat_friction_combine}' material(s); robot and table average-mode, written at start",
+            flush=True,
+        )
+
+    def _write_cloth_min_frictions(self) -> None:
+        """Every robot shape at its env's robot friction, every table shape at its table friction."""
+        ids = torch.arange(self.num_envs, dtype=torch.int64, device="cpu")
+        for asset, mu in ((self.robot, self._fric_robot), (self.table, self._fric_table)):
+            view = asset.root_physx_view
+            mats = view.get_material_properties()
+            mats[:, :, 0] = mu.unsqueeze(1)
+            mats[:, :, 1] = mu.unsqueeze(1)
+            mats[:, :, 2] = 0.0
+            view.set_material_properties(mats, ids)
+
+    def _check_cloth_min_frictions(self) -> None:
+        """Read every friction back; log the pair distribution."""
+        r, pc = self.cfg.rigid_cloth, self.cfg.physx_chain
+        ids = torch.arange(self.num_envs, device=self.device)
+        worst = 0.0
+        for k, art in enumerate(self._manipuland_arts()):
+            keep, local = self._manipuland_rows(k, ids)
+            if local.numel() == 0:
+                continue
+            env_ids = ids if keep is None else ids[keep.to(ids.device)]
+            mats = art.root_physx_view.get_material_properties()[local.cpu().long()]
+            want = self._fric_slat[env_ids.cpu()].unsqueeze(1)
+            worst = max(worst, float((mats[..., 0] - want).abs().max()))
+        for asset, mu in ((self.robot, self._fric_robot), (self.table, self._fric_table)):
+            mats = asset.root_physx_view.get_material_properties()
+            worst = max(worst, float((mats[..., 0] - mu.unsqueeze(1)).abs().max()))
+        if worst > 1e-4:
+            raise RuntimeError(f"[physx] cloth_min frictions off by {worst:.4f} from what was written")
+        s, f, t = self._fric_slat, self._fric_robot, self._fric_table
+        pairs = {
+            "cloth-table": torch.minimum(s, t), "cloth-robot": torch.minimum(s, f),
+            "robot-table": 0.5 * (f + t),
+        }
+        capped = float(((s > t) | (s > f)).float().mean())
+        txt = ", ".join(
+            f"{k} {float(v.mean()):.3f} [{float(v.min()):.3f}, {float(v.max()):.3f}]" for k, v in pairs.items()
+        )
+        print(
+            f"[rigid_cloth] friction (cloth_min): slat {float(s.mean()):.3f} ({pc.slat_friction_combine}), "
+            f"robot {float(f.mean()):.3f}, table {float(t.mean()):.3f} (average) -> {txt}; "
+            f"slat above robot or table in {capped:.1%} of envs (that pair takes the lower)",
             flush=True,
         )
 
@@ -403,17 +527,28 @@ class _PhysxClothMixin:
             raise ValueError("[physx_chain] rigid_cloth.contact_ke / contact_kd are Newton (MJWarp) only")
         m = self._contact_margin_value()
         self._contact_margin = m
+        cloth_min = pc.friction_model == "cloth_min"
+        if cloth_min:
+            self._write_cloth_min_frictions()
+            self._check_cloth_min_frictions()
         for art in self._manipuland_arts():
             view = art.root_physx_view
             mats = view.get_material_properties()
             rest = view.get_rest_offsets()
-            bad_mu = float((mats[..., 0] - r.friction).abs().max())
+            bad_mu = 0.0 if cloth_min else float((mats[..., 0] - r.friction).abs().max())
             bad_rest = float((rest - m).abs().max())
             if bad_mu > 1e-4 or bad_rest > 1e-6:
                 raise RuntimeError(
                     f"[physx] {art.cfg.prim_path}: slat friction off by {bad_mu:.4f} or rest offset off "
                     f"by {bad_rest * 1e3:.3f} mm from what was authored"
                 )
+        if cloth_min:
+            print(
+                f"[rigid_cloth] contact margin {m * 1e3:.2f} mm as PhysX rest offset on every slat "
+                f"(contact offset {self._contact_offset_value() * 1e3:.1f} mm)",
+                flush=True,
+            )
+            return
         tips = self.robot.root_physx_view.get_material_properties()[0, :, 0]
         n_tip = int(((tips - r.fingertip_friction).abs() < 1e-4).sum())
         n_def = int(((tips - _DEFAULT_MU).abs() < 1e-4).sum())
@@ -444,6 +579,11 @@ class _PhysxClothMixin:
             k: torch.ones(n, device=self.device)
             for k in ("slat_friction", "fingertip_friction", "hinge_damping", "mass")
         }
+        if self.cfg.physx_chain.friction_model == "cloth_min":
+            # Drawn once at startup (_bind_cloth_min_materials); absolute values here, not factors.
+            self.dr_sample["slat_friction"] = self._fric_slat.to(self.device)
+            self.dr_sample["fingertip_friction"] = self._fric_robot.to(self.device)
+            self.dr_sample["table_friction"] = self._fric_table.to(self.device)
         self.dr_sample["hinge_stiffness"] = torch.zeros(n, device=self.device)
         self.dr_sample["contact_margin"] = torch.full((n,), self._contact_margin, device=self.device)
         self._dr_ready = bool(self.cfg.rigid_cloth.randomization.enabled)
@@ -455,7 +595,8 @@ class _PhysxClothMixin:
                 f"{tuple(rd.hinge_damping_scale)} (log), hinge stiffness {tuple(rd.hinge_stiffness)} "
                 f"N m/rad, contact margin {self._contact_margin * 1e3:.1f}"
                 f"{rd.contact_margin_offset[0] * 1e3:+.1f}..{rd.contact_margin_offset[1] * 1e3:+.1f} mm, "
-                f"mass x{tuple(rd.mass_scale)} (friction fixed: see physx_envs)",
+                f"mass x{tuple(rd.mass_scale)} (friction: "
+                f"{'per env at startup, see the cloth_min line' if self.cfg.physx_chain.friction_model == 'cloth_min' else 'fixed, see physx_envs'})",
                 flush=True,
             )
 

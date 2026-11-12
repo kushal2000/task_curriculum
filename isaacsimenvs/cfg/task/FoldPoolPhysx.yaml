@@ -328,7 +328,7 @@ rigid_cloth:
   joint_damping: 0.05             # actuator gain, NOT the URDF's <dynamics> (the importer drops that)
   joint_stiffness: 0.0            # limp chain; plate_joint_stiffness() is the calibrated alternative
   joint_limit: null               # null => ChainSpec.joint_limit (the chain's own thickness)
-  slat_friction: null             # null => sqrt(0.25 * table 0.5) = 0.354, the cloth's effective value
+  slat_friction: -1.0             # negative => sqrt(0.25 * table 0.5) = 0.354, the cloth's effective value
   fingertip_slat_friction: -1.0   # negative => sqrt(0.25 * fingertip 1.5) = 0.612, likewise
   # MJWarp takes the higher-PRIORITY geom's friction and `max` only on a tie; without priority a
   # slat felt max(0.354, 0.5) = 0.5 on the table and 1.5 under a fingertip. Costs fingertip-TABLE

@@ -1,0 +1,9 @@
+# flat7RW_rigid (stage 12, run 10): flat7RW_base with the 11-10 felt thickness: contact shell 1.5 +- 1 mm
+# per episode (plate + shells 3-7 mm) instead of 7 +- 3 mm. Nothing else changes.
+base: flat7RW_base
+
+env:
+  rigid_cloth:
+    contact_margin: 0.0015
+    randomization:
+      contact_margin_offset: [-0.001, 0.001]

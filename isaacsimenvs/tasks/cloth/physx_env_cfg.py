@@ -36,6 +36,27 @@ class PhysxChainCfg:
     fingertip_friction_combine: str = "max"
     """Friction combine mode on the fingertip colliders; see ``slat_friction_combine``."""
 
+    friction_model: str = "priority"
+    """How contact friction is set up.
+
+    ``"priority"`` (default): the cloth-matched model above -- slats ``min`` at
+    ``rigid_cloth.friction``, fingertips ``max`` at ``rigid_cloth.fingertip_friction``, everything
+    else PhysX's default 0.5; fixed, friction DR refused.
+
+    ``"cloth_min"``: slats ``min`` at ``rigid_cloth.friction``; the WHOLE robot at
+    ``assets.finger_tip_friction`` and the table at ``assets.table_friction``, both average-mode
+    (tensor-API written). Pairs: cloth-table = min(slat, table), cloth-robot = min(slat, robot),
+    robot-table = (robot + table) / 2. With ``rigid_cloth.randomization`` on, each of the three is
+    drawn per env ONCE at startup (``slat_friction_scale``, ``fingertip_friction_scale`` -- the robot
+    here --, ``table_friction_scale``), quantised to ``friction_buckets`` values: PhysX caps a scene at
+    64K materials and the slats need one USD material (with its combine mode) per bucket."""
+
+    friction_buckets: int = 16
+    """Distinct values per randomised friction under ``friction_model: cloth_min``."""
+
+    friction_seed: int = 0
+    """Seed of the per-env friction draw under ``friction_model: cloth_min``."""
+
     contact_offset_margin: float = 0.002
     """A slat's PhysX contact offset is its rest offset (the 7 mm ``rigid_cloth.contact_margin``) plus
     this [m]. PhysX starts generating contacts at the contact offset and holds them at the rest
