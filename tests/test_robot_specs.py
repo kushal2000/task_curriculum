@@ -294,3 +294,35 @@ def test_flexiv_sharpa_filter_covers_its_derivation() -> None:
     derived, _ = self_collision_pairs.derive("flexiv_sharpa")
     pairs = lambda m: {frozenset((a, b)) for a, bs in m.items() for b in bs}  # noqa: E731
     assert pairs(derived) <= pairs(robots.FLEXIV_SHARPA.self_collision_filter)
+
+REAL_URDF = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
+
+
+def test_right_real_urdf_limits() -> None:
+    """The real-limits URDF differs from the human-like one only in the arm limits (5 deg inside
+    on both sides) and the finger PIP upper limit (100 deg); the home pose stays inside."""
+    base, real = _joints(RIGHT_URDF), _joints(REAL_URDF)
+    assert set(base) == set(real)
+    expect_deg = {"joint1": (-160, 160), "joint2": (-130, 130), "joint3": (-170, 170),
+                  "joint4": (-107, 154), "joint5": (-170, 170), "joint6": (-80, 260), "joint7": (-170, 170)}
+    pips = {f"r_{f}_pip" for f in ("index_finger", "middle_finger", "ring_finger", "pinky")}
+    for name, j in real.items():
+        lim, blim = j.find("limit"), base[name].find("limit")
+        if lim is None:
+            assert blim is None, name
+            continue
+        lo, hi = float(lim.get("lower")), float(lim.get("upper"))
+        blo, bhi = float(blim.get("lower")), float(blim.get("upper"))
+        if name in expect_deg:
+            assert (math.degrees(lo), math.degrees(hi)) == pytest.approx(expect_deg[name], abs=0.01), name
+            assert math.degrees(lo - blo) == pytest.approx(5.0, abs=0.01), name
+            assert math.degrees(bhi - hi) == pytest.approx(5.0, abs=0.01), name
+        elif name in pips:
+            assert (lo, math.degrees(hi)) == (blo, pytest.approx(100.0, abs=0.01)), name
+        else:
+            assert (lo, hi) == (blo, bhi), name
+        assert lim.get("effort") == blim.get("effort") and lim.get("velocity") == blim.get("velocity"), name
+    for name, q in robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE.arm_default_joint_pos.items():
+        lim = real[name].find("limit")
+        # 0.1 rad: the arm reset noise (reset_dof_pos_random_interval_arm).
+        assert float(lim.get("lower")) + 0.1 <= q <= float(lim.get("upper")) - 0.1, name

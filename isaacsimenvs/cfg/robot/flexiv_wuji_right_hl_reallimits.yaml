@@ -1,0 +1,8 @@
+# Robot overlay: flexiv_wuji_right_human_like.yaml's robot (HAND2_DRIVE, no sysid) with the real robot's
+# joint limits (rizon4s_right_wuji_real_limits.urdf: arm 5 deg inside the spec, finger PIP <= 100 deg), in the
+# real-setup geometry (table top 0.33 m above the robot frame).
+robot: flexiv_wuji_right_human_like
+robot_self_collision: true
+robot_root_pos: [0.0, 0.51, 0.20]
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"

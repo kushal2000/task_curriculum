@@ -1,0 +1,9 @@
+# flat7RW_base (stage 12, run 11, control for 7-10): the flat7 recipe on Flexiv + right Wuji with HAND2_DRIVE
+# (no sysid), the real joint limits and the real-setup table height; everything else as flat7 (old contact
+# frictions, 7 +- 3 mm contact shell, default table DR).
+base: flat7
+task: Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHLRL-Direct-v0
+
+env:
+  cloth:
+    start_height: 0.20          # see flat7FlexivWujiRHL: at 0.30 the sheet spawns among the fingertips
