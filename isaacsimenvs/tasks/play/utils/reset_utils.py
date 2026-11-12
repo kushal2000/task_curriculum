@@ -12,6 +12,7 @@ from isaaclab.utils.math import random_orientation
 from .action_utils import sample_log_uniform
 from .goal_sampling import sample_absolute_goal_pose, sample_delta_goal_pose
 from .obs_utils import KEYPOINT_CORNERS, NUM_FINGERTIPS, _perturb_quat
+from .point_dr import MODES, RealisticLags
 
 def allocate_state_buffers(env) -> None:
     """Populate every per-env buffer + index cache used by the hooks.
@@ -169,6 +170,7 @@ def allocate_state_buffers(env) -> None:
         env._arm_joint_mask[env._arm_joint_ids] = True
     _init_spring_drive(env)
     _init_hand_dynamics_dr(env)
+    _init_point_dr(env)
     _print_dr_summary(env)
 
     # --- Wrench DR state (Phase C/D) ---
@@ -269,6 +271,47 @@ def _init_hand_dynamics_dr(env) -> None:
         f"{float(env._hand_effort_base[0, hand].min()):.3f}-{float(env._hand_effort_base[0, hand].max()):.3f} N m",
         flush=True,
     )
+
+
+def _init_point_dr(env) -> None:
+    """State for point-level object DR (``point_dr_mode``); validates the config."""
+    dr = env.cfg.domain_randomization
+    mode = str(dr.point_dr_mode)
+    if mode not in MODES:
+        raise ValueError(f"domain_randomization.point_dr_mode must be one of {MODES}, got {mode!r}")
+    if mode == "off":
+        return
+    pose_dr = (
+        dr.use_object_state_delay_noise
+        or any(float(v) != 0.0 for v in dr.object_pose_bias_xyz)
+        or float(dr.object_pose_bias_rot_degrees) > 0.0
+    )
+    if pose_dr:
+        raise ValueError(
+            "point_dr_mode replaces the pose-level object DR: set use_object_state_delay_noise false "
+            "and object_pose_bias_xyz / object_pose_bias_rot_degrees to zero."
+        )
+    if mode == "simple":
+        lo, hi = (int(v) for v in dr.point_delay_range)
+        if not 0 <= lo <= hi:
+            raise ValueError(f"point_delay_range must be 0 <= lo <= hi, got {(lo, hi)}")
+        env._point_queue_len = hi + 1
+    else:
+        lo, hi = (int(v) for v in dr.point_base_delay_range)
+        cap = int(dr.point_delay_max)
+        if not 0 <= lo <= hi <= cap or int(dr.point_delay_jitter) < 0 or min(dr.point_hold_choices) < 1:
+            raise ValueError(
+                "realistic point DR needs 0 <= base lo <= hi <= point_delay_max, jitter >= 0, k >= 1; "
+                f"got base {(lo, hi)}, max {cap}, jitter {dr.point_delay_jitter}, k {dr.point_hold_choices}"
+            )
+        env._point_queue_len = cap + 1
+        env._point_lags = RealisticLags(env.num_envs, env.device)
+    k = int(env._keypoint_offsets.shape[1])
+    env._point_bias = torch.zeros(env.num_envs, k, 3, device=env.device)
+    env._point_common_bias = torch.zeros(env.num_envs, 3, device=env.device)
+    # The queues are allocated on first use, when the frame and proprio widths are known.
+    env._point_queue = None
+    env._proprio_queue = None
 
 
 def _randomize_robot_dof_state(env, env_ids: torch.Tensor) -> None:
@@ -501,11 +544,12 @@ def _draw_episode_dr(env, env_ids: torch.Tensor) -> None:
     """Re-draw every per-episode DR term for ``env_ids``.
 
     The order of the draws is fixed (it sets the RNG stream): fixed lags, object pose bias,
-    robot PD gains, hand joint dynamics.
+    point-level object DR, robot PD gains, hand joint dynamics.
     """
     dr = env.cfg.domain_randomization
     _draw_delay_lags(env, env_ids, dr)
     _draw_object_pose_bias(env, env_ids, dr)
+    _draw_point_dr(env, env_ids, dr)
     _draw_robot_gains(env, env_ids, dr)
     _draw_hand_dynamics(env, env_ids, dr)
 
@@ -541,6 +585,17 @@ def _draw_object_pose_bias(env, env_ids, dr) -> None:
         ident = torch.zeros(n, 4, device=env.device)
         ident[:, 0] = 1.0
         env._object_bias_quat[env_ids] = _perturb_quat(ident, float(dr.object_pose_bias_rot_degrees))
+
+
+def _draw_point_dr(env, env_ids, dr) -> None:
+    """Point-level object DR (utils/point_dr.py): per-point and common biases, the camera stream."""
+    if str(dr.point_dr_mode) == "off":
+        return
+    n = env_ids.numel()
+    env._point_bias[env_ids] = _symmetric_uniform(n, env._point_bias.shape[1], dr.point_bias_xyz, env.device)
+    env._point_common_bias[env_ids] = _symmetric_uniform(n, None, dr.point_common_bias_xyz, env.device)
+    if dr.point_dr_mode == "realistic":
+        env._point_lags.draw_episode(env_ids, dr.point_base_delay_range, dr.point_hold_choices)
 
 
 def _draw_robot_gains(env, env_ids, dr) -> None:
@@ -598,6 +653,19 @@ def _print_dr_summary(env) -> None:
         f"robot gains k x{tuple(dr.robot_stiffness_scale_range)} d x{tuple(dr.robot_damping_scale_range)}",
         flush=True,
     )
+    if str(dr.point_dr_mode) != "off":
+        lag = (
+            f"lag {tuple(dr.point_delay_range)} per step"
+            if dr.point_dr_mode == "simple"
+            else f"base {tuple(dr.point_base_delay_range)} +-{dr.point_delay_jitter}, max "
+            f"{dr.point_delay_max}, frame every k in {tuple(dr.point_hold_choices)}"
+        )
+        print(
+            f"[dr] point DR {dr.point_dr_mode}: {lag} | noise {dr.point_noise_std} m, bias "
+            f"+-{tuple(dr.point_bias_xyz)} m per point, common +-{tuple(dr.point_common_bias_xyz)} m "
+            f"(points + goal) | obs delay on proprio only",
+            flush=True,
+        )
 
 
 __all__ = [

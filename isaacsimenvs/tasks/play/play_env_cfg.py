@@ -499,6 +499,29 @@ class DomainRandomizationCfg:
     hand_friction_scale_range: tuple[float, float] = (1.0, 1.0)
     hand_effort_limit_scale_range: tuple[float, float] = (1.0, 1.0)
 
+    # Point-level object DR (utils/point_dr.py). Instead of perturbing the fitted object POSE, the
+    # K tracked points (Play's keypoints, the cloth's moving-half corners) and the goal pose are
+    # delayed together by one lag, each point gets its own noise and per-episode bias, the points
+    # and the goal share a per-episode common bias, and the points are rigidly re-fitted -- the
+    # same pipeline as the clean observation. "off" | "simple" | "realistic" (see point_dr.py).
+    # When on: the pose-level object DR (use_object_state_delay_noise, object_pose_bias_*) must be
+    # off, and use_obs_delay delays only the proprioceptive fields -- not the point-derived ones
+    # (object_rot, keypoints_*), not prev_action_targets (known instantly on hardware).
+    point_dr_mode: str = "off"
+    # simple: lag drawn every step, uniform on this inclusive range [policy steps].
+    point_delay_range: tuple[int, int] = (0, 0)
+    # realistic: per-episode base latency (inclusive), per-frame jitter +-j, cap, and the camera
+    # period k [policy steps] drawn per episode from the choices.
+    point_base_delay_range: tuple[int, int] = (0, 0)
+    point_delay_jitter: int = 0
+    point_delay_max: int = 0
+    point_hold_choices: tuple[int, ...] = (1,)
+    # Per-point noise: white [m] every step, and a bias drawn per episode uniform in +-xyz [m].
+    point_noise_std: float = 0.0
+    point_bias_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    # Per-episode bias shared by all points AND the goal, uniform in +-xyz [m].
+    point_common_bias_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
+
     # Random force/torque impulses on the object body.
     force_scale: float = 20.0
     force_prob_range: tuple[float, float] = (0.001, 0.1)

@@ -9,6 +9,7 @@ import torch
 from isaaclab.utils.math import convert_quat, quat_apply, quat_from_angle_axis, quat_mul
 
 from ..robots import KUKA_SHARPA
+from .point_dr import push_and_read, refit_points, simple_lags
 
 
 # ----------------------------------------------------------------------------
@@ -244,6 +245,104 @@ def _apply_object_state_dr(env, obj_pos, obj_rot, obj_linvel, obj_angvel):
     return noisy_pos, noisy_rot, noisy_vel
 
 
+#: Under point DR, the policy fields use_obs_delay leaves alone: the point-derived ones (they carry
+#: the point lag), prev_action_targets (the robot's own command, known instantly on hardware) and
+#: the constant object_scales.
+_UNDELAYED_IN_POINT_MODE = (
+    "object_rot", "object_vel", "keypoints_rel_palm", "keypoints_rel_goal",
+    "prev_action_targets", "object_scales",
+)
+
+
+def _apply_point_dr(env, points, rest, goal_pos, goal_rot):
+    """Point-level object DR (``point_dr_mode``; see utils/point_dr.py).
+
+    ``points`` (N, K, 3) and the goal pose share one lag; each point gets its own noise and
+    per-episode bias; a per-episode common bias moves the points and the goal together. The points
+    are then rigidly re-fitted to ``rest`` (N, K, 3), as the clean keypoints are built from a pose.
+    Returns ``(keypoints (N, K, 3), object quat wxyz, goal pos, goal quat wxyz)``.
+    """
+    dr = env.cfg.domain_randomization
+    n, k, _ = points.shape
+    frame = torch.cat([points.reshape(n, 3 * k), goal_pos, goal_rot], dim=-1)
+    start = _episode_start(env)
+    if env._point_queue is None:
+        env._point_queue = torch.zeros(n, env._point_queue_len, frame.shape[1], device=env.device)
+    if dr.point_dr_mode == "simple":
+        lags = simple_lags(n, dr.point_delay_range, env.device)
+    else:
+        lags = env._point_lags.step(start, int(dr.point_delay_jitter), int(dr.point_delay_max))
+    env._point_lag_last = lags  # read by probes
+    env._point_queue, delayed = push_and_read(env._point_queue, frame, lags, start)
+
+    obs_points = delayed[:, : 3 * k].reshape(n, k, 3) + env._point_bias
+    obs_points = obs_points + env._point_common_bias.unsqueeze(1)
+    if float(dr.point_noise_std) > 0.0:
+        obs_points = obs_points + torch.randn_like(obs_points) * float(dr.point_noise_std)
+    kp, quat = refit_points(rest, obs_points)
+
+    obs_goal_pos = delayed[:, 3 * k : 3 * k + 3] + env._point_common_bias
+    obs_goal_rot = torch.nn.functional.normalize(delayed[:, 3 * k + 3 : 3 * k + 7], dim=-1)
+    return kp, quat, obs_goal_pos, obs_goal_rot
+
+
+def _observed_object_and_goal(env, obj_pos, obj_rot, obj_linvel, obj_angvel, obj_kp, goal_pos, goal_rot, kp_offsets):
+    """The object and goal as the policy observes them, under one of three regimes.
+
+    * ``point_dr_mode`` on: the tracked points and the goal go through the point DR
+      (``_apply_point_dr``) and the object pose is re-fitted from the perturbed points;
+    * pose-level DR (``use_object_state_delay_noise`` and/or ``object_pose_bias_*``): the object
+      pose is delayed, noised and biased, and the keypoints rebuilt from it;
+    * neither: the true object pose.
+
+    Returns ``(keypoints (N, K, 3), object quat wxyz, object vel (N, 6), goal pos, goal quat wxyz)``.
+    """
+    dr = env.cfg.domain_randomization
+    obj_vel = torch.cat([obj_linvel, obj_angvel], dim=-1)
+    if str(dr.point_dr_mode) != "off":
+        tracked = getattr(env, "_tracked_points_w", None)
+        points = tracked() - env.scene.env_origins.unsqueeze(1) if tracked is not None else obj_kp
+        kp, rot, g_pos, g_rot = _apply_point_dr(env, points, kp_offsets, goal_pos, goal_rot)
+        # Same quaternion sign as the clean observation (the fit's sign is arbitrary).
+        rot = torch.where((rot * obj_rot).sum(dim=-1, keepdim=True) < 0.0, -rot, rot)
+        return kp, rot, obj_vel, g_pos, g_rot  # the point stream carries no velocity: obj_vel unused
+
+    if dr.use_object_state_delay_noise:
+        pos, rot, vel = _apply_object_state_dr(env, obj_pos, obj_rot, obj_linvel, obj_angvel)
+    else:
+        pos, rot, vel = obj_pos, obj_rot, obj_vel
+    # Per-episode pose bias (zero / identity unless object_pose_bias_* is set).
+    pos = pos + env._object_bias_pos
+    rot = quat_mul(env._object_bias_quat, rot)
+    return _keypoints_world(pos, rot, kp_offsets), rot, vel, goal_pos, goal_rot
+
+
+def _delay_proprio_fields(env, obs_noisy: dict, obj_kp: torch.Tensor, palm_frame_offset: torch.Tensor) -> None:
+    """Under point DR, ``use_obs_delay`` delays the proprioceptive fields only, in place.
+
+    The point-derived fields already carry the point lag (``_UNDELAYED_IN_POINT_MODE``).
+    ``keypoints_rel_palm`` is rebuilt from the DELAYED palm, as on hardware: camera points minus
+    the proprio palm the policy reads at the same step. ``palm_frame_offset`` turns the observed
+    palm_pos (Play frame) back into the env frame the points are in.
+    """
+    fields = [f for f in env.cfg.obs.obs_list if f not in _UNDELAYED_IN_POINT_MODE]
+    if "palm_pos" not in fields:
+        fields.append("palm_pos")
+    prop = _stack_obs_dict(obs_noisy, fields)
+    if env._proprio_queue is None:
+        env._proprio_queue = torch.zeros(env.num_envs, env._obs_queue.shape[1], prop.shape[1], device=env.device)
+    env._proprio_queue, prop = _sample_delay(
+        env._proprio_queue, prop, env, flush=_episode_start(env), fixed_idx=env._obs_delay_idx
+    )
+    start = 0
+    for f in fields:
+        width = obs_noisy[f].reshape(env.num_envs, -1).shape[1]
+        obs_noisy[f] = prop[:, start:start + width].reshape(obs_noisy[f].shape)
+        start += width
+    palm_delayed = obs_noisy["palm_pos"] + palm_frame_offset
+    obs_noisy["keypoints_rel_palm"] = obj_kp - palm_delayed.unsqueeze(1)
+
+
 def _apply_obs_delay(env, policy_tensor: torch.Tensor) -> torch.Tensor:
     """Apply per-env policy-observation delay."""
     env._obs_queue, delayed = _sample_delay(
@@ -296,20 +395,13 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     goal_pos = env.goal_viz.data.root_pos_w - env_origins
     goal_rot = env.goal_viz.data.root_quat_w  # wxyz
 
-    if dr.use_object_state_delay_noise:
-        noisy_obj_pos, noisy_obj_rot, noisy_obj_vel = _apply_object_state_dr(
-            env, obj_pos, obj_rot, obj_linvel, obj_angvel
-        )
-    else:
-        noisy_obj_pos, noisy_obj_rot, noisy_obj_vel = obj_pos, obj_rot, obj_vel
-    # Per-episode pose bias (zero / identity unless object_pose_bias_* is set).
-    noisy_obj_pos = noisy_obj_pos + env._object_bias_pos
-    noisy_obj_rot = quat_mul(env._object_bias_quat, noisy_obj_rot)
-
+    point_mode = str(dr.point_dr_mode) != "off"
     kp_offsets = env._keypoint_offsets * env._object_scale_multiplier.unsqueeze(1)
     obj_kp = _keypoints_world(obj_pos, obj_rot, kp_offsets)
     goal_kp = _keypoints_world(goal_pos, goal_rot, kp_offsets)
-    noisy_obj_kp = _keypoints_world(noisy_obj_pos, noisy_obj_rot, kp_offsets)
+    noisy_obj_kp, noisy_obj_rot, noisy_obj_vel, obs_goal_pos, obs_goal_rot = _observed_object_and_goal(
+        env, obj_pos, obj_rot, obj_linvel, obj_angvel, obj_kp, goal_pos, goal_rot, kp_offsets
+    )
 
     # Optional per-env yaw noise on the observed goal (world +Z about goal_pos).
     goal_yaw_obs_noise = getattr(env, "goal_yaw_obs_noise", None)
@@ -317,9 +409,10 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         z_axis = torch.tensor(
             [0.0, 0.0, 1.0], device=goal_rot.device, dtype=goal_rot.dtype
         ).unsqueeze(0).expand(env.num_envs, -1)
-        yaw_q = quat_from_angle_axis(goal_yaw_obs_noise, z_axis)
-        noisy_goal_rot = quat_mul(yaw_q, goal_rot)
-        noisy_goal_kp = _keypoints_world(goal_pos, noisy_goal_rot, kp_offsets)
+        obs_goal_rot = quat_mul(quat_from_angle_axis(goal_yaw_obs_noise, z_axis), obs_goal_rot)
+        noisy_goal_kp = _keypoints_world(obs_goal_pos, obs_goal_rot, kp_offsets)
+    elif point_mode:
+        noisy_goal_kp = _keypoints_world(obs_goal_pos, obs_goal_rot, kp_offsets)
     else:
         noisy_goal_kp = goal_kp
 
@@ -376,10 +469,13 @@ def build_observations(env) -> dict[str, torch.Tensor]:
             joint_pos + torch.randn_like(joint_pos) * dr.joint_pos_obs_noise_std * 2.0 / span
         )
 
+    if point_mode and dr.use_obs_delay:
+        _delay_proprio_fields(env, obs_noisy, noisy_obj_kp, palm_pos - palm_pos_obs)
+
     state_tensor = _stack_obs_dict(obs_clean, env.cfg.obs.state_list)
     policy_tensor = _stack_obs_dict(obs_noisy, env.cfg.obs.obs_list)
 
-    if dr.use_obs_delay:
+    if dr.use_obs_delay and not point_mode:
         policy_tensor = _apply_obs_delay(env, policy_tensor)
 
     clip = env.cfg.obs.clamp_abs_observations

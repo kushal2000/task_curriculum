@@ -432,6 +432,11 @@ class ClothTaskMixin:
         nodal = nodal.torch if hasattr(nodal, "torch") else nodal
         return nodal.view(self.num_envs, -1, 3)[:, self._kp_idx_t, :]
 
+    def _tracked_points_w(self) -> torch.Tensor:
+        """The points ``point_dr_mode`` perturbs (obs_utils): the moving-half corners themselves,
+        in keypoint order -- what a point tracker sees -- rather than the rigid reconstruction."""
+        return self.cloth_keypoints_w()
+
     def fold_error(self) -> torch.Tensor:
         """Per-env max keypoint distance from its fold target, ``(num_envs,)``.
 

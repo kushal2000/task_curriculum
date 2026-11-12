@@ -29,6 +29,7 @@ def disable_randomization(cfg) -> None:
     dr.object_pose_bias_rot_degrees = 0.0
     dr.robot_stiffness_scale_range = (1.0, 1.0)
     dr.robot_damping_scale_range = (1.0, 1.0)
+    dr.point_dr_mode = "off"
     dr.hand_friction_scale_range = (1.0, 1.0)
     dr.hand_effort_limit_scale_range = (1.0, 1.0)
     dr.force_scale = 0.0
