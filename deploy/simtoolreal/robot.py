@@ -117,11 +117,32 @@ def hand_velocity(q: np.ndarray, t: float, memo: dict, window_s: float) -> np.nd
     return memo["dq"]
 
 
+class Ticker:
+    """A fixed-rate loop inside the arm's event loop: `await ticker.wait()` once per iteration.
+
+    aioflexiv's torque loop is a task in this same event loop. Each of its ticks blocks about 1 ms
+    (read_once waits for the next 1 kHz robot state), and every asyncio timer wake-up costs 2-3 of
+    those ticks, so asyncio.sleep(0.005) takes ~7.5 ms (joint_state ran at ~125 Hz, not 200).
+    Instead, yield one arm tick at a time (sleep(0)) until the deadline; deadlines advance by
+    exactly one period, so the average rate holds."""
+
+    def __init__(self, rate_hz: float):
+        self.period = 1.0 / rate_hz
+        self.deadline = time.perf_counter() + self.period
+
+    async def wait(self) -> None:
+        while time.perf_counter() < self.deadline:
+            await asyncio.sleep(0)
+        self.deadline += self.period
+        if time.perf_counter() > self.deadline:   # a whole period behind: don't try to catch up
+            self.deadline = time.perf_counter() + self.period
+
+
 async def publish_joint_state(cfg, spec, arm, hand, status: dict) -> None:
     """joint_state at rate_hz until cancelled or the arm stops. status["tripped"]: a safety trip's reason;
     status["ready"]: policy mode has brought the hand home and now forwards joint_target."""
     pub = open_publisher(cfg.bus.joint_state_port)
-    memo, seq = {}, 0
+    memo, seq, ticker = {}, 0, Ticker(cfg.robot.rate_hz)
     try:
         while (q := read_q(arm, hand)) is not None:
             now = time.time()
@@ -129,7 +150,7 @@ async def publish_joint_state(cfg, spec, arm, hand, status: dict) -> None:
             send(pub, "joint_state", {"seq": seq, "t": now, "q": q, "dq": dq, "tripped": status.get("tripped"),
                                      "ready": bool(status.get("ready"))})
             seq += 1
-            await asyncio.sleep(1.0 / cfg.robot.rate_hz)
+            await ticker.wait()
     finally:
         pub.close(linger=0)
 
@@ -224,6 +245,7 @@ async def follow_policy(cfg, spec, arm, hand, status: dict) -> str:
     commanded = read_q(arm, hand)         # what the robot is being sent (at start: where it is)
     status["ready"] = True                # policy.py starts only now, from this pose (not mid hand-move)
     target, last_seq, following = None, None, False
+    ticker = Ticker(rc.rate_hz)
     try:
         while (q := read_q(arm, hand)) is not None:
             target = recv_latest(sub) or target
@@ -247,7 +269,7 @@ async def follow_policy(cfg, spec, arm, hand, status: dict) -> str:
                     print(f"[robot] no joint_target for {rc.target_timeout_s} s: holding", flush=True)
                     following = False
                     commanded = hold(arm, hand)
-            await asyncio.sleep(1.0 / rc.rate_hz)
+            await ticker.wait()
         return ARM_STOPPED
     finally:
         sub.close(linger=0)
@@ -293,6 +315,7 @@ async def play_openloop(cfg, spec, arm, hand, status: dict) -> str:
         print(f"[robot] openloop: sending {n} targets ({n * dt:.1f} s) from {roll['path']}", flush=True)
         commanded = read_q(arm, hand)
         t0, sent, ended = time.perf_counter(), -1, False
+        ticker = Ticker(rc.rate_hz)
         while (q := read_q(arm, hand)) is not None:
             tick = int((time.perf_counter() - t0) / dt)
             k = min(tick, n - 1)
@@ -312,7 +335,7 @@ async def play_openloop(cfg, spec, arm, hand, status: dict) -> str:
                     if k == n - 1 and not ended:
                         ended = True
                         print("[robot] openloop: last target sent; holding it. Ctrl-C to end.", flush=True)
-            await asyncio.sleep(1.0 / rc.rate_hz)
+            await ticker.wait()
         return ARM_STOPPED
     finally:
         announcer.cancel()

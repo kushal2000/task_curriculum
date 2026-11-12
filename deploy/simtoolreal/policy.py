@@ -46,6 +46,10 @@ def load_network(checkpoint: Path, config: Path, expl_coef: float, num_actions: 
     pretrained_policy/config.yaml). SAPG trains several policy "blocks" that differ only in one extra
     input, the exploration coefficient; expl_coef 0.0 is the one trained on the task reward only.
     """
+    # One CPU thread. The net is tiny (0.6 ms on 8 threads, 2 ms on 1, idle), but torch's default
+    # thread pool spins on every core: with FoundationPose, the recorder and the viewer busy on the
+    # same PC, it took 21 ms median, 50 ms p99, and the loop fell to 30 Hz. 1 thread under that load: 2.3 ms.
+    torch.set_num_threads(1)
     # load player.py by path: importing the isaacsimenvs package would pull in Isaac Lab
     path = REPO / "isaacsimenvs" / "eval" / "player.py"
     module_spec = importlib.util.spec_from_file_location("_play_player", path)
