@@ -1,0 +1,6 @@
+# box2RW_allDR (stage 12, run 5): flat7RW_allDR on the 2-plate chain only (box2-mid, size DR 10-20 cm).
+base: flat7RW_allDR
+
+env:
+  fold_pool:
+    shapes: [box2-mid]

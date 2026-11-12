@@ -1,5 +1,47 @@
-# flat7FlexivWujiRHL: the flat7 recipe (flat7.yaml) on the Flexiv Rizon 4s + RIGHT Wuji Hand 2 with
-# human-like joint limits, in the real setup's geometry (cfg/robot/flexiv_wuji_right_human_like.yaml);
-# only the robot differs.
+# flat7FlexivWujiRHL: the flat7 recipe (flat7.yaml) on the Flexiv Rizon 4s + RIGHT Wuji Hand 2 as the
+# real robot is: real-setup geometry, the hand's identified joint dynamics and torque limits, the
+# real joint limits (cfg/robot/flexiv_wuji_right_real.yaml, robots.FLEXIV_WUJI_RIGHT_REAL). Until
+# 2026-11-10 this ran on ...RightHumanLike (HAND2_DRIVE armature, no friction, the spec's limits).
 base: flat7
-task: Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHumanLike-Direct-v0
+task: Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0
+
+env:
+  reset:
+    # Table-height DR: the (kinematic) table is moved +-1.5 cm in z at every reset by Play's
+    # _reset_table_pose; the base stays put, so the policy cannot see it (palm_pos is in the base
+    # frame). With start_height 0.20 the sheet drops 3.5-6.5 cm onto whatever height the table is at.
+    table_reset_z_range: 0.015
+  cloth:
+    # 5 cm above the nominal table top (was 0.30 = 15 cm). With the base 5 cm lower the sheet
+    # spawned among the fingertips (89 mm mean clearance) and 4.4% of resets threw it off the table
+    # within 1 s; at 0.20 it is 0.2% (probe 276388/276397). Evals of policies trained with this
+    # recipe must use the same value.
+    start_height: 0.20
+    # Contact friction, centre values (2026-11-10). The cloth side is the fabric-release value
+    # (fabric_params_release: cotton / napkin / denim / chiffon soft_contact_mu 0.265; silk 0.062,
+    # towel 0.667), the Wuji fingertip 0.5 instead of the Sharpa-era 1.5, the table 1.0 (see
+    # rigid_cloth below). VBD pairs are sqrt(soft_contact_mu * shape mu): cloth-fingertip
+    # sqrt(0.265 * 0.5) = 0.364, cloth-table sqrt(0.265 * 1.0) = 0.515.
+    soft_contact_mu: 0.265
+  assets:
+    finger_tip_friction: 0.5
+    table_friction: 1.0
+  rigid_cloth:
+    # Plate-table friction 1.0, above plate-robot 0.5 (2026-11-10, chosen in the viewer). A real
+    # cloth on the table is hard to slide or turn. With a finger pressing at N >> the plate's
+    # weight, the plate follows the finger when finger mu > table mu, whatever its mass: the old
+    # pairs (finger 0.612, table 0.354) let the hand drag the sheet around. So the mass stays at the
+    # default 2.0 kg/m^2 (plates at fabric mass, 0.1, let a finger at 10 N through at 8 position
+    # iterations; probes 276642 / 276647) and only the friction changes.
+    # PhysX pairs (cloth_min): plate-table min(1.0, 1.0) = 1.0, plate-robot min(1.0, 0.5) = 0.5,
+    # robot-table (0.5 + 1.0) / 2 = 0.75.
+    slat_friction: 1.0
+    fingertip_slat_friction: 0.364       # Newton chain only (priority rule); unused on PhysX
+    # Felt thickness about 5 mm (2026-11-10): 2 mm plate + 2 x 1.5 mm contact shell, redrawn per
+    # episode at +-1 mm of shell, so 3-7 mm. Was 7 +- 3 mm of shell = 16 mm (10-22), the VBD
+    # sheet's particle diameter; real fabrics are under 1 mm, a towel 2-5 mm (literature values).
+    contact_margin: 0.0015
+    randomization:
+      contact_margin_offset: [-0.001, 0.001]
+  physx_chain:
+    friction_model: cloth_min            # slats min at 1.0; robot 0.5 / table 1.0 average-mode
