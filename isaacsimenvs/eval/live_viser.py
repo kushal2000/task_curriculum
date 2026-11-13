@@ -200,6 +200,23 @@ PHYSICS = (
 _UNIT = {"hinge_stiffness": 1e-4, "contact_margin_offset": 1e-3}
 
 OUTCOMES = ("fold_held", "fold", "fall", "hand_far", "nonfinite", "timeout")
+#: Under ``cloth.release_persist`` a fold only scores once it survives the hand leaving, as in
+#: training and ``eval/episodes.py``; a fold still held with the hand on at the timeout is
+#: "fold_hand_on", NOT a success.
+RELEASE_OUTCOMES = ("persist", "persist_fail")
+
+
+def episode_outcome(reasons: dict, e: int, truncated: bool, release: bool) -> str:
+    """One label for env ``e``'s finished episode, from the env's ``_termination_reasons``."""
+    flag = lambda k: k in reasons and bool(reasons[k][e])  # noqa: E731
+    if release:
+        for k in RELEASE_OUTCOMES:
+            if flag(k):
+                return k
+        if flag("fold_held"):
+            return "fold_hand_on" if not flag("released") else "fold_released_no_persist"
+    fired = [k for k in OUTCOMES if flag(k)]
+    return fired[0] if fired else ("timeout" if truncated else "?")
 
 ROBOT_RGB = (205, 208, 214)
 TABLE_RGB = (96, 112, 138)
@@ -614,7 +631,7 @@ def main() -> None:
             playing=True, step_once=False, speed=1.0, world=0, deterministic=True,
             policy_name=args.policy, player=None, coef=POLICIES[args.policy][1],
             reset_all=False, reset_one=False, shape_choice=["random"] * n_env,
-            stats=[{"episodes": 0, "folds": 0, "last": "-"} for _ in range(n_env)],
+            stats=[{"episodes": 0, "folds": 0, "last": "-", "by": {}} for _ in range(n_env)],
             lock=threading.Lock(), rebuild=True, restart=None, physics_dirty=False,
             fps=0.0, fold_choice=["random"] * n_env, angle_choice=[None] * n_env, pause_at=0,
         )
@@ -1136,6 +1153,15 @@ def main() -> None:
                     cols.append([rgb, rgb])
             return np.asarray(pts, dtype=np.float32), np.asarray(cols, dtype=np.uint8)
 
+        fold_word = "persisted folds" if getattr(inner, "_release_mode", False) else "folds"
+
+        def outcome_breakdown():
+            tot = {}
+            for st_ in S.stats:
+                for k, v in st_["by"].items():
+                    tot[k] = tot.get(k, 0) + v
+            return ", ".join(f"{k} {v}" for k, v in sorted(tot.items(), key=lambda kv: -kv[1])) or "none yet"
+
         def hud_text():
             w = S.world
             st = S.stats[w]
@@ -1153,9 +1179,9 @@ def main() -> None:
                     if si[1] is not None else "start: **flat**")(start_info(w))] if start_tabs is not None else []),
                 f"{word} error **{err * 1e3:.1f} mm** (tolerance {tol * 1e3:.1f} mm), footprint "
                 f"{float(inner.footprint_ratio()[w]):.2f} " + (f"{word.upper()}ED" if err < tol else ""),
-                f"this env: {st['folds']} folds / {st['episodes']} episodes, last: {st['last']}",
-                f"all envs: {sum(s['folds'] for s in S.stats)} folds / "
-                f"{sum(s['episodes'] for s in S.stats)} episodes",
+                f"this env: {st['folds']} {fold_word} / {st['episodes']} episodes, last: {st['last']}",
+                f"all envs: {sum(s['folds'] for s in S.stats)} {fold_word} / "
+                f"{sum(s['episodes'] for s in S.stats)} episodes ({outcome_breakdown()})",
                 f"sim {S.fps:.0f} policy steps/s (real time = {1.0 / float(inner.step_dt):.0f})",
             ]
             if pierce is not None:
@@ -1203,6 +1229,8 @@ def main() -> None:
                 draw()  # poses now, not at the next step: the view may be paused
             if S.policy_name != active_name:
                 S.player = get_player(S.policy_name)
+                if active_name is not None:  # tallies are per policy: start them over on a switch
+                    S.stats = [{"episodes": 0, "folds": 0, "last": "-", "by": {}} for _ in range(n_env)]
                 active_name = S.policy_name
             if rigid and S.physics_dirty:
                 inner._randomize_physics(torch.arange(n_env, device=device))
@@ -1227,11 +1255,12 @@ def main() -> None:
                 ended = terminated.bool() | truncated.bool()
                 if bool(ended.any()):
                     reasons = getattr(inner, "_termination_reasons", {})
+                    release = bool(getattr(inner, "_release_mode", False))
                     for e in ended.nonzero(as_tuple=True)[0].tolist():
-                        fired = [k for k in OUTCOMES if k in reasons and bool(reasons[k][e])]
-                        out = fired[0] if fired else ("timeout" if bool(truncated[e]) else "?")
+                        out = episode_outcome(reasons, e, bool(truncated[e]), release)
                         S.stats[e]["episodes"] += 1
-                        S.stats[e]["folds"] += int(out == "fold_held")
+                        S.stats[e]["folds"] += int(out == ("persist" if release else "fold_held"))
+                        S.stats[e]["by"][out] = S.stats[e]["by"].get(out, 0) + 1
                         S.stats[e]["last"] = out
                     S.player.reset_rnn(ended.nonzero(as_tuple=True)[0])
                 n_steps += 1
@@ -1258,8 +1287,8 @@ def main() -> None:
                 if now - t_log > 15.0:
                     t_log = now
                     print(f"[live] {S.fps:.0f} steps/s, env {S.world}, "
-                          f"{sum(x['folds'] for x in S.stats)} folds / "
-                          f"{sum(x['episodes'] for x in S.stats)} episodes, "
+                          f"{sum(x['folds'] for x in S.stats)} {fold_word} / "
+                          f"{sum(x['episodes'] for x in S.stats)} episodes [{outcome_breakdown()}], "
                           f"{len(server.get_clients())} client(s); last 0.5 s: sim {t_sim * 1e3:.0f} ms, "
                           f"draw {t_draw * 1e3:.0f} ms", flush=True)
                 t_sim = t_draw = 0.0
