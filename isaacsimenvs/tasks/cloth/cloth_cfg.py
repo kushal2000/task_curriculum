@@ -171,6 +171,12 @@ class ClothCfg:
     (``scripts/analysis/cloth_plasticity_probe.py``) 100 (95 deg per grid cell) holds a pressed
     towel or cotton fold without changing the free drape; napkin and denim need 50, chiffon and silk 25."""
 
+    plastic_set_curvature: float = 0.0
+    """Two-stage plasticity [1/m], 0 = off (single-stage, every result before 2026-11-10). A hinge
+    gains set only while bent past ``plastic_set_curvature x hinge width`` (16.7 mm along the grid);
+    gentler bends -- a light touch, a hanging drape -- stay elastic, and set can always shrink, so
+    unfolding still irons a crease out (``utils/plasticity.py``)."""
+
     # --- the fold -------------------------------------------------------------------------
     fold_axis: str = "x"
     """Axis normal to the fold line, in cloth-local coordinates: the ``+`` half folds onto ``-``."""

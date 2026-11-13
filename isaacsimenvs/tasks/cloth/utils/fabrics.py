@@ -60,6 +60,8 @@ def cloth_params(name: str, plastic: bool = False) -> dict[str, float]:
     out = {k: float(v) for k, v in d["cloth"].items()}
     if plastic:
         out["plastic_yield_curvature"] = float(d.get("plastic_yield_curvature", 0.0))
+        if float(d.get("plastic_set_curvature", 0.0)) > 0.0:  # two-stage presets only
+            out["plastic_set_curvature"] = float(d["plastic_set_curvature"])
     return out
 
 

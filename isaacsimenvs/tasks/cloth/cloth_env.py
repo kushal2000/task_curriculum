@@ -37,6 +37,7 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
 
     def __init__(self, cfg: ClothEnvCfg, render_mode: str | None = None, **kwargs):
         kappa = float(cfg.cloth.plastic_yield_curvature)
+        self._plastic_set_curvature = float(cfg.cloth.plastic_set_curvature)
         self._plasticity = None
         restore = self._install_plasticity_at_capture(kappa) if kappa > 0.0 else None
         restore_sdf = self._install_full_surface_sdf(cfg) if cfg.cloth.full_surface_contact else None
@@ -239,7 +240,11 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         # left every env sheet purely elastic), mirrored to the model's for refreshes and readers.
         views = [e.view for e in getattr(NewtonManager._solver, "_entries", {}).values() if e.solver is cloth_solver]
         solver_rest = views[0].edge_rest_angle if views else None
-        plast = BendingPlasticity(model, kappa, solver_rest_angle=solver_rest)
+        kappa_set = float(getattr(self, "_plastic_set_curvature", 0.0))
+        plast = BendingPlasticity(model, kappa, solver_rest_angle=solver_rest, set_curvature=kappa_set)
+        if kappa_set > 0.0:
+            print(f"[cloth] two-stage plasticity: set grows only past {kappa_set:g} /m "
+                  f"(yield {kappa:g} /m)", flush=True)
         plast.wrap_solver(cloth_solver)
         print(f"[cloth] plasticity writes the cloth solver's edge_rest_angle "
               f"({'its own view copy, mirrored to the model' if plast.mirror is not None else 'shared with the model'})",

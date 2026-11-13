@@ -18,6 +18,14 @@ Per edge, with ``theta`` the current dihedral angle and ``theta_y = kappa * hing
 curvature into hinge angle, as their Eq. 1 does for one edge on a face (``S = theta * l / 2A``). On
 this 7x7 grid it is the 16.7 mm cell width for edges along the grid and 11.8 mm for the diagonals.
 
+Two-stage (``set_curvature`` > 0, 2026-11-10): set only GROWS while the hinge is bent sharply,
+``|theta| >= theta_s = set_curvature * hinge_width``. Below that the hinge is elastic however far
+it bends from its rest angle, so a light touch or a hanging drape (small angles spread over many
+hinges) leaves no set, while a real fold -- which on this mesh puts ~160 deg on the crease hinges --
+yields as before. Set can always SHRINK (a return mapping that moves the rest angle toward flat is
+applied at any ``theta``), so unfolding a creased sheet still irons the crease out. ``theta_s`` <=
+``theta_y`` makes the gate inert (any hinge past the yield is past the set angle too).
+
 A crease narrower than a cell cannot exist on this mesh, so ``kappa`` is a mesh-level parameter to
 be calibrated (measured fold-press-release angles), not a literature value: paper's 200 /m would
 need a 190 deg fold on one hinge to yield.
@@ -69,6 +77,7 @@ def _yield_kernel(
     q: wp.array(dtype=wp.vec3),
     edge_indices: wp.array2d(dtype=wp.int32),
     yield_angle: wp.array(dtype=float),
+    set_angle: wp.array(dtype=float),
     rest_angle: wp.array(dtype=float),
 ):
     e = wp.tid()
@@ -79,10 +88,17 @@ def _yield_kernel(
     # Newton's bending term does not wrap theta - rest; neither does this, so the two agree on what
     # "elastic part" means even for a rest angle near +-pi.
     y = yield_angle[e]
+    r = rest_angle[e]
+    cand = r
     if d > y:
-        rest_angle[e] = theta - y
+        cand = theta - y
     elif d < -y:
-        rest_angle[e] = theta + y
+        cand = theta + y
+    # Two-stage gate: growing set (|rest| increasing) needs a sharp bend, |theta| >= set angle;
+    # shrinking it (toward flat) is always allowed. set_angle 0 = single-stage, as before.
+    if wp.abs(cand) > wp.abs(r) and wp.abs(theta) < set_angle[e]:
+        return
+    rest_angle[e] = cand
 
 
 @wp.kernel
@@ -108,12 +124,14 @@ class BendingPlasticity:
     :meth:`reset` (all edges, or the ids of some) when a sheet is put back flat.
     """
 
-    def __init__(self, model, yield_curvature, rest_q=None, solver_rest_angle=None) -> None:
+    def __init__(self, model, yield_curvature, rest_q=None, solver_rest_angle=None, set_curvature=0.0) -> None:
         """``solver_rest_angle``: the ``edge_rest_angle`` array the cloth SOLVER reads, when that is
         not ``model.edge_rest_angle`` -- under ``SolverCoupled`` the VBD entry runs on a ModelView
         that owns a projected copy, so writing the model's array alone never reaches the solver.
         The yield update then runs on the solver's array and is mirrored to the model's (which a
-        view refresh projects back over the copy)."""
+        view refresh projects back over the copy).
+
+        ``set_curvature`` [1/m]: scalar or per edge; the two-stage gate (module docstring). 0 = off."""
         self.model = model
         self.edge_indices = model.edge_indices
         self.num_edges = int(model.edge_count)
@@ -128,6 +146,8 @@ class BendingPlasticity:
         self.hinge_width = self._hinge_width(model.particle_q.numpy() if rest_q is None else np.asarray(rest_q))
         self.yield_angle = wp.zeros(self.num_edges, dtype=float, device=self.device)
         self.set_yield_curvature(yield_curvature)
+        self.set_angle = wp.zeros(self.num_edges, dtype=float, device=self.device)
+        self.set_set_curvature(set_curvature)
 
     def _hinge_width(self, rest_q: np.ndarray) -> np.ndarray:
         """``(A1 + A2) / edge_length`` per edge on the rest positions [m]; 0 on boundary edges."""
@@ -148,11 +168,15 @@ class BendingPlasticity:
             ang = np.where(np.isinf(kappa), np.inf, kappa * self.hinge_width)
         self.yield_angle.assign(ang.astype(np.float32))
 
+    def set_set_curvature(self, set_curvature) -> None:
+        kappa = np.broadcast_to(np.asarray(set_curvature, dtype=np.float64), (self.num_edges,))
+        self.set_angle.assign((kappa * self.hinge_width).astype(np.float32))
+
     def apply(self, state) -> None:
         wp.launch(
             _yield_kernel,
             dim=self.num_edges,
-            inputs=[state.particle_q, self.edge_indices, self.yield_angle, self.rest_angle],
+            inputs=[state.particle_q, self.edge_indices, self.yield_angle, self.set_angle, self.rest_angle],
             device=self.device,
         )
         if self.mirror is not None:
