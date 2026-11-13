@@ -25,9 +25,9 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-from utils.config import REPO                    # noqa: E402
-from utils.spec import base_to_env, load_spec    # noqa: E402
+sys.path.insert(0, str(HERE.parents[2]))   # repo root, for deploy.*
+from deploy.utils.config import REPO                    # noqa: E402
+from deploy.utils.spec import base_to_env, load_spec    # noqa: E402
 
 MESH = HERE.parent / "objects" / "flat_eraser" / "flat_eraser.obj"
 MESH_DIR = REPO / "assets" / "flexiv_wuji"

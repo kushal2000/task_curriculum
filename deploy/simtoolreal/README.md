@@ -8,7 +8,11 @@ real robot. Trained on branch `kushal/2026-10-30_pretraining_real`, task
 
 Each part is its own process (a "node"). They talk over ZMQ on one machine: every publisher binds
 its own port, and any number of processes can subscribe. Every pose on the bus is in the robot base
-frame. The topics and their fields are listed in [utils/link.py](utils/link.py).
+frame. The topics and their fields are listed in [deploy/utils/link.py](../utils/link.py).
+
+The nodes other than the policy are shared with the other deploy tasks (`deploy/rigid2deform/`):
+they live in `deploy/nodes/`, the code every task uses in `deploy/utils/`. This folder has Play's
+own parts: `run.py`, `policy.py`, `goals.py`, `config.yaml`, the spec, the eraser, the checks.
 
 ```
 perception.py ──object_pose, camera_image──┐   (+ camera_frame: every frame, raw, for the recorder)
@@ -24,25 +28,26 @@ robot.mode=openloop: no policy, no perception; robot.py sends a sim rollout's jo
 
 | node | runs in | what |
 |---|---|---|
-| [run.py](run.py) | `.venv_deploy` | the entry point: starts the nodes for a robot.mode, ends them on Ctrl-C |
-| [perception.py](perception.py) | FoundationPose env, robot PC GPU | RealSense → FoundationPose → `object_pose` (+ `camera_image` for the viewer); `perception.source=fake`: a fixed pose, no camera (any env) |
-| [robot.py](robot.py) | `.venv_deploy` | arm (aioflexiv; or its MuJoCo arm) + hand (aiowuji; or `fake`, no hand); modes `home`, `free_drive`, `policy`, `openloop` |
+| [run.py](run.py) | `.venv_deploy` | the entry point: starts the nodes for a robot.mode, ends them on Ctrl-C ([deploy/utils/runner.py](../utils/runner.py)) |
+| [perception.py](perception.py) → [nodes/perception.py](../nodes/perception.py) | FoundationPose env, robot PC GPU | RealSense → FoundationPose → `object_pose` (+ `camera_image` for the viewer); `perception.source=fake`: a fixed pose, no camera (any env) |
+| [robot.py](../nodes/robot.py) | `.venv_deploy` | arm (aioflexiv; or its MuJoCo arm) + hand (aiowuji; or `fake`, no hand); modes `home`, `free_drive`, `policy`, `openloop` |
 | [policy.py](policy.py) | `.venv_deploy` | observation → LSTM → joint targets; goals and the goal test |
-| [viewer.py](viewer.py) | `.venv_deploy` | live viser page: robot, targets, object, goal, camera, topic status |
-| [recorder.py](recorder.py) | `.venv_deploy` | every message → `recordings/<date>_<time>_<name>.jsonl` |
-| [playback.py](playback.py) | `.venv_deploy` | plays a recording back in viser; exports an mp4; never moves the robot |
+| [viewer.py](../nodes/viewer.py) | `.venv_deploy` | live viser page: robot, targets, object, goal, camera, topic status |
+| [recorder.py](../nodes/recorder.py) | `.venv_deploy` | every message → `recordings/<date>_<time>_<name>.jsonl` |
+| [playback.py](../nodes/playback.py) | `.venv_deploy` | plays a recording back in viser; exports an mp4; never moves the robot |
 
-Other folders: `utils/` (helpers used by several nodes, see [utils/\_\_init\_\_.py](utils/__init__.py)),
+Other folders: `deploy/utils/` (code every task uses, see [\_\_init\_\_.py](../utils/__init__.py)),
 `spec/` (facts exported from the training env, and the robot URDF), `objects/` (object meshes),
 `checks/` (offline checks against a recorded sim rollout, and the scripts that make the spec and
 the rollout).
 
 ## Config
 
-Every node reads [config.yaml](config.yaml). Override any value on the command line with dotted keys:
-`run.py robot.mode=home robot.arm=<ROBOT_SN>`. A key that is not in the file is an error (a typo
-stops the run instead of being ignored). To print the merged config:
-`.venv_deploy/bin/python deploy/simtoolreal/utils/config.py <overrides>`.
+Every node reads [config.yaml](config.yaml): run.py and policy.py directly, the shared nodes because
+run.py passes them `config=deploy/simtoolreal/config.yaml` (start one by hand with that argument too).
+Override any value on the command line with dotted keys: `run.py robot.mode=home robot.arm=<ROBOT_SN>`.
+A key that is not in the file is an error (a typo stops the run instead of being ignored). To print
+the merged config: `.venv_deploy/bin/python deploy/utils/config.py config=deploy/simtoolreal/config.yaml <overrides>`.
 
 The spec json (`spec/`) is not a setting: it is copied from the training env. Never edit it by hand.
 
@@ -67,7 +72,7 @@ The spec json (`spec/`) is not a setting: it is copied from the training env. Ne
 MuJoCo arm, fake hand, fixed object. Two terminals, from the repo root:
 
 ```bash
-PY=.venv_deploy/bin/python; D=deploy/simtoolreal
+PY=.venv_deploy/bin/python; D=deploy/simtoolreal; C=config=$D/config.yaml
 $PY $D/perception.py perception.source=fake
 $PY $D/run.py robot.arm=mujoco robot.hand=fake run.duration_s=30   # viewer at http://localhost:8091
 ```
@@ -77,7 +82,7 @@ The object does not move here, so no goal is ever reached; each goal times out a
 ## Run on the robot
 
 ```bash
-PY=.venv_deploy/bin/python; D=deploy/simtoolreal
+PY=.venv_deploy/bin/python; D=deploy/simtoolreal; C=config=$D/config.yaml
 ARM="robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>"
 
 # 1. get the robot to home (the training start pose, spec default_q)
@@ -86,8 +91,8 @@ $PY $D/run.py robot.mode=free_drive $ARM       # or: move it by hand; prints how
 
 # 2. perception (FoundationPose env): click 4 corners of a box around the object, then it tracks
 ~/miniconda3/envs/foundationpose/bin/python $D/perception.py
-#    several objects: object.name=[plate7_white,plate7_brown] (one box to click per object; the policy
-#    sees the first; give the viewer / run.py the same object.name to draw them all)
+#    several objects: object.name=[a,b] (one box to click per object; the policy sees the first;
+#    give run.py the same object.name so the viewer draws them all)
 
 # 3. the policy run (robot.mode=policy is the default)
 $PY $D/run.py $ARM record.name=eraser_try1     # record.camera=true: also the camera images
@@ -118,59 +123,9 @@ the hand is connected but never enabled.
 - Ctrl-C on run.py ends everything, in this order: policy, robot (holds, then stops; stopping the
   hand disables it, so the fingers go limp), recorder, viewer.
 
-The nodes can also run one by one, each in its own terminal (`robot.py robot.mode=...`,
-`viewer.py`, `policy.py`, `recorder.py record.name=...`): that is all run.py does.
-
-## Fold: the fold-pool policies on two taped plates
-
-`task=fold` runs a fold-pool policy (`deploy/policy/*.pth`, branch `yiboc_wuji`): two plates taped
-along one edge make a sheet; the policy turns one plate over onto the other. Everything else (robot,
-viewer, recorder, safety) is the same as above.
-
-```bash
-# perception: both plates, the MOVING one first (one box to click per plate)
-~/miniconda3/envs/foundationpose/bin/python $D/perception.py task=fold
-# the run (flat7RW_base by default; any of the five: policy.checkpoint=deploy/policy/<name>.pth)
-$PY $D/run.py task=fold $ARM record.name=fold_try1
-```
-
-`task=fold` applies `fold.overrides` in config.yaml (spec, checkpoint, `object.name:
-[plate5_brown, plate5_white]` = [moving, stationary]), then the command line. Start with the two
-plates lying flat, side by side, taped edge to edge, about where training put the sheet: centre 0.51 m
-in front of the base (base frame (0, −0.51)) ± 10 cm, any heading. The policy refuses to start
-otherwise (`PlateFrames.start`).
-
-What the policy sees (`utils/fold.py`, every number checked against the training code by
-`checks/check_fold.py`):
-
-| | |
-|---|---|
-| object | the moving plate's 4 corner keypoints: training's 7 x 7 grid, rows 16.7 and 50 mm from the hinge (10 cm sheet), so the object position is 8.3 mm off the plate centre, away from the hinge; orientation = the plate's, with the sign rule of training's `_mat_to_wxyz` |
-| goal | the same corners mirrored onto the stationary plate (training's hinge is on the mid-plane: no lift), recomputed every step from the stationary plate. Its quaternion is relabelled (x, y, z, w) -> (w, x, y, z) as the PhysX training env does (`physx_envs._goal_quat_from_matrix`): keep it |
-| object_scales | (sheet, sheet, 0.016) / 0.04 = (2.5, 2.5, 0.4) at 10 cm: the z is the sim's felt thickness, not the plate's |
-| success | every corner within 1.5 cm of the fold target AND the sheet's extent along the stationary plate's x ≤ 0.65 x sheet. The episode ends there (as in training). The target is the REAL fold: tape on the top face puts the folded plate 2 x `fold.hinge_z` = 5 mm above training's |
-| stops | folded; 600 steps (10 s, `goals.timeout_steps`); a plate 5 cm below the table top; the plates' hinge edges more than `fold.max_hinge_gap_m` (3 cm) apart, which means a tracker flipped or slipped |
-
-A plate is a box, so FoundationPose may report it turned 180° about any of its axes. `PlateFrames`
-takes the pose that lies flat with the hinge edges together at the start, and after that, for each
-plate, the symmetric pose closest to the last frame.
-
-The fold spec (`spec/spec_flexiv_wuji_right_fold.json`, `checks/export_fold_spec.py`) differs from
-the Play spec in what the deploy code reads: the real joint limits (`rizon4s_right_wuji_real_limits.urdf`:
-arm 5° inside, finger PIP ≤ 100°), the table top 0.33 m above the base, and the fingertip pad offsets
-(per finger: the thumb gets 22.9 mm, not the ring finger as in Play). The five runs in `deploy/policy/`
-share every one of these (`export_fold_spec.py --compare`):
-
-| checkpoint | trained on |
-|---|---|
-| `flat7RW_base` | 7 shapes, S2R hand drive, 16 mm felt, no observation DR |
-| `flat7RW_fricition` | + plate/robot/table friction DR |
-| `flat7RW_sysid` | + the identified hand (friction, spring, armature, 1.0 A x Kt) and its DR |
-| `flat7RW_allDR` | identified hand, 5 mm felt (3-7), point-level object DR, delays, noise, table height ± 1.5 cm |
-| `box2RW_allDR` | as `flat7RW_allDR`, two-plate sheets only |
-
-Without hardware: `perception.py task=fold perception.source=fake` sends the plates of a flat sheet at
-`perception.fake_pose_base` (the sheet's hinge middle), the moving one turned up by `fold.fake_fold_deg`.
+The nodes can also run one by one, each in its own terminal (`deploy/nodes/robot.py $C robot.mode=...`,
+`deploy/nodes/viewer.py $C`, `policy.py`, `deploy/nodes/recorder.py $C record.name=...`): that is all
+run.py does.
 
 ## robot modes
 
@@ -237,7 +192,7 @@ Recordings from before Nov 9 evening have the viewer's 10 Hz JPEGs in the .jsonl
 reads those too.
 
 ```bash
-$PY $D/playback.py $D/recordings/<file>.jsonl      # http://localhost:8091: time slider, play, speed
+$PY deploy/nodes/playback.py $D/recordings/<file>.jsonl      # http://localhost:8091: time slider, play, speed
 ```
 
 To export a video, set the 3D view in the browser, then click "export mp4". The browser tab renders
@@ -257,17 +212,15 @@ every frame, the camera image goes on the right, and the video is saved next to 
 | network actions, CPU vs the sim's GPU | mean 0.004, max 0.09 |
 | own goal sampler vs training's rules (2000 goals) | no rule broken |
 
-Run it after any change to `utils/observation.py`, `utils/robot_model.py`, `utils/goals.py` or
-`policy.py`, and after a new checkpoint or spec. The rollout (32 MB) is gitignored, so it runs only
-where the rollout is.
+Run it after any change to `deploy/utils/observation.py`, `deploy/utils/robot_model.py`,
+`deploy/utils/policy_net.py`, `goals.py` or `policy.py`, and after a new checkpoint or spec. The
+rollout (32 MB) is gitignored, so it runs only where the rollout is.
 
 | script | what | runs in |
 |---|---|---|
 | `checks/record_lift.py` | the lift rollout for `robot.mode=openloop`, and its open-loop test in sim (cluster: `scripts/cluster/bos14_simtoolreal_lift.sh`) | the training branch's worktree, Isaac Sim |
 | `checks/record_sim_rollout.py` | records the policy in the training env, every step → `rollout.npz` (cluster: `scripts/cluster/bos14_simtoolreal_record.sh`) | the training branch's worktree, Isaac Sim |
 | `checks/export_spec.py` | reads the training branch from git → `spec/` (spec json + URDF); `--rollout_meta` adds the fingertip order | `.venv_deploy`, no Isaac Sim |
-| `checks/export_fold_spec.py` | the fold spec from `yiboc_wuji` (task YAML + robot overlay + experiment, as train.py layers them); `--compare` diffs the five runs | `.venv_deploy`, no Isaac Sim |
-| `checks/check_fold.py` | `utils/fold.py` against the training code's own methods (pulled from git, run with torch) on random sheets; the success test at 0-180°; `PlateFrames` through random symmetric flips | `.venv_deploy`, no Isaac Sim |
 
 ## Things the policy depends on that are easy to break
 
@@ -291,9 +244,3 @@ where the rollout is.
 - How long robot.py takes to see a Flexiv E-stop.
 - The mp4 export's 3D rendering. It needs a browser, so it was tested only with a stand-in.
 - Nothing has run on the real robot yet. All tests so far used the MuJoCo arm and a fake hand.
-- Fold: no sim rollout of a fold policy has been run through the deploy code (the Play `check_rec1`
-  equivalent); the observation is checked against the training code piece by piece
-  (`check_fold.py`), and a MuJoCo run with fake plates moved the hand over the sheet. Not checked:
-  FoundationPose on 5 mm plates while a finger covers them; the hinge-gap stop on a real fold; the
-  hand's effort limit (`robot.hand_effort_limit` 1.0 A) against flat7RW_base / _fricition, which
-  trained with the S2R drive's higher torque limits.

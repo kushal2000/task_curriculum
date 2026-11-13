@@ -16,14 +16,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # deploy/simtoolreal
-from policy import action_to_targets, load_network                                         # noqa: E402
-from utils.config import load_config, object_meshes, repo_path                                      # noqa: E402
-from utils.goals import _volume, first_goal, keypoint_distance, next_goal, object_corners  # noqa: E402
-from utils.observation import build_obs, obs_fields                                        # noqa: E402
-from utils.quat import quat_apply, quat_conj, quat_mul                                     # noqa: E402
-from utils.robot_model import link_pose, load_robot_model                                  # noqa: E402
-from utils.spec import load_spec                                                           # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))   # repo root, for deploy.*
+from deploy.simtoolreal.goals import _volume, first_goal, next_goal, object_corners          # noqa: E402
+from deploy.utils.config import load_config, object_meshes, repo_path                         # noqa: E402
+from deploy.utils.observation import build_obs, keypoint_distance, obs_fields                 # noqa: E402
+from deploy.utils.policy_net import action_to_targets, load_network                           # noqa: E402
+from deploy.utils.quat import quat_apply, quat_conj, quat_mul                                     # noqa: E402
+from deploy.utils.robot_model import link_pose, load_robot_model                                  # noqa: E402
+from deploy.utils.spec import load_spec                                                           # noqa: E402
 
 REC = "docs/results/simtoolreal/rec1/rollout.npz"
 EVERY = 10
@@ -36,7 +36,7 @@ def quat_err(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def main() -> None:
-    cfg = load_config()
+    cfg = load_config(path=Path(__file__).resolve().parents[1] / "config.yaml")
     spec = load_spec(repo_path(cfg.spec_path))
     model = load_robot_model(spec)
     with np.load(repo_path(REC)) as f:

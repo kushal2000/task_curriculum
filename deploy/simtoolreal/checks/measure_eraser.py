@@ -28,11 +28,11 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-from utils.config import REPO, load_config                    # noqa: E402
-from utils.link import open_subscriber, recv_wait              # noqa: E402
-from utils.quat import quat_apply                              # noqa: E402
-from utils.spec import base_to_env, load_spec                  # noqa: E402
+sys.path.insert(0, str(HERE.parents[2]))   # repo root, for deploy.*
+from deploy.utils.config import REPO, load_config                    # noqa: E402
+from deploy.utils.link import open_subscriber, recv_wait              # noqa: E402
+from deploy.utils.quat import quat_apply                              # noqa: E402
+from deploy.utils.spec import base_to_env, load_spec                  # noqa: E402
 
 MESH = HERE.parent / "objects" / "flat_eraser" / "flat_eraser.obj"
 
@@ -56,7 +56,7 @@ def main() -> None:
     p.add_argument("--seconds", type=float, default=3.0)
     p.add_argument("--out", type=Path)
     args, overrides = p.parse_known_args()
-    cfg = load_config(overrides)
+    cfg = load_config(overrides, path=HERE.parent / "config.yaml")
     spec = load_spec(REPO / cfg.spec_path)
     size, centre_in_mesh = mesh_box(MESH)
 

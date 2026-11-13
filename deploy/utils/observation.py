@@ -4,9 +4,11 @@ every DR term off). All poses in the env frame, quaternions wxyz.
     obs = build_obs(spec, model, q, dq, prev_targets, object_pos, object_quat,
                     goal_pos, goal_quat, object_scales)
 
-Play: the 4 keypoints are grasp-box corners placed at the object and goal poses. Fold mode passes
-keypoints=(object_kp, goal_kp) instead (utils/fold.py: the moving half's corners, and the same
+Play: the 4 keypoints are grasp-box corners placed at the object and goal poses. Other tasks pass
+keypoints=(object_kp, goal_kp) instead (rigid2deform/fold.py: the moving half's corners, and the same
 corners at the observed goal); goal_pos / goal_quat are then unused.
+
+    d = keypoint_distance(spec, obj_pos, obj_quat, goal_pos, goal_quat)   # Play's success distance, m
 
 | field                  | size | what                                                        |
 |------------------------|------|-------------------------------------------------------------|
@@ -41,6 +43,15 @@ def keypoint_offsets(spec: dict, object_scales: np.ndarray) -> np.ndarray:
 def keypoints_world(pos: np.ndarray, quat_wxyz: np.ndarray, offsets: np.ndarray) -> np.ndarray:
     """(4, 3) keypoints placed at an object pose."""
     return pos + quat_apply(np.broadcast_to(quat_wxyz, offsets.shape[:-1] + (4,)), offsets)
+
+
+def keypoint_distance(spec: dict, obj_pos, obj_quat, goal_pos, goal_quat) -> float:
+    """The largest distance (m) between the object's 4 success keypoints and the goal's (Play's success
+    test). Success keypoints have one fixed size for every object (fixed_size), unlike the observation's."""
+    kp = spec["keypoint_corners"] * (0.5 * spec["keypoint_scale"] * spec["fixed_size"])
+    a = keypoints_world(np.asarray(obj_pos), np.asarray(obj_quat), kp)
+    b = keypoints_world(np.asarray(goal_pos), np.asarray(goal_quat), kp)
+    return float(np.linalg.norm(a - b, axis=-1).max())
 
 
 def obs_fields(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos, goal_quat,

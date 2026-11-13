@@ -1,4 +1,4 @@
-"""Goals: where the policy should move the object next, and whether it got there. Env frame, wxyz.
+"""Play goals: where the policy should move the object next, and whether it got there. Env frame, wxyz.
 
 Sampling (training's reset_utils._reset_goal_pose):
     pos, quat = first_goal(spec, rng, corners)                  # uniform in the target volume, random rotation
@@ -16,8 +16,8 @@ above the table.
 
 import numpy as np
 
-from .observation import keypoints_world
-from .quat import quat_apply, quat_from_angle_axis, quat_mul, random_quat
+from deploy.utils.observation import keypoint_distance
+from deploy.utils.quat import quat_apply, quat_from_angle_axis, quat_mul, random_quat
 
 
 def object_corners(mesh_path) -> np.ndarray:
@@ -49,15 +49,6 @@ def next_goal(spec: dict, rng: np.random.Generator, corners: np.ndarray,
     angle = (rng.random() * 2 - 1) * np.radians(spec["delta_rotation_degrees"])
     new_quat = quat_mul(quat_from_angle_axis(angle, axis), quat)
     return _above_table(spec, corners, new_pos, new_quat, clearance), new_quat
-
-
-def keypoint_distance(spec: dict, obj_pos, obj_quat, goal_pos, goal_quat) -> float:
-    """The largest distance (m) between the object's 4 success keypoints and the goal's.
-    Success keypoints have one fixed size for every object (fixed_size), unlike the observation's."""
-    kp = spec["keypoint_corners"] * (0.5 * spec["keypoint_scale"] * spec["fixed_size"])
-    a = keypoints_world(np.asarray(obj_pos), np.asarray(obj_quat), kp)
-    b = keypoints_world(np.asarray(goal_pos), np.asarray(goal_quat), kp)
-    return float(np.linalg.norm(a - b, axis=-1).max())
 
 
 def is_near(spec: dict, obj_pos, obj_quat, goal_pos, goal_quat, tolerance: float) -> bool:

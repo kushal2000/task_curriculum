@@ -1,9 +1,9 @@
 """The recorder node: every message on the bus, appended to a .jsonl file as it arrives.
 
-run.py starts it when record.name is set and stops it when the run ends (SIGTERM):
+A task's run.py starts it when record.name is set and stops it when the run ends (SIGTERM):
     .venv_deploy/bin/python deploy/simtoolreal/run.py record.name=eraser_try1 [record.camera=true]
 It can also run alone (Ctrl-C stops):
-    .venv_deploy/bin/python deploy/simtoolreal/recorder.py record.name=free_drive_test
+    .venv_deploy/bin/python deploy/nodes/recorder.py config=deploy/simtoolreal/config.yaml record.name=free_drive_test
 
 File: <record.dir>/<date>_<time>_<name>.jsonl, one JSON object per line:
     line 1:  {"topic": "meta", "msg": {"t": <start time>, "config": <the full config of this run>}}
@@ -12,7 +12,7 @@ Recorded: joint_state, joint_target, goal_pose, sim_object_pose, object_pose, ob
 viewer's 10 Hz JPEGs).
 
 record.camera=true: every camera frame (camera_frame from perception.py, at the camera's fps) goes to
-<same name>.camera.mp4 (H.264, utils/video.py; record.camera_codec, record.camera_quality), and each
+<same name>.camera.mp4 (H.264, deploy/utils/video.py; record.camera_codec, record.camera_quality), and each
 frame's time to the .jsonl:
     {"topic": "camera_frame", "msg": {"seq": <perception's>, "t": <camera frame time>, "frame": <index in the mp4>}}
 About 15 MB/min without the camera (joint_state at 200 Hz is most of it).
@@ -28,10 +28,10 @@ from pathlib import Path
 import zmq
 from omegaconf import OmegaConf
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))    # deploy/simtoolreal
-from utils.config import load_config, repo_path              # noqa: E402
-from utils.link import FRAME_PORT, FRAME_TOPIC, TOPIC_PORTS, open_subscriber, recv_frame   # noqa: E402
-from utils.video import VideoWriter                                                     # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
+from deploy.utils.config import load_config, repo_path              # noqa: E402
+from deploy.utils.link import FRAME_PORT, FRAME_TOPIC, TOPIC_PORTS, open_subscriber, recv_frame   # noqa: E402
+from deploy.utils.video import VideoWriter                                                     # noqa: E402
 
 
 def main() -> None:

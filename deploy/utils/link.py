@@ -18,7 +18,8 @@ Every message has seq (counts up from 0, the sender counts) and t (time.time(), 
 | joint_target | policy.py; robot.py in      | policy_port        | targets (27); t = when sent                    |
 |              | robot.mode=openloop         |                    |                                               |
 | goal_pose    | policy.py; robot.py         | policy_port        | pos (3), quat_wxyz (4), goal_index; t = sent   |
-|              | (openloop: the sim's goal)  |                    |                                               |
+|              | (openloop: the sim's goal)  |                    | status (optional): a markdown line the viewer  |
+|              |                             |                    | shows in place of its keypoint distance        |
 | sim_object_  | robot.py (openloop)         | policy_port        | pos (3), quat_wxyz (4): where the sim rollout  |
 | pose         |                             |                    | had the object at this step; t = sent          |
 
@@ -53,7 +54,7 @@ from pathlib import Path
 import numpy as np
 import zmq
 
-NODES_DIR = Path(__file__).resolve().parents[1]   # deploy/simtoolreal
+NODES_DIR = Path(__file__).resolve().parents[1] / "nodes"   # deploy/nodes: the shared nodes
 
 # every topic -> its publisher's port key in config.yaml `bus`
 TOPIC_PORTS = {"joint_state": "joint_state_port", "joint_target": "policy_port", "goal_pose": "policy_port",
@@ -73,6 +74,15 @@ def open_publisher(port: int) -> zmq.Socket:
 def send(sock: zmq.Socket, topic: str, msg: dict) -> None:
     """Send one message. Never waits: with no subscriber it is dropped."""
     sock.send_string(f"{topic} {json.dumps(msg, default=_to_json)}")
+
+
+def send_object_poses(sock: zmq.Socket, seq: int, t: float, names: list[str], pos: np.ndarray,
+                      quat: np.ndarray) -> None:
+    """object_pose (the first object's), and with more than one object object_poses (all).
+    pos (N, 3), quat (N, 4) wxyz, in names' order."""
+    send(sock, "object_pose", {"seq": seq, "t": t, "pos": pos[0], "quat_wxyz": quat[0]})
+    if len(names) > 1:
+        send(sock, "object_poses", {"seq": seq, "t": t, "names": names, "pos": pos, "quat_wxyz": quat})
 
 
 def send_frame(sock: zmq.Socket, seq: int, t: float, rgb: np.ndarray) -> None:
@@ -125,12 +135,13 @@ def age(msg: dict) -> float:
     return time.time() - msg["t"]
 
 
-def start_node(script: str, *overrides: str) -> subprocess.Popen:
-    """Start another node (e.g. "viewer.py") with this process's command-line overrides (so both read
-    the same config), then `overrides` (these win). Its own session: a Ctrl-C in the terminal reaches
-    only this process, which ends the child with stop_node."""
-    return subprocess.Popen([sys.executable, str(NODES_DIR / script), *sys.argv[1:], *overrides],
-                            start_new_session=True)
+def start_node(script: str | Path, *overrides: str) -> subprocess.Popen:
+    """Start another node: a shared one by name ("viewer.py", in deploy/nodes/) or any script by path
+    (a task's policy.py), with this process's command-line overrides (so both read the same config),
+    then `overrides` (these win; a task's run.py adds config=<its config>). Its own session: a Ctrl-C
+    in the terminal reaches only this process, which ends the child with stop_node."""
+    path = Path(script) if Path(script).is_absolute() else NODES_DIR / script
+    return subprocess.Popen([sys.executable, str(path), *sys.argv[1:], *overrides], start_new_session=True)
 
 
 def stop_node(proc: subprocess.Popen | None, sig=signal.SIGINT, timeout_s: float = 10.0) -> None:

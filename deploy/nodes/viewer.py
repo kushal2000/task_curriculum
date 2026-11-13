@@ -1,20 +1,20 @@
 """The viewer node: a live viser page of everything on the bus. Only listens, never publishes, so it
 can be started and stopped at any time without touching the run.
 
-    .venv_deploy/bin/python deploy/simtoolreal/viewer.py      # then open http://<robot PC>:8091
+    .venv_deploy/bin/python deploy/nodes/viewer.py config=deploy/<task>/config.yaml   # then open http://<robot PC>:8091
 
 Subscribes  joint_state  -> the robot, at its measured joint angles
             joint_target -> a green see-through robot at the policy's targets
             object_pose  -> the object mesh
             object_poses -> the other objects' meshes, each in its own colour (object.name a list)
-            goal_pose    -> an orange see-through object mesh
+            goal_pose    -> an orange see-through object mesh; its status line, if it has one
             sim_object_pose -> a blue see-through object mesh: where the sim rollout had the object
                             (robot.mode=openloop)
             camera_image -> the camera image in the side panel (if perception sends it)
 
 The scene is in the env frame (the training env's): table and robot base where training had them.
-The status panel lists each topic's age and rate, and the object -> goal distance against the
-success threshold. playback.py draws recordings with the same build_scene / draw.
+The status panel lists each topic's age and rate, then goal_pose's status line (the task's policy
+writes it), or, without one, the object -> goal keypoint distance against Play's success threshold. playback.py draws recordings with the same build_scene / draw.
 """
 
 import sys
@@ -22,12 +22,13 @@ import time
 from pathlib import Path
 
 import numpy as np
+from omegaconf import OmegaConf
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))    # deploy/simtoolreal
-from utils.config import REPO, load_config, object_meshes, repo_path                                 # noqa: E402
-from utils.goals import keypoint_distance                                             # noqa: E402
-from utils.link import TOPIC_PORTS, age, decode_jpeg, open_subscriber, recv_latest    # noqa: E402
-from utils.spec import base_to_env, load_spec                                         # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
+from deploy.utils.config import REPO, load_config, object_meshes, repo_path                                 # noqa: E402
+from deploy.utils.observation import keypoint_distance                                       # noqa: E402
+from deploy.utils.link import TOPIC_PORTS, age, decode_jpeg, open_subscriber, recv_latest    # noqa: E402
+from deploy.utils.spec import base_to_env, load_spec                                         # noqa: E402
 
 MESH_DIR = REPO / "assets" / "flexiv_wuji"   # the URDF's mesh paths are relative to it (fetch_assets.sh)
 EXTRA_COLORS = [(0.9, 0.25, 0.6), (0.2, 0.75, 0.85), (0.6, 0.4, 0.9), (0.85, 0.85, 0.2)]
@@ -102,15 +103,12 @@ def draw(server, scene: dict, spec, msgs: dict) -> None:
 
 
 def goal_text(spec, last: dict, tolerance: float) -> str:
-    """"object -> goal ..." line, or "" without both poses."""
+    """goal_pose's status line; without one, "object -> goal ..." (Play); "" without the poses."""
     o, g = last.get("object_pose"), last.get("goal_pose")
+    if g is not None and g.get("status"):
+        return str(g["status"])
     if o is None or g is None:
         return ""
-    if "fold_error" in g:   # task=fold (policy.run_fold)
-        f = spec["fold"]
-        return (f"fold error (corners, worst): **{100 * g['fold_error']:.1f} cm** "
-                f"(success below {100 * f['keypoint_tolerance']:.1f} cm) · footprint {g['footprint']:.2f} "
-                f"(at most {f['max_folded_footprint']:.2f}) · hinge gap {1000 * g['hinge_gap']:.0f} mm")
     d = keypoint_distance(spec, *base_to_env(spec, o["pos"], o["quat_wxyz"]),
                           *base_to_env(spec, g["pos"], g["quat_wxyz"]))
     return (f"object -> goal (keypoints, worst): **{100 * d:.1f} cm** "
@@ -134,8 +132,10 @@ def status_text(spec, last: dict, rates: dict, stale_s: float, tolerance: float)
 
 
 def success_tolerance(cfg, spec) -> float:
-    """m: the keypoint distance under which the object counts as at the goal."""
-    return (cfg.goals.success_tolerance or spec["success_tolerance_final"]) * spec["keypoint_scale"]
+    """m: the keypoint distance under which the object counts as at the goal (Play: goals.success_tolerance;
+    a config without it: training's)."""
+    tol = OmegaConf.select(cfg, "goals.success_tolerance", default=None)
+    return (tol or spec["success_tolerance_final"]) * spec["keypoint_scale"]
 
 
 def main() -> None:
