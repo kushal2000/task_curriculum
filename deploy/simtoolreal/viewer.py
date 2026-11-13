@@ -6,6 +6,7 @@ can be started and stopped at any time without touching the run.
 Subscribes  joint_state  -> the robot, at its measured joint angles
             joint_target -> a green see-through robot at the policy's targets
             object_pose  -> the object mesh
+            object_poses -> the other objects' meshes, each in its own colour (object.name a list)
             goal_pose    -> an orange see-through object mesh
             sim_object_pose -> a blue see-through object mesh: where the sim rollout had the object
                             (robot.mode=openloop)
@@ -23,16 +24,19 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))    # deploy/simtoolreal
-from utils.config import REPO, load_config, repo_path                                 # noqa: E402
+from utils.config import REPO, load_config, object_meshes, repo_path                                 # noqa: E402
 from utils.goals import keypoint_distance                                             # noqa: E402
 from utils.link import TOPIC_PORTS, age, decode_jpeg, open_subscriber, recv_latest    # noqa: E402
 from utils.spec import base_to_env, load_spec                                         # noqa: E402
 
 MESH_DIR = REPO / "assets" / "flexiv_wuji"   # the URDF's mesh paths are relative to it (fetch_assets.sh)
+EXTRA_COLORS = [(0.9, 0.25, 0.6), (0.2, 0.75, 0.85), (0.6, 0.4, 0.9), (0.85, 0.85, 0.2)]
 
 
-def build_scene(server, spec, mesh_path: Path) -> dict:
-    """Table, robot, target ghost, object, goal, and the side panel. Returns the handles."""
+def build_scene(server, spec, mesh_paths: list[Path]) -> dict:
+    """Table, robot, target ghost, the objects (object_meshes: the first is the policy's, its mesh also
+    draws the goal and the sim object), and the side panel. Returns the handles."""
+    mesh_path, extra_meshes = mesh_paths[0], mesh_paths[1:]
     import trimesh
     import yourdfpy
     from viser.extras import ViserUrdf
@@ -58,8 +62,14 @@ def build_scene(server, spec, mesh_path: Path) -> dict:
     server.scene.add_frame("/goal/axes", axes_length=0.06, axes_radius=0.002)
     sim_obj = server.scene.add_mesh_simple("/sim_object", vertices=mesh.vertices, faces=mesh.faces,
                                            color=(0.2, 0.45, 0.95), opacity=0.4, visible=False)
+    extras = []
+    for i, path in enumerate(extra_meshes, start=1):
+        m = trimesh.load(path, force="mesh")
+        extras.append(server.scene.add_mesh_simple(f"/object_{i}", vertices=m.vertices, faces=m.faces,
+                                                   color=EXTRA_COLORS[(i - 1) % len(EXTRA_COLORS)], visible=False))
+        server.scene.add_frame(f"/object_{i}/axes", axes_length=0.06, axes_radius=0.002)
     return {
-        "robot": robot, "ghost": ghost, "object": obj, "goal": goal, "sim_object": sim_obj,
+        "robot": robot, "ghost": ghost, "object": obj, "goal": goal, "sim_object": sim_obj, "extras": extras,
         # viser's joint order -> index in the spec's joint order
         "order": [list(spec["joint_names"]).index(j) for j in robot.get_actuated_joint_names()],
         "show_targets": server.gui.add_checkbox("show joint targets (green)", True),
@@ -84,6 +94,11 @@ def draw(server, scene: dict, spec, msgs: dict) -> None:
                 handle = scene[name]
                 handle.position, handle.wxyz = base_to_env(spec, msgs[topic]["pos"], msgs[topic]["quat_wxyz"])
                 handle.visible = True
+        poses = msgs.get("object_poses")
+        if poses is not None:   # [0] is object_pose's, drawn above
+            for handle, pos, quat in zip(scene.get("extras", []), poses["pos"][1:], poses["quat_wxyz"][1:]):
+                handle.position, handle.wxyz = base_to_env(spec, pos, quat)
+                handle.visible = True
 
 
 def goal_text(spec, last: dict, tolerance: float) -> str:
@@ -91,6 +106,11 @@ def goal_text(spec, last: dict, tolerance: float) -> str:
     o, g = last.get("object_pose"), last.get("goal_pose")
     if o is None or g is None:
         return ""
+    if "fold_error" in g:   # task=fold (policy.run_fold)
+        f = spec["fold"]
+        return (f"fold error (corners, worst): **{100 * g['fold_error']:.1f} cm** "
+                f"(success below {100 * f['keypoint_tolerance']:.1f} cm) · footprint {g['footprint']:.2f} "
+                f"(at most {f['max_folded_footprint']:.2f}) · hinge gap {1000 * g['hinge_gap']:.0f} mm")
     d = keypoint_distance(spec, *base_to_env(spec, o["pos"], o["quat_wxyz"]),
                           *base_to_env(spec, g["pos"], g["quat_wxyz"]))
     return (f"object -> goal (keypoints, worst): **{100 * d:.1f} cm** "
@@ -127,7 +147,7 @@ def main() -> None:
     tolerance = success_tolerance(cfg, spec)
 
     server = viser.ViserServer(host="0.0.0.0", port=vc.port)
-    scene = build_scene(server, spec, repo_path(cfg.objects[cfg.object.name].mesh))
+    scene = build_scene(server, spec, object_meshes(cfg))
     subs = {topic: open_subscriber(cfg.bus.host, cfg.bus[port], topic) for topic, port in TOPIC_PORTS.items()}
     last = dict.fromkeys(TOPIC_PORTS)                  # newest message per topic
     counts = dict.fromkeys(TOPIC_PORTS, 0)             # messages since t_rate

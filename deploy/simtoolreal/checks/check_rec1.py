@@ -18,7 +18,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # deploy/simtoolreal
 from policy import action_to_targets, load_network                                         # noqa: E402
-from utils.config import load_config, repo_path                                            # noqa: E402
+from utils.config import load_config, object_meshes, repo_path                                      # noqa: E402
 from utils.goals import _volume, first_goal, keypoint_distance, next_goal, object_corners  # noqa: E402
 from utils.observation import build_obs, obs_fields                                        # noqa: E402
 from utils.quat import quat_apply, quat_conj, quat_mul                                     # noqa: E402
@@ -100,7 +100,7 @@ def main() -> None:
 
     # 3. our goal sampler vs training's rules
     rng = np.random.default_rng(0)
-    corners = object_corners(repo_path(cfg.objects[cfg.object.name].mesh))
+    corners = object_corners(object_meshes(cfg)[0])
     lo, hi = _volume(spec)
     broken = {"outside volume (xy)": 0, "step > delta": 0, "turn > delta": 0, "below table clearance": 0}
     pos, quat = first_goal(spec, rng, corners)

@@ -7,9 +7,13 @@ environment on the robot PC (needs its GPU), from the repo root:
 
   It opens the camera the extrinsics file was calibrated for (its camera_serial), and refuses another.
   1. First frame: an OpenCV window opens; click 4 corners of a box around the object, SAM turns it
-     into a mask, FoundationPose registers the pose. The window then closes.
+     into a mask, FoundationPose registers the pose. The window then closes. With a list in
+     object.name, once per object, in the list's order (the terminal says which).
   2. Every later frame: FoundationPose tracks from the last pose; the pose goes out over ZMQ, and
-     the color image (camera_image) at image_hz for the viewer.
+     the color image (camera_image) at image_hz for the viewer. object_pose is the first object's (the
+     policy's); with a list in object.name, object_poses also carries every tracked object. Each object
+     costs one FoundationPose step per frame; perception.parallel_track runs them in threads, one CUDA
+     stream each, so they overlap on the GPU. The status line prints the tracking time per frame.
   3. With perception.frame_stream (default on), a thread sends every camera frame raw (camera_frame,
      camera_frame_port) at the camera's fps, whatever FoundationPose's speed; recorder.py
      record.camera=true encodes them to an mp4. Nothing listening: the frames are dropped.
@@ -21,6 +25,9 @@ environment on the robot PC (needs its GPU), from the repo root:
 perception.source=fake: a fixed pose (perception.fake_pose_base), no camera, to test without one:
 
     .venv_deploy/bin/python deploy/simtoolreal/perception.py perception.source=fake
+
+  task=fold: fake_pose_base is the SHEET's (hinge line middle, mid-plane); the two plates are sent
+  where they lie in it, the moving one turned up by fold.fake_fold_deg (utils/fold.py).
 """
 
 import json
@@ -35,19 +42,47 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))               # deploy/simtoolreal
 sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.calibration
-from utils.config import load_config, repo_path                      # noqa: E402
+from utils.config import load_config, object_meshes, object_names, repo_path                      # noqa: E402
 from utils.link import FRAME_PORT, encode_jpeg, open_publisher, send, send_frame   # noqa: E402
 
 
+def send_poses(pub, seq: int, t: float, names: list[str], pos: np.ndarray, quat: np.ndarray) -> None:
+    """object_pose (the first object's), and with more than one object object_poses (all)."""
+    send(pub, "object_pose", {"seq": seq, "t": t, "pos": pos[0], "quat_wxyz": quat[0]})
+    if len(names) > 1:
+        send(pub, "object_poses", {"seq": seq, "t": t, "names": names, "pos": pos, "quat_wxyz": quat})
+
+
+def fake_fold_poses(cfg, pose: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """task=fold: the two plates' mesh poses for a sheet at pose (base frame) [moving, stationary]."""
+    from utils.fold import FoldGeometry, mesh_to_sheet, quat_to_mat
+    from utils.spec import load_spec
+    names = object_names(cfg)
+    if len(names) != 2:
+        raise SystemExit(f"[perception] task=fold: object.name must be [moving, stationary], got {names}")
+    geom = FoldGeometry(load_spec(repo_path(cfg.spec_path)), cfg.fold.sheet_size, cfg.fold.hinge_z)
+    plates = geom.plate_poses(pose[:3], quat_to_mat(pose[3:]), np.radians(cfg.fold.fake_fold_deg),
+                              mesh_to_sheet(cfg.fold.hinge_axis_mesh))
+    return (np.array([plates["moving"][0], plates["stationary"][0]]),
+            np.array([plates["moving"][1], plates["stationary"][1]]))
+
+
 def publish_fake(cfg, pub) -> None:
-    """A fixed pose at fake_hz, until Ctrl-C."""
+    """A fixed pose at fake_hz, until Ctrl-C. Objects after the first: 15 cm further along base x each.
+    task=fold: the sheet's pose, see fake_fold_poses."""
     p = cfg.perception
+    names = object_names(cfg)
     pose = np.asarray(p.fake_pose_base, dtype=float)
-    pos, quat = pose[:3], pose[3:] / np.linalg.norm(pose[3:])
-    print(f"[perception] fake: pos {pos}, quat_wxyz {quat} at {p.fake_hz} Hz. Ctrl-C stops.", flush=True)
+    if cfg.task == "fold":
+        pos, quat = fake_fold_poses(cfg, pose)
+    else:
+        pos = np.array([pose[:3] + [0.15 * i, 0.0, 0.0] for i in range(len(names))])
+        quat = np.tile(pose[3:] / np.linalg.norm(pose[3:]), (len(names), 1))
+    print(f"[perception] fake: {names}, pos {pos.tolist()}, quat_wxyz {quat[0]} at {p.fake_hz} Hz. "
+          "Ctrl-C stops.", flush=True)
     seq = 0
     while True:
-        send(pub, "object_pose", {"seq": seq, "t": time.time(), "pos": pos, "quat_wxyz": quat})
+        send_poses(pub, seq, time.time(), names, pos, quat)
         seq += 1
         time.sleep(1.0 / p.fake_hz)
 
@@ -67,7 +102,7 @@ def track_camera(cfg, pub) -> None:
     calib = json.loads(calib_path.read_text())
     T_base_cam = np.asarray(calib["T_base_cam"], dtype=float)  # extrinsics
     calib_serial = calib.get("camera_serial")
-    mesh_path = repo_path(cfg.objects[cfg.object.name].mesh)
+    names, mesh_paths = object_names(cfg), object_meshes(cfg)
 
     # the extrinsics belong to one camera: open that one, and refuse another
     serial = p.camera_serial or calib_serial
@@ -78,30 +113,43 @@ def track_camera(cfg, pub) -> None:
     cam.start()
     K = cam.K()  # intrinsics
     print(f"[perception] {cam.name} {cam.serial}, {p.camera_width}x{p.camera_height} at {p.camera_fps} fps, "
-          f"extrinsics {calib_path.name}, mesh {mesh_path.name}", flush=True)
-    est = load_foundationpose(fp_dir, mesh_path)
+          f"extrinsics {calib_path.name}, meshes {[m.name for m in mesh_paths]}", flush=True)
+    parallel = p.parallel_track and len(names) > 1
+    ests = load_foundationpose(fp_dir, mesh_paths, own_rasterizer=parallel)
+    tracker = ParallelTracker(ests) if parallel else None
     stop_frames = threading.Event()
     if p.frame_stream:
         threading.Thread(target=stream_frames, args=(cam, cfg.bus[FRAME_PORT], stop_frames), daemon=True).start()
     try:
         # 1. register on the first frame
-        rgb, depth, t = cam.latest_rgbd()
-        mask = select_mask(rgb)
-        t0 = time.time()
-        est.register(K=K, rgb=rgb, depth=depth, ob_mask=mask, iteration=p.register_iters)
-        print(f"[perception] registered in {time.time() - t0:.2f} s. Ctrl-C stops.", flush=True)
+        T_cam_last = [None] * len(names)   # each object's newest T_cam_obj
+        for i, (name, est) in enumerate(zip(names, ests)):
+            print(f"[perception] object {i + 1}/{len(names)}: {name}. Click 4 corners of a box around it.",
+                  flush=True)
+            rgb, depth, t = cam.latest_rgbd()
+            mask = select_mask(rgb)
+            t0 = time.time()
+            T_cam_last[i] = est.register(K=K, rgb=rgb, depth=depth, ob_mask=mask, iteration=p.register_iters)
+            print(f"[perception] {name} registered in {time.time() - t0:.2f} s.", flush=True)
+        print(f"[perception] tracking{' in parallel' if parallel else ''}. Ctrl-C stops.", flush=True)
 
         # 2. track every new frame
-        seq, last_t, n, t_print, t_image = 0, t, 0, time.time(), 0.0
+        seq, last_t, n, t_print, t_image, track_s = 0, t, 0, time.time(), 0.0, 0.0
         while True:
             rgb, depth, t = cam.latest_rgbd()
             if t == last_t:            # no new camera frame yet
                 time.sleep(0.002)
                 continue
             last_t = t
-            T_base_obj = T_base_cam @ est.track_one(rgb=rgb, depth=depth, K=K, iteration=p.track_iters)
-            send(pub, "object_pose", {"seq": seq, "t": t, "pos": T_base_obj[:3, 3],
-                                      "quat_wxyz": matrix_to_quat_wxyz(T_base_obj[:3, :3])})
+            t0 = time.perf_counter()
+            if tracker is not None:
+                T_cam_last = tracker.track(rgb, depth, K, p.track_iters)
+            else:
+                T_cam_last = [est.track_one(rgb=rgb, depth=depth, K=K, iteration=p.track_iters) for est in ests]
+            track_s += time.perf_counter() - t0
+            T_base_objs = [T_base_cam @ T for T in T_cam_last]
+            pos = np.array([T[:3, 3] for T in T_base_objs])
+            send_poses(pub, seq, t, names, pos, np.array([matrix_to_quat_wxyz(T[:3, :3]) for T in T_base_objs]))
             seq += 1
             if p.image_hz > 0 and t - t_image >= 1.0 / p.image_hz:   # JPEG costs a few ms per frame
                 send(pub, "camera_image", {"seq": seq, "t": t, "jpeg": encode_jpeg(rgb, p.image_jpeg_quality)})
@@ -109,12 +157,41 @@ def track_camera(cfg, pub) -> None:
 
             n += 1
             if time.time() - t_print > 5.0:
-                print(f"[perception] {n / (time.time() - t_print):.1f} Hz, pos {np.round(T_base_obj[:3, 3], 3)}, "
-                      f"latency {1000 * (time.time() - t):.0f} ms", flush=True)
-                n, t_print = 0, time.time()
+                print(f"[perception] {n / (time.time() - t_print):.1f} Hz, track {1000 * track_s / n:.1f} ms/frame, "
+                      f"pos {np.round(pos, 3).tolist()}, latency {1000 * (time.time() - t):.0f} ms", flush=True)
+                n, t_print, track_s = 0, time.time(), 0.0
     finally:
+        if tracker is not None:
+            tracker.close()
         stop_frames.set()
         cam.stop()
+
+
+class ParallelTracker:
+    """track_one for every object at once: one thread and one CUDA stream per object, so their GPU work
+    overlaps (the Python between kernels still takes turns). The objects share the refiner network,
+    which keeps no state between calls that matters; each has its own rasterizer (own_rasterizer)."""
+
+    def __init__(self, ests: list) -> None:
+        import torch
+        from concurrent.futures import ThreadPoolExecutor
+
+        self.ests = ests
+        self.streams = [torch.cuda.Stream() for _ in ests]
+        self.pool = ThreadPoolExecutor(max_workers=len(ests), thread_name_prefix="track")
+        self._torch = torch
+
+    def _one(self, i: int, rgb, depth, K, iters: int) -> np.ndarray:
+        with self._torch.cuda.stream(self.streams[i]):
+            return self.ests[i].track_one(rgb=rgb, depth=depth, K=K, iteration=iters)   # ends in .cpu(): synced
+
+    def track(self, rgb, depth, K, iters: int) -> list:
+        """-> T_cam_obj per object, all tracked on the same frame."""
+        futures = [self.pool.submit(self._one, i, rgb, depth, K, iters) for i in range(len(self.ests))]
+        return [f.result() for f in futures]
+
+    def close(self) -> None:
+        self.pool.shutdown(wait=True)
 
 
 def stream_frames(cam, port: int, stop: threading.Event) -> None:
@@ -131,8 +208,10 @@ def stream_frames(cam, port: int, stop: threading.Event) -> None:
         seq += 1
 
 
-def load_foundationpose(fp_dir: Path, mesh_path: Path):
-    """Build FoundationPose for one mesh. Imports from the FoundationPose checkout."""
+def load_foundationpose(fp_dir: Path, mesh_paths: list[Path], own_rasterizer: bool = False) -> list:
+    """One FoundationPose per mesh (each keeps its own last pose), sharing the networks, and the
+    rasterizer unless own_rasterizer (needed to track in parallel threads). Imports from the
+    FoundationPose checkout."""
     sys.path.insert(0, str(fp_dir))
     import nvdiffrast.torch as dr
     import trimesh
@@ -141,10 +220,15 @@ def load_foundationpose(fp_dir: Path, mesh_path: Path):
 
     set_logging_format(level=logging.WARNING)   # its INFO lines: dozens per frame
 
-    mesh = trimesh.load(str(mesh_path), process=False)   # process=False: keep the mesh frame as is
-    return FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, mesh=mesh,
-                          scorer=ScorePredictor(), refiner=PoseRefinePredictor(),
-                          glctx=dr.RasterizeCudaContext(), debug=0, debug_dir="/tmp/foundationpose")
+    scorer, refiner, glctx = ScorePredictor(), PoseRefinePredictor(), dr.RasterizeCudaContext()
+    ests = []
+    for mesh_path in mesh_paths:
+        mesh = trimesh.load(str(mesh_path), process=False)   # process=False: keep the mesh frame as is
+        ests.append(FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, mesh=mesh,
+                                   scorer=scorer, refiner=refiner,
+                                   glctx=dr.RasterizeCudaContext() if own_rasterizer else glctx, debug=0,
+                                   debug_dir="/tmp/foundationpose"))
+    return ests
 
 
 def select_mask(rgb: np.ndarray) -> np.ndarray:

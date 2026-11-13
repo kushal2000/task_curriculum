@@ -15,6 +15,12 @@ Every step (1/60 s):
 
 The policy works in the env frame (the training env's); the bus carries robot-base-frame poses.
 When this node stops, it simply stops publishing: the robot node holds its last target.
+
+task=fold (run_fold): a fold-pool policy. Subscribes object_poses (both plates) instead; every step
+the moving plate gives the object and the stationary one the goal (utils/fold.py); the run stops when
+the sheet is folded (the training episode ends there too), on timeout, or when the two plates' hinge
+edges drift apart (fold.max_hinge_gap_m: a tracker flipped or lost). goal_pose is where the moving
+plate's mesh lands when folded, plus fold_error / footprint / hinge_gap for the viewer and recorder.
 """
 
 import importlib.util
@@ -26,7 +32,8 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))    # deploy/simtoolreal
-from utils.config import REPO, load_config, repo_path                            # noqa: E402
+from utils.config import REPO, load_config, object_names, repo_path                         # noqa: E402
+from utils.fold import FoldGeometry, PlateFrames, mesh_to_sheet                  # noqa: E402
 from utils.goals import first_goal, is_near, next_goal, object_corners, rollout_goals   # noqa: E402
 from utils.link import age, open_publisher, open_subscriber, recv_latest, send   # noqa: E402
 from utils.observation import NUM_OBS, build_obs                                 # noqa: E402
@@ -103,9 +110,12 @@ def main() -> None:
     model = load_robot_model(spec)
     net = load_network(repo_path(cfg.policy.checkpoint), repo_path(cfg.policy.config), cfg.policy.expl_coef,
                        num_actions=len(spec["joint_names"]))
+    if cfg.task == "fold":
+        run_fold(cfg, spec, model, net, pub)
+        return
     rng = np.random.default_rng(cfg.run.seed)
 
-    obj_cfg = cfg.objects[cfg.object.name]
+    obj_cfg = cfg.objects[object_names(cfg)[0]]   # with several objects: the first
     scales = np.asarray(obj_cfg.scale, dtype=np.float64)
     corners = object_corners(repo_path(obj_cfg.mesh))
 
@@ -220,6 +230,122 @@ def main() -> None:
         pub.close(linger=0)
 
     print(f"[policy] stopped ({stop_reason}) after {step * dt:.1f} s, {goals_reached} goals reached", flush=True)
+
+
+def run_fold(cfg, spec, model, net, pub) -> None:
+    """task=fold: the moving plate is the object, the stationary one gives the goal; see the docstring."""
+    names = object_names(cfg)
+    if len(names) != 2:
+        raise SystemExit(f"[policy] task=fold: object.name must be [moving, stationary], got {names}")
+    fc = cfg.fold
+    geom = FoldGeometry(spec, fc.sheet_size, fc.hinge_z)
+    m2s = mesh_to_sheet(fc.hinge_axis_mesh)
+    frames = PlateFrames(geom, m2s, fc.max_hinge_gap_m)
+
+    dt = spec["policy_dt"]
+    max_steps = int(round(cfg.run.duration_s / dt))
+    timeout_steps = cfg.goals.timeout_steps or spec["episode_length_steps"]
+    lost_z = spec["table_top_z_env"] - OBJECT_LOST_BELOW_TABLE
+
+    bus = cfg.bus
+    sub_state = open_subscriber(bus.host, bus.joint_state_port, "joint_state")
+    sub_object = open_subscriber(bus.host, bus.object_pose_port, "object_poses")
+
+    def plates(msg) -> list[tuple]:
+        """[moving, stationary] as (centre, mesh quat wxyz), env frame."""
+        out, sent = [], [str(n) for n in msg["names"]]   # the bus may deliver a numpy array
+        for name in names:
+            if name not in sent:
+                raise SystemExit(f"[policy] object_poses has {sent}, no {name}: perception's object.name differs")
+            i = sent.index(name)
+            out.append(base_to_env(spec, np.asarray(msg["pos"][i]), np.asarray(msg["quat_wxyz"][i])))
+        return out
+
+    print(f"[policy] fold: moving {names[0]}, stationary {names[1]}, sheet {100 * fc.sheet_size:.0f} cm; "
+          "waiting for robot.py ready (hand home) and object_poses ...", flush=True)
+    state, obj = wait_for_inputs(sub_state, sub_object)
+    f = frames.start(*plates(obj))
+    score = geom.score(geom.observe(f["moving"], f["stationary"]), f["stationary"])
+    print(f"[policy] fold: plates side by side, hinge gap {1000 * f['hinge_gap']:.1f} mm, fold error "
+          f"{100 * score['fold_error_real']:.1f} cm, footprint {score['footprint']:.2f}", flush=True)
+
+    prev_targets = state["q"].copy()
+    with torch.no_grad():
+        net.get_action(torch.zeros(1, NUM_OBS), deterministic=True)   # warm up (the first call is slow)
+    net.reset_rnn()                                                    # ... and forget it
+
+    stop_reason = "duration"
+    step = 0
+    print(f"[policy] running for {cfg.run.duration_s} s (episode {timeout_steps * dt:.0f} s); Ctrl-C stops", flush=True)
+    t_next = time.perf_counter()
+    try:
+        for step in range(max_steps):
+            # 1. newest inputs
+            state = recv_latest(sub_state) or state
+            obj = recv_latest(sub_object) or obj
+            if state.get("tripped"):
+                stop_reason = f"robot safety trip: {state['tripped']}"
+                break
+            if age(state) > cfg.policy.joint_state_max_age_s:
+                stop_reason = f"joint_state {1000 * age(state):.0f} ms old"
+                break
+            if age(obj) > cfg.perception.max_age_s:
+                stop_reason = f"object_poses {1000 * age(obj):.0f} ms old"
+                break
+            f = frames.update(*plates(obj))
+            if f["hinge_gap"] > fc.max_hinge_gap_m:
+                stop_reason = (f"the plates' hinge edges {100 * f['hinge_gap']:.1f} cm apart "
+                               f"(fold.max_hinge_gap_m {100 * fc.max_hinge_gap_m:.1f}): tracking lost or flipped")
+                break
+            o = geom.observe(f["moving"], f["stationary"])
+            score = geom.score(o, f["stationary"])
+
+            # 2. the state the last targets produced: folded / fell / timeout end the episode
+            if step > 0:
+                if score["folded"]:
+                    stop_reason = "folded"
+                    break
+                if min(f["moving"][0][2], f["stationary"][0][2]) < lost_z:
+                    stop_reason = "a plate off the table"
+                    break
+                if step >= timeout_steps:
+                    stop_reason = "episode timeout"
+                    break
+
+            # 3. observation -> network -> targets
+            obs = build_obs(spec, model, state["q"], state["dq"], prev_targets, o["object_pos"], o["object_quat"],
+                            o["goal_pos"], o["goal_quat_obs"], geom.object_scales,
+                            keypoints=(o["object_kp"], o["goal_kp"]))
+            with torch.no_grad():
+                action = net.get_action(torch.from_numpy(obs)[None], deterministic=True)[0].numpy().astype(np.float64)
+            targets = action_to_targets(spec, prev_targets, action)
+            prev_targets = targets
+
+            # 4. publish
+            now = time.time()
+            send(pub, "joint_target", {"seq": step, "t": now, "targets": targets})
+            goal_pos_base, goal_quat_base = env_to_base(spec, *geom.goal_plate_pose(f["stationary"], m2s))
+            send(pub, "goal_pose", {"seq": step, "t": now, "pos": goal_pos_base, "quat_wxyz": goal_quat_base,
+                                    "goal_index": 0, "fold_error": score["fold_error_real"],
+                                    "fold_error_train": score["fold_error"], "footprint": score["footprint"],
+                                    "hinge_gap": f["hinge_gap"]})
+
+            # wait for the next tick -> 60Hz
+            t_next += dt
+            late = time.perf_counter() - t_next
+            if late < 0:
+                time.sleep(-late)
+            elif late > dt:   # more than a whole step behind: don't try to catch up
+                print(f"[policy] step {step} {1000 * late:.0f} ms late", flush=True)
+                t_next = time.perf_counter()
+    except KeyboardInterrupt:
+        stop_reason = "Ctrl-C"
+    finally:
+        pub.close(linger=0)
+
+    print(f"[policy] stopped ({stop_reason}) after {step * dt:.1f} s: fold error {100 * score['fold_error_real']:.1f} cm "
+          f"(success below {100 * geom.tolerance:.1f}), footprint {score['footprint']:.2f} "
+          f"(success at most {geom.max_footprint:.2f})", flush=True)
 
 
 if __name__ == "__main__":

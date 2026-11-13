@@ -20,8 +20,10 @@ was made with:
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import math
+import re
 import subprocess
 import sys
 import types
@@ -70,6 +72,27 @@ def keypoint_corners(ref: str) -> list[list[int]]:
     raise ValueError("KEYPOINT_CORNERS literal not closed")
 
 
+PLAY_ENV_CFG_PY = "isaacsimenvs/tasks/play/play_env_cfg.py"
+
+
+def cfg_default(ref: str, path: str, field: str):
+    """A configclass field's default, read as a literal (the file imports Isaac Lab). The field name
+    must not repeat in the file. None when the file has no such field."""
+    found = re.findall(rf"^\s+{field}:\s*[^=\n]+=\s*(.+?)\s*$", git_show(ref, path), re.M)
+    assert len(found) <= 1, f"{path}: {len(found)} defaults for {field}"
+    return ast.literal_eval(found[0]) if found else None
+
+
+def section_get(ref: str, section: dict, key: str):
+    """section[key], or play_env_cfg.py's default when the task YAML leaves it out (None: neither
+    has it -- a Play goal-sampling field the fold task does not use)."""
+    return section[key] if key in section else cfg_default(ref, PLAY_ENV_CFG_PY, key)
+
+
+def optional(cast, value):
+    return None if value is None else cast(value)
+
+
 def urdf_joints(urdf_text: str) -> dict[str, dict]:
     out = {}
     for j in ET.fromstring(urdf_text).iter("joint"):
@@ -80,22 +103,25 @@ def urdf_joints(urdf_text: str) -> dict[str, dict]:
     return out
 
 
-def main() -> None:
-    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--ref", default=DEFAULT_REF, help="git ref of the training branch")
-    p.add_argument("--out", type=Path, default=HERE.parent / "spec" / "spec_flexiv_wuji_right_hl.json")
-    p.add_argument("--rollout_meta", type=Path, default=None,
-                   help="rollout_meta.json from record_sim_rollout.py: adds the fingertip order the "
-                        "observation really uses (PhysX body order) and the offset applied at each position")
-    args = p.parse_args()
+def rev_parse(ref: str) -> str:
+    return subprocess.run(["git", "-C", str(REPO), "rev-parse", ref],
+                          check=True, capture_output=True, text=True).stdout.strip()
 
-    commit = subprocess.run(["git", "-C", str(REPO), "rev-parse", args.ref],
-                            check=True, capture_output=True, text=True).stdout.strip()
-    spec = load_robot_spec(args.ref)
-    cfg = yaml.safe_load(git_show(args.ref, TASK_YAML))
-    assert cfg["robot"] == ROBOT_NAME, cfg["robot"]
+
+def table_box(ref: str, cfg: dict) -> list[float]:
+    """The table URDF's collision box size [x, y, z], m."""
+    return [float(v) for v in ET.fromstring(git_show(ref, cfg["assets"]["table_urdf"]))
+            .find(".//collision/geometry/box").get("size").split()]
+
+
+def spec_fields(ref: str, commit: str, task: str, robot_name: str, spec, cfg: dict, *,
+                robot_root_pos: tuple, table_pos_env: list, table_top_z_env: float) -> dict:
+    """The spec dict for one training env: robot (from robots.py + the URDF), action pipeline,
+    observation, table, goal sampling, success test, DR. `cfg` is the env config as the task ran it
+    (task YAML, plus any overlays); the table and the robot root are passed in, in the env frame the
+    deploy code uses (the robot base at robot_root_pos)."""
     urdf_rel = cfg["assets"]["robot_urdf"]
-    urdf_text = git_show(args.ref, urdf_rel)
+    urdf_text = git_show(ref, urdf_rel)
     limits = urdf_joints(urdf_text)
 
     names = list(spec.joint_names_canonical)
@@ -115,14 +141,18 @@ def main() -> None:
 
     sim, act, obs, rew = cfg["sim"], cfg["action"], cfg["obs"], cfg["reward"]
     reset, term, dr = cfg["reset"], cfg["termination"], cfg["domain_randomization"]
-    table_size = [float(v) for v in ET.fromstring(git_show(args.ref, cfg["assets"]["table_urdf"]))
-                  .find(".//collision/geometry/box").get("size").split()]
+    # Newer robots.py: fingertip_offset is one 3-vector or five (one per fingertip link); older: a property.
+    if hasattr(spec, "fingertip_offsets"):
+        tip_offsets = [list(o) for o in spec.fingertip_offsets]
+    else:
+        off = spec.fingertip_offset
+        tip_offsets = [list(o) for o in off] if len(off) == 5 else [list(off)] * 5
 
-    out = {
-        "task": TASK,
-        "source_ref": args.ref,
+    return {
+        "task": task,
+        "source_ref": ref,
         "source_commit": commit,
-        "robot": ROBOT_NAME,
+        "robot": robot_name,
         "robot_urdf": Path(urdf_rel).name,
         "robot_urdf_in_source": urdf_rel,
         # --- joints, policy (canonical) order: Rizon joint1-7, then r_ Wuji joints thumb..pinky ---
@@ -140,12 +170,12 @@ def main() -> None:
         "hand_friction": spec.hand_friction,
         "robot_gravity": "off in sim (the real arm's controller compensates it)",
         # --- frames ---
-        "robot_root_pos_env": list(ROBOT_ROOT_POS),
+        "robot_root_pos_env": list(robot_root_pos),
         "robot_root_quat_wxyz": list(ROBOT_ROOT_QUAT_WXYZ),
         "palm_body": spec.palm_body_name,
         "palm_center_offset": list(spec.palm_center_offset),
         "fingertip_links": list(spec.fingertip_link_names),
-        "fingertip_offsets": [list(o) for o in spec.fingertip_offsets],
+        "fingertip_offsets": tip_offsets,
         # --- action pipeline ---
         "policy_dt": float(sim["dt"]) * int(cfg["decimation"]),
         "sim_dt": float(sim["dt"]),
@@ -157,14 +187,14 @@ def main() -> None:
         "obs_list": list(obs["obs_list"]),
         "obs_clip": float(obs["clamp_abs_observations"]),
         "quat_convention_obs": "xyzw",
-        "keypoint_corners": keypoint_corners(args.ref),
+        "keypoint_corners": keypoint_corners(ref),
         "object_base_size": float(rew["object_base_size"]),
         "keypoint_scale": float(rew["keypoint_scale"]),
         "keypoint_offsets_formula": "corner * object_scales * object_base_size * keypoint_scale / 2, in the object frame",
         # --- scene ---
-        "table_size": table_size,
-        "table_pos_env": [*reset["table_reset_xy"], float(reset["table_reset_z"])],
-        "table_top_z_env": float(reset["table_reset_z"]) + table_size[2] / 2,
+        "table_size": table_box(ref, cfg),
+        "table_pos_env": list(table_pos_env),
+        "table_top_z_env": float(table_top_z_env),
         "table_reset_z_range": float(reset["table_reset_z_range"]),
         # --- goals and success (training) ---
         "goal_sampling_type": reset["goal_sampling_type"],
@@ -173,8 +203,8 @@ def main() -> None:
         "target_volume_mins": list(reset["target_volume_mins"]),
         "target_volume_maxs": list(reset["target_volume_maxs"]),
         "target_volume_region_scale": float(reset["target_volume_region_scale"]),
-        "use_goal_table_clearance": bool(reset["use_goal_table_clearance"]),
-        "goal_table_clearance_m": float(reset["goal_table_clearance_m"]),
+        "use_goal_table_clearance": optional(bool, section_get(ref, reset, "use_goal_table_clearance")),
+        "goal_table_clearance_m": optional(float, section_get(ref, reset, "goal_table_clearance_m")),
         "success_tolerance_start": float(term["success_tolerance"]),
         "success_tolerance_final": float(term["target_success_tolerance"]),
         "success_steps": int(term["success_steps"]),
@@ -182,10 +212,30 @@ def main() -> None:
         "fixed_size": list(rew["fixed_size"]),
         "fixed_size_keypoint_reward": bool(rew["fixed_size_keypoint_reward"]),
         # --- domain randomization the policy was trained under (what the real loop must stay inside) ---
-        "dr": {k: dr[k] for k in ("obs_delay_max", "action_delay_max", "object_state_delay_max",
+        "dr": {k: section_get(ref, dr, k) for k in ("obs_delay_max", "action_delay_max", "object_state_delay_max",
                                   "object_state_xyz_noise_std", "object_state_rotation_noise_degrees",
                                   "joint_velocity_obs_noise_std")},
     }
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("--ref", default=DEFAULT_REF, help="git ref of the training branch")
+    p.add_argument("--out", type=Path, default=HERE.parent / "spec" / "spec_flexiv_wuji_right_hl.json")
+    p.add_argument("--rollout_meta", type=Path, default=None,
+                   help="rollout_meta.json from record_sim_rollout.py: adds the fingertip order the "
+                        "observation really uses (PhysX body order) and the offset applied at each position")
+    args = p.parse_args()
+
+    commit = rev_parse(args.ref)
+    spec = load_robot_spec(args.ref)
+    cfg = yaml.safe_load(git_show(args.ref, TASK_YAML))
+    assert cfg["robot"] == ROBOT_NAME, cfg["robot"]
+    reset = cfg["reset"]
+    out = spec_fields(args.ref, commit, TASK, ROBOT_NAME, spec, cfg, robot_root_pos=ROBOT_ROOT_POS,
+                      table_pos_env=[*reset["table_reset_xy"], float(reset["table_reset_z"])],
+                      table_top_z_env=float(reset["table_reset_z"]) + table_box(args.ref, cfg)[2] / 2)
+    urdf_rel = cfg["assets"]["robot_urdf"]
 
     if args.rollout_meta is not None:
         meta = json.loads(args.rollout_meta.read_text())
@@ -196,7 +246,7 @@ def main() -> None:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=1) + "\n")
-    (args.out.parent / Path(urdf_rel).name).write_text(urdf_text)
+    (args.out.parent / Path(urdf_rel).name).write_text(git_show(args.ref, urdf_rel))
     print(f"wrote {args.out} and {Path(urdf_rel).name} from {args.ref} @ {commit[:7]}")
 
 

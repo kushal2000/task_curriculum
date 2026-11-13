@@ -8,7 +8,7 @@ It can also run alone (Ctrl-C stops):
 File: <record.dir>/<date>_<time>_<name>.jsonl, one JSON object per line:
     line 1:  {"topic": "meta", "msg": {"t": <start time>, "config": <the full config of this run>}}
     then:    {"topic": "<topic>", "msg": <the message exactly as sent on the bus>}
-Recorded: joint_state, joint_target, goal_pose, sim_object_pose, object_pose. Not camera_image (the
+Recorded: joint_state, joint_target, goal_pose, sim_object_pose, object_pose, object_poses. Not camera_image (the
 viewer's 10 Hz JPEGs).
 
 record.camera=true: every camera frame (camera_frame from perception.py, at the camera's fps) goes to

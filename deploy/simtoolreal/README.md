@@ -86,6 +86,8 @@ $PY $D/run.py robot.mode=free_drive $ARM       # or: move it by hand; prints how
 
 # 2. perception (FoundationPose env): click 4 corners of a box around the object, then it tracks
 ~/miniconda3/envs/foundationpose/bin/python $D/perception.py
+#    several objects: object.name=[plate7_white,plate7_brown] (one box to click per object; the policy
+#    sees the first; give the viewer / run.py the same object.name to draw them all)
 
 # 3. the policy run (robot.mode=policy is the default)
 $PY $D/run.py $ARM record.name=eraser_try1     # record.camera=true: also the camera images
@@ -118,6 +120,57 @@ the hand is connected but never enabled.
 
 The nodes can also run one by one, each in its own terminal (`robot.py robot.mode=...`,
 `viewer.py`, `policy.py`, `recorder.py record.name=...`): that is all run.py does.
+
+## Fold: the fold-pool policies on two taped plates
+
+`task=fold` runs a fold-pool policy (`deploy/policy/*.pth`, branch `yiboc_wuji`): two plates taped
+along one edge make a sheet; the policy turns one plate over onto the other. Everything else (robot,
+viewer, recorder, safety) is the same as above.
+
+```bash
+# perception: both plates, the MOVING one first (one box to click per plate)
+~/miniconda3/envs/foundationpose/bin/python $D/perception.py task=fold
+# the run (flat7RW_base by default; any of the five: policy.checkpoint=deploy/policy/<name>.pth)
+$PY $D/run.py task=fold $ARM record.name=fold_try1
+```
+
+`task=fold` applies `fold.overrides` in config.yaml (spec, checkpoint, `object.name:
+[plate5_brown, plate5_white]` = [moving, stationary]), then the command line. Start with the two
+plates lying flat, side by side, taped edge to edge, about where training put the sheet: centre 0.51 m
+in front of the base (base frame (0, −0.51)) ± 10 cm, any heading. The policy refuses to start
+otherwise (`PlateFrames.start`).
+
+What the policy sees (`utils/fold.py`, every number checked against the training code by
+`checks/check_fold.py`):
+
+| | |
+|---|---|
+| object | the moving plate's 4 corner keypoints: training's 7 x 7 grid, rows 16.7 and 50 mm from the hinge (10 cm sheet), so the object position is 8.3 mm off the plate centre, away from the hinge; orientation = the plate's, with the sign rule of training's `_mat_to_wxyz` |
+| goal | the same corners mirrored onto the stationary plate (training's hinge is on the mid-plane: no lift), recomputed every step from the stationary plate. Its quaternion is relabelled (x, y, z, w) -> (w, x, y, z) as the PhysX training env does (`physx_envs._goal_quat_from_matrix`): keep it |
+| object_scales | (sheet, sheet, 0.016) / 0.04 = (2.5, 2.5, 0.4) at 10 cm: the z is the sim's felt thickness, not the plate's |
+| success | every corner within 1.5 cm of the fold target AND the sheet's extent along the stationary plate's x ≤ 0.65 x sheet. The episode ends there (as in training). The target is the REAL fold: tape on the top face puts the folded plate 2 x `fold.hinge_z` = 5 mm above training's |
+| stops | folded; 600 steps (10 s, `goals.timeout_steps`); a plate 5 cm below the table top; the plates' hinge edges more than `fold.max_hinge_gap_m` (3 cm) apart, which means a tracker flipped or slipped |
+
+A plate is a box, so FoundationPose may report it turned 180° about any of its axes. `PlateFrames`
+takes the pose that lies flat with the hinge edges together at the start, and after that, for each
+plate, the symmetric pose closest to the last frame.
+
+The fold spec (`spec/spec_flexiv_wuji_right_fold.json`, `checks/export_fold_spec.py`) differs from
+the Play spec in what the deploy code reads: the real joint limits (`rizon4s_right_wuji_real_limits.urdf`:
+arm 5° inside, finger PIP ≤ 100°), the table top 0.33 m above the base, and the fingertip pad offsets
+(per finger: the thumb gets 22.9 mm, not the ring finger as in Play). The five runs in `deploy/policy/`
+share every one of these (`export_fold_spec.py --compare`):
+
+| checkpoint | trained on |
+|---|---|
+| `flat7RW_base` | 7 shapes, S2R hand drive, 16 mm felt, no observation DR |
+| `flat7RW_fricition` | + plate/robot/table friction DR |
+| `flat7RW_sysid` | + the identified hand (friction, spring, armature, 1.0 A x Kt) and its DR |
+| `flat7RW_allDR` | identified hand, 5 mm felt (3-7), point-level object DR, delays, noise, table height ± 1.5 cm |
+| `box2RW_allDR` | as `flat7RW_allDR`, two-plate sheets only |
+
+Without hardware: `perception.py task=fold perception.source=fake` sends the plates of a flat sheet at
+`perception.fake_pose_base` (the sheet's hinge middle), the moving one turned up by `fold.fake_fold_deg`.
 
 ## robot modes
 
@@ -213,6 +266,8 @@ where the rollout is.
 | `checks/record_lift.py` | the lift rollout for `robot.mode=openloop`, and its open-loop test in sim (cluster: `scripts/cluster/bos14_simtoolreal_lift.sh`) | the training branch's worktree, Isaac Sim |
 | `checks/record_sim_rollout.py` | records the policy in the training env, every step → `rollout.npz` (cluster: `scripts/cluster/bos14_simtoolreal_record.sh`) | the training branch's worktree, Isaac Sim |
 | `checks/export_spec.py` | reads the training branch from git → `spec/` (spec json + URDF); `--rollout_meta` adds the fingertip order | `.venv_deploy`, no Isaac Sim |
+| `checks/export_fold_spec.py` | the fold spec from `yiboc_wuji` (task YAML + robot overlay + experiment, as train.py layers them); `--compare` diffs the five runs | `.venv_deploy`, no Isaac Sim |
+| `checks/check_fold.py` | `utils/fold.py` against the training code's own methods (pulled from git, run with torch) on random sheets; the success test at 0-180°; `PlateFrames` through random symmetric flips | `.venv_deploy`, no Isaac Sim |
 
 ## Things the policy depends on that are easy to break
 
@@ -236,3 +291,9 @@ where the rollout is.
 - How long robot.py takes to see a Flexiv E-stop.
 - The mp4 export's 3D rendering. It needs a browser, so it was tested only with a stand-in.
 - Nothing has run on the real robot yet. All tests so far used the MuJoCo arm and a fake hand.
+- Fold: no sim rollout of a fold policy has been run through the deploy code (the Play `check_rec1`
+  equivalent); the observation is checked against the training code piece by piece
+  (`check_fold.py`), and a MuJoCo run with fake plates moved the hand over the sheet. Not checked:
+  FoundationPose on 5 mm plates while a finger covers them; the hinge-gap stop on a real fold; the
+  hand's effort limit (`robot.hand_effort_limit` 1.0 A) against flat7RW_base / _fricition, which
+  trained with the S2R drive's higher torque limits.

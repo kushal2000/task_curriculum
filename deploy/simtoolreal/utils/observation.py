@@ -4,6 +4,10 @@ every DR term off). All poses in the env frame, quaternions wxyz.
     obs = build_obs(spec, model, q, dq, prev_targets, object_pos, object_quat,
                     goal_pos, goal_quat, object_scales)
 
+Play: the 4 keypoints are grasp-box corners placed at the object and goal poses. Fold mode passes
+keypoints=(object_kp, goal_kp) instead (utils/fold.py: the moving half's corners, and the same
+corners at the observed goal); goal_pos / goal_quat are then unused.
+
 | field                  | size | what                                                        |
 |------------------------|------|-------------------------------------------------------------|
 | joint_pos              | 27   | joint angles scaled to [-1, 1] across the joint limits      |
@@ -40,13 +44,17 @@ def keypoints_world(pos: np.ndarray, quat_wxyz: np.ndarray, offsets: np.ndarray)
 
 
 def obs_fields(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos, goal_quat,
-               object_scales) -> dict:
-    """Each observation field by name (see the table above)."""
+               object_scales, keypoints=None) -> dict:
+    """Each observation field by name (see the table above). keypoints: (object_kp, goal_kp), each
+    (4, 3), in place of the grasp-box corners (fold mode)."""
     lower, upper = spec["joint_lower"], spec["joint_upper"]
     palm_pos, palm_quat = palm_center(spec, model, q)
-    kp = keypoint_offsets(spec, object_scales)
-    object_kp = keypoints_world(object_pos, object_quat, kp)
-    goal_kp = keypoints_world(goal_pos, goal_quat, kp)
+    if keypoints is None:
+        kp = keypoint_offsets(spec, object_scales)
+        object_kp = keypoints_world(object_pos, object_quat, kp)
+        goal_kp = keypoints_world(goal_pos, goal_quat, kp)
+    else:
+        object_kp, goal_kp = (np.asarray(k, dtype=np.float64) for k in keypoints)
     return {
         "joint_pos": 2.0 * (q - lower) / (upper - lower) - 1.0,
         "joint_vel": dq,
@@ -62,10 +70,10 @@ def obs_fields(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_p
 
 
 def build_obs(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos, goal_quat,
-              object_scales) -> np.ndarray:
+              object_scales, keypoints=None) -> np.ndarray:
     """(134,) float32, the fields in spec["obs_list"] order, clipped."""
     fields = obs_fields(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos, goal_quat,
-                        object_scales)
+                        object_scales, keypoints)
     obs = np.concatenate([np.asarray(fields[name], dtype=np.float64) for name in spec["obs_list"]])
     assert obs.shape == (NUM_OBS,), obs.shape
     return np.clip(obs, -spec["obs_clip"], spec["obs_clip"]).astype(np.float32)

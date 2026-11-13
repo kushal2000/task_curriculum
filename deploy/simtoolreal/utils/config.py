@@ -17,12 +17,34 @@ DEFAULT_CONFIG = HERE.parent / "config.yaml"
 
 
 def load_config(overrides: list[str] | None = None, path: Path = DEFAULT_CONFIG) -> DictConfig:
-    """config.yaml + overrides ("a.b=c"). overrides=None reads them from sys.argv."""
+    """config.yaml + overrides ("a.b=c"). overrides=None reads them from sys.argv.
+    task=fold: config.yaml, then fold.overrides, then the command line."""
     if overrides is None:
         overrides = sys.argv[1:]
     cfg = OmegaConf.load(path)
     OmegaConf.set_struct(cfg, True)         # unknown keys -> error
-    return OmegaConf.merge(cfg, OmegaConf.from_dotlist(overrides))
+    cli = OmegaConf.from_dotlist(overrides)
+    merged = OmegaConf.merge(cfg, cli)
+    if merged.task == "fold":
+        merged = OmegaConf.merge(cfg, cfg.fold.overrides, cli)
+    elif merged.task != "play":
+        raise SystemExit(f"task={merged.task}: play | fold")
+    return merged
+
+
+def object_names(cfg: DictConfig) -> list[str]:
+    """object.name as a list: one name, or several. The first is the policy's object (object_pose)."""
+    name = cfg.object.name
+    names = [name] if isinstance(name, str) else list(name)
+    unknown = [n for n in names if n not in cfg.objects]
+    if not names or unknown:
+        raise SystemExit(f"object.name={name}: unknown {unknown}; known objects: {list(cfg.objects)}")
+    return names
+
+
+def object_meshes(cfg: DictConfig) -> list[Path]:
+    """The mesh of each object in object.name, in its order."""
+    return [repo_path(cfg.objects[n].mesh) for n in object_names(cfg)]
 
 
 def repo_path(p: str) -> Path:
