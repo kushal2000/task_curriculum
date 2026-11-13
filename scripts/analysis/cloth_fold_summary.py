@@ -63,6 +63,13 @@ def main() -> int:
     print(f"  within tolerance    : {sum(e <= max(tol) for e in errs)} / {len(errs)} at {max(tol)}")
     print(f"  falls / ejected     : {falls} / {ejected}")
     print(f"  nonfinite resets    : {nonfinite}")
+    # cloth.release_persist runs: episodes.py files the env's extra reasons under per_env_extra_done.
+    rel = {k: sum(int(sum(bool(v) for v in r.get("per_env_extra_done", {}).get(k, []))) for r in runs)
+           for k in ("released", "persist", "persist_fail")}
+    if any(k in r.get("per_env_extra_done", {}) for r in runs for k in rel):
+        print(f"  released            : {rel['released']:4d} / {n_eps}  ({100*rel['released']/n_eps:.2f}%)")
+        print(f"  persist (success)   : {rel['persist']:4d} / {n_eps}  ({100*rel['persist']/n_eps:.2f}%)")
+        print(f"  persist_fail        : {rel['persist_fail']:4d} / {n_eps}")
 
     if len(tol) != 1:
         print(f"  !! fold tolerance differs across files: {sorted(tol)} -- NOT comparable")

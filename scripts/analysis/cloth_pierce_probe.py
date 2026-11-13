@@ -28,7 +28,7 @@ import numpy as np
 from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
 from isaacsimenvs.tasks.cloth.utils.pierce import PierceDetector
 
-OUTCOMES = ("fold_held", "fall", "hand_far", "nonfinite", "timeout")
+OUTCOMES = ("persist", "persist_fail", "fold_held", "fall", "hand_far", "nonfinite", "timeout")
 
 
 def main() -> None:
@@ -69,7 +69,11 @@ def main() -> None:
         if not args.randomize:
             disable_randomization(env_cfg)
         use_single_object_variant()
+        import time
+
+        t_setup = time.perf_counter()
         env = gym.make(task, cfg=env_cfg)
+        setup_s = time.perf_counter() - t_setup
         inner = env.unwrapped
         n, dev = inner.num_envs, inner.device
         player = PretrainedPlayer(
@@ -105,10 +109,26 @@ def main() -> None:
         pierced_height = []  # the same, at every pierced finger-step
         table_half = float(inner.cfg.cloth.table_half_thickness)
         prev_pos = None
+        # Grip: does the hand move the cloth at all? Highest cloth node above the table top and the
+        # largest node displacement from where it lay after reset, max over the first episode.
+        def nodal():
+            q = inner._cloth.data.nodal_pos_w
+            return (q.torch if hasattr(q, "torch") else q).float()
+        # The sheet spawns above the table and drops onto it: start measuring once it has settled.
+        GRIP_WARM = 30
+        q0 = nodal().clone()
+        top0 = (inner._table_z_per_env + table_half) + inner.scene.env_origins[:, 2]
+        cloth_lift = torch.zeros(n, device=dev)
+        cloth_move = torch.zeros(n, device=dev)
         step = 0
+        step_s = []  # env.step wall time [s], synced
         while step < args.max_steps and not bool(done.all()):
             action = player.get_action(obs["policy"], deterministic=True)
+            torch.cuda.synchronize()
+            t0 = time.perf_counter()
             obs, _r, term, trunc, _x = env.step(action.to(dev))
+            torch.cuda.synchronize()
+            step_s.append(time.perf_counter() - t0)
             ended = (term.bool() | trunc.bool())
 
             hit, a, b = det(NewtonManager._state_0)              # (E, F)
@@ -135,6 +155,14 @@ def main() -> None:
             first_pierce_step = torch.where((first_pierce_step < 0) & hit.any(dim=1) & live,
                                             torch.full_like(first_pierce_step, step), first_pierce_step)
             prev_pos = pos
+            q = nodal()
+            if step == GRIP_WARM:
+                q0 = q.clone()
+            first = ~done & ~ended & (step >= GRIP_WARM)
+            lift = q[..., 2].amax(dim=1) - top0
+            move = (q - q0).norm(dim=-1).amax(dim=1)
+            cloth_lift = torch.where(first, torch.maximum(cloth_lift, lift), cloth_lift)
+            cloth_move = torch.where(first, torch.maximum(cloth_move, move), cloth_move)
             length += (~done).long()
 
             fin = ended & ~done
@@ -162,6 +190,12 @@ def main() -> None:
             "checkpoint": args.checkpoint, "randomize": args.randomize, "seed": args.seed,
             "num_envs": n, "overrides": hydra_args, "steps_run": step,
             "fingers": names,
+            "timing": {
+                "env_setup_s": round(setup_s, 1),
+                "env_step_ms_mean": round(float(np.mean(step_s[20:] or step_s)) * 1e3, 2),
+                "env_step_ms_median": round(float(np.median(step_s[20:] or step_s)) * 1e3, 2),
+                "warmup_steps_excluded": 20,
+            },
             "episodes_finished": int(fin_mask.sum()),
             "episodes_with_pierce": int((pierced & fin_mask).sum()),
             "episodes_with_pierce_ge_30_steps": int(((longest_any >= 30) & fin_mask).sum()),
@@ -185,6 +219,14 @@ def main() -> None:
                 "frac_below_12mm": round(float(np.mean(np.array(pierced_height) < 0.012)), 3) if pierced_height else None,
                 "frac_above_30mm": round(float(np.mean(np.array(pierced_height) > 0.030)), 3) if pierced_height else None,
             },
+            "grip": {
+                "settle_steps": GRIP_WARM,
+                "cloth_lift_cm_median": round(float(cloth_lift.median()) * 100, 2),
+                "cloth_lift_cm_p90": round(float(cloth_lift.quantile(0.9)) * 100, 2),
+                "frac_lifted_over_3cm": round(float((cloth_lift > 0.03).float().mean()), 3),
+                "cloth_move_cm_median": round(float(cloth_move.median()) * 100, 2),
+                "frac_moved_over_3cm": round(float((cloth_move > 0.03).float().mean()), 3),
+            },
             "onset_speed_mps": {
                 "n": len(onset_speed),
                 "median": round(float(np.median(onset_speed)), 3) if onset_speed else None,
@@ -194,8 +236,8 @@ def main() -> None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(res, indent=2))
         print("[pierce] " + json.dumps({k: res[k] for k in (
-            "episodes_finished", "episodes_with_pierce", "episodes_with_pierce_ge_30_steps",
-            "outcome_if_pierced", "outcome_if_clean", "pierce_onsets_per_finger", "onset_speed_mps",
+            "episodes_finished", "episodes_with_pierce", "episodes_with_pierce_ge_30_steps", "grip",
+            "timing", "outcome_if_pierced", "outcome_if_clean", "pierce_onsets_per_finger", "onset_speed_mps",
             "onset_height_mm", "pierced_steps_height_mm")}),
             flush=True)
         env.close()

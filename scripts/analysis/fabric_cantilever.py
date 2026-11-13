@@ -32,9 +32,18 @@ _geo = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_geo)
 
 G = 9.81
-SIZE, RES = 0.10, 7
+# --res: particles per side (env: 7). Read before the constants below, which the plasticity probe
+# imports too, so one --res on either command line sets both. The geometry stays physical: a 10 cm
+# sheet, a 5 cm overhang and the rest clamped, whatever the resolution.
+_pre = argparse.ArgumentParser(add_help=False)
+_pre.add_argument("--res", type=int, default=7)
+_pre.add_argument("--size", type=float, default=0.10)
+_pre_a = _pre.parse_known_args()[0]
+SIZE, RES = _pre_a.size, _pre_a.res  # env: 0.10 m, 7
+if RES % 2 == 0 or RES < 5:
+    raise SystemExit(f"--res must be odd and >= 5 (a hinge row on the fold line), got {RES}")
 H = SIZE / (RES - 1)
-N_CLAMP = 4  # rows i = 0..3 pinned (also fixes the slope); the free 3 cells are the fold flap
+N_CLAMP = RES - round(0.05 / H)  # 7x7: rows 0..3 pinned (also fixes the slope), 3 free cells
 L = (RES - N_CLAMP) * H  # overhang, 5 cm = the half sheet a fold lifts
 SUBSTEPS_PER_FRAME = 24  # 60 Hz frames, cloth dt 1/1440 s as in the env
 DT = 1.0 / 60.0 / SUBSTEPS_PER_FRAME
@@ -48,11 +57,13 @@ _fspec = importlib.util.spec_from_file_location("fabrics", ROOT / "isaacsimenvs/
 fabrics = importlib.util.module_from_spec(_fspec)
 _fspec.loader.exec_module(fabrics)
 _PRESETS = {n: fabrics.load(n) for n in fabrics.names() if n != "base"}
+# B: the preset's `measured:` block (cantilever of a real swatch) if it has one, else `literature:`.
 FABRICS = {
-    n: dict(rho=d["cloth"]["density"], B=d["literature"]["bending_rigidity"], tri=d["cloth"]["tri_ke"])
+    n: dict(rho=d["cloth"]["density"], B=d.get("measured", d.get("literature", {}))["bending_rigidity"],
+            tri=d["cloth"]["tri_ke"])
     for n, d in _PRESETS.items()
 }
-TRI_RANGE = {n: tuple(d["literature"]["tri_range"]) for n, d in _PRESETS.items()}
+TRI_RANGE = {n: tuple(d["literature"]["tri_range"]) for n, d in _PRESETS.items() if "tri_range" in d.get("literature", {})}
 TUNED_KE = {n: d["cloth"]["edge_ke"] for n, d in _PRESETS.items()}
 
 # --- exact elastica --------------------------------------------------------------------------
@@ -181,11 +192,15 @@ def main():
     ap.add_argument("--drop", type=float, default=8.0)
     ap.add_argument("--tri", choices=["now", "lo", "hi"], default="now", help="tri_ke = tri_ka: preset or TRI_RANGE end")
     ap.add_argument("--iters", type=int, default=ITERS, help="VBD iterations (env: 12)")
+    ap.add_argument("--tri-ke", type=float, default=None, help="tri_ke = tri_ka for every fitted preset (overrides --tri)")
     ap.add_argument("--ke-start", choices=["lit", "tuned"], default="lit", help="first-round edge_ke: B/h or TUNED_KE")
+    ap.add_argument("--fabrics", nargs="+", default=list(FABRICS), choices=list(FABRICS), help="presets to fit (default all)")
+    ap.add_argument("--res", type=int, default=7, help="particles per side (env: 7; read at import)")
+    ap.add_argument("--size", type=float, default=0.10, help="sheet side [m] (env: 0.10; read at import)")
     a = ap.parse_args()
     out = ROOT / a.out
     out.mkdir(parents=True, exist_ok=True)
-    names = list(FABRICS)
+    names = list(a.fabrics)
     for n in names:
         f = FABRICS[n]
         f["c"] = (f["B"] / (f["rho"] * G)) ** (1 / 3)
@@ -195,6 +210,8 @@ def main():
         f["ke"] = f["B"] / H if a.ke_start == "lit" else TUNED_KE[n]  # starting guess
         if a.tri != "now":
             f["tri"] = TRI_RANGE[n][0 if a.tri == "lo" else 1]
+        if a.tri_ke is not None:
+            f["tri"] = a.tri_ke
         print(f"[target] {n:8s} c {100 * f['c']:.2f} cm  droop {f['theta_target']:.1f} deg", flush=True)
 
     history = {n: [] for n in names}
@@ -227,7 +244,7 @@ def main():
     frames, times, vmax = simulate(specs, a.drop, record_every=2, iterations=a.iters)
     print(f"[final] max |v| at end {vmax:.2e} m/s", flush=True)
 
-    summary = {"tri_set": a.tri, "L_m": L, "h_m": H, "dt": DT, "iterations": a.iters, "kd_now": KD_NOW, "fabrics": {}}
+    summary = {"res": RES, "size_m": SIZE, "tri_set": a.tri, "L_m": L, "h_m": H, "dt": DT, "iterations": a.iters, "kd_now": KD_NOW, "fabrics": {}}
     for n in names:
         f = FABRICS[n]
         row = {k: f[k] for k in ("rho", "B", "tri", "c", "theta_target", "ke_old", "ke", "kd_scaled")}

@@ -256,7 +256,29 @@ def main() -> None:
         done = torch.zeros(n, dtype=torch.bool, device=dev)
         was_rel = torch.zeros(n, dtype=torch.bool, device=dev)
         outcome = [""] * n
-        T = {k: [] for k in ("opening", "fold_err", "folded", "released", "d_release", "d_all", "d_all_body")}
+        T = {k: [] for k in ("opening", "fold_err", "folded", "released", "d_release", "d_all", "d_all_body",
+                             "press_N", "pen_max_mm")}
+        # Hand press estimate: VBD's soft contact is a penalty, normal force = k * penetration per
+        # record (rigid_vbd_kernels._eval_soft_ef_contact), k = mean(soft_contact_ke, shape ke) with
+        # rigid_avbd_beta = 0. Summed over the hand's records; damping and friction left out.
+        shape_ke = getattr(model, "shape_material_ke", None)
+        ke_shape = float(np.median(shape_ke.numpy())) if shape_ke is not None and shape_ke.shape[0] else 2.5e3
+        k_eff = 0.5 * (float(inner.cfg.cloth.soft_contact_ke) + ke_shape)
+        sheet_mass = float(model.particle_mass.numpy()[: model.particle_count // n].sum())
+        print(f"[spring] press estimate: k_eff {k_eff:.0f} N/m (cloth {inner.cfg.cloth.soft_contact_ke:g}, shape "
+              f"{ke_shape:g}); sheet mass {sheet_mass * 1e3:.1f} g, weight {sheet_mass * 9.81:.3f} N", flush=True)
+
+        def press_now():
+            inner.hand_cloth_touching()
+            g, ev = getattr(inner, "_touch_last_gap", None), getattr(inner, "_touch_last_env", None)
+            f = torch.zeros(n, device=dev)
+            pm = torch.zeros(n, device=dev)
+            if g is not None and g.numel():
+                pen = (-g).clamp(min=0.0).float()
+                ev = ev.long().clamp(0, n - 1)
+                f.index_add_(0, ev, k_eff * pen)
+                pm.scatter_reduce_(0, ev, pen * 1e3, reduce="amax")
+            return f, pm
         at_release, at_end, release_step, last_live = {}, {}, [-1] * n, {}
         step = 0
         while step < args.max_steps and not bool(done.all()):
@@ -271,8 +293,10 @@ def main() -> None:
             rel = inner._released.clone()
             d_rel = inner.hand_cloth_distance()
             d_all, b_all = all_hand_dist(parts)
+            press, pen_max = press_now()
             for k, v in (("opening", ang), ("fold_err", fe), ("folded", folded), ("released", rel),
-                         ("d_release", d_rel), ("d_all", d_all), ("d_all_body", b_all)):
+                         ("d_release", d_rel), ("d_all", d_all), ("d_all_body", b_all),
+                         ("press_N", press), ("pen_max_mm", pen_max)):
                 T[k].append(torch.where(live, v.float(), torch.full_like(v.float(), float("nan"))).cpu().numpy())
             newly = (rel & ~was_rel & live).cpu().numpy()
             if newly.any():
@@ -359,6 +383,26 @@ def main() -> None:
         for e in range(n):
             r0 = release_step[e]
             ep = {"env": e, "outcome": outcome[e], "release_step": r0}
+            pr, fo = tr["press_N"][e], tr["folded"][e]
+            fin_ = np.isfinite(pr)
+            first_fold = int(np.flatnonzero(fo == 1)[0]) if (fo == 1).any() else -1
+            # the fold-making window: first contact to release (or episode end)
+            touch_steps = np.flatnonzero(fin_ & (pr > 0))
+            t0_ = int(touch_steps[0]) if touch_steps.size else -1
+            t1_ = r0 if r0 >= 0 else int(np.flatnonzero(fin_)[-1]) + 1 if fin_.any() else 0
+            win = pr[t0_:t1_] if t0_ >= 0 and t1_ > t0_ else np.array([])
+            win = win[np.isfinite(win)]
+            hold = pr[first_fold:t1_] if 0 <= first_fold < t1_ else np.array([])
+            hold = hold[np.isfinite(hold)]
+            ep |= {"first_fold_step": first_fold, "first_touch_step": t0_,
+                   "press_peak_N": round(float(win.max()), 3) if win.size else 0.0,
+                   "press_p90_N": round(float(np.percentile(win, 90)), 3) if win.size else 0.0,
+                   "press_mean_touching_N": round(float(win[win > 0].mean()), 3) if (win > 0).any() else 0.0,
+                   "press_impulse_Ns": round(float(win.sum() * float(inner.step_dt)), 4) if win.size else 0.0,
+                   "touch_frac_before_release": round(float((win > 0).mean()), 3) if win.size else 0.0,
+                   "press_while_folded_mean_N": round(float(hold.mean()), 3) if hold.size else None,
+                   "press_while_folded_peak_N": round(float(hold.max()), 3) if hold.size else None,
+                   "pen_max_mm": round(float(np.nanmax(tr["pen_max_mm"][e])), 2) if fin_.any() else None}
             if r0 >= 0:
                 op = tr["opening"][e]
                 post = op[r0:]
@@ -440,7 +484,9 @@ def main() -> None:
             if sel:
                 by_out[o] = {"n": len(sel), **{k: agg(sel, k) for k in (
                     "opening_at_release", "opening_min_30_before", "opening_max_after", "opening_last",
-                    "fold_err_max_after_mm", "d_all_min_after_mm")},
+                    "fold_err_max_after_mm", "d_all_min_after_mm", "press_peak_N", "press_p90_N",
+                    "press_mean_touching_N", "press_impulse_Ns", "press_while_folded_mean_N",
+                    "press_while_folded_peak_N", "pen_max_mm")},
                     "bend_at_release": bend_profile(sel, "hinges_at_release")}
         res = {
             "checkpoint": args.checkpoint, "seed": args.seed, "num_envs": n, "overrides": hydra_args,
@@ -448,6 +494,8 @@ def main() -> None:
                                             "diagonal": round(float(yield_deg[kind == 1].mean()), 1)},
             "bins_half_cells": BINS, "hinge_value_order": ["abs_theta_deg", "abs_rest_deg", "abs_elastic_deg", "n"],
             "outcomes": {o: outcome.count(o) for o in set(outcome)},
+            "press_k_eff_N_per_m": k_eff, "sheet_mass_g": round(sheet_mass * 1e3, 2),
+            "sheet_weight_N": round(sheet_mass * 9.81, 4),
             "released": len(rel_eps),
             "by_outcome": by_out,
             "hand_bodies": names_all,
@@ -465,7 +513,8 @@ def main() -> None:
         print("[spring] " + json.dumps({k: res[k] for k in ("outcomes", "released")}), flush=True)
         for o, v in by_out.items():
             print(f"[spring] {o}: n={v['n']} " + " ".join(f"{k}={v[k]['median']}" for k in (
-                "opening_at_release", "opening_max_after", "opening_last", "d_all_min_after_mm")), flush=True)
+                "opening_at_release", "opening_max_after", "opening_last", "d_all_min_after_mm",
+                "press_peak_N", "press_while_folded_mean_N", "press_impulse_Ns", "pen_max_mm")), flush=True)
         if args.yank != "none":
             print("[spring] yank " + json.dumps(res["yank_summary"]), flush=True)
         env.close()
