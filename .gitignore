@@ -67,3 +67,10 @@ assets/g1_wuji2_description/
 docs/results/**/*.json
 docs/results/**/*.pt
 docs/results/**/*.png
+docs/results/**/*.npz
+
+# Local-only binaries: policy zips, the Isaac Lab overlay image, prior checkpoints, pip cache.
+/fabric_*.zip
+/isaaclab_overlay.img
+/checkpoints/
+/isaac_cache/
