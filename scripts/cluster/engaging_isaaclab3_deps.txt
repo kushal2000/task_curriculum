@@ -1,0 +1,44 @@
+# Isaac Lab 3 root dependencies (third_party/IsaacLab/pyproject.toml), minus the workspace
+# members, which are installed editable. Generated for scripts/cluster/engaging_finish_isaaclab3.sh.
+numpy>=2
+torch>=2.11
+torchvision>=0.26.0
+torchaudio>=2.11
+onnx>=1.18.0
+prettytable>=3.3.0
+psutil
+protobuf>=4.25.8,!=5.26.0
+hidapi>=0.14.0
+gymnasium>=1.2.0
+trimesh
+pyglet>=2.1.6,<3
+transformers==4.57.6
+einops
+warp-lang==1.16.0
+matplotlib>=3.10.3
+pillow>=12.1.1
+botocore
+starlette>=0.46.0,<0.50
+# omniverseclient==2.72.3  -- dropped: manylinux_2_35 wheels only, Engaging is glibc 2.28; kit-less Newton never uses it
+filelock
+lazy_loader>=0.4
+pin ; platform_system == 'Linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')
+pin-pink==3.3.0 ; platform_system == 'Linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')
+daqp==0.8.5 ; platform_system == 'Linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')
+usd-core>=25.11,<26.0 ; platform_machine == 'x86_64' or platform_machine == 'AMD64'
+usd-exchange>=2.2 ; platform_machine == 'aarch64'
+hf-xet>=1.4.1,<2.0.0 ; platform_machine == 'x86_64' or platform_machine == 'AMD64' or platform_machine == 'aarch64'
+tensorboard
+numba>=0.63.1
+hydra-core
+h5py>=3.15.0
+packaging
+rich
+tqdm>=4.67.1
+rsl-rl-lib==5.4.1
+onnxscript>=0.5
+newton[sim]>=1.2.0  # [importers] dropped: needs open3d, manylinux_2_35 wheels only
+newton-usd-schemas>=0.2.0
+PyOpenGL-accelerate>=3.1.0
+imgui-bundle>=1.92.5
+typing-extensions>=4.15.0
