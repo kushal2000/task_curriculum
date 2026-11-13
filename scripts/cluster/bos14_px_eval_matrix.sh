@@ -42,7 +42,7 @@
 #SBATCH --error=slurm_logs/%x_%A_%a.out
 
 set -uo pipefail
-cd /home/yiboc/mit/task_curriculum
+cd "${REPO:-/home/yiboc/mit/task_curriculum}"   # REPO / PHYSX_PY / POLICY_CFG: see engaging_px_eval_matrix.sh
 : "${TRAIN_JOB:?set TRAIN_JOB to the PhysX training array}"
 : "${RUN_TAG:?set RUN_TAG to the training run tag}"
 KIND="${KIND:-pool}"
@@ -58,7 +58,7 @@ if [ -z "${CKPT:-}" ]; then
 fi
 [ -n "$CKPT" ] && [ -f "$CKPT" ] || { echo "[px_mx] no checkpoint for $NAME" >&2; exit 1; }
 
-PHYSX=(.venv_isaacsim/bin/python -m isaacsimenvs.eval.episodes --headless)
+PHYSX=(${PHYSX_PY:-.venv_isaacsim/bin/python} -m isaacsimenvs.eval.episodes --headless)
 NEWTON=(scripts/newton_py -m isaacsimenvs.eval.episodes)
 POOL7=("env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]"
        env.fold_pool.one_shape_per_env=true)
@@ -92,7 +92,7 @@ for CUT in 0.04 0.015; do
     for ES in 1 2; do
         OUT="$OUTDIR/${OUT_TAG}_s${SEED}__on_${TARGET}__${START}__${CT}_s${ES}.json"
         [ -s "$OUT" ] && { echo "[px_mx] exists: $OUT"; continue; }
-        "${PY[@]}" --task "$TASK" --checkpoint "$CKPT" --policy_config pretrained_policy/config.yaml \
+        "${PY[@]}" --task "$TASK" --checkpoint "$CKPT" --policy_config "${POLICY_CFG:-pretrained_policy/config.yaml}" \
             --sapg_expl_coef 0 --num_envs "$ENVS" --max_steps 900 --success_tolerance 0.01 \
             --num_assets_per_type 1 --single_variant "${SARGS[@]}" --seed "$ES" --out "$OUT" \
             "${TARGS[@]}" "env.cloth.keypoint_tolerance=$CUT" env.cloth.nan_policy=reset \
