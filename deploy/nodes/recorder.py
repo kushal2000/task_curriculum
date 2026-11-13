@@ -5,7 +5,7 @@ A task's run.py starts it when record.name is set and stops it when the run ends
 It can also run alone (Ctrl-C stops):
     .venv_deploy/bin/python deploy/nodes/recorder.py config=deploy/simtoolreal/config.yaml record.name=free_drive_test
 
-File: <record.dir>/<date>_<time>_<name>.jsonl, one JSON object per line:
+File: <record.dir>/<date>/<date>_<time>_<name>.jsonl, one JSON object per line:
     line 1:  {"topic": "meta", "msg": {"t": <start time>, "config": <the full config of this run>}}
     then:    {"topic": "<topic>", "msg": <the message exactly as sent on the bus>}
 Recorded: joint_state, joint_target, goal_pose, sim_object_pose, object_pose, object_poses. Not camera_image (the
@@ -41,9 +41,10 @@ def main() -> None:
         raise SystemExit("[recorder] set record.name")
     topics = [t for t in TOPIC_PORTS if t != "camera_image"]
 
-    out_dir = repo_path(rc.dir)
+    stamp = time.strftime('%Y-%m-%d_%H-%M-%S')
+    out_dir = repo_path(rc.dir) / stamp[:10]                       # one folder per day
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{time.strftime('%Y-%m-%d_%H-%M-%S')}_{rc.name}.jsonl"
+    path = out_dir / f"{stamp}_{rc.name}.jsonl"
 
     # every message, not only the newest (latest_only=False)
     subs = [open_subscriber(cfg.bus.host, cfg.bus[TOPIC_PORTS[t]], t, latest_only=False) for t in topics]

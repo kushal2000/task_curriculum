@@ -33,7 +33,7 @@ robot.mode=openloop: no policy, no perception; robot.py sends a sim rollout's jo
 | [robot.py](../nodes/robot.py) | `.venv_deploy` | arm (aioflexiv; or its MuJoCo arm) + hand (aiowuji; or `fake`, no hand); modes `home`, `free_drive`, `policy`, `openloop` |
 | [policy.py](policy.py) | `.venv_deploy` | observation → LSTM → joint targets; goals and the goal test |
 | [viewer.py](../nodes/viewer.py) | `.venv_deploy` | live viser page: robot, targets, object, goal, camera, topic status |
-| [recorder.py](../nodes/recorder.py) | `.venv_deploy` | every message → `recordings/<date>_<time>_<name>.jsonl` |
+| [recorder.py](../nodes/recorder.py) | `.venv_deploy` | every message → `recordings/<date>/<date>_<time>_<name>.jsonl` |
 | [playback.py](../nodes/playback.py) | `.venv_deploy` | plays a recording back in viser; exports an mp4; never moves the robot |
 
 Other folders: `deploy/utils/` (code every task uses, see [\_\_init\_\_.py](../utils/__init__.py)),
@@ -181,7 +181,7 @@ the reason in `joint_state` (`tripped`), so policy.py stops and the viewer shows
 ## Recording and playback
 
 `run.py record.name=<name>` starts recorder.py for that run. It writes every message, as sent, to
-`recordings/<date>_<time>_<name>.jsonl` (gitignored). Line 1 is the run's full config. Size: about
+`recordings/<date>/<date>_<time>_<name>.jsonl` (gitignored). Line 1 is the run's full config. Size: about
 25 MB/min. recorder.py can also run on its own, e.g. to record a free-drive session.
 
 `record.camera=true` also records the camera: perception.py sends every camera frame raw

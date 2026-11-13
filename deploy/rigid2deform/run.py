@@ -9,7 +9,7 @@ deploy/utils/runner.py has what starts when and how it all stops.
                                          #    (perception.source=fake: no camera)
     $PY $R $ARM                          # 3. robot.mode=policy (the default): task=fold
         policy.checkpoint=deploy/rigid2deform/policy/box2RW_allDR.pth    another of the five runs
-        record.name=fold_try1            record it (recordings/<date>_<time>_fold_try1.jsonl)
+        record.name=fold_try1            record it (recordings/<date>/<date>_<time>_fold_try1.jsonl)
         run.viewer=false, ...            any other config key
 """
 

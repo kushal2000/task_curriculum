@@ -5,7 +5,7 @@ deploy/utils/runner.py has what starts when and how it all stops.
     $PY $R robot.mode=home       $ARM    # 1. move to home (or free_drive: move it there by hand)
     (start perception)                   # 2. deploy/simtoolreal/perception.py (FoundationPose env)
     $PY $R $ARM                          # 3. robot.mode=policy (the default): the policy run
-        record.name=eraser_try1          record it (recordings/<date>_<time>_eraser_try1.jsonl)
+        record.name=eraser_try1          record it (recordings/<date>/<date>_<time>_eraser_try1.jsonl)
         record.camera=true               ... with the camera video (<name>.camera.mp4)
         run.viewer=false                 no viewer
         run.duration_s=60, ...           any other config key
