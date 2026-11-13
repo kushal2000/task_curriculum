@@ -1,0 +1,220 @@
+# Deploy settings for the rigid2deform policies (branch yiboc_wuji: rigid plates standing in for a
+# deformable sheet) on Flexiv Rizon 4s + right Wuji Hand 2. task picks what the policy does.
+#
+# Two kinds of numbers:
+#   - this file: choices you make when deploying (which robot, gains, safety limits, ...). Edit freely.
+#   - spec file (spec_path below): facts copied from the training env (joint limits, obs layout,
+#     action pipeline, the fold geometry, ...). Never edit by hand; regenerate it with checks/export_fold_spec.py.
+#
+# run.py and policy.py read this file; run.py hands it to the shared nodes (deploy/nodes/) as
+# config=deploy/rigid2deform/config.yaml. Override any value on the command line with dotted keys, e.g.
+#   python run.py robot.mode=home robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>
+#   python run.py policy.checkpoint=deploy/rigid2deform/policy/box2RW_allDR.pth record.name=fold_try1
+# A key that is not in this file is an error. deploy/utils/config.py prints the merged config.
+#
+# Frames: "env" = the frame the policy observes in (Play's): robot base at (0, 0.8, 0); the fold
+# training table's top is at env z 0.33 m. Lengths in metres, angles in degrees unless the name says otherwise.
+
+task: fold                  # fold: turn one plate of a taped two-plate sheet over onto the other (fold.py)
+spec_path: deploy/rigid2deform/spec/spec_flexiv_wuji_right_fold.json   # robot URDF next to it
+
+# ------------------------------------------------------------------------------------------- bus
+# The processes talk over ZMQ (deploy/utils/link.py). Each publisher binds its own port; anyone may subscribe.
+# Every pose on the bus is in the robot base frame.
+bus:
+  host: 127.0.0.1           # the machine the publishers run on
+  object_pose_port: 5560    # perception.py -> object_pose, camera_image
+  joint_state_port: 5561    # robot.py -> joint_state
+  policy_port: 5562         # policy.py -> joint_target, goal_pose
+  camera_frame_port: 5563   # perception.py -> camera_frame (every camera frame, raw, for the recorder)
+
+# ----------------------------------------------------------------------------------------- run
+# run.py: robot.py in robot.mode, + viewer.py / recorder.py, + policy.py in policy mode
+run:
+  viewer: true              # start viewer.py; it stays open after robot and policy stop
+  confirm_hardware: true    # type 'go' before real hardware moves
+  duration_s: 300.0         # policy time to run (the episode's own timeout usually ends it first)
+
+# --------------------------------------------------------------------------------------- policy
+# The five runs in policy/ (flat7RW_base, _fricition, _sysid, _allDR, box2RW_allDR; the README says
+# what each trained on) share every spec number the deploy code reads (checks/export_fold_spec.py --compare).
+policy:
+  checkpoint: deploy/rigid2deform/policy/flat7RW_base.pth
+  config: pretrained_policy/config.yaml
+  expl_coef: 0.0            # SAPG block; 0 = the last block (task reward only)
+  joint_state_max_age_s: 0.05   # stop when the newest joint_state is older (robot.py died / stalled)
+
+# ---------------------------------------------------------------------------------------- robot
+robot:
+  mode: policy              # policy | home | free_drive (deploy/nodes/robot.py's docstring); openloop needs
+                            #   an openloop section, which this task has not
+  arm: mujoco               # robot serial number | mujoco (aioflexiv's MuJoCo Rizon)
+  hand: fake                # hand serial number | auto | dry_run (connected, never enabled) | fake (no hand)
+  hand_sn: null             # serial for hand: dry_run
+  mujoco_viewer: false
+
+  arm_gain_scale: 1.0       # real arm kp, kd = sim kp, kd x this
+  # Sim hand gains are Nm/rad; the Wuji firmware takes A/rad and applies ~1.95x the documented law:
+  #   kp_A = kp_Nm / (hand_kp_scale * Kt),  kd_A = kd_Nm / (hand_kd_scale * Kt)
+  # Kt (N m/A, per joint) and the scales come from the aiowuji sysid fit of this hand (WH2KA01260825022,
+  # firmware 2.10.0, fingers-up + palm-down runs, --fit-gear): wuji_hand2_sysid_data_2026-10-14.zip,
+  # reference/mujoco_fit_params.json.
+  hand_kp_scale: 1.9662     # firmware_law.kp_scale
+  hand_kd_scale: 1.9438     # firmware_law.kd_scale
+  hand_kt:                  # N m/A, aiowuji names
+    thumb_S1: 0.4390
+    thumb_S2: 0.2042
+    thumb_S3: 0.2546
+    thumb_S4: 0.2219
+    index_S1: 0.5986
+    index_S2: 0.2324
+    index_S3: 0.1795
+    index_S4: 0.1350
+    middle_S1: 0.6611
+    middle_S2: 0.2009
+    middle_S3: 0.1636
+    middle_S4: 0.1138
+    ring_S1: 0.5567
+    ring_S2: 0.2053
+    ring_S3: 0.1686
+    ring_S4: 0.1635
+    pinky_S1: 0.4777
+    pinky_S2: 0.1090
+    pinky_S3: 0.1002
+    pinky_S4: 0.1570
+  hand_effort_limit: 1.0    # A (aiowuji default 0.5, max 1.5)
+  hand_effort_limit_joints: {}  # per-joint exceptions, aiowuji names (thumb_S1 ... pinky_S4), A
+
+  move_speed: 0.3           # home: arm joint speed limit, rad/s (joint-space move, no table avoidance)
+  hand_move_speed: 0.5      # home, and policy's start: hand joint speed limit, rad/s
+  free_drive_kd_scale: 0.2  # free_drive: arm damping = sim damping x this (kp = 0)
+  home_tolerance_arm_deg: 3.0    # every arm joint this close to spec default_q
+  home_tolerance_hand_deg: 15.0  # every hand joint (not checked with hand: dry_run, it hangs limp)
+  rate_hz: 200.0            # joint_state publish / target forward loop
+  target_timeout_s: 0.1     # no new joint_target for this long -> hold the measured pose
+
+  # policy mode safety. A trip: hold the measured pose (the hand keeps its grip), ignore every later
+  # target, report it in joint_state ("tripped"; policy.py then stops). Ctrl-C to end.
+  max_arm_tracking_deg: 25.0     # any arm joint this far from the target it is being sent
+                                 #   (training: < ~19 when the hand presses; mujoco test, no object: 3.2)
+  max_target_step_arm_deg: 2.0   # a new target this far from the last one sent, any arm joint
+                                 #   (training's action pipeline: at most 0.143 deg per policy step)
+  max_target_step_hand_deg: 20.0 # ... any hand joint (pipeline: at most 0.1 x the joint's range per
+                                 #   step, 12.5 deg for thumb_cmc_abd; mujoco test: 11.2)
+
+# --------------------------------------------------------------------------------------- object
+# object.name: what is on the table, from `objects` below. Each object's `perception` says which
+# perception node tracks it and how the policy turns that into the sheet's grid points (sheets/);
+# all of object.name must share one:
+#   foundationpose  [moving plate, stationary plate]: two rigid plates taped along one edge;
+#                   perception.py runs deploy/nodes/perception.py: one box to click per plate, in this order
+#   cotracker       [cloth]: a cloth, its grid points tracked by CoTracker: not implemented yet
+#                   (sheets/cloth_points.py)
+object:
+  name: [plate5_brown, plate5_white]
+
+# Known objects. Plates: scale = the grasp box (scale x 4 cm), not read by this task (fold.py builds
+# object_scales from the sheet size); mesh: a box centred on its origin, long side twice the short one,
+# z thickness: the sheet's size and hinge come from it. FoundationPose returns the pose of this mesh's frame.
+objects:
+  cloth:                      # placeholder: selecting it stops with "not implemented yet"
+    perception: cotracker
+  plate7_white:
+    perception: foundationpose
+    scale: [3.5, 1.75, 0.05]  # 14 x 7 x 0.2 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate7_white/plate7_white.obj   # 14 x 7 x 0.2 cm box centred on the origin, x long, z thickness; RGB (195, 193, 198) as the D415 sees plate5_white (Nov 12)
+    color: [195, 193, 198]       # RGB as the D415 sees it (measured; nothing reads it now)
+  plate7_brown:
+    perception: foundationpose
+    scale: [3.5, 1.75, 0.05]
+    mesh: deploy/rigid2deform/objects/plate7_brown/plate7_brown.obj   # the same box, RGB (153, 123, 94) as the D415 sees it (Nov 12)
+    color: [153, 123, 94]       # RGB as the D415 sees it (measured; nothing reads it now)
+  plate5_white:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.125] # 10 x 5 x 0.5 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate5_white/plate5_white.obj   # 10 x 5 x 0.5 cm box centred on the origin, x long, z thickness; RGB (195, 193, 198) as the D415 sees it (Nov 12)
+    color: [195, 193, 198]       # RGB as the D415 sees it (measured; nothing reads it now)
+  plate5_brown:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.125]
+    mesh: deploy/rigid2deform/objects/plate5_brown/plate5_brown.obj   # the same box, plate7_brown's colour
+    color: [153, 123, 94]       # RGB as the D415 sees it (measured; nothing reads it now)
+  plate5_2_white:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.05]  # 10 x 5 x 0.2 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate5_2_white/plate5_2_white.obj   # plate5_white's box scaled to 2 mm thick
+    color: [195, 193, 198]       # RGB as the D415 sees plate5_white (measured; nothing reads it now)
+  plate5_2_brown:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.05]
+    mesh: deploy/rigid2deform/objects/plate5_2_brown/plate5_2_brown.obj   # plate5_brown's box scaled to 2 mm thick
+    color: [153, 123, 94]       # RGB as the D415 sees plate5_brown (measured; nothing reads it now)
+  plate5_red:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.125] # 10 x 5 x 0.5 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate5_red/plate5_red.obj   # 10 x 5 x 0.5 cm box centred on the origin, x long, z thickness
+    color: [198, 61, 69]        # RGB as the D415 sees it (Nov 12; tol 40: no stray pixels on hand, table, arm)
+  plate5_green:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.125]
+    mesh: deploy/rigid2deform/objects/plate5_green/plate5_green.obj   # the same box, green
+    color: [45, 148, 113]       # RGB as the D415 sees it (Nov 12; tol 40: <= 130 stray pixels, on the arm's cyan LED rings)
+
+# ------------------------------------------------------------------------------------------ fold
+# task=fold: the fold-pool policy turns the moving half of the sheet over onto the stationary half
+# (plates: object.name[0] onto object.name[1]). fold.py has what the policy observes and the success test.
+fold:
+  sheet_size: null          # m, the sheet's side (training: 0.10-0.20). Plates: null = their meshes' long side
+                            #   (plate5: 0.10, plate7: 0.14); set, it must match. A cloth: required
+  timeout_steps: 0          # the episode's length in policy steps; 0 = training's 600 (10 s)
+  fake_fold_deg: 0.0        # fake perception: the moving half turned up this far (180 = folded)
+  # plates (perception foundationpose) only. The hinge runs along the plates' long side (from the mesh).
+  hinge_z: null             # m, hinge line above the plates' mid-plane; null = half their thickness (tape on
+                            #   the top face: plate5 2.5 mm, plate5_2 / plate7 1 mm). Training's hinge is on the
+                            #   mid-plane: the observed goal stays training's; the success test expects the
+                            #   folded plate 2 x hinge_z higher, where it really lands
+  max_hinge_gap_m: 0.03     # stop when the two plates' hinge edges are further apart (tracking lost / flipped);
+                            #   also the start test (lying flat side by side)
+
+# ----------------------------------------------------------------------------------- perception
+perception:
+  source: camera            # perception.py runs: camera (the objects' perception node) | fake (fake_perception.py: a still sheet)
+  max_age_s: 0.2            # policy.py treats older poses / points as "object lost"
+
+  # camera (runs in the FoundationPose environment on the robot PC)
+  foundationpose_dir: ~/FoundationPose   # the kushal2000/FoundationPose checkout (estimater.py, generate_mask.py, weights/)
+  extrinsics: deploy/calibration/extrinsics/left_camera_nov7.json   # T_base_cam from calibrate_compare.py (D415 821312062243)
+  camera_serial: null       # null = the extrinsics file's camera_serial; perception.py refuses any other camera
+  camera_width: 640         # FoundationPose crops around the object, so a small image is enough
+  camera_height: 480        #   (upstream: 960 x 540 from a ZED)
+  camera_fps: 60            # 6 | 15 | 30 | 60 (D435 at 640 x 480). Pose rate = min(this, FoundationPose's speed)
+  register_iters: 5         # FoundationPose refine iterations at the first frame (upstream default)
+  track_iters: 2            # ... at every later frame (upstream default)
+  parallel_track: true      # several objects: track them at once, one thread + CUDA stream each; false = one by one
+  image_hz: 10.0            # camera_image for the viewer (JPEG); 0 = off
+  image_jpeg_quality: 80
+  frame_stream: true        # also send every camera frame raw (camera_frame) for recorder.py record.camera
+
+  # fake (perception.py -> fake_perception.py, not nodes/perception.py's fake): the SHEET's pose (hinge line middle,
+  # plates' mid-plane), [x, y, z, qw, qx, qy, qz] in the robot base frame. Default: training's sheet
+  # centre on the 0.33 m table, 5 mm plates. The plates (or points) are sent where they lie in it (fold.fake_fold_deg).
+  fake_pose_base: [0.0, -0.51, 0.3325, 1.0, 0.0, 0.0, 0.0]
+  fake_hz: 30.0
+
+# ---------------------------------------------------------------------------------------- record
+# recorder.py: started by run.py when record.name is set, e.g. run.py record.name=eraser_try1
+record:
+  name: null                # null = do not record. Else -> <dir>/<date>_<time>_<name>.jsonl
+  camera: false             # also record every camera frame (camera_frame) -> <file>.camera.mp4 (H.264)
+  camera_codec: libx264     # libx264 (CPU, ~0.4 core at 640x480 60 fps) | h264_nvenc (GPU; this ffmpeg needs driver >= 610)
+  camera_quality: 23        # x264 -crf / nvenc -cq: lower = better and bigger; 18 ~ visually lossless
+  dir: deploy/rigid2deform/recordings
+  video_fps: 60             # playback.py's mp4 export
+  video_height: 480         # px; the 3D view is 4:3, the camera image is scaled to the same height
+
+# ---------------------------------------------------------------------------------------- viewer
+# viewer.py: a live viser page of everything on the bus (only listens, never publishes)
+viewer:
+  port: 8091                # http://<robot PC>:8091
+  hz: 30.0                  # scene redraws per second
+  stale_s: 0.5              # a topic with nothing newer is marked stale in the status panel
