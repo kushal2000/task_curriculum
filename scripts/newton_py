@@ -39,4 +39,11 @@ else
 fi
 
 export OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}"
+
+# Engaging (glibc 2.28) has no omniverseclient wheel, so remote Isaac assets cannot be fetched;
+# the few the kit-less tasks reference (the ground plane) are mirrored to a local asset root.
+ENGAGING_ASSETS=/orcd/scratch/orcd/011/hglin/isaac_assets/6.1
+if [[ -z "${ISAACSIM_ASSET_ROOT:-}" && -d "${ENGAGING_ASSETS}/Isaac" ]]; then
+  export ISAACSIM_ASSET_ROOT="${ENGAGING_ASSETS}"
+fi
 exec "${PY}" "$@"

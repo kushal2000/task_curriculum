@@ -37,6 +37,7 @@ read -r -a FAB_LIST <<<"${FABRICS:-big_napkin chiffon cotton denim napkin silk t
 I="${SLURM_ARRAY_TASK_ID:-0}"
 FABRIC="${FAB_LIST[$I]:?no fabric for index $I}"
 PRESET="${FABRIC}_measured"
+PRIOR_SET="${PRIOR:-}"
 PRIOR="${PRIOR:-checkpoints/last_0_pxpool_flat7DRABC_s1_175385_ep_3052_rew__1198.3557_.pth}"
 ENVS="${ENVS:-768}"
 EPOCHS="${EPOCHS:-2035}"
@@ -53,14 +54,57 @@ REL_OV=()
 [ "${RELEASE:-0}" = 1 ] && REL_OV=(env.cloth.release_persist=true env.episode_length_s=12.0)
 # TRAIN_ARGS: extra Hydra overrides, space-separated (e.g. TRAIN_ARGS="env.cloth.persist_fail_penalty=0.0").
 read -r -a EXTRA_OV <<<"${TRAIN_ARGS:-}"
-JOB="${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-local}}"
+JOB="${RUN_JOB:-${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-local}}}"
 NAME="0_ftfab${RUN_TAG:-}_${FABRIC}_${JOB}"
 
 read -r -a FAB_OV <<<"$(.venv_isaaclab3/bin/python -I isaacsimenvs/tasks/cloth/utils/fabrics.py "$PRESET" --plastic)"
 [ "${#FAB_OV[@]}" -gt 0 ] || { echo "[ftfab] no overrides for $PRESET" >&2; exit 1; }
 
+# THIN=1: the real-thickness presets of docs/results/cloth_thin_final (cloth_sequence_probe.py THIN):
+# thickness (particle radius = half), self-contact radius = thickness, self-contact margin THIN_MARGIN (default 3 mm), two-stage
+# plasticity (yield, set), full-surface contact, and the stiffer stretch / chiffon bending of that study.
+# Starts from the fabric's 16 mm release finetune (THIN_PRIOR) unless PRIOR is given.
+if [ "${THIN:-0}" = 1 ]; then
+    #                  thickness  yield set  start run (16 mm release finetune)
+    declare -A TH=([big_napkin]="0.0003  20 80  0_ftfabrel3sRfsC_big_napkin_28602237"
+                   [chiffon]="   0.0001  100 80 0_ftfabrel3sRfsC_chiffon_28607526"
+                   [cotton]="    0.0003  20 80  0_ftfabrel3sRfsC2_cotton_28647593"
+                   [denim]="     0.00035 100 80 0_ftfabrel3sRfsC_denim_28607527"
+                   [napkin]="    0.00015 20 120 0_ftfabrel3sRfsC_napkin_28607529"
+                   [silk]="      0.0003  42 120 0_ftfabrel3sRfsC_silk_28607530"
+                   [towel]="     0.001   100 80 0_ftfabrel3sRfsC_towel_28607531")
+    read -r T Y SET START <<<"${TH[$FABRIC]:?no thin preset for $FABRIC}"
+    Y="${THIN_YIELD:-$Y}"; Y="${Y%.0}"
+    # The margin caps cloth speed (VBD truncation: 0.5 x 0.42 x margin per 1/1440 s substep): 1.5 x T
+    # held thin sheets to 0.05-0.16 m/s (slow spawn drop); 3 mm gives 0.91 m/s as in the 16 mm setup.
+    # THIN_MARGIN=1.5x restores the old value.
+    MARGIN="${THIN_MARGIN:-0.003}"
+    [ "$MARGIN" = 1.5x ] && MARGIN=$(.venv_isaaclab3/bin/python -I -c "print(1.5 * $T)")
+    # CONTACT=<m>: the hand/table contact layer (env.cloth.thickness = 2 x particle radius) on its own,
+    # while cloth-cloth contact (self_contact_radius) stays at the real thickness T. The contact
+    # curriculum (engaging_fabric_curriculum.sh) steps this down; unset = T as well.
+    THIN_OV=(env.cloth.thickness=${CONTACT:-$T} env.cloth.self_contact_radius=$T env.cloth.self_contact_margin=$MARGIN
+             env.cloth.plastic_yield_curvature=$Y.0 env.cloth.plastic_set_curvature=$SET.0 env.cloth.full_surface_contact=true)
+    case $FABRIC in
+        chiffon) THIN_OV+=(env.cloth.tri_ke=100.0 env.cloth.tri_ka=100.0 env.cloth.edge_ke=0.0012076974591784867);;
+        cotton|silk) THIN_OV+=(env.cloth.tri_ke=100.0 env.cloth.tri_ka=100.0);;
+    esac
+    # A thin key replaces the preset's (Hydra takes each key once).
+    KEEP=()
+    for o in "${FAB_OV[@]}"; do
+        dup=0; for v in "${THIN_OV[@]}"; do [ "${o%%=*}" = "${v%%=*}" ] && dup=1; done
+        [ "$dup" = 0 ] && KEEP+=("$o")
+    done
+    FAB_OV=("${KEEP[@]}" "${THIN_OV[@]}")
+    if [ -z "${PRIOR_SET:-}" ]; then
+        PRIOR=$(.venv_isaaclab3/bin/python -I -c "import sys; sys.path.insert(0, 'scripts/analysis'); from pathlib import Path; from rigid_cloth_eval_manifest import find_checkpoint; print(find_checkpoint(sys.argv[1], Path('outputs'), 'last') or '')" "$START")
+    fi
+fi
+
 # Resume from this run's own newest periodic checkpoint if a previous attempt (preempted) left one.
-LATEST="$(ls outputs/*/*/"$NAME"/nn/periodic_"$NAME"_ep_*.pth 2>/dev/null | sort -V | tail -1)"
+# Newest by EPOCH, not path: a seeded run (engaging_fabric_curriculum.sh) also has outputs/seed/..., which
+# sorts after the dated folders.
+LATEST="$(ls outputs/*/*/"$NAME"/nn/periodic_"$NAME"_ep_*.pth 2>/dev/null | awk -F_ep_ '{print $NF"\t"$0}' | sort -n | tail -1 | cut -f2)"
 if [ -n "$LATEST" ]; then
     CKPT_ARGS=(--checkpoint "$LATEST" --checkpoint_load_mode resume)
 else
