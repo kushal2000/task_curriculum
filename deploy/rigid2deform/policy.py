@@ -9,9 +9,8 @@ task=fold (run_fold): a fold-pool policy. The objects' perception (object.name) 
 perception message into the sheet's grid points; fold.py turns those into the observation (the moving
 half gives the object, the stationary half the goal) and the success test. Subscribes the source's
 topic and joint_state. The run stops when the sheet is folded (the training episode ends there too),
-on timeout (fold.timeout_steps), when part of the sheet falls off the table, or when the source says
-its tracking is lost (rigid plates: their hinge edges drift apart). Publishes joint_target, and
-goal_pose (where the moving half lands when folded) with fold_error / footprint, the source's numbers
+on timeout (fold.timeout_steps), or when the source says its tracking is lost (rigid plates: their
+hinge edges drift apart). Publishes joint_target, and goal_pose (where the moving half lands when folded) with fold_error / footprint, the source's numbers
 and a status line for the viewer and recorder.
 
 The policy works in the env frame (the training env's); the bus carries robot-base-frame poses.
@@ -32,7 +31,7 @@ from deploy.rigid2deform.sheets import sheet_source                             
 from deploy.utils.config import load_config, repo_path                                              # noqa: E402
 from deploy.utils.link import age, open_publisher, open_subscriber, recv_latest, send               # noqa: E402
 from deploy.utils.observation import NUM_OBS, build_obs                                              # noqa: E402
-from deploy.utils.policy_net import (OBJECT_LOST_BELOW_TABLE, action_to_targets,         # noqa: E402
+from deploy.utils.policy_net import (action_to_targets,                                  # noqa: E402
                                      load_network, wait_for_inputs, wait_step)
 from deploy.utils.robot_model import load_robot_model                                                # noqa: E402
 from deploy.utils.spec import env_to_base, load_spec                                                 # noqa: E402
@@ -41,18 +40,27 @@ from deploy.utils.spec import env_to_base, load_spec                            
 def run_fold(cfg, spec, model, net, pub) -> None:
     """task=fold: the moving half is the object, the stationary half gives the goal; see the docstring."""
     src = sheet_source(cfg)
-    geom = fold_geometry(spec, src.sheet_size(cfg))
-    sheet = src.init(cfg, spec, geom)
-    lift = sheet["target_lift"]
+    size = src.sheet_size(cfg)   # None: the source measures it (cloth: its clicked corners), from the first message
 
     dt = spec["policy_dt"]
     max_steps = int(round(cfg.run.duration_s / dt))
     timeout_steps = cfg.fold.timeout_steps or spec["episode_length_steps"]
-    lost_z = spec["table_top_z_env"] - OBJECT_LOST_BELOW_TABLE
 
     bus = cfg.bus
     sub_state = open_subscriber(bus.host, bus.joint_state_port, "joint_state")
     sub_object = open_subscriber(bus.host, bus.object_pose_port, src.TOPIC)
+
+    print(f"[policy] fold: waiting for robot.py ready (hand home) and {src.TOPIC} ...", flush=True)
+    joints, msg = wait_for_inputs(sub_state, sub_object)
+    if size is None:
+        size = src.measured_size(msg)
+    geom = fold_geometry(spec, size)
+    if cfg.fold.success_tolerance_m is not None:   # the success test's corner distance (training: keypoint_tolerance)
+        geom["tolerance"] = float(cfg.fold.success_tolerance_m)
+    sheet = src.init(cfg, spec, geom)
+    lift = sheet["target_lift"]
+    # older perception = lost: the source's own limit if it has one (CoTracker answers in batches)
+    max_age = src.max_age_s(sheet) if hasattr(src, "max_age_s") else cfg.perception.max_age_s
 
     def status(sc: dict, s: dict) -> str:
         """goal_pose's line for the viewer."""
@@ -60,9 +68,7 @@ def run_fold(cfg, spec, model, net, pub) -> None:
                 f"(success below {100 * geom['tolerance']:.1f} cm) · footprint {sc['footprint']:.2f} "
                 f"(at most {geom['max_footprint']:.2f}) · {s['status']}")
 
-    print(f"[policy] fold: {sheet['describe']}, sheet {100 * geom['size']:.0f} cm; "
-          f"waiting for robot.py ready (hand home) and {src.TOPIC} ...", flush=True)
-    joints, msg = wait_for_inputs(sub_state, sub_object)
+    print(f"[policy] fold: {sheet['describe']}, sheet {100 * geom['size']:.1f} cm", flush=True)
     s = src.start(sheet, msg)
     sc = score(geom, observe(geom, s["particles"]), lift)
     print(f"[policy] fold: sheet found ({s['status']}), fold error {100 * sc['fold_error_real']:.1f} cm, "
@@ -88,7 +94,7 @@ def run_fold(cfg, spec, model, net, pub) -> None:
             if age(joints) > cfg.policy.joint_state_max_age_s:
                 stop_reason = f"joint_state {1000 * age(joints):.0f} ms old"
                 break
-            if age(msg) > cfg.perception.max_age_s:
+            if age(msg) > max_age:
                 stop_reason = f"{src.TOPIC} {1000 * age(msg):.0f} ms old"
                 break
             s = src.update(sheet, msg, s)
@@ -98,13 +104,10 @@ def run_fold(cfg, spec, model, net, pub) -> None:
             o = observe(geom, s["particles"])
             sc = score(geom, o, lift)
 
-            # 2. the state the last targets produced: folded / fell / timeout end the episode
+            # 2. the state the last targets produced: folded / timeout end the episode
             if step > 0:
                 if sc["folded"]:
                     stop_reason = "folded"
-                    break
-                if s["particles"][:, 2].min() < lost_z:
-                    stop_reason = "part of the sheet off the table"
                     break
                 if step >= timeout_steps:
                     stop_reason = "episode timeout"

@@ -133,7 +133,7 @@ def main() -> None:
     print(f"[playback] {path.name}: {duration:.1f} s; {counts}", flush=True)
 
     server = viser.ViserServer(host="0.0.0.0", port=cfg.viewer.port)
-    scene = build_scene(server, spec, object_meshes(cfg))
+    scene = build_scene(server, spec, object_meshes(cfg, allow_missing=True))
     slider = server.gui.add_slider("time (s)", min=0.0, max=max(duration, 0.01), step=1.0 / cfg.record.video_fps,
                                    initial_value=0.0)
     play = server.gui.add_checkbox("play", False)

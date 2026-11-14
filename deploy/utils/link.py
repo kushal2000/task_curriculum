@@ -9,6 +9,9 @@ Every message has seq (counts up from 0, the sender counts) and t (time.time(), 
 | object_pose  | perception.py               | object_pose_port   | pos (3), quat_wxyz (4); t = camera frame time  |
 | object_poses | perception.py, with a list  | object_pose_port   | names (N), pos (N, 3), quat_wxyz (N, 4): every |
 |              | in object.name              |                    | tracked object, [0] = object_pose's            |
+| object_points| rigid2deform/cloth_        | object_pose_port   | mode, sigma, unit (N, 3) sheet units, pos (N,3)|
+|              | tracker.py (cloth)          |                    | visible (N), uv (N, 2), size_measured; t =     |
+|              |                             |                    | camera frame time (sheets/cloth_points.py)     |
 | camera_image | perception.py (camera)      | object_pose_port   | jpeg (base64 text), image_hz; for the viewer   |
 | camera_frame | perception.py (camera)      | camera_frame_port  | every camera frame, raw RGB (binary, see        |
 |              |                             |                    | send_frame); width, height; for the recorder   |
@@ -59,7 +62,8 @@ NODES_DIR = Path(__file__).resolve().parents[1] / "nodes"   # deploy/nodes: the 
 # every topic -> its publisher's port key in config.yaml `bus`
 TOPIC_PORTS = {"joint_state": "joint_state_port", "joint_target": "policy_port", "goal_pose": "policy_port",
                "sim_object_pose": "policy_port", "object_pose": "object_pose_port",
-               "object_poses": "object_pose_port", "camera_image": "object_pose_port"}
+               "object_poses": "object_pose_port", "object_points": "object_pose_port",
+               "camera_image": "object_pose_port"}
 # camera_frame is not in TOPIC_PORTS: it is binary (send_frame / recv_frame), not "<topic> <json>"
 FRAME_TOPIC, FRAME_PORT = "camera_frame", "camera_frame_port"
 

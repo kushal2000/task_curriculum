@@ -109,7 +109,11 @@ $PY $D/run.py $ARM record.name=eraser_try1     # record.camera=true: also the ca
 The viewer (http://<robot PC>:8091) starts unless `run.viewer=false`; the recorder only with
 `record.name`. In every mode the viewer stays up after the robot stops, until Ctrl-C.
 
-run.py asks you to type `go` on real hardware, with a warning for the mode. The robot refuses to start with the arm away from
+On real hardware run.py first starts the viewer and `robot.py robot.mode=watch` (read only: the arm
+is connected but not enabled, the hand never enabled), waits for its joint_state, says whether
+perception's object_pose arrives, and only then asks you to type `go`, with a warning for the mode:
+check the robot and the object in the viewer first. After `go` the watch ends and the recorder and
+the robot (then the policy) start. The robot refuses to start with the arm away from
 home, then brings the hand home itself (it went limp when the last run ended). The policy waits
 for the robot's first joint_state. For the first runs, use `robot.hand=dry_run robot.hand_sn=<HAND_SN>`:
 the hand is connected but never enabled.
@@ -132,7 +136,7 @@ run.py does.
 | mode | what |
 |---|---|
 | `home` | Hand to home first (it opens and lets go), then the arm, both jerk-limited at `move_speed` / `hand_move_speed`; checks it got there, then exits |
-| `free_drive` | Arm: kp 0, light damping, gravity compensated, movable by hand. Hand: connected, never enabled. Publishes `joint_state` and prints the distance to home every second |
+| `free_drive` | Arm: kp 0, light damping, gravity compensated, movable by hand; a soft wall starts `free_drive_limit_margin_deg` before each joint limit. Hand: connected, never enabled. Publishes `joint_state` and prints the distance to home every second |
 | `policy` | Forwards `joint_target` at 200 Hz. No new target for 0.1 s: holds the measured pose until targets come back |
 | `openloop` | Hand to home, then sends target k of `openloop.path` from k/60 s on, with no feedback, and the same safety checks as `policy`. After the last one it holds it until Ctrl-C |
 

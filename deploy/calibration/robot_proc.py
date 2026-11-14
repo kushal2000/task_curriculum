@@ -2,7 +2,8 @@
 aioflexiv's Python torque loop (same reason as live_viser.py).
 
 The arm holds its pose in joint impedance with the sim's gains (ArmIO, as run_real.py), or is in free
-drive: no stiffness, light damping, the robot's gravity compensation on, so it can be moved by hand.
+drive: no stiffness, light damping, the robot's gravity compensation on, so it can be moved by hand; a
+soft wall before each joint limit keeps it out of Flexiv's abrupt soft limits (deploy/utils/free_drive.py).
 The hand is not connected: its joints stay at the spec's default_q.
 
     robot = RobotProcess(spec, arm="<ROBOT_SN>" | "mujoco" | "none")
@@ -25,7 +26,8 @@ _ST_STARTING, _ST_READY, _ST_FAILED = 0.0, 1.0, -1.0
 
 class RobotProcess:
     def __init__(self, spec, arm: str, arm_gain_scale: float = 1.0, viewer: bool = False,
-                 free_kd_scale: float = 0.2) -> None:
+                 free_kd_scale: float = 0.2, free_limit_margin_deg: float = 10.0,
+                 free_ramp_s: float = 0.3) -> None:
         na = spec.n_arm
         self.can_move = arm != "none"
         ctx = mp.get_context("spawn")
@@ -37,7 +39,9 @@ class RobotProcess:
             target=_serve, daemon=True,
             args=(self._buf, self._err, self._stop, arm, spec.default_q[:na].tolist(),
                   (spec.stiffness[:na] * arm_gain_scale).tolist(), (spec.damping[:na] * arm_gain_scale).tolist(),
-                  (spec.damping[:na] * free_kd_scale).tolist(), viewer))
+                  (spec.damping[:na] * free_kd_scale).tolist(), viewer,
+                  spec.lower[:na].tolist(), spec.upper[:na].tolist(), float(np.radians(free_limit_margin_deg)),
+                  free_ramp_s))
         self._proc.start()
         while self._buf[0] == _ST_STARTING:
             self._check()
@@ -73,7 +77,7 @@ class RobotProcess:
             self._proc.terminate()
 
 
-def _serve(buf, err, stop, arm: str, q_start, kp, kd, free_kd, viewer: bool) -> None:
+def _serve(buf, err, stop, arm: str, q_start, kp, kd, free_kd, viewer: bool, lower, upper, margin, ramp_s) -> None:
     import asyncio
     import sys
     import traceback
@@ -81,6 +85,7 @@ def _serve(buf, err, stop, arm: str, q_start, kp, kd, free_kd, viewer: bool) -> 
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from deploy.joint_reach.run_real import ArmIO
+    from deploy.utils.free_drive import blend_gains, wall_gains
 
     na = len(kp)
 
@@ -94,19 +99,28 @@ def _serve(buf, err, stop, arm: str, q_start, kp, kd, free_kd, viewer: bool) -> 
         try:
             await arm_io.start()
             arm_io.command(arm_io.read()[0])  # hold where it is
+            c = arm_io.c
+            lo = np.maximum(lower, c.robot.info["q_min"])  # the tighter of the spec's and the robot's limits
+            hi = np.minimum(upper, c.robot.info["q_max"])
             buf[0] = _ST_READY
+            # a: 1 holding, 0 free; it ramps over ramp_s, so the stiffness never comes or goes in one step
+            a, q_hold, t_last = 1.0, arm_io.read()[0], time.perf_counter()
             while not stop.is_set():
                 q = arm_io.read()[0]
                 buf[3:3 + na] = q.tolist()
-                if buf[1] != buf[2]:
-                    c = arm_io.c
-                    with c.state_lock:  # the target first: back to holding, the arm stays where it is
-                        c.q_desired = q.copy()
-                        c.kp, c.kd = ((np.zeros(na), np.asarray(free_kd)) if buf[1]
-                                      else (arm_io.kp.copy(), arm_io.kd.copy()))
+                now = time.perf_counter()
+                da, t_last = (now - t_last) / max(ramp_s, 1e-3), now
+                want = 0.0 if buf[1] else 1.0
+                if a != want or not want:
+                    if want:  # back to holding: the target follows the arm until the stiffness is back
+                        a, q_hold = min(a + da, 1.0), q.copy()
+                    else:     # to free: the holding torque fades; then the target follows the hand, up to the walls
+                        a = max(a - da, 0.0)
+                    free = wall_gains(q, lo, hi, margin, arm_io.kp, np.asarray(free_kd), arm_io.kd)[:3]
+                    with c.state_lock:
+                        c.q_desired, c.kp, c.kd = blend_gains(a, (q_hold, arm_io.kp, arm_io.kd), free)
+                if a == want:
                     buf[2] = buf[1]
-                if buf[2]:
-                    arm_io.command(q)  # follow the hand, so turning free drive off holds here
                 await asyncio.sleep(1 / 60)
         finally:
             await arm_io.stop()

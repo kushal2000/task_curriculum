@@ -13,8 +13,10 @@ read the same config.
 | free_drive | viewer, recorder, robot                  | movable by hand until Ctrl-C               |
 | openloop   | viewer, recorder, robot                  | refuses to start away from home; sends a   |
 |            |                                          | sim rollout's targets (openloop.path)      |
-(recorder only with record.name; viewer unless run.viewer=false.) Viewer and recorder start first,
-so they listen from the beginning; the policy waits for the robot's first joint_state.
+(recorder only with record.name; viewer unless run.viewer=false.) On real hardware (run.confirm_hardware),
+first the viewer and robot.py robot.mode=watch (read only: the arm not enabled, the hand never
+enabled), so the viewer shows the robot and perception's object; then run asks for 'go', ends the
+watch and starts recorder, robot (policy). The policy waits for the robot's first joint_state.
 
 While it runs:
   - the policy ends (duration, goals, timeout, object off the table, safety trip): the robot holds
@@ -32,7 +34,9 @@ from pathlib import Path
 from deploy.nodes.robot import MODES
 
 from .config import REPO, load_config, repo_path
-from .link import start_node, stop_node
+from .link import age, open_subscriber, recv_latest, start_node, stop_node
+
+WATCH_TIMEOUT_S = 30.0       # for robot.py robot.mode=watch's first joint_state
 
 # asked before real hardware moves
 CONFIRM_WARNINGS = {"home": "the arm moves in a straight joint-space line, NOT around the table",
@@ -59,40 +63,23 @@ def run(config_path: Path, policy_script: Path, check=None) -> None:
         from .spec import load_spec
         print(placement_text(load_rollout(repo_path(cfg.openloop.path), load_spec(repo_path(cfg.spec_path)))),
               flush=True)
-    if cfg.robot.arm != "mujoco" and cfg.run.confirm_hardware:
-        answer = input(f"[run] {mode}, arm {cfg.robot.arm}, hand {cfg.robot.hand}: {CONFIRM_WARNINGS[mode]}. "
-                       "Type 'go': ")
-        if answer.strip() != "go":
-            raise SystemExit("[run] not confirmed")
-
     nodes = {}
-    if cfg.run.viewer:
-        nodes["viewer"] = start_node("viewer.py", config_arg)
-    if cfg.record.name:
-        nodes["recorder"] = start_node("recorder.py", config_arg)
-    nodes["robot"] = start_node("robot.py", config_arg)
-    if mode == "policy":
-        nodes["policy"] = start_node(Path(policy_script).resolve(), config_arg)
-
-    watched = [n for n in ("robot", "policy") if n in nodes]
-    exited = set()
     try:
-        while True:
-            for name in watched:
-                if name not in exited and nodes[name].poll() is not None:
-                    exited.add(name)
-                    print(f"[run] {name}.py exited (code {nodes[name].returncode})", flush=True)
-                    if name == "robot":
-                        stop_node(nodes.get("policy"))   # it would stop by itself (no joint_state), sooner
-                    if exited == set(watched):
-                        still = [n for n in ("viewer", "recorder") if n in nodes]
-                        print(f"[run] {' and '.join(watched)} stopped; {' and '.join(still) or 'nothing'} "
-                              "still running. Ctrl-C to quit.", flush=True)
-            time.sleep(0.2)
+        if cfg.run.viewer:
+            nodes["viewer"] = start_node("viewer.py", config_arg)
+        if cfg.robot.arm != "mujoco" and cfg.run.confirm_hardware:
+            confirm(cfg, nodes, config_arg)
+        if cfg.record.name:
+            nodes["recorder"] = start_node("recorder.py", config_arg)
+        nodes["robot"] = start_node("robot.py", config_arg)
+        if mode == "policy":
+            nodes["policy"] = start_node(Path(policy_script).resolve(), config_arg)
+        watch_nodes(nodes)
     except KeyboardInterrupt:
         pass
     finally:
         print("[run] stopping ...", flush=True)
+        stop_node(nodes.get("watch"))
         stop_node(nodes.get("policy"))                  # stops sending targets
         stop_node(nodes.get("robot"))                   # holds, then stops arm and hand
         if "recorder" in nodes:
@@ -100,3 +87,55 @@ def run(config_path: Path, policy_script: Path, check=None) -> None:
             stop_node(nodes["recorder"], signal.SIGTERM)
         stop_node(nodes.get("viewer"))
         print("[run] done", flush=True)
+
+
+def confirm(cfg, nodes: dict, config_arg: str) -> None:
+    """Before anything is enabled: robot.py robot.mode=watch (read only) so the viewer shows the robot
+    and perception's object; wait for its joint_state, then ask for 'go'; then end the watch."""
+    mode = cfg.robot.mode
+    nodes["watch"] = start_node("robot.py", config_arg, "robot.mode=watch")
+    state_sub = open_subscriber(cfg.bus.host, cfg.bus.joint_state_port, "joint_state")
+    object_subs = [open_subscriber(cfg.bus.host, cfg.bus.object_pose_port, t) for t in ("object_pose", "object_points")]
+    try:
+        deadline = time.time() + WATCH_TIMEOUT_S
+        while recv_latest(state_sub) is None:
+            if nodes["watch"].poll() is not None:
+                raise SystemExit(f"[run] robot.py (watch) exited (code {nodes['watch'].returncode}): "
+                                 "cannot read the robot")
+            if time.time() > deadline:
+                raise SystemExit(f"[run] no joint_state from robot.py (watch) in {WATCH_TIMEOUT_S:.0f} s")
+            time.sleep(0.05)
+        time.sleep(1.0)                                 # perception's newest pose / points, if it runs
+        got = [(t, m) for t, m in zip(("object_pose", "object_points"), map(recv_latest, object_subs))
+               if m is not None and age(m) < 1.0]
+        perception = (f"{got[0][0]} OK" if got
+                      else "NO object_pose / object_points (perception not running, or object not seen)")
+        viewer = f"viewer http://localhost:{cfg.viewer.port}; " if "viewer" in nodes else ""
+        print(f"[run] reading robot (nothing enabled); {perception}. {viewer}check, then:", flush=True)
+        answer = input(f"[run] {mode}, arm {cfg.robot.arm}, hand {cfg.robot.hand}: {CONFIRM_WARNINGS[mode]}. "
+                       "Type 'go': ")
+    finally:
+        state_sub.close(linger=0)
+        for s in object_subs:
+            s.close(linger=0)
+    if answer.strip() != "go":
+        raise SystemExit("[run] not confirmed")
+    stop_node(nodes.pop("watch"))                       # releases arm and hand for the real robot.py
+
+
+def watch_nodes(nodes: dict) -> None:
+    """Until Ctrl-C: report robot.py / policy.py exiting (robot gone: stop the policy too)."""
+    watched = [n for n in ("robot", "policy") if n in nodes]
+    exited = set()
+    while True:
+        for name in watched:
+            if name not in exited and nodes[name].poll() is not None:
+                exited.add(name)
+                print(f"[run] {name}.py exited (code {nodes[name].returncode})", flush=True)
+                if name == "robot":
+                    stop_node(nodes.get("policy"))   # it would stop by itself (no joint_state), sooner
+                if exited == set(watched):
+                    still = [n for n in ("viewer", "recorder") if n in nodes]
+                    print(f"[run] {' and '.join(watched)} stopped; {' and '.join(still) or 'nothing'} "
+                          "still running. Ctrl-C to quit.", flush=True)
+        time.sleep(0.2)

@@ -26,7 +26,7 @@ bus:
   object_pose_port: 5560    # perception.py -> object_pose, camera_image
   joint_state_port: 5561    # robot.py -> joint_state
   policy_port: 5562         # policy.py -> joint_target, goal_pose
-  camera_frame_port: 5563   # perception.py -> camera_frame (every camera frame, raw, for the recorder)
+  camera_frame_port: 5563   # perception.py (plates and cloth) -> camera_frame (every camera frame, raw, for the recorder)
 
 # ----------------------------------------------------------------------------------------- run
 # run.py: robot.py in robot.mode, + viewer.py / recorder.py, + policy.py in policy mode
@@ -88,6 +88,8 @@ robot:
   move_speed: 0.3           # home: arm joint speed limit, rad/s (joint-space move, no table avoidance)
   hand_move_speed: 0.5      # home, and policy's start: hand joint speed limit, rad/s
   free_drive_kd_scale: 0.2  # free_drive: arm damping = sim damping x this (kp = 0)
+  free_drive_limit_margin_deg: 10.0  # free_drive: a soft wall starts this far before each arm joint limit
+  free_drive_ramp_s: 0.3    # free_drive: the stiffness goes / comes back over this long, not in one step
   home_tolerance_arm_deg: 3.0    # every arm joint this close to spec default_q
   home_tolerance_hand_deg: 15.0  # every hand joint (not checked with hand: dry_run, it hangs limp)
   rate_hz: 200.0            # joint_state publish / target forward loop
@@ -108,8 +110,8 @@ robot:
 # all of object.name must share one:
 #   foundationpose  [moving plate, stationary plate]: two rigid plates taped along one edge;
 #                   perception.py runs deploy/nodes/perception.py: one box to click per plate, in this order
-#   cotracker       [cloth]: a cloth, its grid points tracked by CoTracker: not implemented yet
-#                   (sheets/cloth_points.py)
+#   cotracker       [cloth]: a cloth, points on it tracked by CoTracker (perception.cotracker);
+#                   perception.py runs cloth_tracker.py: click the points in its window (sheets/cloth_points.py)
 object:
   name: [plate5_brown, plate5_white]
 
@@ -117,7 +119,7 @@ object:
 # object_scales from the sheet size); mesh: a box centred on its origin, long side twice the short one,
 # z thickness: the sheet's size and hinge come from it. FoundationPose returns the pose of this mesh's frame.
 objects:
-  cloth:                      # placeholder: selecting it stops with "not implemented yet"
+  cloth:                      # any square cloth; give fold.sheet_size
     perception: cotracker
   plate7_white:
     perception: foundationpose
@@ -129,6 +131,26 @@ objects:
     scale: [3.5, 1.75, 0.05]
     mesh: deploy/rigid2deform/objects/plate7_brown/plate7_brown.obj   # the same box, RGB (153, 123, 94) as the D415 sees it (Nov 12)
     color: [153, 123, 94]       # RGB as the D415 sees it (measured; nothing reads it now)
+  plate75_2_white:
+    perception: foundationpose
+    scale: [3.75, 1.875, 0.05]  # 15 x 7.5 x 0.2 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate75_2_white/plate75_2_white.obj   # 15 x 7.5 x 0.2 cm box centred on the origin, x long, z thickness; plate7_white's colour
+    color: [195, 193, 198]       # RGB as the D415 sees plate5_white (measured; nothing reads it now)
+  plate75_2_brown:
+    perception: foundationpose
+    scale: [3.75, 1.875, 0.05]
+    mesh: deploy/rigid2deform/objects/plate75_2_brown/plate75_2_brown.obj   # the same box, plate7_brown's colour
+    color: [153, 123, 94]       # RGB as the D415 sees plate7_brown (measured; nothing reads it now)
+  plate75_5_white:
+    perception: foundationpose
+    scale: [3.75, 1.875, 0.125]  # 15 x 7.5 x 0.5 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate75_5_white/plate75_5_white.obj   # plate75_2_white's box scaled to 5 mm thick
+    color: [195, 193, 198]       # RGB as the D415 sees plate5_white (measured; nothing reads it now)
+  plate75_5_brown:
+    perception: foundationpose
+    scale: [3.75, 1.875, 0.125]
+    mesh: deploy/rigid2deform/objects/plate75_5_brown/plate75_5_brown.obj   # plate75_2_brown's box scaled to 5 mm thick
+    color: [153, 123, 94]       # RGB as the D415 sees plate7_brown (measured; nothing reads it now)
   plate5_white:
     perception: foundationpose
     scale: [2.5, 1.25, 0.125] # 10 x 5 x 0.5 cm grasp box
@@ -165,12 +187,15 @@ objects:
 # (plates: object.name[0] onto object.name[1]). fold.py has what the policy observes and the success test.
 fold:
   sheet_size: null          # m, the sheet's side (training: 0.10-0.20). Plates: null = their meshes' long side
-                            #   (plate5: 0.10, plate7: 0.14); set, it must match. A cloth: required
-  timeout_steps: 0          # the episode's length in policy steps; 0 = training's 600 (10 s)
+                            #   (plate5: 0.10, plate7: 0.14, plate75: 0.15); set, it must match. A cloth: null =
+                            #   the longest side between its clicked corners, as a square's; set, used as is
+  success_tolerance_m: 0.05 # folded = every observed corner within this of its fold target (and the footprint test);
+                            #   null = training's keypoint_tolerance (0.015)
+  timeout_steps: 3600       # the episode's length in policy steps (60 Hz): 3600 = 60 s; 0 = training's 600 (10 s)
   fake_fold_deg: 0.0        # fake perception: the moving half turned up this far (180 = folded)
   # plates (perception foundationpose) only. The hinge runs along the plates' long side (from the mesh).
   hinge_z: null             # m, hinge line above the plates' mid-plane; null = half their thickness (tape on
-                            #   the top face: plate5 2.5 mm, plate5_2 / plate7 1 mm). Training's hinge is on the
+                            #   the top face: plate5 / plate75_5 2.5 mm, plate5_2 / plate7 / plate75_2 1 mm). Training's hinge is on the
                             #   mid-plane: the observed goal stays training's; the success test expects the
                             #   folded plate 2 x hinge_z higher, where it really lands
   max_hinge_gap_m: 0.03     # stop when the two plates' hinge edges are further apart (tracking lost / flipped);
@@ -179,7 +204,7 @@ fold:
 # ----------------------------------------------------------------------------------- perception
 perception:
   source: camera            # perception.py runs: camera (the objects' perception node) | fake (fake_perception.py: a still sheet)
-  max_age_s: 0.2            # policy.py treats older poses / points as "object lost"
+  max_age_s: 0.2            # policy.py treats older poses as "object lost" (cotracker: its own, below)
 
   # camera (runs in the FoundationPose environment on the robot PC)
   foundationpose_dir: ~/FoundationPose   # the kushal2000/FoundationPose checkout (estimater.py, generate_mask.py, weights/)
@@ -193,7 +218,26 @@ perception:
   parallel_track: true      # several objects: track them at once, one thread + CUDA stream each; false = one by one
   image_hz: 10.0            # camera_image for the viewer (JPEG); 0 = off
   image_jpeg_quality: 80
-  frame_stream: true        # also send every camera frame raw (camera_frame) for recorder.py record.camera
+  frame_stream: true        # also send every camera frame raw (camera_frame) for recorder.py record.camera (cloth too)
+
+  # cotracker (cloth_tracker.py, in the cotracker environment): CoTracker3 online on the same camera
+  # (camera_serial / extrinsics / camera_width / camera_height / camera_fps above; image_hz for the viewer)
+  cotracker:
+    # mode and sigma are cloth_tracker.py's: they go out with object_points and the policy uses those, so
+    # give them to perception.py only (run.py's are not read; fake perception sends its own)
+    mode: grid              # what you click and how the points become the grid (sheets/cloth_points.py):
+                            #   grid: the 4 corners, the 49 grid points tracked | kp8: 8 points, the keypoints
+                            #   | fit: the 4 corners + any points on the cloth
+    cotracker_dir: ~/co-tracker   # the co-tracker checkout (cotracker/, rs_tracking/ for snapping clicks)
+    checkpoint: null        # null = <cotracker_dir>/checkpoints/scaled_online.pth
+    snap_radius: 8          # px: a click snaps to the strongest corner this near (m toggles in the window)
+    auto_points: 30         # fit: how many points `a` adds
+    sigma: 0.25             # fit: the moving least squares width, x the side (0 = one rigid fit per half)
+    max_age_s: 0.35         # policy.py: older object_points = lost (results come in 8-frame batches:
+                            #   ~60 ms inference + 133 ms per batch at 60 fps)
+    max_lost_s: null        # a half with < 3 points seen (occluded): the policy keeps observing the last good
+                            #   particles until a frame fits again; null = wait for ever, a number = then stop
+    save_dir: null          # a directory: also an overlay mp4 + npz per run (null: only the bus / recorder)
 
   # fake (perception.py -> fake_perception.py, not nodes/perception.py's fake): the SHEET's pose (hinge line middle,
   # plates' mid-plane), [x, y, z, qw, qx, qy, qz] in the robot base frame. Default: training's sheet

@@ -7,6 +7,8 @@ Subscribes  joint_state  -> the robot, at its measured joint angles
             joint_target -> a green see-through robot at the policy's targets
             object_pose  -> the object mesh
             object_poses -> the other objects' meshes, each in its own colour (object.name a list)
+            object_points -> tracked points (a cloth): green seen, red not (an object without a mesh
+                            gets a small flat box for its object / goal poses)
             goal_pose    -> an orange see-through object mesh; its status line, if it has one
             sim_object_pose -> a blue see-through object mesh: where the sim rollout had the object
                             (robot.mode=openloop)
@@ -39,6 +41,10 @@ def build_scene(server, spec, mesh_paths: list[Path]) -> dict:
     draws the goal and the sim object), and the side panel. Returns the handles."""
     mesh_path, extra_meshes = mesh_paths[0], mesh_paths[1:]
     import trimesh
+
+    def load_mesh(path):
+        """The mesh, or for an object without one (a cloth) a 4 x 4 x 0.2 cm box as a marker."""
+        return trimesh.creation.box((0.04, 0.04, 0.002)) if path is None else trimesh.load(path, force="mesh")
     import yourdfpy
     from viser.extras import ViserUrdf
 
@@ -55,8 +61,10 @@ def build_scene(server, spec, mesh_paths: list[Path]) -> dict:
     robot = ViserUrdf(server, load_urdf(), root_node_name=root.name + "/measured")
     ghost = ViserUrdf(server, load_urdf(), root_node_name=root.name + "/targets",
                       mesh_color_override=(0.15, 0.85, 0.35, 0.3))
-    mesh = trimesh.load(mesh_path, force="mesh")
+    mesh = load_mesh(mesh_path)
     obj = server.scene.add_mesh_trimesh("/object", mesh)
+    points = server.scene.add_point_cloud("/object_points", points=np.zeros((1, 3), np.float32),
+                                          colors=np.zeros((1, 3), np.uint8), point_size=0.006, visible=False)
     server.scene.add_frame("/object/axes", axes_length=0.06, axes_radius=0.002)
     goal = server.scene.add_mesh_simple("/goal", vertices=mesh.vertices, faces=mesh.faces,
                                         color=(0.95, 0.6, 0.1), opacity=0.4)
@@ -65,12 +73,13 @@ def build_scene(server, spec, mesh_paths: list[Path]) -> dict:
                                            color=(0.2, 0.45, 0.95), opacity=0.4, visible=False)
     extras = []
     for i, path in enumerate(extra_meshes, start=1):
-        m = trimesh.load(path, force="mesh")
+        m = load_mesh(path)
         extras.append(server.scene.add_mesh_simple(f"/object_{i}", vertices=m.vertices, faces=m.faces,
                                                    color=EXTRA_COLORS[(i - 1) % len(EXTRA_COLORS)], visible=False))
         server.scene.add_frame(f"/object_{i}/axes", axes_length=0.06, axes_radius=0.002)
     return {
         "robot": robot, "ghost": ghost, "object": obj, "goal": goal, "sim_object": sim_obj, "extras": extras,
+        "points": points,
         # viser's joint order -> index in the spec's joint order
         "order": [list(spec["joint_names"]).index(j) for j in robot.get_actuated_joint_names()],
         "show_targets": server.gui.add_checkbox("show joint targets (green)", True),
@@ -95,6 +104,13 @@ def draw(server, scene: dict, spec, msgs: dict) -> None:
                 handle = scene[name]
                 handle.position, handle.wxyz = base_to_env(spec, msgs[topic]["pos"], msgs[topic]["quat_wxyz"])
                 handle.visible = True
+        pts = msgs.get("object_points")
+        if pts is not None and "points" in scene:
+            seen = np.asarray(pts["visible"], dtype=bool)
+            scene["points"].points = base_to_env(spec, np.asarray(pts["pos"], dtype=np.float32),
+                                                 np.array([1.0, 0.0, 0.0, 0.0]))[0].astype(np.float32)
+            scene["points"].colors = np.where(seen[:, None], [[40, 220, 60]], [[230, 40, 40]]).astype(np.uint8)
+            scene["points"].visible = True
         poses = msgs.get("object_poses")
         if poses is not None:   # [0] is object_pose's, drawn above
             for handle, pos, quat in zip(scene.get("extras", []), poses["pos"][1:], poses["quat_wxyz"][1:]):
@@ -147,7 +163,7 @@ def main() -> None:
     tolerance = success_tolerance(cfg, spec)
 
     server = viser.ViserServer(host="0.0.0.0", port=vc.port)
-    scene = build_scene(server, spec, object_meshes(cfg))
+    scene = build_scene(server, spec, object_meshes(cfg, allow_missing=True))
     subs = {topic: open_subscriber(cfg.bus.host, cfg.bus[port], topic) for topic, port in TOPIC_PORTS.items()}
     last = dict.fromkeys(TOPIC_PORTS)                  # newest message per topic
     counts = dict.fromkeys(TOPIC_PORTS, 0)             # messages since t_rate

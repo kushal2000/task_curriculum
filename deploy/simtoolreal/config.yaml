@@ -86,6 +86,8 @@ robot:
   move_speed: 0.3           # home: arm joint speed limit, rad/s (joint-space move, no table avoidance)
   hand_move_speed: 0.5      # home, and policy's start: hand joint speed limit, rad/s
   free_drive_kd_scale: 0.2  # free_drive: arm damping = sim damping x this (kp = 0)
+  free_drive_limit_margin_deg: 10.0  # free_drive: a soft wall starts this far before each arm joint limit
+  free_drive_ramp_s: 0.3    # free_drive: the stiffness goes / comes back over this long, not in one step
   home_tolerance_arm_deg: 3.0    # every arm joint this close to spec default_q
   home_tolerance_hand_deg: 15.0  # every hand joint (not checked with hand: dry_run, it hangs limp)
   rate_hz: 200.0            # joint_state publish / target forward loop

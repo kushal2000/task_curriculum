@@ -194,7 +194,8 @@ class App:
         self.cam.start()
         self.intr = self.cam.intrinsics.to_dict()
         print(f"[calib] {self.cam.name} {self.cam.serial}, extrinsics {self.ext_path}, arm {args.arm}", flush=True)
-        self.robot = RobotProcess(self.spec, args.arm, args.arm_gain_scale, args.viewer, args.free_kd_scale)
+        self.robot = RobotProcess(self.spec, args.arm, args.arm_gain_scale, args.viewer, args.free_kd_scale,
+                                  args.free_limit_margin_deg)
         if ext:
             self.T = np.asarray(ext["T_base_cam"], float)
         else:
@@ -570,6 +571,8 @@ def _parse() -> argparse.Namespace:
     p.add_argument("--arm_gain_scale", type=float, default=1.0, help="x the sim's arm kp and kd when holding")
     p.add_argument("--free_kd_scale", type=float, default=0.2,
                    help="free drive damping = this x the sim's arm kd (more: heavier to move, slower to drift)")
+    p.add_argument("--free_limit_margin_deg", type=float, default=10.0,
+                   help="free drive: a soft wall starts this far before each arm joint limit")
     p.add_argument("--settle_s", type=float, default=2.0, help="hold this long before a capture")
     p.add_argument("--live_hz", type=float, default=2.0, help="live cloud refresh rate")
     p.add_argument("--preview_hz", type=float, default=4.0, help="sim-over-real preview refresh rate")

@@ -4,12 +4,17 @@ a task's run.py (deploy/utils/runner.py); deploy/simtoolreal/README.md has the d
 robot.arm   serial number | mujoco (aioflexiv's MuJoCo Rizon, same code path)
 robot.hand  serial number | auto | dry_run (connected, never enabled) | fake (deploy/utils/fake_hand.py)
 robot.mode  home        hand, then arm, to home (spec default_q, the training start pose), then exit
-            free_drive  arm movable by hand (kp 0, Flexiv compensates gravity); hand never enabled
+            free_drive  arm movable by hand (kp 0, Flexiv compensates gravity), with a soft wall before
+                        each joint limit (deploy/utils/free_drive.py); hand never enabled
             policy      the arm must be at home; the hand is brought home; then forward policy.py's
                         joint_target, with two safety checks (check_tracking, check_target_step)
             openloop    as policy, but the targets come from a sim rollout (openloop.path, made by
                         simtoolreal/checks/record_lift.py), sent one per policy step with no feedback; this node
                         then also publishes joint_target, goal_pose and sim_object_pose itself
+            watch       read only, nothing enabled: the arm over a plain RDK connection (no Enable, no
+                        mode switch), the hand connected but never enabled; publishes joint_state until
+                        Ctrl-C. run.py runs this before 'go', so the viewer shows the robot (and
+                        perception) first; then it ends this and starts the real mode
 
 Every mode publishes joint_state at rate_hz, and ends (Ctrl-C, or the arm's torque loop stopped:
 E-stop / enabling button / fault) by holding the measured pose and then stopping both: the hand goes
@@ -30,11 +35,13 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
 from deploy.utils.config import load_config, repo_path                                  # noqa: E402
 from deploy.utils.fake_hand import FakeHand                                             # noqa: E402
+from deploy.utils.free_drive import blend_gains, wall_gains                             # noqa: E402
 from deploy.utils.link import age, open_publisher, open_subscriber, recv_latest, send   # noqa: E402
 from deploy.utils.openloop import load_rollout                                          # noqa: E402
 from deploy.utils.spec import load_spec                                                 # noqa: E402
 
 MODES = ("policy", "home", "free_drive", "openloop")
+WATCH = "watch"                           # run.py's before-'go' mode, not one to run by itself
 AT_HOME_MODES = ("policy", "openloop")   # refuse to start with the arm away from home
 ARM, HAND = slice(0, 7), slice(7, None)   # spec joint order: 7 arm joints, then 20 hand joints
 ARM_STOPPED = "arm torque loop stopped (E-stop, enabling button or fault)"
@@ -50,11 +57,11 @@ def open_arm(cfg, spec):
     return FlexivController(str(cfg.arm), **kwargs)
 
 
-def set_arm_gains(arm, cfg, spec, free: bool = False) -> None:
-    """The sim's gains, or free drive (kp 0, light damping)."""
+def set_arm_gains(arm, cfg, spec) -> None:
+    """The sim's gains."""
     with arm.state_lock:
-        arm.kp = np.zeros(7) if free else spec["stiffness"][ARM] * cfg.arm_gain_scale
-        arm.kd = spec["damping"][ARM] * (cfg.free_drive_kd_scale if free else cfg.arm_gain_scale)
+        arm.kp = spec["stiffness"][ARM] * cfg.arm_gain_scale
+        arm.kd = spec["damping"][ARM] * cfg.arm_gain_scale
 
 
 def open_hand(cfg, spec, never_enable: bool = False):
@@ -205,19 +212,49 @@ async def go_home(cfg, spec, arm, hand) -> str:
 
 
 async def free_drive(cfg, spec, arm, hand) -> str:
-    """Arm movable by hand until Ctrl-C; prints how far each arm joint is from home every second."""
-    set_arm_gains(arm, cfg.robot, spec, free=True)
+    """Arm movable by hand until Ctrl-C; prints how far each arm joint is from home every second.
+    Within free_drive_limit_margin_deg of a joint limit (the robot's or the spec's, whichever is
+    tighter) a soft wall pushes back, so the joint stays out of Flexiv's own, abrupt, soft limit.
+    The stiffness goes, and at the end comes back, over free_drive_ramp_s, not in one step."""
+    rc, names = cfg.robot, spec["joint_names"]
+    lower = np.maximum(spec["joint_lower"][ARM], arm.robot.info["q_min"])
+    upper = np.minimum(spec["joint_upper"][ARM], arm.robot.info["q_max"])
+    margin = np.radians(rc.free_drive_limit_margin_deg)
+    kp_wall, kd_wall = spec["stiffness"][ARM] * rc.arm_gain_scale, spec["damping"][ARM] * rc.arm_gain_scale
+    kd_free = spec["damping"][ARM] * rc.free_drive_kd_scale
+    ticker, next_print = Ticker(rc.rate_hz), time.perf_counter()
+    step = 1.0 / max(rc.free_drive_ramp_s * rc.rate_hz, 1.0)   # of `a` per tick; a: 1 holding, 0 free
+    a, q_start = 1.0, np.asarray(arm.q_desired, float).copy()
+
+    def apply(q, a, q_hold) -> np.ndarray:
+        *free, depth = wall_gains(q, lower, upper, margin, kp_wall, kd_free, kd_wall)
+        with arm.state_lock:
+            arm.q_desired, arm.kp, arm.kd = blend_gains(a, (q_hold, kp_wall, kd_wall), free)
+        return depth
+
     try:
         while (q := read_q(arm, hand)) is not None:
-            err = np.degrees(q[ARM] - spec["default_q"][ARM])
-            i = int(np.argmax(np.abs(err)))
-            print(f"[robot] free drive: arm to home, worst {spec['joint_names'][i]} {err[i]:+.1f} deg; "
-                  f"all {np.round(err, 1).tolist()}", flush=True)
-            await asyncio.sleep(1.0)
+            a = max(a - step, 0.0)
+            depth = apply(q[ARM], a, q_start)
+            if time.perf_counter() >= next_print:
+                next_print += 1.0
+                err = np.degrees(q[ARM] - spec["default_q"][ARM])
+                i = int(np.argmax(np.abs(err)))
+                near = [f"{names[j]} ({100 * depth[j]:.0f}% into the wall)" for j in np.flatnonzero(depth)]
+                print(f"[robot] free drive: arm to home, worst {names[i]} {err[i]:+.1f} deg; "
+                      f"all {np.round(err, 1).tolist()}"
+                      + (f"; NEAR A JOINT LIMIT, move back: {', '.join(near)}" if near else ""), flush=True)
+            await ticker.wait()
         return ARM_STOPPED
     finally:
-        hold(arm, hand)                   # targets = here, before the stiffness comes back
-        set_arm_gains(arm, cfg.robot, spec)
+        try:                              # the stiffness comes back gradually; the target follows the arm,
+            while a < 1.0 and (q := read_q(arm, hand)) is not None:   # so only the damping brakes it
+                a = min(a + step, 1.0)
+                apply(q[ARM], a, q[ARM])
+                await ticker.wait()
+        finally:
+            hold(arm, hand)               # targets = here
+            set_arm_gains(arm, rc, spec)
 
 
 async def hand_to_home(rc, spec, arm, hand, mode: str) -> str | None:
@@ -342,14 +379,54 @@ async def play_openloop(cfg, spec, arm, hand, status: dict) -> str:
         pub.close(linger=0)
 
 
+# ----------------------------------------------------------------------------------------- watch
+
+class ArmReader:
+    """The arm, read only (robot.mode=watch): a plain flexivrdk.Robot, never enabled, no mode switch,
+    as `python -m aioflexiv status` does. Only the parts read_q / publish_joint_state use."""
+
+    def __init__(self, serial) -> None:
+        import flexivrdk
+        from aioflexiv.config import resolve_robot_sn
+        self.robot = flexivrdk.Robot(resolve_robot_sn(str(serial)), [], False)
+        self.running = True
+
+    @property
+    def state(self) -> dict:
+        s = self.robot.states()
+        return {"qpos": np.asarray(s.q, float), "qvel": np.asarray(s.dtheta, float)}   # as aioflexiv
+
+
+async def watch(cfg, spec) -> None:
+    """Publish joint_state from the read-only arm and the never-enabled hand until Ctrl-C."""
+    rc = cfg.robot
+    if rc.arm == "mujoco":
+        raise SystemExit("[robot] robot.mode=watch needs the real arm")
+    arm = ArmReader(rc.arm)
+    hand = open_hand(rc, spec, never_enable=True)
+    await hand.start()
+    try:
+        far = home_errors(rc, spec, read_q(arm, hand), check_hand=not hand.dry_run)
+        print(f"[robot] watch (nothing enabled); arm {rc.arm}, hand {rc.hand}; "
+              f"{'at home' if not far else 'away from home: ' + ', '.join(far)}", flush=True)
+        await publish_joint_state(cfg, spec, arm, hand, {})
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        await hand.stop()
+        del arm.robot                     # disconnects
+
+
 # ------------------------------------------------------------------------------------------ main
 
 async def main() -> None:
     cfg = load_config()
     rc = cfg.robot
-    if rc.mode not in MODES:
+    if rc.mode not in (*MODES, WATCH):
         raise SystemExit(f"[robot] robot.mode={rc.mode}: {' | '.join(MODES)}")
     spec = load_spec(repo_path(cfg.spec_path))
+    if rc.mode == WATCH:
+        return await watch(cfg, spec)
 
     arm = open_arm(rc, spec)
     hand = open_hand(rc, spec, never_enable=rc.mode == "free_drive")

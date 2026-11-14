@@ -53,13 +53,14 @@ def object_names(cfg: DictConfig) -> list[str]:
     return names
 
 
-def object_meshes(cfg: DictConfig) -> list[Path]:
-    """The mesh of each object in object.name, in its order."""
+def object_meshes(cfg: DictConfig, allow_missing: bool = False) -> list[Path | None]:
+    """The mesh of each object in object.name, in its order. allow_missing: None for an object without
+    one (a cloth), else an error."""
     names = object_names(cfg)
     missing = [n for n in names if cfg.objects[n].get("mesh") is None]
-    if missing:
+    if missing and not allow_missing:
         raise SystemExit(f"objects {missing} have no mesh")
-    return [repo_path(cfg.objects[n].mesh) for n in names]
+    return [repo_path(cfg.objects[n].mesh) if cfg.objects[n].get("mesh") else None for n in names]
 
 
 def repo_path(p: str) -> Path:

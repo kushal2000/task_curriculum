@@ -7,7 +7,7 @@ same) picks the source here and the perception node to run:
 | perception     | object.name                 | source module    | node (topic)                                        |
 |----------------|-----------------------------|------------------|-----------------------------------------------------|
 | foundationpose | [moving plate, stationary]  | rigid_plates.py  | deploy/nodes/perception.py (object_poses)           |
-| cotracker      | [cloth]                     | cloth_points.py  | deploy/nodes/point_tracker.py (object_points): TODO |
+| cotracker      | [cloth]                     | cloth_points.py  | rigid2deform/cloth_tracker.py (object_points)       |
 
 Every source module has:
     TOPIC                               what to subscribe
