@@ -1,0 +1,14 @@
+# flat7RW_obsActDR: flat7RW_obsDR (point-level object-state DR with realistic lags, proprio obs delay,
+# joint pos / vel noise) + action DR: action delay 0-3 steps (per episode, as the observation delays)
+# and action noise 0.05 (flat7DRABC's). Flexiv + right Wuji, human-like spec on the real joint limits
+# (RightHLRL). No PD-gain, hand-dynamics, friction or plate-physics DR.
+#
+# 2026-11-14: trained from the right-Wuji Play prior (play_scratch_flexiv_right_dr_cont_41213, best
+# checkpoint, mean reward 6490 at epoch 239585), --checkpoint_load_mode weights.
+base: flat7RW_obsDR
+
+env:
+  domain_randomization:
+    use_action_delay: true
+    action_delay_max: 4        # queue length: lags 0-3 steps
+    action_noise_std: 0.05
