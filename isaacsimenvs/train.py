@@ -68,6 +68,13 @@ def _pose_viewer_target(task_id: str) -> str | None:
 
 
 def main() -> None:
+    # `kill -USR1 <pid>` dumps every thread's Python stack to stderr (the slurm log). Only a signal
+    # handler, no timer thread, so it is safe to leave on: Kit swallows tracebacks and the cluster
+    # forbids ptrace (py-spy), so this is the one way to see where a hung run is stuck.
+    import faulthandler
+    import signal
+
+    faulthandler.register(signal.SIGUSR1, all_threads=True)
 
     from isaaclab.app import AppLauncher
 

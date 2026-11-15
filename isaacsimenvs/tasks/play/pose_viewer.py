@@ -443,6 +443,9 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         inner = self.env.unwrapped
         if not hasattr(inner, "get_student_obs"):
             return None
+        student_cfg = getattr(getattr(inner, "cfg", None), "student_obs", None)
+        if student_cfg is not None and not getattr(student_cfg, "enabled", True):
+            return None
         try:
             student_obs = inner.get_student_obs()
         except Exception as exc:

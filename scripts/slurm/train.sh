@@ -33,6 +33,11 @@ if [[ "${VIEWER:-1}" != 0 && " ${ARGS[*]} " != *" --capture_viewer "* ]]; then
         || echo "[slurm] WARNING: HEAD has commits not pushed to origin/$BRANCH -- viewer assets may be stale" >&2
 fi
 
+# wandb's console capture (a redirect thread on stdout/stderr) is redundant here -- the slurm log
+# already has every line -- and it deadlocked both 2026-11-14 7-day runs at their first viewer
+# write: main thread blocked on a futex, a wandb-era thread spinning in syscalls, no traceback.
+export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
+
 gpu_log_start
 START=$(date +%s)
 "${PY[@]}" -m isaacsimenvs.train "${HEADLESS[@]}" "${ARGS[@]}"
