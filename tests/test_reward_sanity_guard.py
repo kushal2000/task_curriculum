@@ -8,10 +8,15 @@ untouched. `nonfinite_reward` read 0.0000 throughout.
 
 from __future__ import annotations
 
+import pytest
 import torch
 import yaml
 
-from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
+# Imports Isaac Lab at module level. Under .venv_isaacsim that boots Kit (and stops at its EULA
+# prompt during collection), so these run in the kit-less .venv_isaaclab3 only.
+pytest.importorskip("isaaclab_newton", reason="needs the kit-less Isaac Lab 3 stack (.venv_isaaclab3)")
+
+from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv  # noqa: E402
 
 LIMIT = ClothEnv.REWARD_SANITY_LIMIT
 

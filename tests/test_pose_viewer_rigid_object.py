@@ -11,7 +11,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from isaacsimenvs.tasks.play.pose_viewer import build_pose_viewer_html
+# Imports Isaac Lab at module level. Under .venv_isaacsim that boots Kit (and stops at its EULA
+# prompt during collection), so these run in the kit-less .venv_isaaclab3 only.
+pytest.importorskip("isaaclab_newton", reason="needs the kit-less Isaac Lab 3 stack (.venv_isaaclab3)")
+
+from isaacsimenvs.tasks.play.pose_viewer import build_pose_viewer_html  # noqa: E402
 
 # A hammer, as `handle_head_primitives` emits it: cylinder handle + box head.
 HAMMER_URDF = """<?xml version="1.0"?>

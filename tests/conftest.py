@@ -22,6 +22,47 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+class _NoKitIsaacLab:
+    """Make ``import isaaclab*`` raise ModuleNotFoundError where it would boot Kit.
+
+    Under ``.venv_isaacsim`` (Isaac Lab 2.3), importing ``isaaclab`` bootstraps the Omniverse Kit
+    kernel: minutes of startup, an interactive EULA prompt, and a ``SystemExit`` when stdin is not a
+    terminal -- which ``pytest.importorskip`` does not catch, so one such import took the whole
+    session down. The Isaac-Lab-backed tests are written for the kit-less Isaac Lab 3 stack
+    (``.venv_isaaclab3``); here they skip instead. Installed only when that stack is absent.
+    """
+
+    def find_spec(self, name, path=None, target=None):
+        if name == "isaaclab" or name.startswith(("isaaclab.", "isaaclab_")):
+            raise ModuleNotFoundError(f"{name}: Isaac Lab would boot Kit here; run this test in .venv_isaaclab3")
+        return None
+
+
+_KITLESS = importlib.util.find_spec("isaaclab_newton") is not None
+if not _KITLESS:
+    sys.meta_path.insert(0, _NoKitIsaacLab())
+
+_NO_KIT_MARK = "Isaac Lab would boot Kit here"
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_setup(item):
+    yield from _skip_if_kit_blocked()
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    yield from _skip_if_kit_blocked()
+
+
+def _skip_if_kit_blocked():
+    """A test (or fixture) that reached a blocked Isaac Lab import skips rather than errors."""
+    outcome = yield
+    exc = outcome.excinfo
+    if exc is not None and issubclass(exc[0], ModuleNotFoundError) and _NO_KIT_MARK in str(exc[1]):
+        outcome.force_exception(pytest.skip.Exception(str(exc[1]), _use_item_location=True))
+
+
 def load_module(rel_path: str, name: str | None = None):
     """Import `rel_path` (relative to the repo root) as a standalone module."""
     path = REPO_ROOT / rel_path
