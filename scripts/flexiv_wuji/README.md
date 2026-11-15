@@ -58,8 +58,9 @@ self-collision-off setup, which the pretrained-policy evals were run in.
 ## What is measured, and what is provisional
 
 **Geometry, checked:**
-- The default arm pose (`FLEXIV_DEFAULT_ARM_POS`) is the IK match of the Kuka's: the hand frames
-  agree to 0.0 mm and 0.1 deg.
+- The default arm pose (`FLEXIV_DEFAULT_ARM_POS`) is the real robot's home pose,
+  (-120, 0, 30, 100, 150, 80, 100) deg, with joint 7 at 120 deg so the palm faces the table. It
+  is no longer the IK match of the Kuka's.
 - The palm centre the policy sees is the Kuka's, carried over through the hand frame. In Isaac
   Sim, at reset, the two robots' palm centres agree to 0.1 mm.
 - The fingertip pad offset is the Sharpa's share of the way to the tip.
@@ -74,8 +75,10 @@ self-collision-off setup, which the pretrained-policy evals were run in.
 - **The arm gains**: stiffness is 2 Nm/rad per Nm of Rizon torque limit, and damping keeps the
   Kuka's damping ratio. The arm lags about twice as much as the Kuka's while moving (11.5 against
   5.4 mrad).
-- **The hand gains**: the vendor MJCF's position servos, much softer than the Sharpa's. They
-  track well in free motion; nothing has tested them under grasp load.
+- **The hand gains**: Wuji's own Isaac Lab drives (`wuji-technology/wuji-isaaclab`, `HAND2_DRIVE`):
+  stiffness, damping, effort limit and armature per joint, no joint friction, a 100 rad/s velocity
+  limit. About 3x stiffer than the vendor MJCF's position servos they replaced. Their gain
+  randomization is not copied. Nothing has tested them against the real hand.
 
 ## Reachability
 

@@ -73,6 +73,13 @@ class RobotSpec:
     hand_spring_ref: dict[str, float] = field(default_factory=dict)
 
     @property
+    def fingertip_offsets(self) -> tuple[tuple[float, float, float], ...]:
+        """The pad offset of each fingertip, in fingertip_link_names order."""
+        if isinstance(self.fingertip_offset[0], (int, float)):
+            return (tuple(self.fingertip_offset),) * len(self.fingertip_link_names)
+        return tuple(tuple(o) for o in self.fingertip_offset)
+
+    @property
     def num_joints(self) -> int:
         return len(self.joint_names_canonical)
 

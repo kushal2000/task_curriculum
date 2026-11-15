@@ -43,7 +43,61 @@ def test_specs_are_registered_and_kuka_is_unchanged_in_shape() -> None:
 
 
 def test_default_pose_matches_the_viewer_constant() -> None:
-    assert SPEC.arm_default_joint_pos == fw.FLEXIV_DEFAULT_ARM_POS
+    """The real robot's home pose: the right-hand specs' default, and flexiv_wuji.py's constant."""
+    assert robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE.arm_default_joint_pos == fw.FLEXIV_DEFAULT_ARM_POS
+
+
+def _task_cfg(task: str) -> dict:
+    yaml = pytest.importorskip("yaml")
+    return yaml.safe_load((REPO_ROOT / "isaacsimenvs" / "cfg" / "task" / f"{task}.yaml").read_text())
+
+
+def _box_size(urdf: str) -> tuple[float, ...]:
+    sizes = {box.get("size") for box in ET.parse(REPO_ROOT / urdf).iter("box")}
+    assert len(sizes) == 1, sizes
+    return tuple(float(v) for v in sizes.pop().split())
+
+
+def test_play_scene_matches_the_viewer_constants() -> None:
+    cfg = _task_cfg("Play")
+    reset = cfg["reset"]
+    assert reset["table_reset_z"] == fw.TABLE_CENTER_Z
+    assert tuple(reset["table_reset_xy"]) == (0.0, 0.0)
+    assert tuple(reset["target_volume_mins"]) == fw.TARGET_VOLUME_MINS
+    assert tuple(reset["target_volume_maxs"]) == fw.TARGET_VOLUME_MAXS
+
+
+@pytest.mark.parametrize("task", ["PlayFlexivWujiRightHumanLike"])
+def test_flexiv_scene_matches_the_viewer_constants(task) -> None:
+    cfg = _task_cfg(task)
+    reset = cfg["reset"]
+    assert (*reset["table_reset_xy"], reset["table_reset_z"]) == fw.FLEXIV_TABLE_CENTER
+    assert _box_size(cfg["assets"]["table_urdf"]) == fw.FLEXIV_TABLE_SIZE
+    assert tuple(reset["target_volume_mins"]) == fw.FLEXIV_TARGET_VOLUME_MINS
+    assert tuple(reset["target_volume_maxs"]) == fw.FLEXIV_TARGET_VOLUME_MAXS
+    assert reset["target_volume_region_scale"] == 1.0
+
+
+def test_flexiv_table_is_where_the_real_one_is() -> None:
+    """Measured on the real setup, in the robot frame: the table top 0.28 m up, its near side
+    0.31 m in front (the robot reaches along -y). Objects start, and the goal volume sits, where
+    Play has them relative to the table top centre (but the goal volume's y_min, taken out to 0)."""
+    base = fw.ROBOT_BASE_POS
+    (cx, cy, cz), (_, depth, height) = fw.FLEXIV_TABLE_CENTER, fw.FLEXIV_TABLE_SIZE
+    top = cz + height / 2
+    assert top - base[2] == pytest.approx(0.28)
+    assert base[1] - (cy + depth / 2) == pytest.approx(0.31)
+    assert cx == base[0]
+    play_top = fw.TABLE_CENTER_Z + _box_size("assets/urdf/table_narrow.urdf")[2] / 2
+    shift = (cx, cy, top - play_top)
+    moved_mins = [p + s for p, s in zip(fw.TARGET_VOLUME_MINS, shift)]
+    moved_mins[1] = 0.0
+    assert fw.FLEXIV_TARGET_VOLUME_MINS == pytest.approx(tuple(moved_mins))
+    assert fw.FLEXIV_TARGET_VOLUME_MAXS == pytest.approx(
+        tuple(p + s for p, s in zip(fw.TARGET_VOLUME_MAXS, shift)))
+    play_reset, flexiv_reset = _task_cfg("Play")["reset"], _task_cfg("PlayFlexivWujiRightHumanLike")["reset"]
+    assert flexiv_reset["table_object_z_offset"] - height / 2 == pytest.approx(
+        play_reset["table_object_z_offset"] - (play_top - fw.TABLE_CENTER_Z))
 
 
 @needs_assets
@@ -82,7 +136,9 @@ def test_every_moving_link_has_an_inertial() -> None:
 
 
 @needs_assets
-def test_hand_gains_match_vendor_mjcf() -> None:
+def test_hand_armature_matches_vendor_mjcf() -> None:
+    """The armature is the vendor MJCF's (the left base and, renamed, the right hand); the right
+    hand's gains and effort limits are Wuji's Isaac Lab drives (robots._WUJI_S2R_DRIVE)."""
     root = ET.parse(WUJI_MJCF).getroot()
     default_armature = float(root.find("default/joint").get("armature"))
     armature = {
@@ -91,10 +147,11 @@ def test_hand_gains_match_vendor_mjcf() -> None:
     }
     servos = {a.get("joint"): a for a in root.iter("position")}
     assert set(servos) == set(SPEC.hand_joint_names)
-    for name, servo in servos.items():
-        assert SPEC.hand_stiffness[name] == pytest.approx(float(servo.get("kp"))), name
-        assert SPEC.hand_damping[name] == pytest.approx(float(servo.get("kv"))), name
+    for name in servos:
         assert SPEC.hand_armature[name] == pytest.approx(armature[name]), name
+    right = robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE
+    assert set(right.hand_effort_limit) == set(right.hand_joint_names)
+    assert all(e > 0 for e in right.hand_effort_limit.values())
 
 
 @needs_assets
@@ -131,11 +188,15 @@ def test_palm_center_is_the_kukas_carried_over_through_the_hand_frame() -> None:
 
 @needs_assets
 def test_fingertip_offset_is_the_sharpa_fraction_of_the_wuji_tip() -> None:
-    """The Sharpa pad point is 0.02 of the 0.026 m to its tip; the Wuji's is the same share of
-    its 0.0248 m (along the distal link's -z)."""
-    joints = _joints(fw.COMPOSED_URDF)
-    tip = -float(joints["l_index_finger_tip_fixed"].find("origin").get("xyz").split()[2])
-    assert math.isclose(-SPEC.fingertip_offset[2], tip * 0.02 / 0.026, abs_tol=5e-4)
+    """The Sharpa pad point is 0.02 of the 0.026 m to its tip; each right Wuji pad is the same share
+    of its own distal link's tip distance (along -z), the thumb's longer one included."""
+    right = robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE
+    joints = _joints(fw.RIGHT_COMPOSED_URDF)
+    for link, offset in zip(right.fingertip_link_names, right.fingertip_offsets):
+        finger = link.removesuffix("_distal")
+        tip = -float(joints[f"{finger}_tip_fixed"].find("origin").get("xyz").split()[2])
+        assert offset[:2] == (0.0, 0.0), link
+        assert math.isclose(-offset[2], tip * 0.02 / 0.026, abs_tol=5e-4), (link, tip * 0.02 / 0.026)
 
 
 def test_sharpa_filter_is_simtoolreals_verbatim() -> None:
@@ -167,7 +228,7 @@ def test_self_collision_filter_is_symmetric_and_names_post_merge_bodies(spec) ->
 
 
 @needs_assets
-@pytest.mark.parametrize("robot", ["flexiv_wuji", "flexiv_wuji_human_like"])
+@pytest.mark.parametrize("robot", ["flexiv_wuji", "flexiv_wuji_human_like", "flexiv_wuji_right_human_like"])
 def test_wuji_filter_matches_its_derivation(robot) -> None:
     """Rerun self_collision_pairs.py: jointed pairs, pairs touching at reset, pairs that meet
     across a knuckle's range. Fails when the mount, default pose, meshes or joint limits change
@@ -177,8 +238,10 @@ def test_wuji_filter_matches_its_derivation(robot) -> None:
     import self_collision_pairs
 
     derived, _ = self_collision_pairs.derive(robot)
-    # Both left URDFs derive the one filter FLEXIV_WUJI holds, which the right hand carries renamed.
-    assert {k: set(v) for k, v in SPEC.self_collision_filter.items()} == {
+    # The left URDFs derive the one filter FLEXIV_WUJI holds; the right URDF derives the same pairs
+    # renamed, which is what FLEXIV_WUJI_RIGHT_HUMAN_LIKE carries.
+    spec = robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE if robot.endswith("right_human_like") else SPEC
+    assert {k: set(v) for k, v in spec.self_collision_filter.items()} == {
         k: set(v) for k, v in derived.items()
     }
 
@@ -334,3 +397,74 @@ def test_only_right_real_has_a_spring() -> None:
             assert len(spec.hand_spring_stiffness) == len(spec.hand_joint_names)
         else:
             assert not spec.hand_spring_stiffness, name
+
+
+needs_right = pytest.mark.skipif(
+    not fw.RIGHT_HUMAN_LIKE_URDF.is_file(), reason="run scripts/flexiv_wuji/flexiv_wuji.py"
+)
+
+
+@needs_right
+def test_right_hand_spec_mirrors_the_left() -> None:
+    """Same arm gains as the left, joints and limits as in its URDF (its hand drive and home pose
+    are the real robot's; test_right_hand_spec_matches_its_urdf checks those)."""
+    right, left = robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE, SPEC
+    assert right.arm_stiffness == left.arm_stiffness and right.arm_damping == left.arm_damping
+    joints = _joints(fw.RIGHT_HUMAN_LIKE_URDF)
+    assert set(right.hand_joint_names) == {n for n, j in joints.items()
+                                           if j.get("type") == "revolute" and n.startswith("r_")}
+    for name, (lo, hi) in fw.HUMAN_LIKE_LIMITS_DEG_RIGHT.items():
+        limit = joints[name].find("limit")
+        if lo is not None:
+            assert float(limit.get("lower")) == pytest.approx(math.radians(lo), abs=1e-4)
+        if hi is not None:
+            assert float(limit.get("upper")) == pytest.approx(math.radians(hi), abs=1e-4)
+
+
+@needs_right
+def test_right_palm_faces_the_table_and_mirrors_the_left_palm_centre() -> None:
+    """At the default pose: positive is flexion on every right flex joint, the palm (the side the
+    fingers flex towards) faces the table within 10 deg, and the palm centre is the left's mirrored
+    across the hand."""
+    np = pytest.importorskip("numpy")
+    yourdfpy = pytest.importorskip("yourdfpy")
+    from hand_frames import hand_frame
+
+    right, left = robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE, SPEC
+    R = yourdfpy.URDF.load(str(fw.RIGHT_HUMAN_LIKE_URDF), load_meshes=False)
+    L = yourdfpy.URDF.load(str(fw.HUMAN_LIKE_URDF), load_meshes=False)
+
+    def pose(u, extra=None):
+        q = {**right.arm_default_joint_pos, **(extra or {})}
+        u.update_cfg(np.array([q.get(n, 0.0) for n in u.actuated_joint_names]))
+
+    def frame(u, s):
+        return hand_frame([u.get_transform(f"{s}_{k}", u.base_link)[:3, 3]
+                           for k in ("wrist", "index_finger_proximal", "middle_finger_proximal", "pinky_proximal")])
+
+    pose(R)
+    H = frame(R, "r")
+    # A point out on each fingertip: the distal link's origin sits on its own joint.
+    def tip_of(f):
+        offset = right.fingertip_offsets[right.fingertip_link_names.index(f"r_{f}_distal")]
+        return (R.get_transform(f"r_{f}_distal", R.base_link) @ np.array([*offset, 1.0]))[:3]
+
+    tip = {f: tip_of(f) for f in ("thumb", "index_finger", "middle_finger", "ring_finger", "pinky")}
+    palm_side = None
+    for name in fw.HUMAN_LIKE_LIMITS_DEG_RIGHT:
+        if name.endswith("_abd"):
+            continue
+        finger = next(f for f in tip if name.startswith(f"r_{f}"))
+        pose(R, {name: 0.5})
+        moved = (tip_of(finger) - tip[finger]) @ H[:3, 2]
+        side = np.sign(moved)
+        assert palm_side in (None, side), name  # every flex joint bends the same way
+        palm_side = side
+    normal = palm_side * H[:3, 2]
+    assert np.degrees(np.arccos(-normal[2])) < 10.0
+
+    pose(R)
+    pose(L)
+    in_left = np.linalg.inv(frame(L, "l")) @ (L.get_transform("link7", L.base_link) @ np.array([*left.palm_center_offset, 1.0]))
+    expected = np.linalg.inv(R.get_transform("link7", R.base_link)) @ (H @ (in_left * np.array([1, 1, -1, 1])))
+    assert np.allclose(right.palm_center_offset, expected[:3], atol=1e-3), expected[:3].round(4)

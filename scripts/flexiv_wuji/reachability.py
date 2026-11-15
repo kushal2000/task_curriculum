@@ -35,11 +35,13 @@ from hand_frames import HAND_KEYPOINTS, hand_frame, hand_points  # noqa: E402
 sys.path.insert(0, str(fw.REPO_ROOT / "isaacsimenvs" / "tasks" / "play"))
 import robots  # noqa: E402  (stdlib-only; imported by path so Isaac Lab is not needed)
 
-#: Play.yaml reset.* values.
-TARGET_MINS, TARGET_MAXS = (-0.35, -0.2, 0.6), (0.35, 0.2, 0.95)
-#: Objects spawn at the table centre +- reset_position_noise_{x,y} = 0.1 and drop onto the top
-#: (z 0.53); a palm centre about 4 cm above it is where a grasp starts.
-TABLE_LAYER = dict(x=(-0.1, 0.1), y=(-0.1, 0.1), z=0.57)
+#: PlayFlexiv*.yaml reset.* values.
+TARGET_MINS, TARGET_MAXS = fw.FLEXIV_TARGET_VOLUME_MINS, fw.FLEXIV_TARGET_VOLUME_MAXS
+#: Objects spawn at the table centre +- reset_position_noise_{x,y} = 0.1 and drop onto the top;
+#: a palm centre about 4 cm above it is where a grasp starts.
+_TX, _TY, _TZ = fw.FLEXIV_TABLE_CENTER
+TABLE_LAYER = dict(x=(_TX - 0.1, _TX + 0.1), y=(_TY - 0.1, _TY + 0.1),
+                   z=_TZ + fw.FLEXIV_TABLE_SIZE[2] / 2 + 0.04)
 POS_TOL, ANGLE_TOL_DEG = 0.005, 30.0
 
 

@@ -50,6 +50,10 @@ CASES = [
     pytest.param(
         "isaacsimenvs/cfg/task/Play.yaml", "PlayEnvCfg", [PLAY_CFG], id="Play",
     ),
+    pytest.param(
+        "isaacsimenvs/cfg/task/PlayFlexivWujiRightHumanLike.yaml", "PlayFlexivWujiRightHumanLikeEnvCfg",
+        [PLAY_CFG], id="PlayFlexivWujiRightHumanLike",
+    ),
 ]
 
 

@@ -48,6 +48,7 @@ URDFS = {
     "kuka_sharpa": fw.KUKA_SHARPA_URDF,
     "flexiv_wuji": fw.COMPOSED_URDF,
     "flexiv_wuji_human_like": fw.HUMAN_LIKE_URDF,
+    "flexiv_wuji_right_human_like": fw.RIGHT_HUMAN_LIKE_URDF,
 }
 #: The spec whose home pose each derivation uses and whose filter it is compared with. Both left
 #: URDFs belong to robots.FLEXIV_WUJI (no longer a selectable robot, but the base the right-hand
@@ -56,6 +57,7 @@ SPECS = {
     "kuka_sharpa": robots.KUKA_SHARPA,
     "flexiv_wuji": robots.FLEXIV_WUJI,
     "flexiv_wuji_human_like": robots.FLEXIV_WUJI,
+    "flexiv_wuji_right_human_like": robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
 }
 #: Deeper than this counts as overlapping (onboard.py's threshold).
 OVERLAP_M = 5e-4

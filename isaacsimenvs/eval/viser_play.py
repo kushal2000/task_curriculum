@@ -53,6 +53,7 @@ if _WEBSOCKETS.is_dir():
 #: (robot, robot_self_collision) in a run's config -> the task it trained on.
 TASK_FOR = {
     ("kuka_sharpa", False): "Isaacsimenvs-Play-Direct-v0",
+    ("flexiv_wuji_right_human_like", True): "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0",
 }
 #: SAPG's per-block coefficients: linspace(50, 0, num_actors // expl_coef_block_size)
 #: (rl_games a2c_common.py:342).
@@ -296,7 +297,8 @@ def main() -> None:
                  "want_env": None, "want_policy": None, "want_start": None, "want_restart": None}
         rs = inner.cfg.reset
         # Where a fixed start puts the object: the table centre, dropped from training's height.
-        start_xyz = (0.0, 0.0, float(rs.table_reset_z) + float(rs.table_object_z_offset))
+        start_xyz = (*(float(v) for v in rs.table_reset_xy),
+                     float(rs.table_reset_z) + float(rs.table_object_z_offset))
         stats = {t: {"episodes": 0, "goals": 0} for t in types}
         ep_goals = np.zeros(num_envs, dtype=np.int64)
 

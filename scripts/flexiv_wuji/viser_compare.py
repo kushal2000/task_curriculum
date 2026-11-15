@@ -3,10 +3,11 @@ Sharpa (flexiv_wuji.FLEXIV_SHARPA_URDF), the Wuji Hand 2 with vendor joint limit
 human-like limits (flexiv_wuji.HUMAN_LIKE_URDF) -- next to SimToolReal's Kuka iiwa14 + Sharpa as the
 reference (hidden by default; the "robots" dropdown shows it).
 
-Each robot stands where the RL env puts it, ``ROBOT_BASE_POS`` behind its own copy of the env's
-table, left to right one ``separation`` apart (0 overlays them on one table). The Flexivs share the
-Flexiv arm sliders -- one default pose whatever the hand -- the two Sharpas share the Sharpa hand
-sliders, and each Wuji has its own over its own limits. Each hand also has a "hand action" slider
+Each robot stands where the RL env puts it, ``ROBOT_BASE_POS``, behind its own copy of its task's
+table -- Play's for the Kuka, the real setup's (``FLEXIV_TABLE_*``) for the Flexivs -- left to
+right one ``separation`` apart (0 overlays them). The green box is the region the task samples
+goal positions in (``*TARGET_VOLUME_*``). The Flexivs share the Flexiv arm sliders -- one default
+pose whatever the hand -- the two Sharpas share the Sharpa hand sliders, and each Wuji has its own over its own limits. Each hand also has a "hand action" slider
 that sets every hand joint the way the policy's hand action does (-1 = lower limit, +1 = upper,
 linearly in between). The Flexiv's base offset and the Wuji's flange mount are live sliders, so the
 mount can be tuned against the Kuka setup by eye.
@@ -86,7 +87,13 @@ TIP_POINTS = {  # dropdown label -> (use the spec's fingertip_offset, marker col
 }
 
 TABLE_SIZE = (0.475, 0.4, 0.3)  # table_narrow.urdf's box
+#: Each setup's task table (centre, size) and goal volume (mins, maxs), env coordinates.
+KUKA_SCENE = dict(table=((0.0, 0.0, fw.TABLE_CENTER_Z), TABLE_SIZE),
+                  goal=(fw.TARGET_VOLUME_MINS, fw.TARGET_VOLUME_MAXS))
+FLEXIV_SCENE = dict(table=(fw.FLEXIV_TABLE_CENTER, fw.FLEXIV_TABLE_SIZE),
+                    goal=(fw.FLEXIV_TARGET_VOLUME_MINS, fw.FLEXIV_TARGET_VOLUME_MAXS))
 TABLE_COLOR = (209, 143, 89)
+GOAL_VOLUME_COLOR = (60, 200, 90)
 
 def make_tf(pos=(0.0, 0.0, 0.0), rpy=(0.0, 0.0, 0.0)) -> np.ndarray:
     T = np.eye(4)
@@ -177,12 +184,22 @@ def main() -> None:
     # Scene graph: /<setup> sits at that setup's env origin (moved by the separation slider);
     # robot and table hang under it in env coordinates, as the env places them.
     roots = {name: server.scene.add_frame(f"/{name}", show_axes=False) for name in SETUPS}
+    scenes = {name: KUKA_SCENE if name == "kuka_sharpa" else FLEXIV_SCENE for name in SETUPS}
     tables = {
         name: server.scene.add_box(
-            f"/{name}/table", color=TABLE_COLOR, dimensions=TABLE_SIZE,
-            position=(0.0, 0.0, fw.TABLE_CENTER_Z),
+            f"/{name}/table", color=TABLE_COLOR, dimensions=scenes[name]["table"][1],
+            position=scenes[name]["table"][0],
         )
         for name in SETUPS
+    }
+    goal_volumes = {
+        name: [
+            server.scene.add_box(f"/{name}/goal_volume{suffix}", color=GOAL_VOLUME_COLOR,
+                                 dimensions=np.subtract(hi, lo), position=np.add(lo, hi) / 2,
+                                 wireframe=wire, opacity=None if wire else 0.15, cast_shadow=False)
+            for suffix, wire in (("", False), ("/edges", True))
+        ]
+        for name, (lo, hi) in ((n, scenes[n]["goal"]) for n in SETUPS)
     }
     server.scene.add_frame("/kuka_sharpa/robot", show_axes=False, position=fw.ROBOT_BASE_POS)
     flexiv_base = server.scene.add_frame("/flexiv_wuji/robot", show_axes=False)
@@ -225,10 +242,10 @@ def main() -> None:
 
     def fingertips(urdf, spec, T_root, with_offset: bool) -> np.ndarray:
         """(5, 3) fingertip points in env coordinates; T_root places ``urdf``'s base."""
-        offset = np.array([*(spec.fingertip_offset if with_offset else (0.0, 0.0, 0.0)), 1.0])
         return np.array([
-            (T_root @ urdf.get_transform(link, urdf.base_link) @ offset)[:3]
-            for link in spec.fingertip_link_names
+            (T_root @ urdf.get_transform(link, urdf.base_link)
+             @ np.array([*(offset if with_offset else (0.0, 0.0, 0.0)), 1.0]))[:3]
+            for link, offset in zip(spec.fingertip_link_names, spec.fingertip_offsets)
         ])
 
     def refresh() -> None:
@@ -241,6 +258,8 @@ def main() -> None:
                 sep > 0 or name == "kuka_sharpa"
             )
             frame_axes[name].visible = show_frames.value
+            for box in goal_volumes[name]:
+                box.visible = show_goal_volume.value and (sep > 0 or name == "kuka_sharpa")
             for label, markers in tip_markers[name].items():
                 for m in markers:
                     m.visible = show_tips.value and label == tip_point.value
@@ -330,10 +349,13 @@ def main() -> None:
             return (f"`{np.round(d, 1)}` mm (|d| {np.linalg.norm(d):.1f}), "
                     f"{np.degrees(Rotation.from_matrix(rel[:3, :3]).magnitude()):.1f} deg")
 
-        table_top = np.array([0.0, 0.0, fw.TABLE_CENTER_Z + TABLE_SIZE[2] / 2])
+        def table_top(name) -> np.ndarray:
+            centre, size = scenes[name]["table"]
+            return np.add(centre, (0.0, 0.0, size[2] / 2))
+
         readout.content = "\n".join([
-            "**Hand frame, relative to table-top centre (m)**",
-            *(f"- {SETUP_LABELS[n]}: `{np.round(H[:3, 3] - table_top, 3)}`" for n, H in frames.items()),
+            "**Hand frame, relative to its table-top centre (m)**",
+            *(f"- {SETUP_LABELS[n]}: `{np.round(H[:3, 3] - table_top(n), 3)}`" for n, H in frames.items()),
             "",
             "**Hand frame in the Kuka+Sharpa hand frame**",
             *(f"- {SETUP_LABELS[n]}: {vs_kuka(frames[n])}" for n in SETUPS if n != "kuka_sharpa"),
@@ -364,6 +386,7 @@ def main() -> None:
         layout_sep = server.gui.add_slider("separation (m)", 0.0, 2.0, 0.01, 1.2)
         show_tables = server.gui.add_checkbox("tables", True)
         show_frames = server.gui.add_checkbox("hand frames", True)
+        show_goal_volume = server.gui.add_checkbox("goal volume", True)
         robot_display = server.gui.add_dropdown("robots", tuple(ROBOT_DISPLAY), initial_value="the three Flexivs")
         robot_alpha = server.gui.add_slider("robot alpha", 0.05, 1.0, 0.05, 1.0)
         show_tips = server.gui.add_checkbox("fingertips", True)
@@ -405,7 +428,7 @@ def main() -> None:
         """The Flexiv arm sliders and the Sharpa hand sliders: one arm pose, one hand pose."""
         values = {**dict(zip(flexiv_q.names, flexiv_q.q())), **dict(zip(sharpa_q.names, sharpa_q.q()))}
         return np.array([values[n] for n in flexiv_sharpa.actuated_joint_names])
-    for handle in (layout_sep, show_tables, show_frames, show_tips, tip_point, robot_display, robot_alpha, base_yaw, *base_xyz, *mount_xyz, *mount_rpy):
+    for handle in (layout_sep, show_tables, show_frames, show_goal_volume, show_tips, tip_point, robot_display, robot_alpha, base_yaw, *base_xyz, *mount_xyz, *mount_rpy):
         handle.on_update(lambda _: refresh())
 
     @match_button.on_click

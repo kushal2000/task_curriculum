@@ -378,6 +378,8 @@ class ResetCfg:
     table_reset_z: float = 0.38
     table_reset_z_range: float = 0.01
     table_object_z_offset: float = 0.25
+    # Table centre in env XY; objects spawn around it (the Flexiv tasks move it to the real setup's).
+    table_reset_xy: tuple[float, float] = (0.0, 0.0)
     # Per-env XY position noise applied at reset (uniform half-widths in m).
     # Default (0, 0) keeps the table centered on the env origin (legacy behavior).
     table_reset_xy_range_m: tuple[float, float] = (0.0, 0.0)
@@ -392,6 +394,12 @@ class ResetCfg:
     target_volume_mins: tuple[float, float, float] = (-0.35, -0.2, 0.6)
     target_volume_maxs: tuple[float, float, float] = (0.35, 0.2, 0.95)
     target_volume_region_scale: float = 1.0
+    # When on, each sampled goal's z is raised (past target_volume_maxs if need be) until the
+    # object at the goal orientation is goal_table_clearance_m above the table top
+    # (utils/goal_table_clearance.py). Off leaves goals where the sampler puts them. (A switch and
+    # a float, not an optional float: the YAML overlay types each field by its default.)
+    use_goal_table_clearance: bool = False
+    goal_table_clearance_m: float = 0.01
 
     # Debug only — when set, every reset writes this exact env-local pose
     # to GoalViz instead of sampling. Format: (x, y, z, qw, qx, qy, qz).
@@ -659,8 +667,25 @@ class PlayEnvCfg(DirectRLEnvCfg):
     domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg()
 
 
+@configclass
+class PlayFlexivWujiRightHumanLikeEnvCfg(PlayEnvCfg):
+    """Play on the Flexiv Rizon 4s + right Wuji Hand 2 with human-like limits, as the real robot is
+    set up (``Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0``): human-like limits on the r_
+    joints, the hand turned 180 deg on the flange so its palm faces the table at the same arm pose,
+    robot self-collision on. The real table and goal geometry are in its task YAML.
+    """
+
+    robot: str = "flexiv_wuji_right_human_like"
+    robot_self_collision: bool = True
+    action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
+    assets: AssetsCfg = AssetsCfg(
+        robot_urdf="assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
+    )
+
+
 __all__ = [
     "PlayEnvCfg",
+    "PlayFlexivWujiRightHumanLikeEnvCfg",
     "AssetsCfg",
     "ObsCfg",
     "StudentObsCfg",
