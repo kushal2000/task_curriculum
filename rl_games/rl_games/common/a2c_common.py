@@ -289,8 +289,10 @@ class A2CBase(BaseAlgorithm):
         # allows us to specify a folder where all experiments will reside
         self.train_dir = config.get('train_dir', 'runs')
 
-        # a folder inside of train_dir containing everything related to a particular experiment
-        self.experiment_dir = os.path.join(self.train_dir, self.experiment_name)
+        # a folder inside of train_dir containing everything related to a particular experiment.
+        # `experiment_dir` overrides it outright (isaacsimenvs/train.py sets it to the run folder, so
+        # nn/ and summaries/ sit directly in it; the experiment name still names the checkpoints).
+        self.experiment_dir = config.get('experiment_dir') or os.path.join(self.train_dir, self.experiment_name)
 
         # folders inside <train_dir>/<experiment_dir> for a specific purpose
         self.nn_dir = os.path.join(self.experiment_dir, 'nn')

@@ -65,7 +65,9 @@ class Run:
 
         self.dir = run_dir
         self.name = run_dir.name.removeprefix("0_")
-        self.config_path = run_dir.parent / ".hydra" / "config.yaml"
+        # New layout: the run folder holds .hydra/ itself; old: <date>/<time>/.hydra/ above 0_<name>/.
+        own = run_dir / ".hydra" / "config.yaml"
+        self.config_path = own if own.is_file() else run_dir.parent / ".hydra" / "config.yaml"
         # Resolved: the agent config interpolates into the env's (num_actors: ${....env.scene.num_envs}).
         self.config = OmegaConf.to_container(OmegaConf.load(self.config_path), resolve=True)
         env = self.config["env"]
@@ -85,7 +87,8 @@ class Run:
 
     def _logged_robot_and_task(self) -> tuple[str, str] | None:
         m = re.search(r"_(\d+)$", self.name)
-        log = REPO / "debug_outputs" / "train_logs" / "slurm" / f"play_scratch_{m.group(1)}.out" if m else None
+        own = sorted(self.dir.glob("slurm_*.out"))   # new layout: the log sits in the run folder
+        log = own[0] if own else (OUTPUTS / "slurm" / f"play_scratch_{m.group(1)}.out" if m else None)
         if log is None or not log.is_file():
             return None
         with log.open(errors="replace") as f:
@@ -108,9 +111,15 @@ class Run:
 
 
 def find_runs() -> list[Run]:
+    """Every run with checkpoints, in both layouts, except under deprecated/:
+    new ``<month>/<date>_<name>_<job>/nn/`` and old ``[<month>/]<date>/<time>/0_<name>/nn/``."""
     runs = []
-    for nn in sorted(OUTPUTS.glob("*/*/0_*/nn")):
-        if any(nn.glob("*.pth")) and (nn.parent.parent / ".hydra" / "config.yaml").is_file():
+    nns = [*OUTPUTS.glob("*/*/nn"), *OUTPUTS.glob("*/*/0_*/nn"), *OUTPUTS.glob("*/*/*/0_*/nn")]
+    for nn in sorted(set(nns)):
+        if "deprecated" in nn.relative_to(OUTPUTS).parts:
+            continue
+        own = (nn.parent / ".hydra" / "config.yaml").is_file()
+        if any(nn.glob("*.pth")) and (own or (nn.parent.parent / ".hydra" / "config.yaml").is_file()):
             try:
                 runs.append(Run(nn.parent))
             except Exception as exc:  # an unreadable config is skipped, not fatal

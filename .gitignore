@@ -15,8 +15,9 @@ dist/
 venv/
 env/
 
-# EVERY run artifact goes under debug_outputs/ (isaacsimenvs/utils/paths.py): train_logs/ (Hydra run
-# dirs <date>/<time>/, wandb/, slurm/, results/), videos/ and deployment/ (real-robot recordings and logs).
+# EVERY run artifact goes under debug_outputs/ (isaacsimenvs/utils/paths.py): train_logs/ (one folder per
+# run, <month>/<date>_<name>_<job>/, with its checkpoints, config, wandb/ and Slurm log), videos/ and
+# deployment/ (real-robot recordings and logs).
 debug_outputs/
 # The pre-2026-11-15 location, still present in older checkouts: move it to debug_outputs/train_logs/.
 /outputs/

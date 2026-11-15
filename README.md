@@ -79,7 +79,8 @@ overlay `cfg/robot/<robot>.yaml`, an experiment recipe `cfg/experiment/<name>.ya
 recipes chain through `base:` and name the task they were written for), then Hydra CLI overrides.
 
 ```bash
-# on Slurm: logs in debug_outputs/train_logs/slurm/, the venv follows the task id, portal defaults
+# on Slurm: each run gets one folder, debug_outputs/train_logs/<month>/<date>_<name>_<job id>/,
+# holding its checkpoints, config, wandb/ and Slurm log; the venv follows the task id
 scripts/slurm/submit.sh scripts/slurm/train.sh \
     --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHLRL-Direct-v0 --experiment flat7RW_obsActDR \
     --checkpoint <play run>/nn/<name>.pth --checkpoint_load_mode weights --single_variant \
@@ -87,7 +88,8 @@ scripts/slurm/submit.sh scripts/slurm/train.sh \
 scripts/slurm/submit.sh --array=0-2 scripts/slurm/train.sh ...          # seeds 1-3
 scripts/slurm/submit.sh --partition=gpu_a100 --gres=gpu:rtxpro6000:1 ... # another cluster
 
-scripts/slurm/submit.sh scripts/slurm/eval.sh --task <id> --checkpoint <pth>   # -> debug_outputs/train_logs/results/eval/
+scripts/slurm/submit.sh scripts/slurm/eval.sh --experiment_dir experiments/<day> --task <id> --checkpoint <pth>
+                                          # -> experiments/<day>/results/ (JSON + Slurm log)
 scripts/slurm/submit.sh scripts/slurm/viser.sh --task <id>                     # live viewer; the log prints the tunnel
 ```
 
@@ -96,11 +98,17 @@ script inside it raised, so check a job's log, not its exit code.
 
 ## Outputs
 
-Everything a run produces is under `debug_outputs/` (`isaacsimenvs/utils/paths.py`):
-`debug_outputs/train_logs/` holds Hydra run dirs `<date>/<time>/0_<name>/nn/*.pth`, `wandb/`, `slurm/`,
-and `results/` (eval JSONs, probe dumps); `debug_outputs/videos/` holds rendered videos and
-`debug_outputs/deployment/` the real-robot run recordings and logs. In a run's `nn/`, `<name>.pth` is the best checkpoint by
-mean reward and `last_<name>_ep_*.pth` are periodic.
+Everything a run produces is under `debug_outputs/` (`isaacsimenvs/utils/paths.py`).
+
+- `debug_outputs/train_logs/<month>/<date>_<run name>_<job id>/` is one training run, all of it:
+  `nn/` (checkpoints: `<name>.pth` is the best by mean reward, `last_<name>_ep_*.pth` periodic),
+  `summaries/`, `.hydra/` (the resolved config), `wandb/`, `interactive_viewer/` and
+  `slurm_<job id>.out`. Outside Slurm the time stands in for the job id. Older runs keep the
+  `<date>/<time>/0_<name>/` layout; `deprecated/` holds runs of removed robots and tasks.
+- `debug_outputs/train_logs/.slurm/`: where sbatch starts each log, before the job moves it into its
+  folder (a symlink stays).
+- `debug_outputs/videos/`: rendered videos. `debug_outputs/deployment/`: real-robot recordings and logs.
+- Eval results go to the experiment's folder, `experiments/<day>/results/`.
 
 ## Deploy
 

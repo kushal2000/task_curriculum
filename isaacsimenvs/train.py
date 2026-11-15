@@ -353,14 +353,26 @@ def main() -> None:
                     "wandb_tags": list(args_cli.wandb_tags),
                     "wandb_notes": args_cli.wandb_notes,
                     "wandb_logcode_dir": args_cli.wandb_logcode_dir,
+                    # wandb.init(dir=...) adds its own wandb/ level: <run folder>/wandb/.
+                    "wandb_dir": hydra_run_dir,
                 }
             )
             observers.append(WandbAlgoObserver(wandb_cfg))
 
         runner = Runner(MultiObserver(observers))
-        # Co-locate rl_games artifacts (checkpoints, summaries) with the Hydra
-        # run dir so slurm logs + config + videos all live together.
+        # Everything a run writes lives in its one folder (train_logs/<month>/<date>_<name>_<job>/):
+        # rl_games' nn/, summaries/ and batches/ directly in it (experiment_dir, not
+        # <train_dir>/<name>/), next to the Hydra config, wandb/, the viewer HTML and the Slurm log.
         agent_cfg["params"]["config"]["train_dir"] = hydra_run_dir
+        agent_cfg["params"]["config"]["experiment_dir"] = hydra_run_dir
+        if is_main_rank:
+            from pathlib import Path
+
+            from isaacsimenvs.utils.paths import adopt_slurm_log
+
+            moved = adopt_slurm_log(Path(hydra_run_dir))
+            if moved is not None:
+                print(f"[train] Slurm log moved to {moved}", flush=True)
         agent_cfg["params"]["config"]["device"] = rl_device
         agent_cfg["params"]["config"]["device_name"] = rl_device
 

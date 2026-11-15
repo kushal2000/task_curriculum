@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
-from isaacsimenvs.utils.paths import PRETRAINED_CHECKPOINT, PRETRAINED_CONFIG, VIDEOS_DIR
+from isaacsimenvs.utils.paths import PRETRAINED_CHECKPOINT, PRETRAINED_CONFIG, default_video_path
 
 #: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums. Both this
 #: module and its sibling print the identical line, so a render that disagrees with an evaluation
@@ -639,7 +639,8 @@ def main() -> None:
     parser.add_argument("--num_assets_per_type", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda:0")
-    parser.add_argument("--out", type=Path, default=VIDEOS_DIR / "render_newton.mp4")
+    parser.add_argument("--out", type=Path, default=None,
+                        help="Video path (default: debug_outputs/videos/<month>/<date>_render_newton_<time>.mp4).")
     parser.add_argument(
         "--no_goal", action="store_true", help="do not render the goal marker at all"
     )
@@ -666,6 +667,8 @@ def main() -> None:
         help="additionally draw the keypoints and per-keypoint error that define success",
     )
     args, hydra_args = parser.parse_known_args()
+    if args.out is None:
+        args.out = default_video_path("render_newton")
     sys.argv = [sys.argv[0]] + hydra_args
 
     import gymnasium as gym

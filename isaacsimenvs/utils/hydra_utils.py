@@ -146,12 +146,17 @@ def hydra_task_config_with_yaml(
                     merged_agent = agent_cfg
                 func(env_cfg_restored, merged_agent, *args, **kwargs)
 
-            # Hydra's default run dir is outputs/<date>/<time>/ under the cwd; put runs in the
-            # repo's debug_outputs/train_logs/ instead, unless the command line sets its own.
+            # Hydra's default run dir is outputs/<date>/<time>/ under the cwd. Each run gets its own
+            # descriptive folder instead, train_logs/<month>/<date>_<run name>_<job id>/ (paths.py),
+            # unless the command line sets hydra.run.dir itself.
             if not any(a.startswith("hydra.run.dir=") for a in sys.argv[1:]):
-                from isaacsimenvs.utils.paths import HYDRA_RUN_DIR
+                from isaacsimenvs.utils.paths import default_run_dir
 
-                sys.argv.append(f"hydra.run.dir={HYDRA_RUN_DIR}")
+                prefix = "agent.params.config.name="
+                run_name = next((a[len(prefix):] for a in sys.argv[1:] if a.startswith(prefix)), None)
+                if run_name is None:
+                    run_name = str(((cfg_dict.get("agent") or {}).get("params") or {}).get("config", {}).get("name", "run"))
+                sys.argv.append(f"hydra.run.dir={default_run_dir(run_name)}")
             hydra_main()
 
         return wrapper
