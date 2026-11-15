@@ -38,9 +38,18 @@ fi
 # write: main thread blocked on a futex, a wandb-era thread spinning in syscalls, no traceback.
 export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
 
+# --distributed: one train.py process per allocated GPU, under torchrun (train.py binds each rank to
+# cuda:$LOCAL_RANK). Submit with --gres=gpu:<model>:<n>; env.scene.num_envs is PER GPU.
+LAUNCH=("${PY[@]}")
+if [[ " ${ARGS[*]} " == *" --distributed "* ]]; then
+    NGPU=$(echo "${CUDA_VISIBLE_DEVICES:-0}" | tr ',' '\n' | grep -c .)
+    LAUNCH=("${PY[@]}" -m torch.distributed.run --standalone --nnodes=1 --nproc_per_node="$NGPU")
+    echo "[slurm] distributed: $NGPU GPUs, one process each (torchrun)"
+fi
+
 gpu_log_start
 START=$(date +%s)
-"${PY[@]}" scripts/training/train.py "${HEADLESS[@]}" "${ARGS[@]}"
+"${LAUNCH[@]}" scripts/training/train.py "${HEADLESS[@]}" "${ARGS[@]}"
 RC=$?
 gpu_log_stop
 echo "[slurm] exit=$RC wall_s=$(( $(date +%s) - START ))"

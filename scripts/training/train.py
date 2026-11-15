@@ -204,6 +204,17 @@ def main() -> None:
     @hydra_task_config_with_yaml(args_cli.task, args_cli.agent, experiment=args_cli.experiment)
     def run(env_cfg, agent_cfg: dict) -> None:
         hydra_run_dir = HydraConfig.get().runtime.output_dir
+        # Move this job's Slurm log into the run folder first thing, before the scene is built: a
+        # large pool takes most of an hour to build, and a job that dies during setup should still
+        # leave its log in its folder. Rank 0 only (the others share the job's log).
+        if int(os.getenv("RANK", "0")) == 0:
+            from pathlib import Path
+
+            from isaacsimenvs.utils.paths import adopt_slurm_log
+
+            moved = adopt_slurm_log(Path(hydra_run_dir))
+            if moved is not None:
+                print(f"[train] Slurm log moved to {moved}", flush=True)
 
         # sim_device CLI flag still wins — it's a launcher-level concern, not
         # something we expect in the task YAML.
@@ -394,14 +405,6 @@ def main() -> None:
         # <train_dir>/<name>/), next to the Hydra config, wandb/, the viewer HTML and the Slurm log.
         agent_cfg["params"]["config"]["train_dir"] = hydra_run_dir
         agent_cfg["params"]["config"]["experiment_dir"] = hydra_run_dir
-        if is_main_rank:
-            from pathlib import Path
-
-            from isaacsimenvs.utils.paths import adopt_slurm_log
-
-            moved = adopt_slurm_log(Path(hydra_run_dir))
-            if moved is not None:
-                print(f"[train] Slurm log moved to {moved}", flush=True)
         agent_cfg["params"]["config"]["device"] = rl_device
         agent_cfg["params"]["config"]["device_name"] = rl_device
 
