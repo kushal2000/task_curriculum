@@ -36,7 +36,7 @@ def main() -> None:
 
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--checkpoint", required=True)
-    p.add_argument("--policy_config", default="pretrained_policy/config.yaml")
+    p.add_argument("--policy_config", default="pretrained_policy/kuka_sharpa/config.yaml")
     p.add_argument("--sapg_expl_coef", type=float, default=0.0)
     p.add_argument("--num_envs", type=int, default=32)
     p.add_argument("--max_steps", type=int, default=900)

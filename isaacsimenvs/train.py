@@ -28,7 +28,7 @@ CLI shape:
     A recorded run recipe instead of the overrides (isaacsimenvs/cfg/experiment/), e.g. flat7DRABC:
     python -m isaacsimenvs.train \
         --task Isaacsimenvs-FoldPoolPhysx-Direct-v0 --agent rl_games_sapg_cfg_entry_point --headless \
-        --experiment flat7DRABC --checkpoint pretrained_policy/model.pth --checkpoint_load_mode weights \
+        --experiment flat7DRABC --checkpoint pretrained_policy/kuka_sharpa/model.pth --checkpoint_load_mode weights \
         agent.params.seed=1
 """
 

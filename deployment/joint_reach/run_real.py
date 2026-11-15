@@ -182,7 +182,7 @@ def _parse() -> argparse.Namespace:
     p.add_argument("--ckpt", required=True, help="joint-reach policy checkpoint (.pth)")
     p.add_argument("--sequence", required=True, help="real_test_sequence.pt from joint_reach_eval")
     p.add_argument("--spec", default=str(DEFAULT_SPEC))
-    p.add_argument("--policy_config", default=None, help="default: pretrained_policy/config.yaml")
+    p.add_argument("--policy_config", default=None, help="default: pretrained_policy/flexiv_wuji/config.yaml")
     p.add_argument("--arm", required=True, help="robot serial, 'mujoco', or 'fake'")
     p.add_argument("--hand", required=True, help="hand serial ('auto': the only one found), 'dry_run', or 'fake'")
     p.add_argument("--hand_sn", default=None, help="hand serial for --hand dry_run")

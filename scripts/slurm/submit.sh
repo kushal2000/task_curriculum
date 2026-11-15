@@ -5,7 +5,7 @@
 #
 #   scripts/slurm/submit.sh \
 #       scripts/slurm/train.sh --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHLRL-Direct-v0 \
-#       --experiment flat7RW_base --checkpoint pretrained_policy/model.pth
+#       --experiment flat7RW_base --checkpoint pretrained_policy/kuka_sharpa/model.pth
 #   scripts/slurm/submit.sh --array=0-2 scripts/slurm/train.sh ...   # seeds 1-3 (agent.params.seed)
 #
 # sbatch options must be written --opt=value (the first argument not starting with '-' is the job

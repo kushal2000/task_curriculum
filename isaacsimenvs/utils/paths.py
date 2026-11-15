@@ -7,8 +7,10 @@ Every run artifact goes under ``DEBUG_OUTPUTS_DIR`` (``debug_outputs/``, gitigno
 * ``debug_outputs/videos/`` (``VIDEOS_DIR``): rendered videos.
 * ``debug_outputs/deployment/`` (``DEPLOY_DIR``): real-robot run recordings and logs (deployment/).
 
-The pretrained tool-use prior is ``PRETRAINED_DIR`` (``<repo>/pretrained_policy``, gitignored; on
-portal a symlink to /share/portal/kk837/simtoolreal/pretrained_policy), or ``$PRETRAINED_POLICY_DIR``.
+The Play priors are in ``PRETRAINED_DIR`` (``<repo>/pretrained_policy``, gitignored, or
+``$PRETRAINED_POLICY_DIR``), one ``<robot>/{model.pth,config.yaml}`` per robot: ``kuka_sharpa/`` (the generic
+SimToolReal prior; on portal symlinks into /share/portal/kk837/simtoolreal/pretrained_policy) and
+``flexiv_wuji/`` (the right-Wuji human-like Play prior, run play_scratch_flexiv_right_dr_cont_41213).
 
 Stdlib only: imported by Kit-free code and by deployment/.
 """
@@ -29,5 +31,8 @@ WANDB_DIR = TRAIN_LOGS_DIR  # wandb.init(dir=...) adds its own "wandb/" level
 #: Hydra's run dir; without this Hydra writes ``outputs/<date>/<time>/`` under the working directory.
 HYDRA_RUN_DIR = TRAIN_LOGS_DIR / "${now:%Y-%m-%d}" / "${now:%H-%M-%S}"
 PRETRAINED_DIR = Path(os.environ.get("PRETRAINED_POLICY_DIR", REPO_ROOT / "pretrained_policy"))
-PRETRAINED_CHECKPOINT = PRETRAINED_DIR / "model.pth"
-PRETRAINED_CONFIG = PRETRAINED_DIR / "config.yaml"
+PRETRAINED_KUKA_SHARPA = PRETRAINED_DIR / "kuka_sharpa"
+PRETRAINED_FLEXIV_WUJI = PRETRAINED_DIR / "flexiv_wuji"
+#: The default prior evals load: Kuka + Sharpa.
+PRETRAINED_CHECKPOINT = PRETRAINED_KUKA_SHARPA / "model.pth"
+PRETRAINED_CONFIG = PRETRAINED_KUKA_SHARPA / "config.yaml"

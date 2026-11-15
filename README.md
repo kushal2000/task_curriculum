@@ -73,9 +73,11 @@ Newton needs every robot URDF it loads in `.cache/usd/`; for the right Wuji add
 `--task Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 env.assets.table_urdf=assets/urdf/table_narrow.urdf`.
 Run Newton code through `scripts/newton_py`, which fixes the venv's libstdc++.
 
-The generic prior is `pretrained_policy/` (gitignored; on portal a symlink to
-`/share/portal/kk837/simtoolreal/pretrained_policy`, or set `$PRETRAINED_POLICY_DIR`). It is the
-Kuka + Sharpa policy; Flexiv + right Wuji runs start from a right-Wuji Play run instead.
+The Play priors are in `pretrained_policy/` (gitignored, or set `$PRETRAINED_POLICY_DIR`), one folder per
+robot, each with `model.pth` and `config.yaml`: `kuka_sharpa/` (the generic SimToolReal prior; on portal
+symlinks into `/share/portal/kk837/simtoolreal/pretrained_policy`) and `flexiv_wuji/` (the right-Wuji
+human-like Play prior, best checkpoint of run play_scratch_flexiv_right_dr_cont_41213). Flexiv + right Wuji
+runs start from `flexiv_wuji/`, Kuka + Sharpa runs from `kuka_sharpa/`.
 
 ## Train, evaluate, watch
 

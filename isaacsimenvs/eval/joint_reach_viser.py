@@ -42,7 +42,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--policy_config", default="pretrained_policy/config.yaml")
+    parser.add_argument("--policy_config", default="pretrained_policy/flexiv_wuji/config.yaml")
     parser.add_argument("--sapg_expl_coef", type=float, default=0.0)
     parser.add_argument("--real_sequence", default="", help="real_test_sequence.pt from joint_reach_eval")
     parser.add_argument("--num_envs", type=int, default=4)

@@ -14,7 +14,7 @@ scripts/cluster/bos14_simtoolreal_record.sh. By hand:
     cd <branch worktree>
     PYTHONPATH=$PWD:$PWD/rl_games .venv/isaacsim/bin/python \
         /home/yiboc/mit/task_curriculum_deployment/deploy/simtoolreal/checks/record_sim_rollout.py --headless \
-        --checkpoint pretrained_policy/nov6_dr.pth --out <dir>
+        --checkpoint pretrained_policy/flexiv_wuji/model.pth --out <dir>
 
 --sweep_coefs 50,40,30,20,10,0 then runs every SAPG block for --sweep_steps on all envs and reports
 goals reached and object falls per block.
@@ -38,7 +38,7 @@ def main() -> None:
 
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--checkpoint", required=True)
-    p.add_argument("--policy_config", default=str(DEPLOY_REPO / "pretrained_policy" / "config.yaml"))
+    p.add_argument("--policy_config", default=str(DEPLOY_REPO / "pretrained_policy" / "flexiv_wuji" / "config.yaml"))
     p.add_argument("--out", required=True)
     p.add_argument("--num_assets_per_type", type=int, default=2,
                    help="objects per size distribution; envs = this x 12 distributions")

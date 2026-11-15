@@ -45,7 +45,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--policy_config", default="pretrained_policy/config.yaml",
+    parser.add_argument("--policy_config", default="pretrained_policy/flexiv_wuji/config.yaml",
                         help="Any config.yaml of this network; only the network section is read.")
     parser.add_argument("--sapg_expl_coef", type=float, default=0.0)
     parser.add_argument("--num_envs", type=int, default=500)

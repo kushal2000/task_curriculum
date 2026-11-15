@@ -107,7 +107,7 @@ class Policy:
     """The rl_games SAPG LSTM checkpoint, one env, deterministic actions, SAPG block coefficient 0."""
 
     def __init__(self, checkpoint: str | Path, num_obs: int, num_actions: int,
-                 policy_config: str | Path = REPO / "pretrained_policy" / "config.yaml",
+                 policy_config: str | Path = REPO / "pretrained_policy" / "flexiv_wuji" / "config.yaml",
                  device: str = "cpu", expl_coef: float = 0.0) -> None:
         import torch
 

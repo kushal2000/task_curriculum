@@ -38,8 +38,8 @@ run:
 
 # --------------------------------------------------------------------------------------- policy
 policy:
-  checkpoint: pretrained_policy/nov6_dr.pth
-  config: pretrained_policy/config.yaml
+  checkpoint: pretrained_policy/flexiv_wuji/model.pth
+  config: pretrained_policy/flexiv_wuji/config.yaml
   expl_coef: 0.0            # SAPG block; 0 = the last block (task reward only)
   joint_state_max_age_s: 0.05   # stop when the newest joint_state is older (robot.py died / stalled)
 

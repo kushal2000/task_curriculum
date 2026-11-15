@@ -1,6 +1,6 @@
 # SimToolReal deploy: Flexiv Rizon 4s + right Wuji Hand 2
 
-Runs the SimToolReal Play policy (`pretrained_policy/nov6_dr.pth`: move a tool to a goal pose) on the
+Runs the SimToolReal Play policy (`pretrained_policy/flexiv_wuji/model.pth`: move a tool to a goal pose) on the
 real robot. Trained on branch `kushal/2026-10-30_pretraining_real`, task
 `Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0`.
 
@@ -59,7 +59,7 @@ The spec json (`spec/`) is not a setting: it is copied from the training env. Ne
   recorder.py and playback.py encode mp4s with).
 - The FoundationPose environment (conda env `foundationpose`, the `kushal2000/FoundationPose` checkout at
   `~/FoundationPose`), plus `pip install pyzmq omegaconf pyrealsense2`.
-- The checkpoint at `pretrained_policy/nov6_dr.pth` (gitignored).
+- The checkpoint at `pretrained_policy/flexiv_wuji/model.pth` (gitignored).
 - The robot meshes for the viewer: `scripts/flexiv_wuji/fetch_assets.sh` (the right hand is gitignored).
 - In `config.yaml`: `perception.foundationpose_dir` (the checkout) and `perception.extrinsics` (the
   camera pose from `deployment/calibration/calibrate_compare.py`; now `left_camera_nov7.json`, D415

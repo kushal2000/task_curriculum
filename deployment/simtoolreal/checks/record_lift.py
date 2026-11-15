@@ -99,7 +99,7 @@ def main() -> None:
 
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--checkpoint", required=True)
-    p.add_argument("--policy_config", default=str(DEPLOY_REPO / "pretrained_policy" / "config.yaml"))
+    p.add_argument("--policy_config", default=str(DEPLOY_REPO / "pretrained_policy" / "flexiv_wuji" / "config.yaml"))
     p.add_argument("--out", required=True)
     p.add_argument("--num_envs", type=int, default=64)
     p.add_argument("--steps", type=int, default=600, help="policy steps (60 Hz) in the rollout")

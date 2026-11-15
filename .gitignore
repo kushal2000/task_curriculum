@@ -47,8 +47,8 @@ deployment/calibration/captures/
 deployment/calibration/compare/
 deployment/calibration/extrinsics/
 
-# Downloaded artifacts (on portal, pretrained_policy is a symlink to
-# /share/portal/kk837/simtoolreal/pretrained_policy, hence no trailing slash).
+# Play priors, one folder per robot: pretrained_policy/{kuka_sharpa,flexiv_wuji}/{model.pth,config.yaml}
+# (model.pth is ~400 MB, over GitHub's file limit).
 /pretrained_policy
 pretrained_assembly/
 

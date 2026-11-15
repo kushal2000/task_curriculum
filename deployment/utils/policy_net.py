@@ -28,7 +28,7 @@ def load_network(checkpoint: Path, config: Path, expl_coef: float, num_actions: 
     per step, in order (the LSTM remembers past steps); net.reset_rnn() clears that memory.
 
     Built through the training repo's isaacsimenvs/eval/player.py (rl_games reads
-    pretrained_policy/config.yaml). SAPG trains several policy "blocks" that differ only in one extra
+    pretrained_policy/flexiv_wuji/config.yaml). SAPG trains several policy "blocks" that differ only in one extra
     input, the exploration coefficient; expl_coef 0.0 is the one trained on the task reward only.
     """
     # One CPU thread. The net is tiny (0.6 ms on 8 threads, 2 ms on 1, idle), but torch's default

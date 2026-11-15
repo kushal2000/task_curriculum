@@ -58,7 +58,7 @@ ROOT = Path(__file__).resolve().parents[2]
 #: generic prior is built in: trained runs live in this checkout's debug_outputs/train_logs/, so list them in a JSON menu
 #: ($LIVE_VISER_POLICIES, below) rather than here.
 POLICIES = {
-    "generic tool-use prior (untrained on folds)": ("pretrained_policy/model.pth", 50.0),
+    "generic tool-use prior (untrained on folds)": ("pretrained_policy/kuka_sharpa/model.pth", 50.0),
 }
 
 #: No network: every action 0 -- the arm holds its pose (velocity-delta actions), the hand goes to the
@@ -241,7 +241,7 @@ def _parse():
     p.add_argument("--even_sizes", type=int, default=1,
                    help="fold pool: space the per-env sheet sizes evenly over size_range instead of "
                         "drawing them, so env k is always the k-th size")
-    p.add_argument("--policy_config", default="pretrained_policy/config.yaml")
+    p.add_argument("--policy_config", default="pretrained_policy/kuka_sharpa/config.yaml")
     p.add_argument("--seed", type=int, default=0)
     return p
 
