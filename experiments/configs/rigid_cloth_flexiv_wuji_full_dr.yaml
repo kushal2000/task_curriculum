@@ -1,0 +1,102 @@
+# Rigid cloth, Flexiv Rizon 4s + right Wuji Hand 2 (identified hand), SimToolReal's DR.
+#
+# The cloth as hinged rigid plates (PhysX fold pool, all 7 shapes), trained on BOTH tasks: each
+# episode is a fold (start flat, fold the + half onto -) or an unfold (start with the + half folded
+# over, open it flat), half and half. The robot is the identified hand (FlexivWujiRightReal: sysid
+# dynamics, the real joint limits). Self-contained: no base: chain.
+#
+#   experiments/submit.sh --time=7-00:00:00 experiments/train.sh \
+#       --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 \
+#       --experiment rigid_cloth_flexiv_wuji_full_dr \
+#       --checkpoint pretrained_policy/flexiv_wuji/model.pth --checkpoint_load_mode weights \
+#       --single_variant agent.params.config.name=0_<run name>
+#
+# Variants are command-line overrides, not more files:
+#   fold only:            env.cloth.task=fold env.fold_pool.init_fold_prob=0.0
+#   camera-like object lags: env.domain_randomization.point_dr_mode=realistic
+#                         env.domain_randomization.use_object_state_delay_noise=false
+#                         (point lag/noise knobs: domain_randomization.point_* in play_env_cfg.py)
+#   robot physics:        env.domain_randomization.robot_stiffness_scale_range=[0.7,1.3]
+#                         env.domain_randomization.robot_damping_scale_range=[0.7,1.3]
+#                         env.domain_randomization.hand_friction_scale_range=[0.7,1.3]
+#                         env.domain_randomization.hand_effort_limit_scale_range=[0.85,1.15]
+#   action noise:         env.domain_randomization.action_noise_std=0.05
+#   no DR at all:         --pinned
+#
+# Provenance: flat7RW_allDR (stage 12, run 6) flattened, with fold+unfold, no epoch limit and its DR
+# observation/action DR replaced by SimToolReal's (no point DR, no action noise) and no robot-physics DR.
+# The plate physics DR (friction, hinge, mass, contact margin) is kept.
+task: Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0
+
+env:
+  scene:
+    num_envs: 24576
+
+  cloth:
+    task: mixed                  # fold and unfold episodes; the episode's task sets its start and target
+    unfold_prob: 0.5
+    nan_policy: reset
+    start_height: 0.20           # at 0.30 the sheet spawns among the fingertips
+    soft_contact_mu: 0.265
+
+  fold_pool:
+    shapes: [box2-mid, box2diag4-mid, box2x8-mid, cross4-mid, corners8-mid, box4-mid, star8-mid]
+    one_shape_per_env: true
+    # mixed needs these: unfold episodes start with the target half fold turned up, by 90-180 deg.
+    init_fold_starts: target
+    init_fold_prob: 1.0
+    init_fold_deg: [90.0, 180.0]
+
+  reset:
+    table_reset_z_range: 0.015
+
+  # Contact frictions measured 2026-11-10: plates 1.0, robot 0.5, table 1.0.
+  assets:
+    finger_tip_friction: 0.5
+    table_friction: 1.0
+  rigid_cloth:
+    slat_friction: 1.0
+    fingertip_slat_friction: 0.364
+    contact_margin: 0.0015
+    randomization:               # plate physics
+      contact_margin_offset: [-0.001, 0.001]
+      slat_friction_scale: [0.7, 1.5]
+      fingertip_friction_scale: [0.7, 1.3]
+      table_friction_scale: [0.7, 1.3]
+      hinge_damping_scale: [0.5, 3.0]
+      hinge_stiffness: [0.0, 5.0e-4]
+      mass_scale: [0.7, 1.5]
+  physx_chain:
+    friction_model: cloth_min    # plates min at 1.0; robot 0.5 / table 1.0 average-mode
+
+  domain_randomization:
+    # SimToolReal's Play DR (Play.yaml's defaults): observation and action delay, object-state delay
+    # and noise, joint-velocity noise.
+    use_obs_delay: true
+    obs_delay_max: 3                     # lags 0-2 steps
+    use_action_delay: true
+    action_delay_max: 3
+    use_object_state_delay_noise: true
+    object_state_delay_max: 10
+    object_state_xyz_noise_std: 0.01     # m
+    object_state_rotation_noise_degrees: 5.0
+    joint_velocity_obs_noise_std: 0.1
+    point_dr_mode: "off"                 # the point-level camera model: an override (header)
+    # Robot physics: not randomized (1.0 = the robot spec's value).
+    robot_stiffness_scale_range: [1.0, 1.0]
+    robot_damping_scale_range: [1.0, 1.0]
+    hand_friction_scale_range: [1.0, 1.0]
+    hand_effort_limit_scale_range: [1.0, 1.0]
+
+agent:
+  params:
+    config:
+      multi_gpu: false
+      max_epochs: -1                     # no limit
+      minibatch_size: 24576
+      central_value_config:
+        minibatch_size: 24576
+      expl_coef_block_size: 4096         # num_envs / 6 SAPG blocks
+      best_save_min_interval_s: 60
+      periodic_save_every: 100
+      snapshot_every: 100

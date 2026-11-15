@@ -35,7 +35,6 @@ debug_outputs/
 /wandb/
 /slurm_logs/
 /videos/
-/experiments/
 /.usd_cache/
 /.pytest_cache/
 /.ruff_cache/

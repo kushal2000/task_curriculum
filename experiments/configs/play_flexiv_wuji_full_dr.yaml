@@ -1,0 +1,61 @@
+# Play pretraining, Flexiv Rizon 4s + right Wuji Hand 2 (identified hand), SimToolReal's DR.
+#
+# SimToolReal's rigid-object goal reaching: the tool-use prior every cloth policy starts from. The
+# setup is the one the right-Wuji Play priors were trained on (run play_scratch_flexiv_right_dr_cont_41213):
+# PlayFlexivWujiRightHumanLike.yaml's table (table_narrow_flexiv.urdf), robot base and reset ranges,
+# with the robot swapped to the identified hand (FlexivWujiRightReal: sysid dynamics, real joint
+# limits). Self-contained: no base: chain.
+#
+#   experiments/submit.sh --time=7-00:00:00 --cpus-per-task=4 --mem=80G experiments/train.sh \
+#       --task Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0 --experiment play_flexiv_wuji_full_dr \
+#       --checkpoint pretrained_policy/flexiv_wuji/model.pth --checkpoint_load_mode weights \
+#       agent.params.config.name=0_<run name>
+#
+# More DR is a command-line override, not another file:
+#   camera-like object lags: env.domain_randomization.point_dr_mode=realistic
+#                         env.domain_randomization.use_object_state_delay_noise=false
+#                         (point lag/noise knobs: domain_randomization.point_* in play_env_cfg.py)
+#   robot physics:        env.domain_randomization.robot_stiffness_scale_range=[0.7,1.3]
+#                         env.domain_randomization.robot_damping_scale_range=[0.7,1.3]
+#                         env.domain_randomization.hand_friction_scale_range=[0.7,1.3]
+#                         env.domain_randomization.hand_effort_limit_scale_range=[0.85,1.15]
+#   action noise:         env.domain_randomization.action_noise_std=0.05
+#   stronger pushes:      env.domain_randomization.force_scale=20.0 env.domain_randomization.torque_scale=2.0 (SimToolReal's)
+#   no DR at all:         --pinned
+#
+# Provenance: the 41213 run's overrides (24576 envs, force 5 / torque 1, 1 cm tolerances) and no epoch limit.
+task: Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0
+
+env:
+  scene:
+    num_envs: 24576
+
+  termination:
+    success_tolerance: 0.01
+    target_success_tolerance: 0.01
+
+  domain_randomization:
+    # SimToolReal's Play DR (Play.yaml's defaults): observation and action delay, object-state delay
+    # and noise, joint-velocity noise.
+    use_obs_delay: true
+    obs_delay_max: 3                     # lags 0-2 steps
+    use_action_delay: true
+    action_delay_max: 3
+    use_object_state_delay_noise: true
+    object_state_delay_max: 10
+    object_state_xyz_noise_std: 0.01     # m
+    object_state_rotation_noise_degrees: 5.0
+    joint_velocity_obs_noise_std: 0.1
+    point_dr_mode: "off"                 # the point-level camera model: an override (header)
+    force_scale: 5.0                     # object pushes at the 41213 run's strength
+    torque_scale: 1.0
+    # Robot physics: not randomized (1.0 = the robot spec's value).
+    robot_stiffness_scale_range: [1.0, 1.0]
+    robot_damping_scale_range: [1.0, 1.0]
+    hand_friction_scale_range: [1.0, 1.0]
+    hand_effort_limit_scale_range: [1.0, 1.0]
+
+agent:
+  params:
+    config:
+      max_epochs: -1                     # no limit
