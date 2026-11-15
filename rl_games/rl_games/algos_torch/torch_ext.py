@@ -1,3 +1,5 @@
+import sys
+import contextlib
 import os
 import numpy as np
 import torch
@@ -80,33 +82,49 @@ def safe_symlink(src, dst):
 def safe_save(state, filename):
     return safe_filesystem_op(torch.save, state, filename)
 
-def _alias_numpy2_modules():
-    """Let numpy 1.x unpickle checkpoints written under numpy 2.x.
+@contextlib.contextmanager
+def _numpy2_aliases():
+    """Let numpy 1.x unpickle checkpoints written under numpy 2.x -- for the load only.
 
     A checkpoint's pickle names numpy scalars by module path, and numpy 2 renamed
     ``numpy.core`` to ``numpy._core``. The Newton venv runs numpy 2 and the Isaac Sim (PhysX)
     venv numpy 1.26, so without this a policy trained on one cannot be loaded on the other
     ("No module named 'numpy._core'"). The reverse direction needs nothing: numpy 2 still
     resolves ``numpy.core``.
-    """
-    import sys
 
+    The aliases MUST be removed after the load. Left in ``sys.modules``, they make every C
+    extension built against numpy 2 (pandas, scipy, shapely, ... -- wheels that try
+    ``numpy._core`` before ``numpy.core``) find ``numpy._core`` and load numpy's C core a second
+    time, which corrupts the interpreter: ``SystemError: Objects/structseq.c:476``, then ``str * int``
+    dispatching to a numpy ufunc. That hung both 2026-11-14 7-day runs (started from a checkpoint)
+    at their first wandb viewer log, which is the first import of such an extension.
+    """
     import numpy
 
     if hasattr(numpy, "_core") or "numpy._core" in sys.modules:
+        yield
         return
     import numpy.core
     import numpy.core.multiarray
     import numpy.core.numeric
 
-    sys.modules["numpy._core"] = numpy.core
-    sys.modules["numpy._core.multiarray"] = numpy.core.multiarray
-    sys.modules["numpy._core.numeric"] = numpy.core.numeric
+    aliases = {
+        "numpy._core": numpy.core,
+        "numpy._core.multiarray": numpy.core.multiarray,
+        "numpy._core.numeric": numpy.core.numeric,
+    }
+    sys.modules.update(aliases)
+    try:
+        yield
+    finally:
+        for name, mod in aliases.items():
+            if sys.modules.get(name) is mod:
+                del sys.modules[name]
 
 
 def safe_load(filename):
-    _alias_numpy2_modules()
-    return safe_filesystem_op(torch.load, filename, weights_only=False, map_location='cpu')
+    with _numpy2_aliases():
+        return safe_filesystem_op(torch.load, filename, weights_only=False, map_location='cpu')
 
 def save_checkpoint(filename, state):
     print("=> saving checkpoint '{}'".format(filename + '.pth'))
