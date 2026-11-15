@@ -1,0 +1,102 @@
+# Build aioflexiv's sdist and publish it to PyPI when a version tag is pushed.
+#
+# To release: bump the version in pyproject.toml, commit, then tag and push:
+#
+#     git tag -a v0.3.0 -m "aioflexiv 0.3.0" && git push origin main v0.3.0
+#
+# PyPI gets the sdist only, as before: the RT shim is compiled where aioflexiv is installed, and
+# it resolves flexivrdk's C++ symbols when it loads. Before publishing, the sdist is installed in
+# a fresh venv on Linux and on macOS, the shim is loaded next to flexivrdk, and the tests run
+# against that install. Running the workflow by hand (Actions > Release > Run workflow) only
+# builds and checks the sdist.
+#
+# PyPI accepts it through trusted publishing: pypi.org > aioflexiv > Settings > Publishing has a
+# GitHub publisher for younghyopark/aioflexiv, workflow release.yml, environment pypi.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that the tag is the package's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME is not pyproject.toml's version $version"
+            exit 1
+          fi
+
+      - name: Build the sdist
+        run: pipx run build --sdist --outdir dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*
+
+  check:
+    name: install on ${{ matrix.os }}
+    needs: sdist
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]  # macos-latest is Apple Silicon
+    steps:
+      - uses: actions/checkout@v7  # for the tests
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"  # flexivrdk 1.9.1 has wheels for 3.12 on both
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdist
+          path: dist
+
+      - name: Install the sdist in a fresh venv
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install dist/*.tar.gz
+
+      - name: Load the RT shim next to flexivrdk
+        run: python -c "import aioflexiv; aioflexiv.load_rt()"
+
+      - name: Run the tests against the install
+        # Outside the checkout's root, where its models/ would be found instead of the installed ones.
+        working-directory: tests
+        run: python -m unittest discover
+
+      - name: Run the CLI
+        run: aioflexiv gravcomp --help
+
+  publish:
+    name: publish to PyPI
+    needs: [sdist, check]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/aioflexiv/
+    permissions:
+      id-token: write  # trusted publishing
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdist
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

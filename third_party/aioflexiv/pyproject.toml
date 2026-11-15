@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "pybind11>=2.11"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aioflexiv"
+version = "0.3.0"
+description = "Experimental Python-owned Flexiv RT torque-control shim"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Younghyo Park" }]
+dependencies = [
+    "flexivrdk==1.9.1",
+    "mujoco",
+    "numpy",
+    "ruckig",
+]
+
+[project.scripts]
+aioflexiv = "aioflexiv.__main__:main"
+aioflexiv-zero-torque = "aioflexiv.zero_torque:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

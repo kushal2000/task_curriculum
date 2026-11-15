@@ -1,0 +1,56 @@
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""Package for environment wrappers to different learning frameworks.
+
+Wrappers allow you to modify the behavior of an environment without modifying the environment itself.
+This is useful for modifying the observation space, action space, or reward function. Additionally,
+they can be used to cast a given environment into the respective environment class definition used by
+different learning frameworks. This operation may include handling of asymmetric actor-critic observations,
+casting the data between different backends such `numpy` and `pytorch`, or organizing the returned data
+into the expected data structure by the learning framework.
+
+All wrappers work similar to the :class:`gymnasium.Wrapper` class. Using a wrapper is as simple as passing
+the initialized environment instance to the wrapper constructor. However, since learning frameworks
+expect different input and output data structures, their wrapper classes are not compatible with each other.
+Thus, they should always be used in conjunction with the respective learning framework.
+
+The package also provides the unified training and playback entrypoints used by the
+``scripts/reinforcement_learning`` executables. See :mod:`isaaclab_rl.entrypoints` for details.
+"""
+
+import importlib.metadata
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .entrypoints import PlaybackRequest, SimpleAgentRequest, TrainingRequest
+
+try:
+    __version__ = importlib.metadata.version("isaaclab_rl")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.0.0"
+__all__ = [
+    "PlaybackRequest",
+    "SimpleAgentRequest",
+    "TrainingRequest",
+    "play",
+    "random_agent",
+    "run_play_cli",
+    "run_random_agent_cli",
+    "run_train_cli",
+    "run_train_multigpu_cli",
+    "run_zero_agent_cli",
+    "train",
+    "zero_agent",
+]
+
+
+def __getattr__(name: str):
+    """Lazily expose unified reinforcement learning entrypoint APIs."""
+    if name in __all__:
+        from . import entrypoints
+
+        return getattr(entrypoints, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
