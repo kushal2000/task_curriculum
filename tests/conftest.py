@@ -36,25 +36,6 @@ def load_module(rel_path: str, name: str | None = None):
 
 
 @pytest.fixture(scope="session")
-def gen_cartpole():
-    return load_module(
-        "isaacsimenvs/tasks/multilink_cartpole/utils/generate_cartpole.py", "gen_cartpole"
-    )
-
-
-@pytest.fixture(scope="session")
-def gen_bottle():
-    return load_module("isaacsimenvs/tasks/bottle_flip/utils/generate_bottle.py", "gen_bottle")
-
-
-@pytest.fixture(scope="session")
-def difficulty_math():
-    return load_module(
-        "isaacsimenvs/tasks/multilink_cartpole/utils/difficulty_math.py", "difficulty_math"
-    )
-
-
-@pytest.fixture(scope="session")
 def schedulers():
     return load_module("isaacsimenvs/curriculum/schedulers.py", "schedulers")
 

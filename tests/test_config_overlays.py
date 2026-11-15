@@ -48,18 +48,6 @@ PLAY_CFG = "isaacsimenvs/tasks/play/play_env_cfg.py"
 # definition of a class name wins, so a task's own `RewardCfg` shadows play's.
 CASES = [
     pytest.param(
-        "isaacsimenvs/cfg/task/MultiLinkCartpole.yaml",
-        "MultiLinkCartpoleEnvCfg",
-        ["isaacsimenvs/tasks/multilink_cartpole/multilink_cartpole_env_cfg.py", CURRICULUM_CFG],
-        id="MultiLinkCartpole",
-    ),
-    pytest.param(
-        "isaacsimenvs/cfg/task/BottleFlip.yaml",
-        "BottleFlipEnvCfg",
-        ["isaacsimenvs/tasks/bottle_flip/bottle_flip_env_cfg.py", PLAY_CFG, CURRICULUM_CFG],
-        id="BottleFlip",
-    ),
-    pytest.param(
         "isaacsimenvs/cfg/task/Play.yaml", "PlayEnvCfg", [PLAY_CFG], id="Play",
     ),
 ]
@@ -137,28 +125,6 @@ def test_every_yaml_key_maps_to_a_config_field(yaml_rel, root_cls, modules):
             ]
 
     assert not problems, f"{yaml_rel}:\n  " + "\n  ".join(problems)
-
-
-def test_cartpole_link_lengths_match_n_max():
-    """`n_max` sets the observation width and `link_lengths` sets the geometry; if they
-    disagree the env raises at scene setup, so catch it in the config instead."""
-    overlay = yaml.safe_load(
-        (REPO_ROOT / "isaacsimenvs/cfg/task/MultiLinkCartpole.yaml").read_text()
-    )
-    geometry = overlay["geometry"]
-    assert len(geometry["link_lengths"]) == geometry["n_max"]
-
-
-def test_curriculum_ranges_are_ordered_and_bounded():
-    for rel in ("isaacsimenvs/cfg/task/MultiLinkCartpole.yaml",
-                "isaacsimenvs/cfg/task/BottleFlip.yaml"):
-        curriculum = yaml.safe_load((REPO_ROOT / rel).read_text())["curriculum"]
-        for key in ("init_range", "final_range"):
-            lo, hi = curriculum[key]
-            assert 0.0 <= lo <= hi <= 1.0, f"{rel}: {key}={curriculum[key]} outside [0, 1]"
-        # The adaptive scheduler clamps range_hi into [init_range[1], final_range[1]],
-        # so an init ceiling above the final one would freeze the curriculum immediately.
-        assert curriculum["init_range"][1] <= curriculum["final_range"][1], rel
 
 
 # --- cfg/experiment/: run recipes layered over a task YAML (train.py --experiment) ---------------

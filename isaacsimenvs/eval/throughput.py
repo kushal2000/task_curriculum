@@ -35,7 +35,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--task",
-        default="Isaacsimenvs-Cable-Direct-v0",
+        default="Isaacsimenvs-Cloth-Direct-v0",
         help="gym id to benchmark. The scene, not the harness, decides what is measured.",
     )
     parser.add_argument("--num_envs", type=int, default=64)
@@ -212,18 +212,8 @@ def main() -> None:
             "task": args_cli.task,
         }
         # Record the knobs that actually set the cost, per scene. Without these a JSON is a bare
-        # number with no way to tell which configuration produced it -- and the cable files on
-        # disk predate a `task` field entirely, so they were only identifiable by the presence of
-        # `segments`.
-        cable = getattr(inner.cfg, "cable", None)
+        # number with no way to tell which configuration produced it.
         cloth = getattr(inner.cfg, "cloth", None)
-        if cable is not None:
-            result.update(
-                segments=int(cable.segments),
-                substeps=int(cable.cable_substeps),
-                vbd_iterations=int(cable.vbd_iterations),
-                proxy_mode=str(cable.proxy_mode),
-            )
         if cloth is not None:
             result.update(
                 resolution=int(cloth.resolution),
