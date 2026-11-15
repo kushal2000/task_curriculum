@@ -3,7 +3,7 @@ aioflexiv's Python torque loop (same reason as live_viser.py).
 
 The arm holds its pose in joint impedance with the sim's gains (ArmIO, as run_real.py), or is in free
 drive: no stiffness, light damping, the robot's gravity compensation on, so it can be moved by hand; a
-soft wall before each joint limit keeps it out of Flexiv's abrupt soft limits (deploy/utils/free_drive.py).
+soft wall before each joint limit keeps it out of Flexiv's abrupt soft limits (deployment/utils/free_drive.py).
 The hand is not connected: its joints stay at the spec's default_q.
 
     robot = RobotProcess(spec, arm="<ROBOT_SN>" | "mujoco" | "none")
@@ -84,8 +84,8 @@ def _serve(buf, err, stop, arm: str, q_start, kp, kd, free_kd, viewer: bool, low
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from deploy.joint_reach.run_real import ArmIO
-    from deploy.utils.free_drive import blend_gains, wall_gains
+    from deployment.joint_reach.run_real import ArmIO
+    from deployment.utils.free_drive import blend_gains, wall_gains
 
     na = len(kp)
 

@@ -1,6 +1,6 @@
 """Upload engaging_fabric_finetune.sh runs (TensorBoard logs) to W&B, with their fabric-eval results.
 
-    WANDB_BASE_URL=https://api.forge.coreweave.com .venv_isaaclab3/bin/python -I \
+    WANDB_BASE_URL=https://api.forge.coreweave.com .venv/isaaclab3/bin/python -I \
         scripts/analysis/ftfab_to_wandb.py --job 28276252 [--fabrics denim cotton]
 
 One W&B run per fabric, id `ftfab_<fabric>_<job>`. A preempted task that restarted from the prior
@@ -23,7 +23,7 @@ from pathlib import Path
 
 FABRICS = ["big_napkin", "chiffon", "cotton", "denim", "napkin", "silk", "towel"]
 COEFS = [50, 40, 30, 20, 10, 0]
-RES = Path("outputs/results/px_matrix")
+RES = Path("debug_outputs/train_logs/results/px_matrix")
 PRIOR = "checkpoints/last_0_pxpool_flat7DRABC_s1_175385_ep_3052_rew__1198.3557_.pth"
 FRAMES_PER_EPOCH = 768 * 32
 
@@ -72,7 +72,7 @@ def run_dir(fabric: str, job: str) -> Path | None:
     from tensorboard.backend.event_processing.event_accumulator import EventAccumulator as EA
 
     best, best_n = None, -1
-    for d in glob.glob(f"outputs/*/*/0_ftfab_{fabric}_{job}"):
+    for d in glob.glob(f"debug_outputs/train_logs/*/*/0_ftfab_{fabric}_{job}"):
         ev = glob.glob(f"{d}/summaries/events.out.tfevents*")
         if not ev:
             continue
@@ -103,7 +103,7 @@ def upload(fabric: str, job: str, args) -> None:
     nn = sorted(p.name for p in (d / "nn").glob("*.pth"))
     finished = any(n.startswith("last_") for n in nn)
     overrides = subprocess.run(
-        [".venv_isaaclab3/bin/python", "-I", "isaacsimenvs/tasks/cloth/utils/fabrics.py",
+        [".venv/isaaclab3/bin/python", "-I", "isaacsimenvs/tasks/cloth/utils/fabrics.py",
          f"{fabric}_measured", "--plastic"], capture_output=True, text=True).stdout.split()
     config = {
         "fabric": fabric, "preset": f"{fabric}_measured", "plasticity": True,

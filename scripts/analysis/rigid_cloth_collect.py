@@ -11,7 +11,7 @@ Three tables, from three sources, because the claim has three parts and they fai
                  cloth. This is the one that decides whether a rigid approximation is *useful*, as
                  opposed to merely trainable.
 
-    .venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_collect.py --job 155018
+    .venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_collect.py --job 155018
 """
 
 from __future__ import annotations
@@ -167,8 +167,8 @@ def _fmt(v, nd=4):
 def main() -> None:
     p = argparse.ArgumentParser(description="Collate the rigid-cloth comparison.")
     p.add_argument("--job", required=True, help="training array job id")
-    p.add_argument("--logs", default="outputs/slurm")
-    p.add_argument("--results", default="outputs/results")
+    p.add_argument("--logs", default="debug_outputs/train_logs/slurm")
+    p.add_argument("--results", default="debug_outputs/train_logs/results")
     p.add_argument(
         "--eval_prefix",
         default="rc_eval_",
@@ -218,7 +218,7 @@ def main() -> None:
               f"{int(ep)}/{tot:<9} {wall_h:<9} {done}/{len(rows)}")
     print("\n* still running: rl_games' figure, which overstates a fast env by up to 2x.")
 
-    curves = read_curves(args.job, REPO_ROOT / "outputs")
+    curves = read_curves(args.job, REPO_ROOT / "debug_outputs" / "train_logs")
     if curves:
         print("\n## Learning on its OWN manipuland (first decile -> last decile, mean over seeds)\n")
         print(f"{'arm':<14} {'seeds':<6} {'fold_rate':<20} {'fold_err_mean (m)':<24} "

@@ -1,7 +1,7 @@
 """CoTracker3 on a real cloth, in an OpenCV window: three ways to get the fold's keypoints from tracked
 points, to compare before any of it feeds the policy. No robot, no ZMQ.
 
-    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/checks/cloth_track_view.py --mode grid
+    ~/miniconda3/envs/cotracker/bin/python deployment/rigid2deform/checks/cloth_track_view.py --mode grid
 (cloth_tracker.py is the pipeline's version: the same clicks, then object_points for the policy.)
     ... --mode fit                      # or kp8; --save DIR keeps an overlay mp4 + an npz per run
 
@@ -48,10 +48,10 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
-from deploy.rigid2deform.fold import fold_geometry, observe, rotation_angle, score  # noqa: E402
-from deploy.rigid2deform.sheets.cloth_points import fit_half, wkabsch  # noqa: E402  (the policy's own fits)
+from deployment.rigid2deform.fold import fold_geometry, observe, rotation_angle, score  # noqa: E402
+from deployment.rigid2deform.sheets.cloth_points import fit_half, wkabsch  # noqa: E402  (the policy's own fits)
 
-SPEC = REPO / "deploy/rigid2deform/spec/spec_flexiv_wuji_right_fold.json"
+SPEC = REPO / "deployment/rigid2deform/spec/spec_flexiv_wuji_right_fold.json"
 WINDOW = "cloth tracking"
 CORNER_LABELS = ["S far A", "S far B", "M far B", "M far A"]
 KP8_LABELS = ["S far A", "S far B", "S near A", "S near B", "M near A", "M near B", "M far A", "M far B"]

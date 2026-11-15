@@ -1,10 +1,10 @@
 """Read a task's config.yaml and apply command-line overrides.
 
-Each task folder has one complete config (deploy/simtoolreal/config.yaml, deploy/rigid2deform/config.yaml).
-A task's run.py loads its own; the shared nodes (deploy/nodes/) are told which one with config=<path>
+Each task folder has one complete config (deployment/simtoolreal/config.yaml, deployment/rigid2deform/config.yaml).
+A task's run.py loads its own; the shared nodes (deployment/nodes/) are told which one with config=<path>
 (run.py passes it on when it starts them):
 
-    python deploy/nodes/perception.py config=deploy/rigid2deform/config.yaml perception.source=fake
+    python deployment/nodes/perception.py config=deployment/rigid2deform/config.yaml perception.source=fake
 
 Each other override must name a key that already exists in that config, so a typo stops the run
 instead of being silently ignored. The loaded config carries its own path as `config` (repo-relative),
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from omegaconf import DictConfig, OmegaConf
 
-HERE = Path(__file__).resolve().parent      # deploy/utils
+HERE = Path(__file__).resolve().parent      # deployment/utils
 REPO = HERE.parents[1]                      # repo root; paths in a config are relative to it
 
 
@@ -29,7 +29,7 @@ def load_config(overrides: list[str] | None = None, path: Path | str | None = No
     overrides = [o for o in overrides if not o.startswith("config=")]
     if path is None:
         if not given:
-            raise SystemExit("config=<path> missing, e.g. config=deploy/simtoolreal/config.yaml "
+            raise SystemExit("config=<path> missing, e.g. config=deployment/simtoolreal/config.yaml "
                              "(a task's run.py passes it to the nodes it starts)")
         path = given[-1]
     path = (REPO / path).resolve() if not Path(path).is_absolute() else Path(path)
@@ -69,5 +69,5 @@ def repo_path(p: str) -> Path:
 
 
 if __name__ == "__main__":
-    # python deploy/utils/config.py config=deploy/simtoolreal/config.yaml robot.mode=home  -> the final config
+    # python deployment/utils/config.py config=deployment/simtoolreal/config.yaml robot.mode=home  -> the final config
     print(OmegaConf.to_yaml(load_config()))

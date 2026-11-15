@@ -1,9 +1,9 @@
 """Check the deploy code against a rollout recorded in the training env (checks/record_sim_rollout.py):
 the same inputs must give the same numbers.
 
-    .venv_deploy/bin/python deploy/simtoolreal/checks/check_rec1.py [config overrides]
+    .venv_deploy/bin/python deployment/simtoolreal/checks/check_rec1.py [config overrides]
     # on this machine the checkpoint is elsewhere:
-    .venv_deploy/bin/python deploy/simtoolreal/checks/check_rec1.py policy.checkpoint=nov6_dr.txt
+    .venv_deploy/bin/python deployment/simtoolreal/checks/check_rec1.py policy.checkpoint=nov6_dr.txt
 
 1. FK, observation, action -> targets, success distance: every EVERY-th step of all 24 envs.
 2. Network: every step of the first NET_ENVS envs, the LSTM run in order (memory reset at each episode).
@@ -17,15 +17,15 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))   # repo root, for deploy.*
-from deploy.simtoolreal.goals import _volume, first_goal, next_goal, object_corners          # noqa: E402
-from deploy.utils.config import load_config, object_meshes, repo_path                         # noqa: E402
-from deploy.utils.observation import build_obs, keypoint_distance, obs_fields                 # noqa: E402
-from deploy.utils.policy_net import action_to_targets, load_network                           # noqa: E402
-from deploy.utils.quat import quat_apply, quat_conj, quat_mul                                     # noqa: E402
-from deploy.utils.robot_model import link_pose, load_robot_model                                  # noqa: E402
-from deploy.utils.spec import load_spec                                                           # noqa: E402
+from deployment.simtoolreal.goals import _volume, first_goal, next_goal, object_corners          # noqa: E402
+from deployment.utils.config import load_config, object_meshes, repo_path                         # noqa: E402
+from deployment.utils.observation import build_obs, keypoint_distance, obs_fields                 # noqa: E402
+from deployment.utils.policy_net import action_to_targets, load_network                           # noqa: E402
+from deployment.utils.quat import quat_apply, quat_conj, quat_mul                                     # noqa: E402
+from deployment.utils.robot_model import link_pose, load_robot_model                                  # noqa: E402
+from deployment.utils.spec import load_spec                                                           # noqa: E402
 
-REC = "outputs/results/simtoolreal/rec1/rollout.npz"
+REC = "debug_outputs/train_logs/results/simtoolreal/rec1/rollout.npz"
 EVERY = 10
 NET_ENVS = 4
 

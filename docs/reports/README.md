@@ -87,7 +87,7 @@ better.** Best so far: the shape pool trained straight from the generic prior (r
 
 Cloth score = zero-shot on the Newton VBD cloth, 3 training seeds pooled, in the order 4 cm pinned /
 4 cm rand / 1.5 cm pinned / 1.5 cm rand. "—" = not measured. Checkpoints are under
-`outputs/<date>/<time>/<name>/nn/`.
+`debug_outputs/train_logs/<date>/<time>/<name>/nn/`.
 
 | run (name prefix) | job | sim / task | start | steps | cloth score | report |
 |---|---|---|---|---|---|---|

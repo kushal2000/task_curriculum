@@ -3,7 +3,7 @@
 Run it on both robots and compare; with randomization off, both start in their default pose, which
 viser_compare.py matched hand-to-hand, so their palm centres should coincide.
 
-    OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python scripts/flexiv_wuji/smoke_env.py \
+    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python scripts/flexiv_wuji/smoke_env.py \
         --task Isaacsimenvs-PlayFlexivWuji-Direct-v0 --headless [--out report.json]
 
 Reports, for env 0 unless noted:

@@ -11,7 +11,7 @@ where objects rest, and solves IK for the policy's palm centre (``RobotSpec.palm
 Reports the reachable fraction per region and condition, for both robots, from several IK starts
 (the default pose plus random ones). Unreachable points are listed for the Flexiv.
 
-    .venv_isaaclab3/bin/python scripts/flexiv_wuji/reachability.py [--out report.json]
+    .venv/isaaclab3/bin/python scripts/flexiv_wuji/reachability.py [--out report.json]
 """
 
 from __future__ import annotations

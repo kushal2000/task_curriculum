@@ -23,9 +23,9 @@ the geometry cannot tell you:
 
 MuJoCo only -- no Kit, no Newton, no GPU:
 
-    .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe
-    .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --variant box3-mid
-    .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --all --json out.json
+    .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe
+    .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --variant box3-mid
+    .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --all --json out.json
 
 ``--stiffness`` is applied to ``model.jnt_stiffness`` after compilation rather than written into the
 URDF, because URDF has no spring element at all: on the Isaac Lab side the same number goes on the

@@ -2,7 +2,7 @@
 
     python3 scripts/analysis/px_eval_matrix_summary.py one_flat one_initfold box3 [--md docs/reports/4_physx/eval_matrix.md]
 
-Reads outputs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json and
+Reads debug_outputs/train_logs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json and
 prints, per cell, the held folds of each training seed (summed over the two eval seeds) and the share
 over all seeds. A missing file shows as "?" so an unfinished or failed task cannot pass as a zero. A
 target with no file at all for a tag (the 7-shape targets before 2026-10-12) is left out.
@@ -31,7 +31,7 @@ def cell(tag: str, target: str, start: str, cut: str) -> str:
     parts, held_all, n_all = [], 0, 0
     for seed in (1, 2, 3):
         held = n = 0
-        files = sorted(glob.glob(f"outputs/results/px_matrix/{tag}_s{seed}__on_{target}__{start}__{cut}_s*.json"))
+        files = sorted(glob.glob(f"debug_outputs/train_logs/results/px_matrix/{tag}_s{seed}__on_{target}__{start}__{cut}_s*.json"))
         for path in files:
             d = json.load(open(path))
             held += int(d["termination_reasons"].get("fold_held", 0))
@@ -58,7 +58,7 @@ def main() -> None:
         out.append("| target | " + " | ".join(f"{c} {s}" for s, c in COLS) + " |")
         out.append("|---|" + "---|" * len(COLS))
         for key, name in TARGETS:
-            if not glob.glob(f"outputs/results/px_matrix/{tag}_s[123]__on_{key}__*.json"):
+            if not glob.glob(f"debug_outputs/train_logs/results/px_matrix/{tag}_s[123]__on_{key}__*.json"):
                 continue
             out.append(f"| {name} | " + " | ".join(cell(tag, key, s, c) for s, c in COLS) + " |")
         out.append("")

@@ -7,7 +7,7 @@ tune them in ``viser_compare.py`` and paste the printed values back here.
 The Kuka iiwa14 + Sharpa model it is compared against, and the RL env's placement of robot and
 table, are mirrored as constants below so this script runs without Isaac Lab.
 
-Pure numpy + stdlib + yourdfpy, run with ``.venv_isaaclab3/bin/python``.
+Pure numpy + stdlib + yourdfpy, run with ``.venv/isaaclab3/bin/python``.
 
     python scripts/flexiv_wuji/flexiv_wuji.py   # write COMPOSED_URDF and HUMAN_LIKE_URDF with MOUNT_*
 """
@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ASSET_DIR = REPO_ROOT / "assets" / "flexiv_wuji"
+ASSET_DIR = REPO_ROOT / "assets" / "urdf" / "flexiv_wuji"
 
 FLEXIV_URDF = ASSET_DIR / "flexiv_description" / "urdf" / "Rizon4s.urdf"
 WUJI_URDF = ASSET_DIR / "wuji_hand2" / "urdf" / "left_with_mount.urdf"
@@ -85,7 +85,7 @@ HUMAN_LIKE_LIMITS_DEG: dict[str, tuple[float | None, float | None]] = {
     "l_thumb_ip": (-15.0, None),
 }
 #: The right hand's: the same joints with r_ names. Its finger axes are flipped with its mirrored
-#: frames, so positive is flexion there too (tests/test_robot_specs.py checks it by FK).
+#: frames, so positive is flexion there too (isaacsimenvs/tasks/play/tests/test_robot_specs.py checks it by FK).
 HUMAN_LIKE_LIMITS_DEG_RIGHT = {"r_" + name[2:]: lim for name, lim in HUMAN_LIKE_LIMITS_DEG.items()}
 
 # --- The RL env (isaacsimenvs/tasks/play), mirrored so this runs without Isaac Lab -----------

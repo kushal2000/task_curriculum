@@ -7,7 +7,7 @@ Raw: `docs/results/phase1_play_physx_64env{,_s1,_s2}.json`.
 ```bash
 export OMNI_KIT_ACCEPT_EULA=YES
 for s in 0 1 2; do
-  .venv_isaacsim/bin/python isaacsimenvs/eval/episodes.py \
+  .venv/isaacsim/bin/python isaacsimenvs/eval/episodes.py \
     --task Isaacsimenvs-Play-Direct-v0 --num_envs 64 --num_assets_per_type 4 \
     --max_steps 12000 --seed $s --headless \
     --out docs/results/phase1_play_physx_64env_s$s.json

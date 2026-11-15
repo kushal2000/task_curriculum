@@ -29,7 +29,7 @@ Reports, per variant:
     rest_um     FK cloud vs the analytic flat grid, MICROMETRES. A pure self-check of the
                 mapping; any non-zero value means the rest of the row is meaningless.
 
-    .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_task_check
+    .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_task_check
 """
 
 from __future__ import annotations

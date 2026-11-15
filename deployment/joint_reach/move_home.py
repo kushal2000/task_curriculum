@@ -5,8 +5,8 @@ posture, not the pose the policy was trained around. This moves to default_q fro
 the same joint impedance gains and Ruckig move run_real.py uses for its start pose. The hand is not
 touched.
 
-    python deploy/joint_reach/move_home.py --arm mujoco --viewer   # check the pose in MuJoCo first
-    python deploy/joint_reach/move_home.py --arm <ROBOT_SN>
+    python deployment/joint_reach/move_home.py --arm mujoco --viewer   # check the pose in MuJoCo first
+    python deployment/joint_reach/move_home.py --arm <ROBOT_SN>
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from deploy.joint_reach.core import DEFAULT_SPEC, Spec  # noqa: E402
-from deploy.joint_reach.run_real import ArmIO  # noqa: E402
+from deployment.joint_reach.core import DEFAULT_SPEC, Spec  # noqa: E402
+from deployment.joint_reach.run_real import ArmIO  # noqa: E402
 
 
 def _parse() -> argparse.Namespace:

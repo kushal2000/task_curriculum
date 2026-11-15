@@ -54,7 +54,7 @@ gym.register(
 )
 
 
-# The rigid-plate approximation of the cloth, on PhysX (Isaac Sim 5.1, `.venv_isaacsim`): one hinged
+# The rigid-plate approximation of the cloth, on PhysX (Isaac Sim 5.1, `.venv/isaacsim`): one hinged
 # chain (`RigidClothPhysx`, the chain picked by `env.rigid_cloth.variant`) and the fold-shape pool
 # (`FoldPoolPhysx`, a shape drawn per episode). Same task code, same observation, same agent configs
 # as the VBD task -- see `physx_envs.py`. Sharing `ClothSAPG.yaml` with the VBD task is deliberate:

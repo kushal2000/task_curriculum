@@ -28,7 +28,7 @@ canonical frame.
 "Write composed URDF" saves the arm + hand with the current mount via ``flexiv_wuji.compose_urdf``
 and prints the values to paste into ``flexiv_wuji.py``.
 
-    .venv_isaaclab3/bin/python scripts/flexiv_wuji/viser_compare.py [--port 8080]
+    .venv/isaaclab3/bin/python scripts/flexiv_wuji/viser_compare.py [--port 8080]
 
 On the cluster, forward the port: ``ssh -L 8080:localhost:8080 <node>``, then open
 http://localhost:8080.

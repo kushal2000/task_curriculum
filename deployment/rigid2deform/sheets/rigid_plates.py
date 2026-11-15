@@ -1,5 +1,5 @@
 """Sheet source perception=foundationpose: two rigid plates taped along one edge, each tracked by
-FoundationPose as its own mesh (deploy/nodes/perception.py, topic object_poses) -> the sheet's particles.
+FoundationPose as its own mesh (deployment/nodes/perception.py, topic object_poses) -> the sheet's particles.
 
 A plate is a box centred on its origin, so its pose gives its sheet frame only up to the box's
 symmetries (identity, 180 deg about each mesh axis). start_frames / update_frames pick the right one:
@@ -35,9 +35,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from deploy.rigid2deform.fold import FOLD_FLIP, mat_to_wxyz, quat_to_mat, rotation_angle
-from deploy.utils.config import object_names, repo_path
-from deploy.utils.spec import base_to_env
+from deployment.rigid2deform.fold import FOLD_FLIP, mat_to_wxyz, quat_to_mat, rotation_angle
+from deployment.utils.config import object_names, repo_path
+from deployment.utils.spec import base_to_env
 
 TOPIC = "object_poses"
 MAX_TILT_DEG = 30.0   # start: each plate's face at most this far from level

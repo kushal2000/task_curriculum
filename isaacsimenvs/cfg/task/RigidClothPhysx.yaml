@@ -1,11 +1,11 @@
 # Isaacsimenvs-RigidClothPhysx-Direct-v0 — the cloth-folding task with a chain of hinged rigid slats
-# as the manipuland, on PhysX (Isaac Sim 5.1 / Isaac Lab 2.3, .venv_isaacsim).
+# as the manipuland, on PhysX (Isaac Sim 5.1 / Isaac Lab 2.3, .venv/isaacsim).
 #
 # GENERATED FROM Cloth.yaml (the VBD task) and kept a full flat copy: the loader does a plain
 # `yaml.safe_load` with no inheritance, and keeping the two diffable is what makes "only the
 # manipuland changed" checkable rather than asserted. Identical task blocks; the Newton solver blocks
 # (newton, use_gravcomp, meshify) dropped, the Play task's PhysX solver block added under sim, and
-# the `rigid_cloth:` and `physx_chain:` blocks added. tests/test_physx_cloth_conventions.py diffs them.
+# the `rigid_cloth:` and `physx_chain:` blocks added. isaacsimenvs/tasks/cloth/tests/test_physx_cloth_conventions.py diffs them.
 #
 # THE `cloth:` BLOCK STAYS, and most of it is INERT here. It is kept because it is where the *task*
 # is defined -- `size`, `resolution` and `fold_axis` fix the particle grid the fold is scored on, and

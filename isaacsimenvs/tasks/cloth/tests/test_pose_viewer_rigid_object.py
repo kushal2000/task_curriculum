@@ -11,9 +11,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-# Imports Isaac Lab at module level. Under .venv_isaacsim that boots Kit (and stops at its EULA
-# prompt during collection), so these run in the kit-less .venv_isaaclab3 only.
-pytest.importorskip("isaaclab_newton", reason="needs the kit-less Isaac Lab 3 stack (.venv_isaaclab3)")
+# Imports Isaac Lab at module level. Under .venv/isaacsim that boots Kit (and stops at its EULA
+# prompt during collection), so these run in the kit-less .venv/isaaclab3 only.
+pytest.importorskip("isaaclab_newton", reason="needs the kit-less Isaac Lab 3 stack (.venv/isaaclab3)")
 
 from isaacsimenvs.tasks.play.pose_viewer import build_pose_viewer_html  # noqa: E402
 
@@ -115,7 +115,7 @@ def test_deformables_survive_the_opt_out():
 # --------------------------------------------------------------------------------------------
 
 KUKA_URDF = "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
-RIGHT_WUJI_URDF = "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
+RIGHT_WUJI_URDF = "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
 
 
 def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10, robot_urdf: str = KUKA_URDF) -> str:

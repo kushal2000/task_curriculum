@@ -1,7 +1,7 @@
 """The rigid2deform policy node: plate poses + joint state in, joint targets out, at 60 Hz.
 
-    .venv_deploy/bin/python deploy/rigid2deform/policy.py config=deploy/rigid2deform/config.yaml [overrides]
-Usually started by run.py (with the robot, viewer and recorder, deploy/nodes/). config.yaml's `task`
+    .venv_deploy/bin/python deployment/rigid2deform/policy.py config=deployment/rigid2deform/config.yaml [overrides]
+Usually started by run.py (with the robot, viewer and recorder, deployment/nodes/). config.yaml's `task`
 picks the loop (TASKS below).
 
 task=fold (run_fold): a fold-pool policy. The objects' perception (object.name) picks the sheet source
@@ -26,15 +26,15 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
-from deploy.rigid2deform.fold import fold_geometry, observe, score                                  # noqa: E402
-from deploy.rigid2deform.sheets import sheet_source                                                 # noqa: E402
-from deploy.utils.config import load_config, repo_path                                              # noqa: E402
-from deploy.utils.link import age, open_publisher, open_subscriber, recv_latest, send               # noqa: E402
-from deploy.utils.observation import NUM_OBS, build_obs                                              # noqa: E402
-from deploy.utils.policy_net import (action_to_targets,                                  # noqa: E402
+from deployment.rigid2deform.fold import fold_geometry, observe, score                                  # noqa: E402
+from deployment.rigid2deform.sheets import sheet_source                                                 # noqa: E402
+from deployment.utils.config import load_config, repo_path                                              # noqa: E402
+from deployment.utils.link import age, open_publisher, open_subscriber, recv_latest, send               # noqa: E402
+from deployment.utils.observation import NUM_OBS, build_obs                                              # noqa: E402
+from deployment.utils.policy_net import (action_to_targets,                                  # noqa: E402
                                      load_network, wait_for_inputs, wait_step)
-from deploy.utils.robot_model import load_robot_model                                                # noqa: E402
-from deploy.utils.spec import env_to_base, load_spec                                                 # noqa: E402
+from deployment.utils.robot_model import load_robot_model                                                # noqa: E402
+from deployment.utils.spec import env_to_base, load_spec                                                 # noqa: E402
 
 
 def run_fold(cfg, spec, model, net, pub) -> None:

@@ -634,26 +634,26 @@ this articulation does live under `scene.articulations["rigid_cloth"]`, and the 
 ## Reproduce
 
 ```bash
-.venv_isaaclab3/bin/python -m pytest tests/test_rigid_cloth.py
+.venv/isaaclab3/bin/python -m pytest isaacsimenvs/tasks/cloth/tests/test_rigid_cloth.py
 
 # the five-variant comparison, and the two five-variant figures
-.venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --all \
+.venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --all \
     --json docs/results/rigid_cloth_variants.json
-.venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_variants_diagram
-MUJOCO_GL=osmesa .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_variants_render
+.venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_variants_diagram
+MUJOCO_GL=osmesa .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_variants_render
 
 # the two single-variant figures: the mid-vs-surface hinge panel, and the four states
-.venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_diagram
-MUJOCO_GL=osmesa .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_render
+.venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_diagram
+MUJOCO_GL=osmesa .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_render
 
 # one variant, or an ad-hoc chain
-.venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --variant box3-mid
-.venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --num_slats 24 --stiffness 1e-4
+.venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --variant box3-mid
+.venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_probe --num_slats 24 --stiffness 1e-4
 
 # the env wiring: is the RL task solvable by each variant, and does the adapter agree with MuJoCo
-.venv_isaaclab3/bin/python -m pytest tests/test_rigid_cloth_env.py
-.venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_task_check
-.venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_task_check --cloth_lift
+.venv/isaaclab3/bin/python -m pytest isaacsimenvs/tasks/cloth/tests/test_rigid_cloth_env.py
+.venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_task_check
+.venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_task_check --cloth_lift
 ```
 
 To actually train, on a GPU node. The chain's USD must be baked first — the Newton stack replaces
@@ -665,11 +665,11 @@ and the damping that acts is an Isaac Lab actuator gain outside the cache key.
 
 ```bash
 # once: bake all five chains (plus the tool pool) in a single Kit start
-OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.newton.usd_cache \
+OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.newton.usd_cache \
     --populate --rigid_cloth_variants
 
 # then, per variant
-.venv_isaaclab3/bin/python isaacsimenvs/train.py \
+.venv/isaaclab3/bin/python isaacsimenvs/train.py \
     --task Isaacsimenvs-RigidCloth-Direct-v0 \
     --agent rl_games_sapg_cfg_entry_point --headless \
     env.rigid_cloth.variant=box3-mid env.scene.num_envs=768

@@ -3,7 +3,7 @@
 #
 # The args go to isaacsimenvs.train unchanged (--experiment, --checkpoint, --checkpoint_load_mode,
 # --wandb_*, hydra overrides). In an array job, task i gets agent.params.seed=i+1 unless the args
-# set a seed. The run itself lands in outputs/<date>/<time>/ (Hydra) and wandb in outputs/wandb/.
+# set a seed. The run itself lands in debug_outputs/train_logs/<date>/<time>/ (Hydra) and wandb in debug_outputs/train_logs/wandb/.
 #
 # The interactive pose viewer is on by default (--capture_viewer, every 6000 steps, logged to wandb
 # and written to the run dir's interactive_viewer/); the browser fetches the robot meshes from raw

@@ -1,10 +1,10 @@
 # Sourced by the job scripts here. The working directory is the repo root (submit.sh --chdir).
 #
 # Picks the interpreter from the --task in the job's arguments, so the command names the backend:
-#   Isaacsimenvs-Cloth*  -> Newton / VBD     scripts/newton_py (.venv_isaaclab3)
-#   everything else      -> PhysX (Kit)      .venv_isaacsim, or scripts/isaacsim_py (the Isaac Sim
-#                                            container) where .venv_isaacsim_ct exists (Engaging)
-# and logs the job's provenance and its GPU memory to outputs/slurm/ next to the job log.
+#   Isaacsimenvs-Cloth*  -> Newton / VBD     scripts/newton_py (.venv/isaaclab3)
+#   everything else      -> PhysX (Kit)      .venv/isaacsim, or scripts/isaacsim_py (the Isaac Sim
+#                                            container) where .venv/isaacsim_ct exists (Engaging)
+# and logs the job's provenance and its GPU memory to debug_outputs/train_logs/slurm/ next to the job log.
 
 set -uo pipefail
 export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES
@@ -24,13 +24,13 @@ if [[ "$TASK" == Isaacsimenvs-Cloth* ]]; then
     HEADLESS=()
 else
     BACKEND=physx
-    if [[ -d .venv_isaacsim_ct ]]; then PY=(scripts/isaacsim_py); else PY=(.venv_isaacsim/bin/python); fi
+    if [[ -d .venv/isaacsim_ct ]]; then PY=(scripts/isaacsim_py); else PY=(.venv/isaacsim/bin/python); fi
     HEADLESS=(--headless)
 fi
 
 JOB_TAG="${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-local}}${SLURM_ARRAY_TASK_ID:+_${SLURM_ARRAY_TASK_ID}}"
-LOG_PREFIX="outputs/slurm/${SLURM_JOB_NAME:-job}_${JOB_TAG}"
-mkdir -p outputs/slurm
+LOG_PREFIX="debug_outputs/train_logs/slurm/${SLURM_JOB_NAME:-job}_${JOB_TAG}"
+mkdir -p debug_outputs/train_logs/slurm
 
 echo "[slurm] task=$TASK backend=$BACKEND python=${PY[*]}"
 echo "[slurm] host=$(hostname -s) job=$JOB_TAG commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain)" && echo YES || echo no)"

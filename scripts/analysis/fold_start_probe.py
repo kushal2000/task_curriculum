@@ -6,8 +6,8 @@ active shape's hinge angles, and the fingertip positions -- plus each env's draw
 angles. ``fold_start_probe_plot.py`` draws the clouds and reports how the starts settle and how close
 the hand is to a raised flap.
 
-    OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python scripts/analysis/fold_start_probe.py --headless \\
-        --out outputs/results/fold_start_probe.pt env.rigid_cloth.joint_damping=0.02
+    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python scripts/analysis/fold_start_probe.py --headless \\
+        --out debug_outputs/train_logs/results/fold_start_probe.pt env.rigid_cloth.joint_damping=0.02
 """
 
 from __future__ import annotations

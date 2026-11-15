@@ -3,7 +3,7 @@
 #     --task <id> --checkpoint <run>/nn/<name>.pth [episodes.py args]
 #
 # Runs isaacsimenvs.eval.episodes; unless --out is given, the JSON goes to
-# outputs/results/eval/<job>.json.
+# debug_outputs/train_logs/results/eval/<job>.json.
 #
 #SBATCH --job-name=eval
 #SBATCH --nodes=1
@@ -17,8 +17,8 @@ source scripts/slurm/_common.sh
 
 ARGS=("$@")
 if [[ " ${ARGS[*]} " != *" --out "* && " ${ARGS[*]} " != *" --out="* ]]; then
-    mkdir -p outputs/results/eval
-    ARGS+=(--out "outputs/results/eval/${SLURM_JOB_NAME:-eval}_${JOB_TAG}.json")
+    mkdir -p debug_outputs/train_logs/results/eval
+    ARGS+=(--out "debug_outputs/train_logs/results/eval/${SLURM_JOB_NAME:-eval}_${JOB_TAG}.json")
 fi
 
 gpu_log_start

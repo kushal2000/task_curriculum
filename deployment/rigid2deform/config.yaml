@@ -6,20 +6,20 @@
 #   - spec file (spec_path below): facts copied from the training env (joint limits, obs layout,
 #     action pipeline, the fold geometry, ...). Never edit by hand; regenerate it with checks/export_fold_spec.py.
 #
-# run.py and policy.py read this file; run.py hands it to the shared nodes (deploy/nodes/) as
-# config=deploy/rigid2deform/config.yaml. Override any value on the command line with dotted keys, e.g.
+# run.py and policy.py read this file; run.py hands it to the shared nodes (deployment/nodes/) as
+# config=deployment/rigid2deform/config.yaml. Override any value on the command line with dotted keys, e.g.
 #   python run.py robot.mode=home robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>
-#   python run.py policy.checkpoint=deploy/rigid2deform/policy/box2RW_allDR.pth record.name=fold_try1
-# A key that is not in this file is an error. deploy/utils/config.py prints the merged config.
+#   python run.py policy.checkpoint=deployment/rigid2deform/policy/box2RW_allDR.pth record.name=fold_try1
+# A key that is not in this file is an error. deployment/utils/config.py prints the merged config.
 #
 # Frames: "env" = the frame the policy observes in (Play's): robot base at (0, 0.8, 0); the fold
 # training table's top is at env z 0.33 m. Lengths in metres, angles in degrees unless the name says otherwise.
 
 task: fold                  # fold: turn one plate of a taped two-plate sheet over onto the other (fold.py)
-spec_path: deploy/rigid2deform/spec/spec_flexiv_wuji_right_fold.json   # robot URDF next to it
+spec_path: deployment/rigid2deform/spec/spec_flexiv_wuji_right_fold.json   # robot URDF next to it
 
 # ------------------------------------------------------------------------------------------- bus
-# The processes talk over ZMQ (deploy/utils/link.py). Each publisher binds its own port; anyone may subscribe.
+# The processes talk over ZMQ (deployment/utils/link.py). Each publisher binds its own port; anyone may subscribe.
 # Every pose on the bus is in the robot base frame.
 bus:
   host: 127.0.0.1           # the machine the publishers run on
@@ -39,14 +39,14 @@ run:
 # The five runs in policy/ (flat7RW_base, _fricition, _sysid, _allDR, box2RW_allDR; the README says
 # what each trained on) share every spec number the deploy code reads (checks/export_fold_spec.py --compare).
 policy:
-  checkpoint: deploy/rigid2deform/policy/flat7RW_base.pth
+  checkpoint: deployment/rigid2deform/policy/flat7RW_base.pth
   config: pretrained_policy/config.yaml
   expl_coef: 0.0            # SAPG block; 0 = the last block (task reward only)
   joint_state_max_age_s: 0.05   # stop when the newest joint_state is older (robot.py died / stalled)
 
 # ---------------------------------------------------------------------------------------- robot
 robot:
-  mode: policy              # policy | home | free_drive (deploy/nodes/robot.py's docstring); openloop needs
+  mode: policy              # policy | home | free_drive (deployment/nodes/robot.py's docstring); openloop needs
                             #   an openloop section, which this task has not
   arm: mujoco               # robot serial number | mujoco (aioflexiv's MuJoCo Rizon)
   hand: fake                # hand serial number | auto | dry_run (connected, never enabled) | fake (no hand)
@@ -109,7 +109,7 @@ robot:
 # perception node tracks it and how the policy turns that into the sheet's grid points (sheets/);
 # all of object.name must share one:
 #   foundationpose  [moving plate, stationary plate]: two rigid plates taped along one edge;
-#                   perception.py runs deploy/nodes/perception.py: one box to click per plate, in this order
+#                   perception.py runs deployment/nodes/perception.py: one box to click per plate, in this order
 #   cotracker       [cloth]: a cloth, points on it tracked by CoTracker (perception.cotracker);
 #                   perception.py runs cloth_tracker.py: click the points in its window (sheets/cloth_points.py)
 object:
@@ -124,62 +124,62 @@ objects:
   plate7_white:
     perception: foundationpose
     scale: [3.5, 1.75, 0.05]  # 14 x 7 x 0.2 cm grasp box
-    mesh: deploy/rigid2deform/objects/plate7_white/plate7_white.obj   # 14 x 7 x 0.2 cm box centred on the origin, x long, z thickness; RGB (195, 193, 198) as the D415 sees plate5_white (Nov 12)
+    mesh: deployment/rigid2deform/objects/plate7_white/plate7_white.obj   # 14 x 7 x 0.2 cm box centred on the origin, x long, z thickness; RGB (195, 193, 198) as the D415 sees plate5_white (Nov 12)
     color: [195, 193, 198]       # RGB as the D415 sees it (measured; nothing reads it now)
   plate7_brown:
     perception: foundationpose
     scale: [3.5, 1.75, 0.05]
-    mesh: deploy/rigid2deform/objects/plate7_brown/plate7_brown.obj   # the same box, RGB (153, 123, 94) as the D415 sees it (Nov 12)
+    mesh: deployment/rigid2deform/objects/plate7_brown/plate7_brown.obj   # the same box, RGB (153, 123, 94) as the D415 sees it (Nov 12)
     color: [153, 123, 94]       # RGB as the D415 sees it (measured; nothing reads it now)
   plate75_2_white:
     perception: foundationpose
     scale: [3.75, 1.875, 0.05]  # 15 x 7.5 x 0.2 cm grasp box
-    mesh: deploy/rigid2deform/objects/plate75_2_white/plate75_2_white.obj   # 15 x 7.5 x 0.2 cm box centred on the origin, x long, z thickness; plate7_white's colour
+    mesh: deployment/rigid2deform/objects/plate75_2_white/plate75_2_white.obj   # 15 x 7.5 x 0.2 cm box centred on the origin, x long, z thickness; plate7_white's colour
     color: [195, 193, 198]       # RGB as the D415 sees plate5_white (measured; nothing reads it now)
   plate75_2_brown:
     perception: foundationpose
     scale: [3.75, 1.875, 0.05]
-    mesh: deploy/rigid2deform/objects/plate75_2_brown/plate75_2_brown.obj   # the same box, plate7_brown's colour
+    mesh: deployment/rigid2deform/objects/plate75_2_brown/plate75_2_brown.obj   # the same box, plate7_brown's colour
     color: [153, 123, 94]       # RGB as the D415 sees plate7_brown (measured; nothing reads it now)
   plate75_5_white:
     perception: foundationpose
     scale: [3.75, 1.875, 0.125]  # 15 x 7.5 x 0.5 cm grasp box
-    mesh: deploy/rigid2deform/objects/plate75_5_white/plate75_5_white.obj   # plate75_2_white's box scaled to 5 mm thick
+    mesh: deployment/rigid2deform/objects/plate75_5_white/plate75_5_white.obj   # plate75_2_white's box scaled to 5 mm thick
     color: [195, 193, 198]       # RGB as the D415 sees plate5_white (measured; nothing reads it now)
   plate75_5_brown:
     perception: foundationpose
     scale: [3.75, 1.875, 0.125]
-    mesh: deploy/rigid2deform/objects/plate75_5_brown/plate75_5_brown.obj   # plate75_2_brown's box scaled to 5 mm thick
+    mesh: deployment/rigid2deform/objects/plate75_5_brown/plate75_5_brown.obj   # plate75_2_brown's box scaled to 5 mm thick
     color: [153, 123, 94]       # RGB as the D415 sees plate7_brown (measured; nothing reads it now)
   plate5_white:
     perception: foundationpose
     scale: [2.5, 1.25, 0.125] # 10 x 5 x 0.5 cm grasp box
-    mesh: deploy/rigid2deform/objects/plate5_white/plate5_white.obj   # 10 x 5 x 0.5 cm box centred on the origin, x long, z thickness; RGB (195, 193, 198) as the D415 sees it (Nov 12)
+    mesh: deployment/rigid2deform/objects/plate5_white/plate5_white.obj   # 10 x 5 x 0.5 cm box centred on the origin, x long, z thickness; RGB (195, 193, 198) as the D415 sees it (Nov 12)
     color: [195, 193, 198]       # RGB as the D415 sees it (measured; nothing reads it now)
   plate5_brown:
     perception: foundationpose
     scale: [2.5, 1.25, 0.125]
-    mesh: deploy/rigid2deform/objects/plate5_brown/plate5_brown.obj   # the same box, plate7_brown's colour
+    mesh: deployment/rigid2deform/objects/plate5_brown/plate5_brown.obj   # the same box, plate7_brown's colour
     color: [153, 123, 94]       # RGB as the D415 sees it (measured; nothing reads it now)
   plate5_2_white:
     perception: foundationpose
     scale: [2.5, 1.25, 0.05]  # 10 x 5 x 0.2 cm grasp box
-    mesh: deploy/rigid2deform/objects/plate5_2_white/plate5_2_white.obj   # plate5_white's box scaled to 2 mm thick
+    mesh: deployment/rigid2deform/objects/plate5_2_white/plate5_2_white.obj   # plate5_white's box scaled to 2 mm thick
     color: [195, 193, 198]       # RGB as the D415 sees plate5_white (measured; nothing reads it now)
   plate5_2_brown:
     perception: foundationpose
     scale: [2.5, 1.25, 0.05]
-    mesh: deploy/rigid2deform/objects/plate5_2_brown/plate5_2_brown.obj   # plate5_brown's box scaled to 2 mm thick
+    mesh: deployment/rigid2deform/objects/plate5_2_brown/plate5_2_brown.obj   # plate5_brown's box scaled to 2 mm thick
     color: [153, 123, 94]       # RGB as the D415 sees plate5_brown (measured; nothing reads it now)
   plate5_red:
     perception: foundationpose
     scale: [2.5, 1.25, 0.125] # 10 x 5 x 0.5 cm grasp box
-    mesh: deploy/rigid2deform/objects/plate5_red/plate5_red.obj   # 10 x 5 x 0.5 cm box centred on the origin, x long, z thickness
+    mesh: deployment/rigid2deform/objects/plate5_red/plate5_red.obj   # 10 x 5 x 0.5 cm box centred on the origin, x long, z thickness
     color: [198, 61, 69]        # RGB as the D415 sees it (Nov 12; tol 40: no stray pixels on hand, table, arm)
   plate5_green:
     perception: foundationpose
     scale: [2.5, 1.25, 0.125]
-    mesh: deploy/rigid2deform/objects/plate5_green/plate5_green.obj   # the same box, green
+    mesh: deployment/rigid2deform/objects/plate5_green/plate5_green.obj   # the same box, green
     color: [45, 148, 113]       # RGB as the D415 sees it (Nov 12; tol 40: <= 130 stray pixels, on the arm's cyan LED rings)
 
 # ------------------------------------------------------------------------------------------ fold
@@ -208,7 +208,7 @@ perception:
 
   # camera (runs in the FoundationPose environment on the robot PC)
   foundationpose_dir: ~/FoundationPose   # the kushal2000/FoundationPose checkout (estimater.py, generate_mask.py, weights/)
-  extrinsics: deploy/calibration/extrinsics/left_camera_nov7.json   # T_base_cam from calibrate_compare.py (D415 821312062243)
+  extrinsics: deployment/calibration/extrinsics/left_camera_nov7.json   # T_base_cam from calibrate_compare.py (D415 821312062243)
   camera_serial: null       # null = the extrinsics file's camera_serial; perception.py refuses any other camera
   camera_width: 640         # FoundationPose crops around the object, so a small image is enough
   camera_height: 480        #   (upstream: 960 x 540 from a ZED)
@@ -252,7 +252,7 @@ record:
   camera: false             # also record every camera frame (camera_frame) -> <file>.camera.mp4 (H.264)
   camera_codec: libx264     # libx264 (CPU, ~0.4 core at 640x480 60 fps) | h264_nvenc (GPU; this ffmpeg needs driver >= 610)
   camera_quality: 23        # x264 -crf / nvenc -cq: lower = better and bigger; 18 ~ visually lossless
-  dir: outputs/deploy/rigid2deform/recordings
+  dir: debug_outputs/deployment/rigid2deform/recordings
   video_fps: 60             # playback.py's mp4 export
   video_height: 480         # px; the 3D view is 4:3, the camera image is scaled to the same height
 

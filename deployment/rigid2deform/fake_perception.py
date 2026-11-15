@@ -1,13 +1,13 @@
 """perception.source=fake for rigid2deform: a still sheet, no camera, to test without one.
 
-    .venv_deploy/bin/python deploy/rigid2deform/fake_perception.py [overrides]
+    .venv_deploy/bin/python deployment/rigid2deform/fake_perception.py [overrides]
 
 Sends what object.name's perception node would, at perception.fake_hz until Ctrl-C.
 perception.fake_pose_base is the SHEET's pose (hinge line middle, mid-plane, robot base frame); the
 moving half is turned up about the hinge by fold.fake_fold_deg.
   foundationpose: object_pose and object_poses, the two plates (object.name [moving, stationary]) where they
                   lie in that sheet (sheets/rigid_plates.py fake_message), as
-                  deploy/nodes/perception.py does.
+                  deployment/nodes/perception.py does.
   cotracker:      object_points, the points perception.cotracker.mode tracks, all seen
                   (sheets/cloth_points.py fake_message), as cloth_tracker.py does.
 """
@@ -20,11 +20,11 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
-from deploy.rigid2deform.fold import fold_geometry                               # noqa: E402
-from deploy.rigid2deform.sheets import cloth_points, rigid_plates, sheet_source  # noqa: E402
-from deploy.utils.config import load_config, repo_path                           # noqa: E402
-from deploy.utils.link import open_publisher, send, send_object_poses            # noqa: E402
-from deploy.utils.spec import load_spec                                          # noqa: E402
+from deployment.rigid2deform.fold import fold_geometry                               # noqa: E402
+from deployment.rigid2deform.sheets import cloth_points, rigid_plates, sheet_source  # noqa: E402
+from deployment.utils.config import load_config, repo_path                           # noqa: E402
+from deployment.utils.link import open_publisher, send, send_object_poses            # noqa: E402
+from deployment.utils.spec import load_spec                                          # noqa: E402
 
 
 def main() -> None:

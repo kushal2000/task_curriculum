@@ -1,7 +1,7 @@
 """The viewer node: a live viser page of everything on the bus. Only listens, never publishes, so it
 can be started and stopped at any time without touching the run.
 
-    .venv_deploy/bin/python deploy/nodes/viewer.py config=deploy/<task>/config.yaml   # then open http://<robot PC>:8091
+    .venv_deploy/bin/python deployment/nodes/viewer.py config=deployment/<task>/config.yaml   # then open http://<robot PC>:8091
 
 Subscribes  joint_state  -> the robot, at its measured joint angles
             joint_target -> a green see-through robot at the policy's targets
@@ -27,12 +27,12 @@ import numpy as np
 from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
-from deploy.utils.config import REPO, load_config, object_meshes, repo_path                                 # noqa: E402
-from deploy.utils.observation import keypoint_distance                                       # noqa: E402
-from deploy.utils.link import TOPIC_PORTS, age, decode_jpeg, open_subscriber, recv_latest    # noqa: E402
-from deploy.utils.spec import base_to_env, load_spec                                         # noqa: E402
+from deployment.utils.config import REPO, load_config, object_meshes, repo_path                                 # noqa: E402
+from deployment.utils.observation import keypoint_distance                                       # noqa: E402
+from deployment.utils.link import TOPIC_PORTS, age, decode_jpeg, open_subscriber, recv_latest    # noqa: E402
+from deployment.utils.spec import base_to_env, load_spec                                         # noqa: E402
 
-MESH_DIR = REPO / "assets" / "flexiv_wuji"   # the URDF's mesh paths are relative to it (fetch_assets.sh)
+MESH_DIR = REPO / "assets" / "urdf" / "flexiv_wuji"   # the URDF's mesh paths are relative to it (fetch_assets.sh)
 EXTRA_COLORS = [(0.9, 0.25, 0.6), (0.2, 0.75, 0.85), (0.6, 0.4, 0.9), (0.85, 0.85, 0.2)]
 
 

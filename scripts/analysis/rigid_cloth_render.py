@@ -7,7 +7,7 @@ slat standing as the wall of a U -- not the reflection a cloth makes.
 Shares its model construction with ``rigid_cloth_probe`` so the thing drawn is the thing measured.
 Offscreen via OSMesa, so it runs headless:
 
-    MUJOCO_GL=osmesa .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_render
+    MUJOCO_GL=osmesa .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_render
 
 Writes a four-panel PNG: settled flat, folded (side on, where the U is visible), the crease in
 close-up, and the clamped cantilever that measures drape.

@@ -188,7 +188,7 @@ def run(fab, scenario, set_kappa, record_every):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="outputs/results/cloth_crumple")
+    ap.add_argument("--out", default="debug_outputs/train_logs/results/cloth_crumple")
     ap.add_argument("--fabrics", nargs="+", default=list(CURRENT))
     ap.add_argument("--scenarios", nargs="+", default=["scrunch", "pinch_lift", "gather"])
     ap.add_argument("--set", type=float, default=80.0, help="two-stage set curvature [1/m]")

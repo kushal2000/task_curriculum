@@ -1,5 +1,5 @@
 """Sheet source perception=cotracker: a real cloth, points on it tracked by CoTracker
-(deploy/rigid2deform/cloth_tracker.py, topic object_points) -> the sheet's particles.
+(deployment/rigid2deform/cloth_tracker.py, topic object_points) -> the sheet's particles.
 
 object_points (one per tracked camera frame; t = that frame's time):
     mode           perception.cotracker.mode the points were clicked for (the node's config; the policy
@@ -38,8 +38,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from deploy.utils.config import object_names
-from deploy.utils.spec import base_to_env
+from deployment.utils.config import object_names
+from deployment.utils.spec import base_to_env
 
 AVAILABLE = True
 TOPIC = "object_points"
@@ -226,7 +226,7 @@ def fake_message(state: dict, sheet_pose_base, fold_rad: float) -> dict:
     """object_points of a sheet at sheet_pose_base [x, y, z, qw, qx, qy, qz] (hinge line middle, robot base
     frame), the moving half turned up by fold_rad about the hinge, every point seen: grid the 49 grid points,
     kp8 its 8, fit the 4 corners + the 49. The base frame's axes are the env's (robot root quaternion identity)."""
-    from deploy.rigid2deform.fold import quat_to_mat
+    from deployment.rigid2deform.fold import quat_to_mat
 
     geom, mode = state["geom"], state["mode"]
     unit = mode_units(geom, mode)

@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from conftest import REPO_ROOT, load_module
+from isaacsimenvs.utils.testing import REPO_ROOT, load_module
 
 robots = load_module("isaacsimenvs/tasks/play/robots.py", "play_robots")
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "flexiv_wuji"))
@@ -275,7 +275,7 @@ def test_human_like_urdf_differs_only_in_its_table_of_limits() -> None:
         assert float(old[name].get("lower")) <= lo <= 0.0 <= hi <= float(old[name].get("upper")), name
 
 
-RIGHT_URDF = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
+RIGHT_URDF = Path(__file__).resolve().parents[4] / "assets/urdf/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
 
 
 def test_right_hand_spec_matches_its_urdf() -> None:
@@ -303,8 +303,8 @@ def test_right_hand_spec_matches_its_urdf() -> None:
     assert [n[2:] for n in spec.hand_joint_names] == [n[2:] for n in SPEC.hand_joint_names]
 
 
-REAL_URDF = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
-SYSID_JSON = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json"
+REAL_URDF = Path(__file__).resolve().parents[4] / "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
+SYSID_JSON = Path(__file__).resolve().parents[4] / "assets/urdf/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json"
 
 
 def test_right_real_spec_is_the_sysid_fit() -> None:

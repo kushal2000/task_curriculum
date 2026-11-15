@@ -1,6 +1,6 @@
 """Play back a recording (recorder.py) in viser, and export it as an mp4. Never moves the robot.
 
-    .venv_deploy/bin/python deploy/nodes/playback.py <recording.jsonl> [viewer.port=8092]
+    .venv_deploy/bin/python deployment/nodes/playback.py <recording.jsonl> [viewer.port=8092]
 
 Open the page: the scene is the live viewer's (viewer.py), at the time on the slider. "play" runs it
 at the chosen speed. "export mp4": set the 3D view in the browser first; every frame is rendered by
@@ -24,11 +24,11 @@ import numpy as np
 from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
-from deploy.utils.config import object_meshes, repo_path                            # noqa: E402
-from deploy.utils.link import FRAME_TOPIC, decode_jpeg, from_json    # noqa: E402
-from deploy.utils.spec import load_spec                              # noqa: E402
-from deploy.utils.video import VideoReader, VideoWriter              # noqa: E402
-from deploy.nodes.viewer import build_scene, draw, goal_text, success_tolerance   # noqa: E402
+from deployment.utils.config import object_meshes, repo_path                            # noqa: E402
+from deployment.utils.link import FRAME_TOPIC, decode_jpeg, from_json    # noqa: E402
+from deployment.utils.spec import load_spec                              # noqa: E402
+from deployment.utils.video import VideoReader, VideoWriter              # noqa: E402
+from deployment.nodes.viewer import build_scene, draw, goal_text, success_tolerance   # noqa: E402
 
 
 def load_recording(path: Path) -> tuple[dict, dict]:

@@ -287,7 +287,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_hand_C_MC_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_hand_C_MC_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -296,7 +296,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_hand_C_MC.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_hand_C_MC.STL" />
       </geometry>
     </collision>
   </link>
@@ -309,7 +309,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_thumb_CMC_VL.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_thumb_CMC_VL.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -332,7 +332,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_thumb_MC_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_thumb_MC_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -341,7 +341,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_thumb_MC.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_thumb_MC.STL" />
       </geometry>
     </collision>
   </link>
@@ -361,7 +361,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_thumb_MCP_VL_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_thumb_MCP_VL_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -384,7 +384,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_thumb_PP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_thumb_PP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -393,7 +393,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_thumb_PP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_thumb_PP.STL" />
       </geometry>
     </collision>
   </link>
@@ -413,7 +413,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_thumb_DP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_thumb_DP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -422,7 +422,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_thumb_DP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_thumb_DP.STL" />
       </geometry>
     </collision>
   </link>
@@ -442,7 +442,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/thumb_elastomer_surface.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/thumb_elastomer_surface.STL" />
       </geometry>
       <material name="">
         <color rgba="0.2 1 0.2 1" />
@@ -451,7 +451,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/thumb_elastomer.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/thumb_elastomer.STL" />
       </geometry>
     </collision>
   </link>
@@ -483,7 +483,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MCP_VL_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MCP_VL_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -492,7 +492,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/MCP_VL.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/MCP_VL.STL" />
       </geometry>
     </collision>
   </link>
@@ -512,7 +512,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_PP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_PP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -521,7 +521,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_PP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_PP.STL" />
       </geometry>
     </collision>
   </link>
@@ -541,7 +541,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -550,7 +550,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MP.STL" />
       </geometry>
     </collision>
   </link>
@@ -570,7 +570,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_DP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_DP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -579,7 +579,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_DP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_DP.STL" />
       </geometry>
     </collision>
   </link>
@@ -599,7 +599,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/elastomer_surface.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/elastomer_surface.STL" />
       </geometry>
       <material name="">
         <color rgba="0.2 1 0.2 1" />
@@ -608,7 +608,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/elastomer.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/elastomer.STL" />
       </geometry>
     </collision>
   </link>
@@ -640,7 +640,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MCP_VL_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MCP_VL_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -649,7 +649,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/MCP_VL.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/MCP_VL.STL" />
       </geometry>
     </collision>
   </link>
@@ -669,7 +669,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_PP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_PP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -678,7 +678,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_PP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_PP.STL" />
       </geometry>
     </collision>
   </link>
@@ -698,7 +698,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -707,7 +707,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MP.STL" />
       </geometry>
     </collision>
   </link>
@@ -727,7 +727,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_DP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_DP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -736,7 +736,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_DP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_DP.STL" />
       </geometry>
     </collision>
   </link>
@@ -756,7 +756,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/elastomer_surface.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/elastomer_surface.STL" />
       </geometry>
       <material name="">
         <color rgba="0.2 1 0.2 1" />
@@ -765,7 +765,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/elastomer.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/elastomer.STL" />
       </geometry>
     </collision>
   </link>
@@ -797,7 +797,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MCP_VL_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MCP_VL_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -806,7 +806,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/MCP_VL.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/MCP_VL.STL" />
       </geometry>
     </collision>
   </link>
@@ -826,7 +826,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_PP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_PP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -835,7 +835,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_PP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_PP.STL" />
       </geometry>
     </collision>
   </link>
@@ -855,7 +855,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -864,7 +864,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MP.STL" />
       </geometry>
     </collision>
   </link>
@@ -884,7 +884,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_DP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_DP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -893,7 +893,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_DP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_DP.STL" />
       </geometry>
     </collision>
   </link>
@@ -913,7 +913,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/elastomer_surface.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/elastomer_surface.STL" />
       </geometry>
       <material name="">
         <color rgba="0.2 1 0.2 1" />
@@ -922,7 +922,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/elastomer.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/elastomer.STL" />
       </geometry>
     </collision>
   </link>
@@ -954,7 +954,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_pinky_MC_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_pinky_MC_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -963,7 +963,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_pinky_MC.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_pinky_MC.STL" />
       </geometry>
     </collision>
   </link>
@@ -983,7 +983,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MCP_VL_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MCP_VL_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -992,7 +992,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/MCP_VL.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/MCP_VL.STL" />
       </geometry>
     </collision>
   </link>
@@ -1012,7 +1012,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_PP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_PP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -1021,7 +1021,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_PP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_PP.STL" />
       </geometry>
     </collision>
   </link>
@@ -1041,7 +1041,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -1050,7 +1050,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_MP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_MP.STL" />
       </geometry>
     </collision>
   </link>
@@ -1070,7 +1070,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_DP_visual.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_DP_visual.STL" />
       </geometry>
       <material name="">
         <color rgba="0.79216 0.81961 0.93333 1" />
@@ -1079,7 +1079,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/left_DP.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/left_DP.STL" />
       </geometry>
     </collision>
   </link>
@@ -1099,7 +1099,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/elastomer_surface.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/elastomer_surface.STL" />
       </geometry>
       <material name="">
         <color rgba="0.2 1 0.2 1" />
@@ -1108,7 +1108,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../urdf/kuka_sharpa_description/left_sharpa_meshes/elastomer.STL" />
+        <mesh filename="../kuka_sharpa_description/left_sharpa_meshes/elastomer.STL" />
       </geometry>
     </collision>
   </link>

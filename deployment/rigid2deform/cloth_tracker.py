@@ -1,7 +1,7 @@
 """The cloth's perception node (objects with perception: cotracker): RealSense -> CoTracker3 online ->
 object_points over ZMQ, in the robot base frame. Usually started by perception.py; on its own:
 
-    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/cloth_tracker.py object.name=[cloth] \
+    ~/miniconda3/envs/cotracker/bin/python deployment/rigid2deform/cloth_tracker.py object.name=[cloth] \
         [perception.cotracker.mode=grid|kp8|fit] [fold.sheet_size=0.15]
 
 Runs in the cotracker environment (~/co-tracker, see realsense_track.py; + pyzmq). Opens the camera the
@@ -51,12 +51,12 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
-from deploy.rigid2deform.fold import fold_geometry, observe, score               # noqa: E402
-from deploy.rigid2deform.sheets import cloth_points as cp                         # noqa: E402
-from deploy.rigid2deform.sheets import sheet_perception                           # noqa: E402
-from deploy.utils.config import REPO, load_config, repo_path                      # noqa: E402
-from deploy.utils.link import FRAME_PORT, encode_jpeg, open_publisher, send, send_frame  # noqa: E402
-from deploy.utils.spec import load_spec                                           # noqa: E402
+from deployment.rigid2deform.fold import fold_geometry, observe, score               # noqa: E402
+from deployment.rigid2deform.sheets import cloth_points as cp                         # noqa: E402
+from deployment.rigid2deform.sheets import sheet_perception                           # noqa: E402
+from deployment.utils.config import REPO, load_config, repo_path                      # noqa: E402
+from deployment.utils.link import FRAME_PORT, encode_jpeg, open_publisher, send, send_frame  # noqa: E402
+from deployment.utils.spec import load_spec                                           # noqa: E402
 
 CONFIG = HERE / "config.yaml"
 WINDOW = "cloth_tracker"
@@ -279,7 +279,7 @@ class Tracker:
 # --- the node -------------------------------------------------------------------------------------
 class Node:
     def __init__(self, cfg):
-        from deploy.calibration.realsense import RealSense
+        from deployment.calibration.realsense import RealSense
 
         self.cfg, p, c = cfg, cfg.perception, cfg.perception.cotracker
         self.mode = str(c.mode)

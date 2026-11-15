@@ -10,7 +10,7 @@
 Each case slides a 10 x 10 x 0.2 cm plate along a fixed 'table' plate at 1 m/s and reads the
 deceleration back as an effective friction coefficient, ``mu = -dv/dt / g``.
 
-    OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python scripts/analysis/physx_contact_probe.py
+    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python scripts/analysis/physx_contact_probe.py
 """
 
 from __future__ import annotations

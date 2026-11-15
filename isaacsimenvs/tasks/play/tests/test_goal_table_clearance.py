@@ -13,7 +13,7 @@ import pytest
 torch = pytest.importorskip("torch")
 Rotation = pytest.importorskip("scipy.spatial.transform").Rotation
 
-from conftest import load_module  # noqa: E402
+from isaacsimenvs.utils.testing import load_module
 
 gtc = load_module("isaacsimenvs/tasks/play/utils/goal_table_clearance.py")
 

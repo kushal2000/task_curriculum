@@ -1,10 +1,10 @@
 """Export what the real-robot FOLD loop needs from a fold-pool training run, as JSON, with no Isaac Sim.
 
-The fold policies in deploy/rigid2deform/policy/ (flat7RW_*, box2RW_allDR) were trained on branch
+The fold policies in deployment/rigid2deform/policy/ (flat7RW_*, box2RW_allDR) were trained on branch
 yiboc_wuji with `train.py --experiment <name>`: a FoldPoolPhysx task on the Flexiv Rizon 4s + RIGHT Wuji
 Hand 2 in the real setup's geometry. This script rebuilds that run's env config the way hydra_utils
 does -- the task YAML, then the robot overlay (cfg/robot/), then the experiment's `base:` chain and the
-experiment -- and writes the spec: every field Play's spec has (deploy/utils/spec_export.py: robot,
+experiment -- and writes the spec: every field Play's spec has (deployment/utils/spec_export.py: robot,
 action pipeline, observation, table, ...), plus a `fold` block (the sheet's grid, the scored keypoints, the fold target, the
 success test). The geometry comes from the branch's own fold_shapes.py and cloth_geometry.py (pure
 Python), run from git.
@@ -14,8 +14,8 @@ Frames. The spec's env frame is the frame the policy OBSERVES in: the robot base
 (0, 0.51, 0.20) and the table at the env origin; only palm_pos is absolute in the observation, and it
 is shifted back to Play's frame, so the table and the sheet are exported shifted the same way.
 
-    .venv_deploy/bin/python deploy/rigid2deform/checks/export_fold_spec.py               # flat7RW_base
-    .venv_deploy/bin/python deploy/rigid2deform/checks/export_fold_spec.py --experiment box2RW_allDR --out /tmp/x.json
+    .venv_deploy/bin/python deployment/rigid2deform/checks/export_fold_spec.py               # flat7RW_base
+    .venv_deploy/bin/python deployment/rigid2deform/checks/export_fold_spec.py --experiment box2RW_allDR --out /tmp/x.json
 
 The five policy/ runs share every field the deploy code reads (`--compare` checks this).
 """
@@ -32,9 +32,9 @@ from pathlib import Path
 
 import yaml
 
-HERE = Path(__file__).resolve().parent     # deploy/rigid2deform/checks
+HERE = Path(__file__).resolve().parent     # deployment/rigid2deform/checks
 sys.path.insert(0, str(HERE.parents[2]))   # repo root, for deploy.*
-from deploy.utils.spec_export import (ROBOT_ROOT_POS, ROBOTS_PY, cfg_default, git_show,   # noqa: E402
+from deployment.utils.spec_export import (ROBOT_ROOT_POS, ROBOTS_PY, cfg_default, git_show,   # noqa: E402
                                       rev_parse, section_get, spec_fields, table_box)
 
 DEFAULT_REF = "origin/yiboc_wuji"

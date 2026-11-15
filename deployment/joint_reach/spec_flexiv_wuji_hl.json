@@ -1,6 +1,6 @@
 {
  "task": "Isaacsimenvs-JointReachFlexivWujiHumanLike-Direct-v0",
- "robot_urdf": "assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf",
+ "robot_urdf": "assets/urdf/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf",
  "joint_names": [
   "joint1",
   "joint2",

@@ -6,7 +6,7 @@ same) picks the source here and the perception node to run:
 
 | perception     | object.name                 | source module    | node (topic)                                        |
 |----------------|-----------------------------|------------------|-----------------------------------------------------|
-| foundationpose | [moving plate, stationary]  | rigid_plates.py  | deploy/nodes/perception.py (object_poses)           |
+| foundationpose | [moving plate, stationary]  | rigid_plates.py  | deployment/nodes/perception.py (object_poses)           |
 | cotracker      | [cloth]                     | cloth_points.py  | rigid2deform/cloth_tracker.py (object_points)       |
 
 Every source module has:
@@ -28,7 +28,7 @@ from types import ModuleType
 
 from omegaconf import DictConfig
 
-from deploy.utils.config import object_names
+from deployment.utils.config import object_names
 
 from . import cloth_points, rigid_plates
 

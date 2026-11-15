@@ -24,7 +24,7 @@ Two lag models (``domain_randomization.point_dr_mode``):
     policy always reads the newest frame that has arrived, so the frame it reads never gets older.
     Capped at ``point_delay_max``.
 
-Torch only (no Isaac Lab), so it is unit-tested on CPU (tests/test_point_dr.py).
+Torch only (no Isaac Lab), so it is unit-tested on CPU (isaacsimenvs/tasks/play/tests/test_point_dr.py).
 """
 
 from __future__ import annotations

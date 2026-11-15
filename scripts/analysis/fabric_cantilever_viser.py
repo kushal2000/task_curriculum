@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fabric_textures import add_fabric_mesh  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DATA = "outputs/results/fabric_cantilever"
+DEFAULT_DATA = "debug_outputs/train_logs/results/fabric_cantilever"
 VARIANTS = [
     ("old_ke|kd_now", "100·B ke, kd 1e-3", (150, 150, 160)),
     ("old_ke|kd_scaled", "100·B ke, kd scaled", (120, 170, 220)),

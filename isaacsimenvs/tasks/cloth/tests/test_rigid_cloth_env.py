@@ -552,7 +552,7 @@ def test_the_hinges_get_armature_at_every_stiffness():
     assert cfg.joint_stiffness == 0.0
     assert cfg.joint_armature > 0.0
     env_py = (
-        pathlib.Path(__file__).resolve().parents[1]
+        pathlib.Path(__file__).resolve().parents[4]
         / "isaacsimenvs/tasks/cloth/rigid_cloth_task.py"
     )
     src = env_py.read_text()

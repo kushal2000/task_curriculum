@@ -9,7 +9,7 @@ import math
 
 import numpy as np
 import pytest
-from conftest import load_module  # noqa: E402
+from isaacsimenvs.utils.testing import load_module
 
 wp = pytest.importorskip("warp")
 newton = pytest.importorskip("newton")

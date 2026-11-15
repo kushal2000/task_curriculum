@@ -1,7 +1,7 @@
 """The three ways a difficulty range is allowed to move.
 
 Each scheduler is a pure function of the curriculum's own scalar state — no torch, no
-env — so `tests/test_curriculum.py` exercises them without booting Kit.
+env — so `isaacsimenvs/curriculum/tests/test_curriculum.py` exercises them without booting Kit.
 
 All of them return the new ``(lo, hi)``. Only ``hi`` is normally advanced: keeping ``lo``
 at its initial value means the easy instances never disappear from the batch, which is

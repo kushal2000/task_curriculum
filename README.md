@@ -39,15 +39,17 @@ isaacsimenvs/
   eval/                 episodes.py (evals), live_viser.py (live viewer), player.py (loads a checkpoint)
   newton/               Newton backend patches and the URDF->USD cache
   curriculum/           difficulty curricula (the cloth unfold task's start-angle curriculum)
-deploy/                 the real robot: simtoolreal, rigid2deform, joint_reach, calibration, shared nodes/utils
+deployment/                 the real robot: simtoolreal, rigid2deform, joint_reach, calibration, shared nodes/utils
 assets/                 robots (urdf/, flexiv_wuji/), tables, fabric textures
 scripts/slurm/          submit.sh + train/eval/viser job scripts; engaging/ environment installers
 scripts/flexiv_wuji/    fetch the robot assets, compose the arm + hand URDFs
 scripts/analysis/       probes and summary tools
 rl_games/               vendored rl_games fork
-tests/                  pytest; Kit-free in both venvs
+third_party/            vendored upstream source at pinned commits: IsaacLab, aioflexiv, aiowuji
 docs/reports/           write-ups
-outputs/                (gitignored) EVERY run artifact
+debug_outputs/          (gitignored) EVERY run artifact: train_logs/, videos/, deployment/
+.cache/                 (gitignored) tool caches: usd/ (URDF->USD for Newton), pytest/, ruff/
+.venv/                  (gitignored) isaacsim/ and isaaclab3/
 ```
 
 ## Setup
@@ -56,18 +58,18 @@ Two venvs on one source tree (both editable-install it):
 
 | venv | stack | runs |
 |---|---|---|
-| `.venv_isaacsim` | Python 3.11, Isaac Sim 5.1 / Isaac Lab 2.3 | Play, rigid fold, joint_reach (PhysX) |
-| `.venv_isaaclab3` | Python 3.12, Isaac Lab 3.0 + Newton (kit-less) | VBD fold |
+| `.venv/isaacsim` | Python 3.11, Isaac Sim 5.1 / Isaac Lab 2.3 | Play, rigid fold, joint_reach (PhysX) |
+| `.venv/isaaclab3` | Python 3.12, Isaac Lab 3.0 + Newton (kit-less) | VBD fold |
 
 ```bash
 scripts/install_isaacsim.sh
-scripts/install_isaaclab3.sh                      # pins Isaac Lab into third_party/IsaacLab
+scripts/install_isaaclab3.sh                      # Isaac Lab from the vendored third_party/IsaacLab
 scripts/flexiv_wuji/fetch_assets.sh               # robot meshes (the right hand's vendor files stay local)
-OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.newton.usd_cache --populate \
+OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.newton.usd_cache --populate \
     --num_assets_per_type 1 'env.assets.handle_head_types=[hammer]'   # USD cache the Newton envs read
 ```
 
-Newton needs every robot URDF it loads in `.usd_cache/`; for the right Wuji add
+Newton needs every robot URDF it loads in `.cache/usd/`; for the right Wuji add
 `--task Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 env.assets.table_urdf=assets/urdf/table_narrow.urdf`.
 Run Newton code through `scripts/newton_py`, which fixes the venv's libstdc++.
 
@@ -82,7 +84,7 @@ overlay `cfg/robot/<robot>.yaml`, an experiment recipe `cfg/experiment/<name>.ya
 recipes chain through `base:` and name the task they were written for), then Hydra CLI overrides.
 
 ```bash
-# on Slurm: logs in outputs/slurm/, the venv follows the task id, portal defaults
+# on Slurm: logs in debug_outputs/train_logs/slurm/, the venv follows the task id, portal defaults
 scripts/slurm/submit.sh scripts/slurm/train.sh \
     --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHLRL-Direct-v0 --experiment flat7RW_obsActDR \
     --checkpoint <play run>/nn/<name>.pth --checkpoint_load_mode weights --single_variant \
@@ -90,7 +92,7 @@ scripts/slurm/submit.sh scripts/slurm/train.sh \
 scripts/slurm/submit.sh --array=0-2 scripts/slurm/train.sh ...          # seeds 1-3
 scripts/slurm/submit.sh --partition=gpu_a100 --gres=gpu:rtxpro6000:1 ... # another cluster
 
-scripts/slurm/submit.sh scripts/slurm/eval.sh --task <id> --checkpoint <pth>   # -> outputs/results/eval/
+scripts/slurm/submit.sh scripts/slurm/eval.sh --task <id> --checkpoint <pth>   # -> debug_outputs/train_logs/results/eval/
 scripts/slurm/submit.sh scripts/slurm/viser.sh --task <id>                     # live viewer; the log prints the tunnel
 ```
 
@@ -99,20 +101,31 @@ script inside it raised, so check a job's log, not its exit code.
 
 ## Outputs
 
-Everything a run produces is under `outputs/` (`isaacsimenvs/utils/paths.py`): Hydra run dirs
-`outputs/<date>/<time>/0_<name>/nn/*.pth`, `outputs/wandb/`, `outputs/slurm/`, `outputs/results/`
-(eval JSONs, probe dumps), `outputs/videos/`, `outputs/deploy/` (robot recordings and logs). In a run's
-`nn/`, `<name>.pth` is the best checkpoint by mean reward and `last_<name>_ep_*.pth` are periodic.
+Everything a run produces is under `debug_outputs/` (`isaacsimenvs/utils/paths.py`):
+`debug_outputs/train_logs/` holds Hydra run dirs `<date>/<time>/0_<name>/nn/*.pth`, `wandb/`, `slurm/`,
+and `results/` (eval JSONs, probe dumps); `debug_outputs/videos/` holds rendered videos and
+`debug_outputs/deployment/` the real-robot run recordings and logs. In a run's `nn/`, `<name>.pth` is the best checkpoint by
+mean reward and `last_<name>_ep_*.pth` are periodic.
 
 ## Deploy
 
-`deploy/` runs a trained policy on the robot: `deploy/simtoolreal/` (Play), `deploy/rigid2deform/`
-(folding) and `deploy/joint_reach/`, as ZMQ nodes (`deploy/nodes/`). The drivers aioflexiv and aiowuji
-are fetched at pinned SHAs by `scripts/fetch_deploy_deps.sh`. See `deploy/simtoolreal/README.md`.
+`deployment/` runs a trained policy on the robot: `deployment/simtoolreal/` (Play), `deployment/rigid2deform/`
+(folding) and `deployment/joint_reach/`, as ZMQ nodes (`deployment/nodes/`). The drivers aioflexiv and aiowuji
+are vendored in `third_party/` (below). See `deployment/simtoolreal/README.md`.
+
+## Third-party code
+
+`third_party/` is committed: plain copies of Isaac Lab (the tree `.venv/isaaclab3` installs) and the
+robot drivers aioflexiv and aiowuji, each at the commit in `third_party/VENDORED.md`, so a clone is
+complete with nothing to fetch. Don't edit them in place; to move a pin, change it in
+`scripts/vendor_third_party.sh`, rerun it and commit the diff.
 
 ## Tests
 
+Each package keeps its tests beside it (`isaacsimenvs/**/tests/`); `isaacsimenvs/conftest.py` is
+the shared setup. Kit-free in both venvs.
+
 ```bash
-.venv_isaaclab3/bin/python -m pytest tests     # everything
-.venv_isaacsim/bin/python -m pytest tests      # the Isaac-Lab-backed tests skip here instead of booting Kit
+.venv/isaaclab3/bin/python -m pytest     # everything
+.venv/isaacsim/bin/python -m pytest      # the Isaac-Lab-backed tests skip here instead of booting Kit
 ```

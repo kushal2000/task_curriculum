@@ -14,11 +14,11 @@ import pytest
 
 from isaacsimenvs.tasks.play.robots import KUKA_SHARPA, ROBOT_SPECS
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[4]
 URDFS = {
     "kuka_sharpa": "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf",
-    "flexiv_wuji_right_human_like": "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
-    "flexiv_wuji_right_real": "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+    "flexiv_wuji_right_human_like": "assets/urdf/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
+    "flexiv_wuji_right_real": "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
 }
 #: Every selectable robot; a new one without a URDF entry above fails here rather than going unchecked.
 SPECS = list(ROBOT_SPECS.values())

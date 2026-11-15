@@ -336,7 +336,7 @@ def run(fab, variant, yield_k, set_k, overrides, rec_every, only=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="outputs/results/cloth_sequence")
+    ap.add_argument("--out", default="debug_outputs/train_logs/results/cloth_sequence")
     ap.add_argument("--fabrics", nargs="+", default=list(CURRENT))
     ap.add_argument("--set", type=float, default=80.0)
     ap.add_argument("--soft-tri", type=float, default=100.0, help="new tri_ke = tri_ka for chiffon, cotton, silk")

@@ -1,6 +1,6 @@
 """PhysX configs for the rigid-cloth (stage 1) and fold-pool (stage 2) tasks.
 
-Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv_isaacsim``), on top of ``PlayEnvCfg`` -- the Play task's own
+Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv/isaacsim``), on top of ``PlayEnvCfg`` -- the Play task's own
 PhysX config -- rather than ``PlayNewtonEnvCfg``. The task blocks (``cloth``, ``rigid_cloth``,
 ``fold_pool``) are the SAME classes the Newton envs use, so a hydra override means the same thing on
 both simulators. The Newton solver block (``newton``, ``use_gravcomp``, ``meshify``) has no

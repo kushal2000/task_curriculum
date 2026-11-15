@@ -9,7 +9,7 @@ Each row is one variant: rest pose on the left with every hinge marked, folded p
 the bent hinges highlighted. The two are drawn at the same scale, so the 5.9 mm ply gap of a
 mid-plane chain and the 2 mm gap of a surface or bar-crease chain are directly comparable.
 
-    .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_variants_diagram
+    .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_variants_diagram
 """
 
 from __future__ import annotations

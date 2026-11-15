@@ -2,9 +2,8 @@
 # Live policy viewer in the browser: scripts/slurm/submit.sh [sbatch options] scripts/slurm/viser.sh \
 #     --task <id> [--port 8080] [live_viser.py args]
 #
-# The job log prints the ssh tunnel. On PhysX, viser needs websockets >= 13 and Isaac Sim ships 12:
-# a newer copy in .venv_isaacsim/viser_overlay (or third_party/viser_websockets) goes first on
-# PYTHONPATH for this process only.
+# The job log prints the ssh tunnel. viser needs websockets >= 13.1; scripts/install_isaacsim.sh
+# installs it into .venv/isaacsim over Isaac Sim's 12.0 pin.
 #
 #SBATCH --job-name=viser
 #SBATCH --nodes=1
@@ -19,10 +18,5 @@ source scripts/slurm/_common.sh
 PORT=8080
 _prev=""
 for _a in "$@"; do [[ "$_prev" == "--port" ]] && PORT="$_a"; _prev="$_a"; done
-if [[ "$BACKEND" == physx ]]; then
-    for d in .venv_isaacsim/viser_overlay third_party/viser_websockets; do
-        [[ -d "$d/websockets" ]] && export PYTHONPATH="$PWD/$d${PYTHONPATH:+:$PYTHONPATH}" && break
-    done
-fi
 echo "[slurm] tunnel: ssh -N -L ${PORT}:$(hostname -s):${PORT} $USER@<login node>   then http://localhost:${PORT}"
 "${PY[@]}" -m isaacsimenvs.eval.live_viser "$@"

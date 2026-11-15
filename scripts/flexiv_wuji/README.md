@@ -17,7 +17,7 @@ scripts/flexiv_wuji/fetch_assets.sh
 
 Fetches the Rizon 4s (flexivrobotics/flexiv_description, xacro expanded with upstream's own
 script) and the Wuji Hand 2 Beta 2 (wuji-technology/wuji-description) at pinned commits into
-`assets/flexiv_wuji/`. It then writes `rizon4s_left_wuji.urdf`, the two joined at
+`assets/urdf/flexiv_wuji/`. It then writes `rizon4s_left_wuji.urdf`, the two joined at
 `flexiv_wuji.MOUNT_*`.
 
 The left-hand robot's files (~12 MB) are committed, because the training-time pose viewer loads
@@ -28,11 +28,11 @@ new upstream commit or mount, then commit the result.
 
 | | |
 |---|---|
-| `viser_compare.py` | Both robots side by side where the env puts them, each behind its own table, with joint, base and mount sliders, and IK to match the Kuka's hand pose. `.venv_isaaclab3` |
-| `viser_wuji_limits.py` | The Flexiv + Wuji with vendor joint limits beside the human-like ones (`rizon4s_left_wuji_human_like_joint_limits.urdf`), driven by joint angles or by one policy-style hand action. `.venv_isaaclab3` |
-| `reachability.py` | IK for the palm centre over the task's goal volume and the table, for both robots. `.venv_isaaclab3` |
-| `self_collision_pairs.py` | Derives the robot's self-collision filter list (`RobotSpec.self_collision_filter`): jointed pairs, pairs touching at reset, and pairs that meet across a knuckle. `.venv_isaaclab3` |
-| `smoke_env.py` | Builds a Play-family task in Isaac Sim and checks sizes, palm/fingertip positions, arm and hand step responses, and random-action stability. `.venv_isaacsim` |
+| `viser_compare.py` | Both robots side by side where the env puts them, each behind its own table, with joint, base and mount sliders, and IK to match the Kuka's hand pose. `.venv/isaaclab3` |
+| `viser_wuji_limits.py` | The Flexiv + Wuji with vendor joint limits beside the human-like ones (`rizon4s_left_wuji_human_like_joint_limits.urdf`), driven by joint angles or by one policy-style hand action. `.venv/isaaclab3` |
+| `reachability.py` | IK for the palm centre over the task's goal volume and the table, for both robots. `.venv/isaaclab3` |
+| `self_collision_pairs.py` | Derives the robot's self-collision filter list (`RobotSpec.self_collision_filter`): jointed pairs, pairs touching at reset, and pairs that meet across a knuckle. `.venv/isaaclab3` |
+| `smoke_env.py` | Builds a Play-family task in Isaac Sim and checks sizes, palm/fingertip positions, arm and hand step responses, and random-action stability. `.venv/isaacsim` |
 
 The two hands are compared in one canonical frame built from their knuckles (`hand_frames.py`),
 so the vendors' different link conventions do not matter.
@@ -65,7 +65,7 @@ self-collision-off setup, which the pretrained-policy evals were run in.
   Sim, at reset, the two robots' palm centres agree to 0.1 mm.
 - The fingertip pad offset is the Sharpa's share of the way to the tip.
 
-`tests/test_robot_specs.py` recomputes all of this from the models.
+`isaacsimenvs/tasks/play/tests/test_robot_specs.py` recomputes all of this from the models.
 
 **Provisional, to be refined against the hardware:**
 - **The mount** (`flexiv_wuji.MOUNT_*`): the hand is flipped onto the flange, with no adapter

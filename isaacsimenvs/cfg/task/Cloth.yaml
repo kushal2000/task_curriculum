@@ -1,7 +1,7 @@
 # Cloth — the Play goal-reaching task with a deformable cloth as the manipuland.
 #
 # GENERATED FROM Play.yaml. The loader does a flat `yaml.safe_load` with no inheritance, so this is
-# a full copy; `tests/test_cloth_yaml_matches_play.py` asserts it does not drift from Play on the
+# a full copy; `isaacsimenvs/tasks/cloth/tests/test_cloth_yaml_matches_play.py` asserts it does not drift from Play on the
 # shared task settings.
 #
 # Intentional additions: the Newton solver blocks (`newton`, `use_gravcomp`, `meshify`) and the

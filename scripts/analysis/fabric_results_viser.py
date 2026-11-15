@@ -4,7 +4,7 @@ plasticity (cloth_plasticity_viser), for the measured presets (cfg/fabric/*_meas
 literature ones. Each view keeps its own controls and camera. A view whose data folder is missing is
 skipped. No GPU needed (replays the saved .npz files).
 
-    .venv_isaaclab3/bin/python scripts/analysis/fabric_results_viser.py [--port 8090]
+    .venv/isaaclab3/bin/python scripts/analysis/fabric_results_viser.py [--port 8090]
 """
 
 import argparse
@@ -35,13 +35,13 @@ def main():
     cant, droop, plast = _load("fabric_cantilever_viser"), _load("fabric_droop_viser"), _load("cloth_plasticity_viser")
     # (title, viewer module, data folder): the dropdown order.
     datasets = [
-        ("Plasticity — napkin & silk retune, 7x7 touch fold (kappa 26-35; presets 30 / 32)", plast, "outputs/results/cloth_plasticity_measured_r7_touch_v3_ns"),
-        ("Plasticity — measured 7x7, touch fold (napkin/silk here at the old 150)", plast, "outputs/results/cloth_plasticity_measured_r7_touch_v3"),
-        ("Plasticity — 25x25 reference, touch fold (0.5 mm contact)", plast, "outputs/results/cloth_plasticity_measured_r25_v3a"),
-        ("Plasticity — measured, 5 fold cycles", plast, "outputs/results/cloth_plasticity_measured_cycles"),
-        ("Cantilever — measured", cant, "outputs/results/fabric_cantilever_measured"),
-        ("Plasticity — measured (weight on top)", plast, "outputs/results/cloth_plasticity_measured_weight"),
-        ("Plasticity — measured (crease press)", plast, "outputs/results/cloth_plasticity_measured"),
+        ("Plasticity — napkin & silk retune, 7x7 touch fold (kappa 26-35; presets 30 / 32)", plast, "debug_outputs/train_logs/results/cloth_plasticity_measured_r7_touch_v3_ns"),
+        ("Plasticity — measured 7x7, touch fold (napkin/silk here at the old 150)", plast, "debug_outputs/train_logs/results/cloth_plasticity_measured_r7_touch_v3"),
+        ("Plasticity — 25x25 reference, touch fold (0.5 mm contact)", plast, "debug_outputs/train_logs/results/cloth_plasticity_measured_r25_v3a"),
+        ("Plasticity — measured, 5 fold cycles", plast, "debug_outputs/train_logs/results/cloth_plasticity_measured_cycles"),
+        ("Cantilever — measured", cant, "debug_outputs/train_logs/results/fabric_cantilever_measured"),
+        ("Plasticity — measured (weight on top)", plast, "debug_outputs/train_logs/results/cloth_plasticity_measured_weight"),
+        ("Plasticity — measured (crease press)", plast, "debug_outputs/train_logs/results/cloth_plasticity_measured"),
         ("Cantilever — literature", cant, cant.DEFAULT_DATA),
         ("Droop lineup — literature", droop, droop.DEFAULT_DATA),
         ("Plasticity — literature", plast, plast.DEFAULT_DATA),

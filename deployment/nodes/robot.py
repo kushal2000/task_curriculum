@@ -1,11 +1,11 @@
 """The robot node: Flexiv Rizon 4s arm (aioflexiv) + right Wuji Hand 2 (aiowuji). Usually started by
-a task's run.py (deploy/utils/runner.py); deploy/simtoolreal/README.md has the details.
+a task's run.py (deployment/utils/runner.py); deployment/simtoolreal/README.md has the details.
 
 robot.arm   serial number | mujoco (aioflexiv's MuJoCo Rizon, same code path)
-robot.hand  serial number | auto | dry_run (connected, never enabled) | fake (deploy/utils/fake_hand.py)
+robot.hand  serial number | auto | dry_run (connected, never enabled) | fake (deployment/utils/fake_hand.py)
 robot.mode  home        hand, then arm, to home (spec default_q, the training start pose), then exit
             free_drive  arm movable by hand (kp 0, Flexiv compensates gravity), with a soft wall before
-                        each joint limit (deploy/utils/free_drive.py); hand never enabled
+                        each joint limit (deployment/utils/free_drive.py); hand never enabled
             policy      the arm must be at home; the hand is brought home; then forward policy.py's
                         joint_target, with two safety checks (check_tracking, check_target_step)
             openloop    as policy, but the targets come from a sim rollout (openloop.path, made by
@@ -33,12 +33,12 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
-from deploy.utils.config import load_config, repo_path                                  # noqa: E402
-from deploy.utils.fake_hand import FakeHand                                             # noqa: E402
-from deploy.utils.free_drive import blend_gains, wall_gains                             # noqa: E402
-from deploy.utils.link import age, open_publisher, open_subscriber, recv_latest, send   # noqa: E402
-from deploy.utils.openloop import load_rollout                                          # noqa: E402
-from deploy.utils.spec import load_spec                                                 # noqa: E402
+from deployment.utils.config import load_config, repo_path                                  # noqa: E402
+from deployment.utils.fake_hand import FakeHand                                             # noqa: E402
+from deployment.utils.free_drive import blend_gains, wall_gains                             # noqa: E402
+from deployment.utils.link import age, open_publisher, open_subscriber, recv_latest, send   # noqa: E402
+from deployment.utils.openloop import load_rollout                                          # noqa: E402
+from deployment.utils.spec import load_spec                                                 # noqa: E402
 
 MODES = ("policy", "home", "free_drive", "openloop")
 WATCH = "watch"                           # run.py's before-'go' mode, not one to run by itself

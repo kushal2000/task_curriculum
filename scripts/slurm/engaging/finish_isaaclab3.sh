@@ -1,5 +1,5 @@
 #!/bin/bash
-# Finish .venv_isaaclab3 on Engaging after `isaaclab.sh -i` stops at isaaclab_ov.
+# Finish .venv/isaaclab3 on Engaging after `isaaclab.sh -i` stops at isaaclab_ov.
 #   scripts/slurm/submit.sh scripts/slurm/engaging/finish_isaaclab3.sh   (submit from the repo root)
 #
 # isaaclab_ov needs `ovstage`, which ships only manylinux_2_35 wheels; every Engaging node is
@@ -14,13 +14,13 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=01:00:00
-#SBATCH --output=outputs/slurm/%x_%j.out
-#SBATCH --error=outputs/slurm/%x_%j.out
+#SBATCH --output=debug_outputs/train_logs/slurm/%x_%j.out
+#SBATCH --error=debug_outputs/train_logs/slurm/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR}"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/orcd/scratch/orcd/011/hglin/.uv_cache}"
 export PATH="$HOME/.local/bin:$PATH"
-PY=.venv_isaaclab3/bin/python
+PY=.venv/isaaclab3/bin/python
 SRC=third_party/IsaacLab/source
 echo "[finish_il3] node $(hostname -s)"
 

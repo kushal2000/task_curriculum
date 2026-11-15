@@ -35,11 +35,11 @@ class GoalCfg:
 
     # Global bank of collision-free configurations in the workspace (canonical order, rad): the
     # chains' far-flung starting points. Built at env start when the file does not exist.
-    bank_file: str = "outputs/joint_reach/goal_bank_s0_n50000.pt"
+    bank_file: str = "debug_outputs/train_logs/joint_reach/goal_bank_s0_n50000.pt"
     bank_size: int = 50_000
     bank_seed: int = 0
     # Chains: one per env, `chain_length` goals each. Built at env start when the file does not exist.
-    chain_file: str = "outputs/joint_reach/goal_chains_s0_l48.pt"
+    chain_file: str = "debug_outputs/train_logs/joint_reach/goal_chains_s0_l48.pt"
     chain_length: int = 48
     chain_seed: int = 0
     # Each chain step moves every arm joint by up to this times a per-step scale drawn from
@@ -128,7 +128,7 @@ class JointReachEnvCfg(PlayEnvCfg):
     (the recipe's 12288) to fill its 50000 goals within max_bank_rounds. Until
     2026-11-14 this task ran on the left hand (``Isaacsimenvs-JointReachFlexivWujiHumanLike-Direct-v0``);
     its checkpoints and the exported
-    ``deploy/joint_reach/spec_flexiv_wuji_hl.json`` belong to that robot.
+    ``deployment/joint_reach/spec_flexiv_wuji_hl.json`` belong to that robot.
     """
 
     robot: str = "flexiv_wuji_right_human_like"
@@ -136,7 +136,7 @@ class JointReachEnvCfg(PlayEnvCfg):
     robot_root_pos: tuple[float, float, float] = (0.0, 0.51, 0.20)
     action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
     assets: AssetsCfg = AssetsCfg(
-        robot_urdf="assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
+        robot_urdf="assets/urdf/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
         table_urdf="assets/urdf/table_fold_pool.urdf",
         # One small object, parked out of reach; Play's scene needs one.
         handle_head_types=("eraser",),

@@ -1,6 +1,6 @@
 """Play trained Play-family policies live in Isaac Sim and watch them in viser.
 
-Pick a run (and checkpoint) from ``outputs/``, and the objects it is tested on: the env is built
+Pick a run (and checkpoint) from ``debug_outputs/train_logs/``, and the objects it is tested on: the env is built
 with the run's own config, one env per object, all stepped together. Objects come from training's
 12 size distributions over the 6 handle-head types, ``--num_assets_per_type`` (default 1) from
 each, so 12 envs by default. They are fresh seed-42 samples from those distributions; only at the
@@ -13,7 +13,7 @@ Isaac Sim builds one robot per process. The run dropdown lists every run of ever
 layout) without touching the env; "load env" restarts this viewer in place -- same process, same
 port -- on the chosen run's robot, and the browser reconnects once it is built (about 30 s).
 
-    OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.eval.viser_play \\
+    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.eval.viser_play \\
         --run play_scratch_flexiv_sharpa_ft05_nodr_249241 --port 8081
 
 ``--run`` takes a run name (or a unique part of one), a run directory, or a ``.pth``. The newest
@@ -42,13 +42,7 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-OUTPUTS = REPO / "outputs"
-# isaacsim-kernel pins websockets==12.0 and viser needs >=13.1. scripts/install_isaacsim.sh
-# installs a newer one here, outside the training venv; it must be first on the path before Kit
-# or viser import websockets.
-_WEBSOCKETS = REPO / "third_party" / "viser_websockets"
-if _WEBSOCKETS.is_dir():
-    sys.path.insert(0, str(_WEBSOCKETS))
+OUTPUTS = REPO / "debug_outputs" / "train_logs"
 
 #: (robot, robot_self_collision) in a run's config -> the task it trained on.
 TASK_FOR = {
@@ -64,7 +58,7 @@ SAPG_MAX_COEF = 50.0
 
 
 class Run:
-    """One training run: ``outputs/<date>/<time>/0_<name>/nn/*.pth`` plus its Hydra config."""
+    """One training run: ``debug_outputs/train_logs/<date>/<time>/0_<name>/nn/*.pth`` plus its Hydra config."""
 
     def __init__(self, run_dir: Path) -> None:
         from omegaconf import OmegaConf
@@ -78,7 +72,7 @@ class Run:
         self.robot = env.get("robot") or "kuka_sharpa"  # configs from before the field: the Kuka
         self.self_collision = bool(env.get("robot_self_collision", False))
         self.task = TASK_FOR.get((self.robot, self.self_collision))
-        # Two jobs started in the same second share one outputs/<date>/<time>/ and so one
+        # Two jobs started in the same second share one debug_outputs/train_logs/<date>/<time>/ and so one
         # .hydra/config.yaml (2026-10-09/18-04-56 holds a Flexiv and a Kuka run). The Slurm log's
         # "[train] robot=... task=..." line is per job, so it decides; on disagreement the saved
         # env config is another run's and is not used.
@@ -91,7 +85,7 @@ class Run:
 
     def _logged_robot_and_task(self) -> tuple[str, str] | None:
         m = re.search(r"_(\d+)$", self.name)
-        log = REPO / "outputs" / "slurm" / f"play_scratch_{m.group(1)}.out" if m else None
+        log = REPO / "debug_outputs" / "train_logs" / "slurm" / f"play_scratch_{m.group(1)}.out" if m else None
         if log is None or not log.is_file():
             return None
         with log.open(errors="replace") as f:

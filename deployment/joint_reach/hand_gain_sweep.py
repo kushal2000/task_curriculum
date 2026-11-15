@@ -6,11 +6,11 @@ The firmware takes kp in A/rad, the sim in Nm/rad, and the hand's torque constan
 The conversion whose replay best matches the sim trajectory is the one to deploy with.
 
     # sweep (the arm stays fake by default: only the hand moves)
-    python deploy/joint_reach/hand_gain_sweep.py --sequence <seq>.pt --hand <HAND_SN> --kp_per_nm 2 3 4 6 \
+    python deployment/joint_reach/hand_gain_sweep.py --sequence <seq>.pt --hand <HAND_SN> --kp_per_nm 2 3 4 6 \
         --hand_disabled_joints 3 17 --num_goals 3
 
     # only analyse existing replay logs
-    python deploy/joint_reach/hand_gain_sweep.py --sequence <seq>.pt --logs outputs/deploy/joint_reach/jr_replay_*.npz
+    python deployment/joint_reach/hand_gain_sweep.py --sequence <seq>.pt --logs debug_outputs/deployment/joint_reach/jr_replay_*.npz
 
 Per joint, for each run:
   dev   mean |q_real - q_sim| over the run: how far the hand's trajectory is from the sim's (main metric)
@@ -32,7 +32,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from deploy.joint_reach.core import DEFAULT_SPEC, REPO, Spec  # noqa: E402
+from deployment.joint_reach.core import DEFAULT_SPEC, REPO, Spec  # noqa: E402
 
 MAX_LAG = 30
 
@@ -98,7 +98,7 @@ def main() -> int:
     p.add_argument("--hand_disabled_joints", type=int, nargs="*", default=[])
     p.add_argument("--num_goals", type=int, default=3)
     p.add_argument("--viser_port", type=int, default=0)
-    p.add_argument("--log_dir", default="outputs/deploy/joint_reach/hand_gain_sweep")
+    p.add_argument("--log_dir", default="debug_outputs/deployment/joint_reach/hand_gain_sweep")
     p.add_argument("--yes", action="store_true")
     args = p.parse_args()
     sys.stdout.reconfigure(line_buffering=True)  # interleave with the run_real subprocesses' output
@@ -134,7 +134,7 @@ def main() -> int:
         for k, c in zip(args.kp_per_nm, kd):
             run_dir = out / f"kp{k:g}"
             before = set(run_dir.glob("*.npz"))
-            cmd = [sys.executable, str(REPO / "deploy/joint_reach/run_real.py"), "--mode", "replay", "--yes",
+            cmd = [sys.executable, str(REPO / "deployment/joint_reach/run_real.py"), "--mode", "replay", "--yes",
                    "--ckpt", "-", "--sequence", args.sequence, "--spec", args.spec,
                    "--arm", args.arm, "--hand", args.hand, "--num_goals", str(args.num_goals),
                    "--hand_kp_per_nm", str(k), "--hand_kd_per_nm", str(c),

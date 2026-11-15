@@ -1,6 +1,6 @@
 # Isaac Sim (Isaac Lab) installation
 
-`task_curriculum` runs in Isaac Sim via Isaac Lab. It requires **Python 3.11** (Isaac Sim 5.x / Isaac Lab 2.3.x requirement) and lives in a dedicated venv at `.venv_isaacsim/`.
+`task_curriculum` runs in Isaac Sim via Isaac Lab. It requires **Python 3.11** (Isaac Sim 5.x / Isaac Lab 2.3.x requirement) and lives in a dedicated venv at `.venv/isaacsim/`.
 
 ## Prerequisites
 
@@ -12,29 +12,29 @@
 ## Install
 
 ```bash
-uv venv .venv_isaacsim --python 3.11
+uv venv .venv/isaacsim --python 3.11
 
 # PyTorch for CUDA 12.6 (Isaac Sim 5.x is built against this)
-uv pip install --python .venv_isaacsim/bin/python torch --index-url https://download.pytorch.org/whl/cu126
+uv pip install --python .venv/isaacsim/bin/python torch --index-url https://download.pytorch.org/whl/cu126
 
 # Vendored rl_games (PPO + SAPG)
-uv pip install --python .venv_isaacsim/bin/python -e ./rl_games/
+uv pip install --python .venv/isaacsim/bin/python -e ./rl_games/
 
 # Inference / tooling deps
-uv pip install --python .venv_isaacsim/bin/python \
+uv pip install --python .venv/isaacsim/bin/python \
   omegaconf hydra-core "gym==0.23.1" scipy numpy yourdfpy trimesh viser \
   requests tqdm tyro huggingface_hub "imageio[ffmpeg]" wandb termcolor
 
 # Isaac Lab + Isaac Sim (~15 GB download; first launch builds RTX shaders, ~2-5 min)
-uv pip install --python .venv_isaacsim/bin/python \
+uv pip install --python .venv/isaacsim/bin/python \
   "isaaclab[isaacsim,all]==2.3.2.post1" --extra-index-url https://pypi.nvidia.com
 
 # typing_extensions fix: install AFTER isaaclab so it wins the resolution
 # (tyro CLIs need NoExtraItems from typing_extensions>=4.13; isaaclab pulls 4.12.2).
-uv pip install --python .venv_isaacsim/bin/python "typing_extensions>=4.13"
+uv pip install --python .venv/isaacsim/bin/python "typing_extensions>=4.13"
 
 # Register the repo-local package (isaacsimenvs)
-uv pip install --python .venv_isaacsim/bin/python -e . --no-deps
+uv pip install --python .venv/isaacsim/bin/python -e . --no-deps
 ```
 
 `--no-deps` on the last line is required so the repo packages install cleanly without
@@ -46,7 +46,7 @@ releases change `DirectRLEnv` / `UrdfConverter` APIs that `isaacsimenvs` depends
 Verify:
 
 ```bash
-.venv_isaacsim/bin/python -c "
+.venv/isaacsim/bin/python -c "
 import torch, isaaclab, isaacsimenvs
 print('torch:', torch.__version__, 'cuda:', torch.cuda.is_available())
 print('isaaclab:', isaaclab.__file__)

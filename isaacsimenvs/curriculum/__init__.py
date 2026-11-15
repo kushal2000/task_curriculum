@@ -10,7 +10,6 @@ Note that :mod:`.cfg` imports ``isaaclab.utils.configclass``, which only resolve
 be imported directly by tests.
 """
 
-from .cfg import CurriculumCfg
 from .core import (
     allocate_curriculum_buffers,
     curriculum_progress,
@@ -31,3 +30,13 @@ __all__ = [
     "sample_difficulty",
     "update_curriculum",
 ]
+
+
+def __getattr__(name: str):
+    # CurriculumCfg is a configclass and imports Isaac Lab, so load it on first use: importing this
+    # package (as pytest does when collecting curriculum/tests/) then stays Kit-free.
+    if name == "CurriculumCfg":
+        from .cfg import CurriculumCfg
+
+        return CurriculumCfg
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

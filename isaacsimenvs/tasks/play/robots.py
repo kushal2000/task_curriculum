@@ -320,7 +320,7 @@ _WUJI_ARMATURE = tuple(
     for name in _WUJI_JOINTS
 )
 
-# Derived by scripts/flexiv_wuji/self_collision_pairs.py (tests/test_robot_specs.py reruns it):
+# Derived by scripts/flexiv_wuji/self_collision_pairs.py (isaacsimenvs/tasks/play/tests/test_robot_specs.py reruns it):
 # each jointed pair, plus the palm (link7, into which l_wrist merges) with every finger's
 # proximal_abd -- touching at reset on the ring and pinky, and through the knuckle's range on
 # the rest, as SimToolReal filters the Sharpa's palm-to-proximal pairs.
@@ -357,7 +357,7 @@ _WUJI_SELF_COLLISION_FILTER = {
 
 # The LEFT Wuji on the Rizon. Not a selectable robot (it is not in ROBOT_SPECS): it is the base the
 # right-hand specs below are built from (arm gains, armature, fingertip order, finger regexes, the
-# self-collision filter), and tests/test_robot_specs.py checks its numbers against the left URDFs
+# self-collision filter), and isaacsimenvs/tasks/play/tests/test_robot_specs.py checks its numbers against the left URDFs
 # those values were read off.
 FLEXIV_WUJI = RobotSpec(
     name="flexiv_wuji",
@@ -368,7 +368,7 @@ FLEXIV_WUJI = RobotSpec(
     palm_body_name="link7",
     # The Kuka's palm centre carried over through the canonical hand frame (middle MCP origin,
     # knuckle-defined axes; scripts/flexiv_wuji/viser_compare.py): same spot relative to the
-    # knuckles. Depends on flexiv_wuji.MOUNT_*; tests/test_robot_specs.py recomputes it.
+    # knuckles. Depends on flexiv_wuji.MOUNT_*; isaacsimenvs/tasks/play/tests/test_robot_specs.py recomputes it.
     palm_center_offset=(-0.0018, -0.015, 0.1948),
     fingertip_body_regex="l_(thumb|index_finger|middle_finger|ring_finger|pinky)_distal",
     # The order the policy observes them in. PhysX's find_bodies(fingertip_body_regex) returns body
@@ -473,7 +473,7 @@ FLEXIV_WUJI_RIGHT_HUMAN_LIKE = RobotSpec(
 # limits (the "real" variant; cfg/robot/flexiv_wuji_right_real.yaml):
 #   * hand armature, joint friction and passive damping from the sysid of the deployed right hand
 #     (firmware 2.10.0; aiowuji sysid_fit.py MuJoCo fit of the 2026-09-30 fingers-up and 2026-10-09
-#     palm-down runs, assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json, kept out of git).
+#     palm-down runs, assets/urdf/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json; committed once copied in).
 #     MuJoCo `frictionloss` is a Coulomb torque [N m]; Isaac Sim >= 5.0 joint friction is an effort
 #     too, so it is used as both the static and the dynamic friction. MuJoCo joint `damping` is
 #     passive, so it goes in as viscous friction and the PD damping stays HAND2_DRIVE's (the deploy
@@ -488,7 +488,7 @@ FLEXIV_WUJI_RIGHT_HUMAN_LIKE = RobotSpec(
 # ----------------------------------------------------------------------------
 
 #: Per hand joint: (torque constant N m/A, armature kg m^2, passive damping N m s/rad, Coulomb
-#: friction N m), the sysid fit rounded to 4 significant figures (tests/test_robot_specs.py checks
+#: friction N m), the sysid fit rounded to 4 significant figures (isaacsimenvs/tasks/play/tests/test_robot_specs.py checks
 #: it against the JSON).
 _WUJI_RIGHT_SYSID = {
     "r_thumb_cmc_flex": (0.439, 0.0001347, 4.39e-06, 0.05382),  # thumb_S1
@@ -513,7 +513,7 @@ _WUJI_RIGHT_SYSID = {
     "r_pinky_dip": (0.157, 5.652e-05, 0.004776, 0.01838),  # pinky_S4
 }
 #: Per hand joint: the sysid fit's passive spring (stiffness N m/rad, rest angle rad), 4 significant
-#: figures. Replayed in PhysX (outputs/results/flexiv_right_sysid_replay, 11-10) it halves the tracking
+#: figures. Replayed in PhysX (debug_outputs/train_logs/results/flexiv_right_sysid_replay, 11-10) it halves the tracking
 #: error against the real trials: 23.6 -> 14.3 mrad at dt 1/120 (12.0 at 1/1000, = the MuJoCo fit).
 _WUJI_RIGHT_SPRING = {
     "r_thumb_cmc_flex": (0.0843, 0.0619),  # thumb_S1
@@ -548,7 +548,7 @@ _WUJI_RIGHT_FRICTION_SCALE = {
     j: (_WUJI_FRICTION_SCALE_THUMB if k < 4 else _WUJI_FRICTION_SCALE_FINGER)[k % 4]
     for k, j in enumerate(_WUJI_RIGHT_SYSID)  # thumb S1..S4, then index, middle, ring, pinky
 }
-#: The deploy's hand current limit [A] (deploy/simtoolreal/config.yaml hand_effort_limit).
+#: The deploy's hand current limit [A] (deployment/simtoolreal/config.yaml hand_effort_limit).
 WUJI_HAND_CURRENT_LIMIT_A = 1.0
 
 FLEXIV_WUJI_RIGHT_REAL = dataclasses.replace(

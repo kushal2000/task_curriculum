@@ -1,13 +1,13 @@
 """The rigid-chain (stage 1) and fold-pool (stage 2) fold tasks on PhysX.
 
-Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv_isaacsim``), on the Play task's own ``PlayEnv``. The task --
+Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv/isaacsim``), on the Play task's own ``PlayEnv``. The task --
 fold targets, reward, success, observations, the chain and the pool, their startup proofs -- is the
 same code the Newton envs run (``cloth_task``, ``rigid_cloth_task``, ``fold_pool_task``); this module
 only expresses the manipuland's physics in PhysX terms. Policies move between the two: train here
 (PhysX steps this robot ~10x faster than MJWarp per GPU, see ``scripts/cluster/bos14_engine_bench.sh``),
 evaluate on the Newton VBD cloth.
 
-    OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.train --headless \\
+    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.train --headless \\
         --task Isaacsimenvs-RigidClothPhysx-Direct-v0 --agent rl_games_sapg_cfg_entry_point
 
 **Contact matching** (what the Newton chain does with MJWarp-specific writes):
@@ -29,7 +29,7 @@ evaluate on the Newton VBD cloth.
   plies 14 mm apart).
 
 **Conventions.** Two Newton quirks reach the observation, and every Newton policy was trained under
-them, so they are reproduced here rather than fixed (``tests/test_physx_cloth_conventions.py``):
+them, so they are reproduced here rather than fixed (``isaacsimenvs/tasks/cloth/tests/test_physx_cloth_conventions.py``):
 
 * the task's root-pose writes to ``env.object`` arrive reordered wxyz -> xyzw (Newton's
   ``patches.install_pose_write_conversion``), so the reset yaw decode (``cloth_adapter.task_yaw``)

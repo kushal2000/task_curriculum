@@ -58,7 +58,7 @@ scene:
 # 3) assets — URDFs, procedural-generation knobs, static per-material frictions
 # -----------------------------------------------------------------------------
 assets:
-  robot_urdf: "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
+  robot_urdf: "assets/urdf/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
   table_urdf: "assets/urdf/table_narrow_flexiv.urdf"
 
   object_name: "handle_head_primitives"

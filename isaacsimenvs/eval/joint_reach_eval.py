@@ -18,7 +18,7 @@ starts small and wanders further), held for travel + --real_settle_s, rolled out
 joint positions) so the deploy code can be checked against it offline and the hardware compared
 against it online.
 
-    .venv_isaacsim/bin/python -m isaacsimenvs.eval.joint_reach_eval --headless \
+    .venv/isaacsim/bin/python -m isaacsimenvs.eval.joint_reach_eval --headless \
         --checkpoint <run>/nn/<ckpt>.pth --out <dir>
 """
 

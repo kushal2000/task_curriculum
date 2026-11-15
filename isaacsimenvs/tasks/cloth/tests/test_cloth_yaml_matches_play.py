@@ -18,7 +18,7 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
-CFG = Path(__file__).resolve().parents[1] / "isaacsimenvs" / "cfg" / "task"
+CFG = Path(__file__).resolve().parents[4] / "isaacsimenvs" / "cfg" / "task"
 
 #: Top-level keys Cloth.yaml is allowed to add, with why.
 ALLOWED_EXTRA = {

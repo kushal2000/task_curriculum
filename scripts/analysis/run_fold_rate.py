@@ -1,6 +1,6 @@
 """Training-time fold rate of rl_games runs, from their tensorboard summaries.
 
-    .venv_isaaclab3/bin/python scripts/analysis/run_fold_rate.py <run-name-substring> ...
+    .venv/isaaclab3/bin/python scripts/analysis/run_fold_rate.py <run-name-substring> ...
 
 Prints, per run, the last value (and the value at a few earlier points) of every scalar whose tag
 mentions ``fold`` -- the share of finished episodes the env counted as a held fold.
@@ -16,7 +16,7 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 def main() -> None:
     for pattern in sys.argv[1:]:
-        for run in sorted(glob.glob(f"outputs/*/*/*{pattern}*")):
+        for run in sorted(glob.glob(f"debug_outputs/train_logs/*/*/*{pattern}*")):
             ev = sorted(glob.glob(f"{run}/summaries/events*"))
             if not ev:
                 continue

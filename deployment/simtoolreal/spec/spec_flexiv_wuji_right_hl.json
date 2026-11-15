@@ -4,7 +4,7 @@
  "source_commit": "276eb9f50a406b3d018d94fd9ad3519955f56b50",
  "robot": "flexiv_wuji_right_human_like",
  "robot_urdf": "rizon4s_right_wuji_human_like_joint_limits.urdf",
- "robot_urdf_in_source": "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
+ "robot_urdf_in_source": "assets/urdf/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
  "joint_names": [
   "joint1",
   "joint2",

@@ -1,8 +1,8 @@
 """Upload finished rl_games TensorBoard runs to Weights & Biases (runs trained without --wandb_activate).
 
-    .venv_isaaclab3/bin/python -I scripts/analysis/tb_to_wandb.py --group rel3sRfsC <run_dir> [<run_dir> ...]
+    .venv/isaaclab3/bin/python -I scripts/analysis/tb_to_wandb.py --group rel3sRfsC <run_dir> [<run_dir> ...]
 
-Each <run_dir> is an ``outputs/<date>/<time>/<name>`` directory with ``summaries/events.*``. Every scalar
+Each <run_dir> is an ``debug_outputs/train_logs/<date>/<time>/<name>`` directory with ``summaries/events.*``. Every scalar
 is logged against ``env_steps`` (rl_games' frame counter); the ``*/iter`` and ``*/time`` duplicates of
 the reward / length curves are skipped. Config: the ``[ftfab]`` header lines of the matching Slurm log
 (fabric, start checkpoint, overrides). The W&B run id is the run name, so re-running replaces nothing --
@@ -19,11 +19,11 @@ from pathlib import Path
 
 
 def slurm_header(name: str) -> dict:
-    """``[ftfab]`` lines of outputs/slurm/ftfab*_<job>_0.out, keyed by the job id at the end of ``name``."""
+    """``[ftfab]`` lines of debug_outputs/train_logs/slurm/ftfab*_<job>_0.out, keyed by the job id at the end of ``name``."""
     m = re.search(r"_(\d+)$", name)
     if not m:
         return {}
-    logs = glob.glob(f"outputs/slurm/ftfab*_{m.group(1)}_*.out")
+    logs = glob.glob(f"debug_outputs/train_logs/slurm/ftfab*_{m.group(1)}_*.out")
     out = {"slurm_job": m.group(1)}
     if not logs:
         return out

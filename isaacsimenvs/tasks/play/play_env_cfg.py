@@ -679,7 +679,7 @@ class PlayFlexivWujiRightHumanLikeEnvCfg(PlayEnvCfg):
     robot_self_collision: bool = True
     action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
     assets: AssetsCfg = AssetsCfg(
-        robot_urdf="assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
+        robot_urdf="assets/urdf/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
     )
 
 

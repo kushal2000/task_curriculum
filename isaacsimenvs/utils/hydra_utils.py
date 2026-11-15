@@ -20,6 +20,7 @@ exactly as Isaac Lab's own decorator does.
 """
 
 from __future__ import annotations
+import sys
 
 import functools
 from collections.abc import Callable
@@ -145,6 +146,12 @@ def hydra_task_config_with_yaml(
                     merged_agent = agent_cfg
                 func(env_cfg_restored, merged_agent, *args, **kwargs)
 
+            # Hydra's default run dir is outputs/<date>/<time>/ under the cwd; put runs in the
+            # repo's debug_outputs/train_logs/ instead, unless the command line sets its own.
+            if not any(a.startswith("hydra.run.dir=") for a in sys.argv[1:]):
+                from isaacsimenvs.utils.paths import HYDRA_RUN_DIR
+
+                sys.argv.append(f"hydra.run.dir={HYDRA_RUN_DIR}")
             hydra_main()
 
         return wrapper

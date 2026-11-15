@@ -12,7 +12,7 @@ Reads the clips + outcome files `bos14_rigid_cloth_render_examples.sh` writes to
 * the failure is TYPICAL rather than dramatic: the policy's most frequent cloth failure mode, and
   within it the clip with the median best fold error.
 
-    .venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_pick_examples.py
+    .venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_pick_examples.py
 """
 
 from __future__ import annotations

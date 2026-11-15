@@ -2,7 +2,7 @@
 
 Run perception.py (camera) first, with the eraser lying flat where the lift will start, then:
 
-    .venv_deploy/bin/python deploy/simtoolreal/checks/measure_eraser.py [--seconds 3] [--out <dir>]
+    .venv_deploy/bin/python deployment/simtoolreal/checks/measure_eraser.py [--seconds 3] [--out <dir>]
 
 It averages FoundationPose's object_pose (the mesh's own frame, robot base frame) over --seconds and
 converts it to what record_lift.py places in the env frame:
@@ -29,10 +29,10 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))   # repo root, for deploy.*
-from deploy.utils.config import REPO, load_config                    # noqa: E402
-from deploy.utils.link import open_subscriber, recv_wait              # noqa: E402
-from deploy.utils.quat import quat_apply                              # noqa: E402
-from deploy.utils.spec import base_to_env, load_spec                  # noqa: E402
+from deployment.utils.config import REPO, load_config                    # noqa: E402
+from deployment.utils.link import open_subscriber, recv_wait              # noqa: E402
+from deployment.utils.quat import quat_apply                              # noqa: E402
+from deployment.utils.spec import base_to_env, load_spec                  # noqa: E402
 
 MESH = HERE.parent / "objects" / "flat_eraser" / "flat_eraser.obj"
 

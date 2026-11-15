@@ -1,7 +1,7 @@
 """The policy node: object pose + joint state in, joint targets out, at 60 Hz.
 
-    .venv_deploy/bin/python deploy/simtoolreal/policy.py config=deploy/simtoolreal/config.yaml [overrides]
-Usually started by run.py (with the robot, viewer and recorder, deploy/nodes/).
+    .venv_deploy/bin/python deployment/simtoolreal/policy.py config=deployment/simtoolreal/config.yaml [overrides]
+Usually started by run.py (with the robot, viewer and recorder, deployment/nodes/).
 
 Subscribes  object_pose (perception), joint_state (robot)
 Publishes   joint_target (to the robot), goal_pose (for the viewer and the recorder)
@@ -26,14 +26,14 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
-from deploy.simtoolreal.goals import first_goal, is_near, next_goal, object_corners, rollout_goals   # noqa: E402
-from deploy.utils.config import load_config, object_names, repo_path                                # noqa: E402
-from deploy.utils.link import age, open_publisher, open_subscriber, recv_latest, send               # noqa: E402
-from deploy.utils.observation import NUM_OBS, build_obs                                              # noqa: E402
-from deploy.utils.policy_net import (OBJECT_LOST_BELOW_TABLE, action_to_targets,         # noqa: E402
+from deployment.simtoolreal.goals import first_goal, is_near, next_goal, object_corners, rollout_goals   # noqa: E402
+from deployment.utils.config import load_config, object_names, repo_path                                # noqa: E402
+from deployment.utils.link import age, open_publisher, open_subscriber, recv_latest, send               # noqa: E402
+from deployment.utils.observation import NUM_OBS, build_obs                                              # noqa: E402
+from deployment.utils.policy_net import (OBJECT_LOST_BELOW_TABLE, action_to_targets,         # noqa: E402
                                      load_network, wait_for_inputs, wait_step)
-from deploy.utils.robot_model import load_robot_model                                                # noqa: E402
-from deploy.utils.spec import base_to_env, env_to_base, load_spec                                    # noqa: E402
+from deployment.utils.robot_model import load_robot_model                                                # noqa: E402
+from deployment.utils.spec import base_to_env, env_to_base, load_spec                                    # noqa: E402
 
 
 def main() -> None:

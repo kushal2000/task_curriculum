@@ -5,7 +5,7 @@ Goals follow held-out random-walk chains (as joint_reach_eval), or the real-robo
 (real_test_sequence.pt) in every env. The menu sets the DR condition (joint_reach_eval's) and can fix
 the obs / action delay; both restart the goal sequence.
 
-    .venv_isaacsim/bin/python -m isaacsimenvs.eval.joint_reach_viser --headless \
+    .venv/isaacsim/bin/python -m isaacsimenvs.eval.joint_reach_viser --headless \
         --checkpoint <run>/nn/<ckpt>.pth --real_sequence <dir>/real_test_sequence.pt --port 8083
 """
 

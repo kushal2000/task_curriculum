@@ -1,6 +1,6 @@
 """View checks/record_lift.py's rollouts in viser, side by side, before sending one to the robot.
 
-    .venv_deploy/bin/python deploy/simtoolreal/checks/view_lifts.py <out dir> [<out dir> ...] \
+    .venv_deploy/bin/python deployment/simtoolreal/checks/view_lifts.py <out dir> [<out dir> ...] \
         [--measured T_base_obj.npy] [--port 8092]
 
 Each <out dir> holds an openloop.npz. Pick one in the panel, then what to play:
@@ -26,12 +26,12 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))   # repo root, for deploy.*
-from deploy.utils.config import REPO                    # noqa: E402
-from deploy.utils.spec import base_to_env, load_spec    # noqa: E402
+from deployment.utils.config import REPO                    # noqa: E402
+from deployment.utils.spec import base_to_env, load_spec    # noqa: E402
 
 MESH = HERE.parent / "objects" / "flat_eraser" / "flat_eraser.obj"
-MESH_DIR = REPO / "assets" / "flexiv_wuji"
-CAMERA = REPO / "deploy" / "calibration" / "extrinsics" / "left_camera_nov7.json"
+MESH_DIR = REPO / "assets" / "urdf" / "flexiv_wuji"
+CAMERA = REPO / "deployment" / "calibration" / "extrinsics" / "left_camera_nov7.json"
 STREAM_WH = (640, 480)        # perception's stream: the 4:3 centre of the calibrated 16:9 image
 
 
@@ -90,7 +90,7 @@ def main() -> None:
     p.add_argument("--camera", type=Path, default=CAMERA, help="extrinsics json (T_base_cam, intrinsics); 'none': off")
     args = p.parse_args()
 
-    spec = load_spec(REPO / "deploy/simtoolreal/spec/spec_flexiv_wuji_right_hl.json")
+    spec = load_spec(REPO / "deployment/simtoolreal/spec/spec_flexiv_wuji_right_hl.json")
     rolls = {}
     for d in args.dirs:
         if (d / "openloop.npz").exists():

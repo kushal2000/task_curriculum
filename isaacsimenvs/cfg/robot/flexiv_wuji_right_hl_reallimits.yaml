@@ -5,4 +5,4 @@ robot: flexiv_wuji_right_human_like
 robot_self_collision: true
 robot_root_pos: [0.0, 0.51, 0.20]
 assets:
-  robot_urdf: "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
+  robot_urdf: "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"

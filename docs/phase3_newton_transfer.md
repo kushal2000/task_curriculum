@@ -21,7 +21,7 @@ scripts/newton_py -m isaacsimenvs.eval.episodes \
   --single_variant --max_steps 12000 'env.assets.handle_head_types=[hammer]'
 
 # PhysX, identical protocol
-.venv_isaacsim/bin/python -m isaacsimenvs.eval.episodes \
+.venv/isaacsim/bin/python -m isaacsimenvs.eval.episodes \
   --task Isaacsimenvs-Play-Direct-v0 --num_envs 64 --num_assets_per_type 1 \
   --single_variant --max_steps 12000 --headless 'env.assets.handle_head_types=[hammer]'
 ```

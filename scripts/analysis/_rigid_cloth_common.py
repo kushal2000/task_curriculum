@@ -5,7 +5,7 @@ which imports `isaaclab.envs` -- and Isaac Lab's sub-namespaces only resolve aft
 booted Kit. The geometry module, the MuJoCo probe and the figure scripts deliberately need neither,
 so they load what they need straight off disk and the package `__init__` never runs.
 
-`tests/conftest.py` holds the same helper for the same reason and keeps its own copy on purpose: a
+`isaacsimenvs/utils/testing.py` holds the same helper for the same reason and keeps its own copy on purpose: a
 conftest has to be importable with nothing but the repo on `sys.path`, and `scripts/` is reached
 through implicit namespace packages (`python -m scripts.analysis.X`), which a pytest run does not
 set up. Two copies of six lines, rather than a test suite that depends on a scripts directory.

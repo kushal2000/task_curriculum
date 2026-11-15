@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import REPO_ROOT  # noqa: E402  pytest puts tests/ on sys.path
+from isaacsimenvs.utils.testing import REPO_ROOT
 
 INIT = (0.0, 0.2)
 FINAL = (0.0, 1.0)
@@ -151,7 +151,7 @@ def _levels_seen(env, core, n_max=8):
 def core():
     import sys, types
     # core imports .schedulers relatively; give it a package to live in.
-    from conftest import load_module
+    from isaacsimenvs.utils.testing import load_module
     pkg = types.ModuleType("curric"); pkg.__path__ = [str(REPO_ROOT / "isaacsimenvs/curriculum")]
     sys.modules["curric"] = pkg
     load_module("isaacsimenvs/curriculum/schedulers.py", "curric.schedulers")

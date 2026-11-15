@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Submit one of the job scripts here, from the repo root, with its log in outputs/slurm/.
+# Submit one of the job scripts here, from the repo root, with its log in debug_outputs/train_logs/slurm/.
 #
 #   scripts/slurm/submit.sh [sbatch options] scripts/slurm/<train|eval|viser>.sh [job args]
 #
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-mkdir -p "${ROOT}/outputs/slurm"
+mkdir -p "${ROOT}/debug_outputs/train_logs/slurm"
 
 opts=()
 while [[ $# -gt 0 && "$1" == -* ]]; do opts+=("$1"); shift; done
@@ -27,5 +27,5 @@ job="$1"; shift
 log="%x_%j"
 for o in "${opts[@]}"; do [[ "$o" == --array=* ]] && log="%x_%A_%a"; done
 
-exec sbatch --chdir="${ROOT}" --output="${ROOT}/outputs/slurm/${log}.out" \
-    --error="${ROOT}/outputs/slurm/${log}.out" "${opts[@]}" "${job}" "$@"
+exec sbatch --chdir="${ROOT}" --output="${ROOT}/debug_outputs/train_logs/slurm/${log}.out" \
+    --error="${ROOT}/debug_outputs/train_logs/slurm/${log}.out" "${opts[@]}" "${job}" "$@"

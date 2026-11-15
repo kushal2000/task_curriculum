@@ -57,7 +57,7 @@ from pathlib import Path
 import numpy as np
 import zmq
 
-NODES_DIR = Path(__file__).resolve().parents[1] / "nodes"   # deploy/nodes: the shared nodes
+NODES_DIR = Path(__file__).resolve().parents[1] / "nodes"   # deployment/nodes: the shared nodes
 
 # every topic -> its publisher's port key in config.yaml `bus`
 TOPIC_PORTS = {"joint_state": "joint_state_port", "joint_target": "policy_port", "goal_pose": "policy_port",
@@ -140,7 +140,7 @@ def age(msg: dict) -> float:
 
 
 def start_node(script: str | Path, *overrides: str) -> subprocess.Popen:
-    """Start another node: a shared one by name ("viewer.py", in deploy/nodes/) or any script by path
+    """Start another node: a shared one by name ("viewer.py", in deployment/nodes/) or any script by path
     (a task's policy.py), with this process's command-line overrides (so both read the same config),
     then `overrides` (these win; a task's run.py adds config=<its config>). Its own session: a Ctrl-C
     in the terminal reaches only this process, which ends the child with stop_node."""

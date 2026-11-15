@@ -12,9 +12,9 @@ import pytest
 import torch
 import yaml
 
-# Imports Isaac Lab at module level. Under .venv_isaacsim that boots Kit (and stops at its EULA
-# prompt during collection), so these run in the kit-less .venv_isaaclab3 only.
-pytest.importorskip("isaaclab_newton", reason="needs the kit-less Isaac Lab 3 stack (.venv_isaaclab3)")
+# Imports Isaac Lab at module level. Under .venv/isaacsim that boots Kit (and stops at its EULA
+# prompt during collection), so these run in the kit-less .venv/isaaclab3 only.
+pytest.importorskip("isaaclab_newton", reason="needs the kit-less Isaac Lab 3 stack (.venv/isaaclab3)")
 
 from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv  # noqa: E402
 

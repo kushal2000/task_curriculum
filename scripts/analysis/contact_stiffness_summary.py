@@ -1,6 +1,6 @@
 """Tabulate the contact-stiffness benchmark (scripts/cluster/bos14_contact_stiffness_bench.sh).
 
-    .venv_isaaclab3/bin/python scripts/analysis/contact_stiffness_summary.py [--speed_job <id>]
+    .venv/isaaclab3/bin/python scripts/analysis/contact_stiffness_summary.py [--speed_job <id>]
 
 Fold rate = ``done_fold_<shape>`` among finished episodes (held 10 steps at 1.5 cm), as
 ``fold_pool_eval_summary.py`` counts it; both eval seeds pooled. Also the outcome mix (fall /
@@ -38,8 +38,8 @@ def _episodes(path: Path) -> tuple[list[dict], dict]:
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--results", default="outputs/results/contact_stiffness")
-    p.add_argument("--speed_job", default=None, help="speed array job id (outputs/slurm/cstiff_<id>_<cfg>.out)")
+    p.add_argument("--results", default="debug_outputs/train_logs/results/contact_stiffness")
+    p.add_argument("--speed_job", default=None, help="speed array job id (debug_outputs/train_logs/slurm/cstiff_<id>_<cfg>.out)")
     args = p.parse_args()
 
     groups: dict[tuple, list[dict]] = defaultdict(list)
@@ -86,7 +86,7 @@ def main() -> None:
     if args.speed_job:
         print("\nspeed (1536 envs, rl_games fps step, mean of the second half of the epochs)")
         for i, cfg in enumerate(CFGS):
-            log = Path(f"outputs/slurm/cstiff_{args.speed_job}_{i}.out")
+            log = Path(f"debug_outputs/train_logs/slurm/cstiff_{args.speed_job}_{i}.out")
             if not log.exists():
                 continue
             fps = [float(x.replace(",", "")) for x in re.findall(r"fps step\s*:\s*([0-9,.]+)", log.read_text())]

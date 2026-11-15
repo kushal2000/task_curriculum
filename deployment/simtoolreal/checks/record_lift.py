@@ -4,7 +4,7 @@ Runs on the TRAINING branch's code (kushal/2026-10-30_pretraining_real), like re
 On the cluster: scripts/cluster/bos14_simtoolreal_lift.sh. By hand:
 
     cd <branch worktree>
-    PYTHONPATH=$PWD:$PWD/rl_games .venv_isaacsim/bin/python \
+    PYTHONPATH=$PWD:$PWD/rl_games .venv/isaacsim/bin/python \
         /home/yiboc/mit/task_curriculum_deployment/deploy/simtoolreal/checks/record_lift.py --headless \
         --checkpoint <nov6_dr.txt> --out <dir>
 
@@ -62,8 +62,8 @@ import time
 from pathlib import Path
 
 TASK = "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0"
-DEPLOY_REPO = Path(__file__).resolve().parents[3]   # deploy/simtoolreal/checks -> repo root
-MESH = DEPLOY_REPO / "deploy" / "simtoolreal" / "objects" / "flat_eraser" / "flat_eraser.obj"
+DEPLOY_REPO = Path(__file__).resolve().parents[3]   # deployment/simtoolreal/checks -> repo root
+MESH = DEPLOY_REPO / "deployment" / "simtoolreal" / "objects" / "flat_eraser" / "flat_eraser.obj"
 TABLE_TOP_Z = 0.28           # the env's default table top (spec table_top_z_env); --table_top moves it
 DROP_M = 0.001               # start this far above the table, so it settles without a jump
 SIM_WIDER_DEG = 5.0          # every arm joint limit in the sim spec is this much wider than the real

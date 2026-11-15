@@ -3,18 +3,18 @@
 Runs the rigid2deform policies (branch `yiboc_wuji`: rigid plates standing in for a deformable sheet)
 on the real robot. `task` in [config.yaml](config.yaml) picks the task; so far there is one, `fold`.
 
-The robot, perception, viewer, recorder and playback are the shared nodes in `deploy/nodes/`, the
-same as SimToolReal's; [deploy/simtoolreal/README.md](../simtoolreal/README.md) describes them
+The robot, perception, viewer, recorder and playback are the shared nodes in `deployment/nodes/`, the
+same as SimToolReal's; [deployment/simtoolreal/README.md](../simtoolreal/README.md) describes them
 (setup on the robot PC, robot modes, safety, recording, playback). This folder has the task's own
 parts:
 
 | file | what |
 |---|---|
-| [run.py](run.py) | the entry point: the shared nodes + policy.py on config.yaml (deploy/utils/runner.py) |
+| [run.py](run.py) | the entry point: the shared nodes + policy.py on config.yaml (deployment/utils/runner.py) |
 | [policy.py](policy.py) | the policy loop of each task (`TASKS`): perception → sheet particles → observation → LSTM → joint targets |
 | [fold.py](fold.py) | task=fold: the sheet's grid points → what the policy observes, and the success test |
 | [sheets/](sheets/__init__.py) | where the grid points come from, by the object's `perception`: `rigid_plates.py` (two FoundationPose plates), `cloth_points.py` (CoTracker cloth: placeholder) |
-| [perception.py](perception.py) | the perception node for object.name's perception (FoundationPose: `deploy/nodes/perception.py`), or with `perception.source=fake` fake_perception.py |
+| [perception.py](perception.py) | the perception node for object.name's perception (FoundationPose: `deployment/nodes/perception.py`), or with `perception.source=fake` fake_perception.py |
 | [fake_perception.py](fake_perception.py) | no camera: what the perception node would send for a still sheet |
 | [config.yaml](config.yaml) | every setting, complete (not an overlay of SimToolReal's) |
 | `spec/` | the fold spec json + the robot URDF with the real joint limits |
@@ -23,9 +23,9 @@ parts:
 | `checks/` | the spec exporter, and the check of fold.py against the training code |
 
 Every node reads config.yaml: run.py and policy.py directly, the shared nodes because run.py passes them
-`config=deploy/rigid2deform/config.yaml` (start one by hand with that argument too). Override any value
+`config=deployment/rigid2deform/config.yaml` (start one by hand with that argument too). Override any value
 on the command line with dotted keys. To print the merged config:
-`.venv_deploy/bin/python deploy/utils/config.py config=deploy/rigid2deform/config.yaml <overrides>`.
+`.venv_deploy/bin/python deployment/utils/config.py config=deployment/rigid2deform/config.yaml <overrides>`.
 
 ## Objects and perception
 
@@ -36,23 +36,23 @@ for every sheet.
 
 | perception | object.name | node (topic) | settings |
 |---|---|---|---|
-| `foundationpose` | `[moving plate, stationary plate]`, two rigid plates taped along one edge | `deploy/nodes/perception.py` (`object_poses`), one per plate | the sheet size and the hinge axis from the plates' meshes; `fold.hinge_z` (null: half the thickness), `fold.max_hinge_gap_m` |
-| `cotracker` | `[cloth]` | `deploy/nodes/point_tracker.py` (`object_points`): not written yet | `fold.sheet_size` (required; more with the node) |
+| `foundationpose` | `[moving plate, stationary plate]`, two rigid plates taped along one edge | `deployment/nodes/perception.py` (`object_poses`), one per plate | the sheet size and the hinge axis from the plates' meshes; `fold.hinge_z` (null: half the thickness), `fold.max_hinge_gap_m` |
+| `cotracker` | `[cloth]` | `deployment/nodes/point_tracker.py` (`object_points`): not written yet | `fold.sheet_size` (required; more with the node) |
 
 `cloth` is in the config as a placeholder: `object.name=[cloth]` stops with "not implemented yet".
-`deploy/nodes/perception.py` refuses an object whose perception is not `foundationpose`.
+`deployment/nodes/perception.py` refuses an object whose perception is not `foundationpose`.
 
 ## Fold: the fold-pool policies on two taped plates
 
 Two plates taped along one edge make a sheet; the policy turns one plate over onto the other.
 
 ```bash
-PY=.venv_deploy/bin/python; D=deploy/rigid2deform
+PY=.venv_deploy/bin/python; D=deployment/rigid2deform
 ARM="robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>"
 $PY $D/run.py robot.mode=home $ARM
 # perception: both plates, the MOVING one first (one box to click per plate)
 ~/miniconda3/envs/foundationpose/bin/python $D/perception.py
-# the run (flat7RW_base by default; any of the five: policy.checkpoint=deploy/rigid2deform/policy/<name>.pth)
+# the run (flat7RW_base by default; any of the five: policy.checkpoint=deployment/rigid2deform/policy/<name>.pth)
 $PY $D/run.py $ARM record.name=fold_try1
 ```
 
@@ -118,9 +118,9 @@ share every one of these (`export_fold_spec.py --compare`):
   settings as a section of config.yaml, its geometry next to fold.py.
 - A perception (e.g. finishing cotracker): a sheet source module in `sheets/` with the functions in
   `sheets/__init__.py` (`TOPIC`, `init`, `start`, `update` → particles, stop, status, info,
-  goal_mesh_pose), registered in `SOURCES`; its node in `deploy/nodes/` if another task could use it;
+  goal_mesh_pose), registered in `SOURCES`; its node in `deployment/nodes/` if another task could use it;
   its fake message in fake_perception.py.
-- Code another deploy folder could use goes in `deploy/utils/`.
+- Code another deploy folder could use goes in `deployment/utils/`.
 
 ## Not verified yet
 

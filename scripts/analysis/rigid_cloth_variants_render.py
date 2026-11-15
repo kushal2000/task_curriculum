@@ -16,7 +16,7 @@ an earlier version of the uniform render managed to show a correct 2 mm fold as 
 
 Offscreen via OSMesa, so it runs headless:
 
-    MUJOCO_GL=osmesa .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_variants_render
+    MUJOCO_GL=osmesa .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_variants_render
 """
 
 from __future__ import annotations

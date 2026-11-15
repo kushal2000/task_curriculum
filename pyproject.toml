@@ -8,8 +8,8 @@ version = "0.1.0"
 description = "Cloth-folding RL on Isaac Lab: rigid-body Play, rigid-plate and VBD cloth fold envs (PhysX and Newton), and the real-robot deploy for the Flexiv Rizon 4s + Wuji Hand 2."
 readme = "README.md"
 # Upper bound raised from <3.12 for the Newton backend: Isaac Lab 3.0 requires Python 3.12,
-# and the same source tree is editable-installed into both venvs (.venv_isaacsim on 3.11,
-# .venv_isaaclab3 on 3.12) so that one copy of the task and eval code serves both.
+# and the same source tree is editable-installed into both venvs (.venv/isaacsim on 3.11,
+# .venv/isaaclab3 on 3.12) so that one copy of the task and eval code serves both.
 requires-python = ">=3.10,<3.13"
 license = { text = "MIT" }
 authors = [
@@ -59,3 +59,14 @@ dev = [
 include = [
     "isaacsimenvs*",
 ]
+
+# Every tool cache lives under .cache/ (gitignored), one subfolder per tool.
+[tool.pytest.ini_options]
+cache_dir = ".cache/pytest"
+# Tests live next to the code they check (isaacsimenvs/**/tests/); isaacsimenvs/conftest.py is the
+# shared setup. importlib mode: the tests/ folders need no __init__.py and same-named files can't clash.
+testpaths = ["isaacsimenvs"]
+addopts = "--import-mode=importlib"
+
+[tool.ruff]
+cache-dir = ".cache/ruff"

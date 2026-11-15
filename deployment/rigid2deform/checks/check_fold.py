@@ -16,7 +16,7 @@ mesh poses through random box symmetries must come back as the right sheet frame
 frame to frame. Then the rigid_plates source end to end: the poses fake_perception.py sends -> the flat sheet's grid. Exits
 non-zero on any mismatch.
 
-    .venv_deploy/bin/python deploy/rigid2deform/checks/check_fold.py
+    .venv_deploy/bin/python deployment/rigid2deform/checks/check_fold.py
 """
 
 from __future__ import annotations
@@ -32,15 +32,15 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))   # repo root, for deploy.*
-from deploy.rigid2deform.fold import (fold_geometry, mat_to_wxyz, observe, quat_to_mat,          # noqa: E402
+from deployment.rigid2deform.fold import (fold_geometry, mat_to_wxyz, observe, quat_to_mat,          # noqa: E402
                                       rotation_angle, score, sheet_points)
-from deploy.rigid2deform.sheets import rigid_plates                                              # noqa: E402
-from deploy.rigid2deform.sheets.rigid_plates import (BOX_SYMMETRIES, particles, plate_layout,    # noqa: E402
+from deployment.rigid2deform.sheets import rigid_plates                                              # noqa: E402
+from deployment.rigid2deform.sheets.rigid_plates import (BOX_SYMMETRIES, particles, plate_layout,    # noqa: E402
                                                      plate_poses, start_frames, update_frames)
-from deploy.utils.config import load_config, repo_path                                          # noqa: E402
-from deploy.utils.observation import keypoints_world                                            # noqa: E402
-from deploy.utils.spec import base_to_env, load_spec                                            # noqa: E402
-from deploy.utils.spec_export import git_show                                                   # noqa: E402
+from deployment.utils.config import load_config, repo_path                                          # noqa: E402
+from deployment.utils.observation import keypoints_world                                            # noqa: E402
+from deployment.utils.spec import base_to_env, load_spec                                            # noqa: E402
+from deployment.utils.spec_export import git_show                                                   # noqa: E402
 
 REF = "origin/yiboc_wuji"
 CLOTH = "isaacsimenvs/tasks/cloth"

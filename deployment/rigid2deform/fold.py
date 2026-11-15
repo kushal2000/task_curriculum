@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from deploy.utils.quat import quat_apply
+from deployment.utils.quat import quat_apply
 
 FOLD_FLIP = np.diag([-1.0, 1.0, -1.0])    # 180 deg about the sheet's y (the hinge), fold_axis x
 

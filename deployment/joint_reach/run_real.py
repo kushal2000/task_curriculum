@@ -12,18 +12,17 @@ runs the chain. Each goal is scored as in sim (reached: every arm joint within 1
 joint within 3 deg at the end of its hold) and printed next to the sim's result.
 
     # no hardware: MuJoCo arm (aioflexiv's bundled Rizon, no hand on it) + a first-order fake hand
-    python deploy/joint_reach/run_real.py --arm mujoco --hand fake --ckpt <ckpt>.pth --sequence <seq>.pt
+    python deployment/joint_reach/run_real.py --arm mujoco --hand fake --ckpt <ckpt>.pth --sequence <seq>.pt
 
     # hardware, hand connected but never enabled (aiowuji dry_run), arm live
-    python deploy/joint_reach/run_real.py --arm <ROBOT_SN> --hand dry_run ...
+    python deployment/joint_reach/run_real.py --arm <ROBOT_SN> --hand dry_run ...
 
     # hardware, both live; --num_goals 3 runs only the first three goals
-    python deploy/joint_reach/run_real.py --arm <ROBOT_SN> --hand <HAND_SN> --num_goals 3 ...
+    python deployment/joint_reach/run_real.py --arm <ROBOT_SN> --hand <HAND_SN> --num_goals 3 ...
 
 Install (the robot PC; Python >= 3.12 for aioflexiv, no Isaac Sim):
-    scripts/fetch_deploy_deps.sh
     pip install torch numpy pyyaml omegaconf gym==0.23.1 -e rl_games -e third_party/aioflexiv -e third_party/aiowuji
-and copy the checkpoint and real_test_sequence.pt over (outputs/ and outputs/results/ are not in git).
+and copy the checkpoint and real_test_sequence.pt over (debug_outputs/train_logs/ and debug_outputs/train_logs/results/ are not in git).
 --viser_port 8090 opens a live view (measured robot, goal ghost, fingertip goals); it also needs viser yourdfpy.
 Check the install with check_offline.py first.
 
@@ -49,7 +48,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from deploy.joint_reach.core import DEFAULT_SPEC, REPO, ActionPipeline, GoalSequence, Policy, Spec, build_obs  # noqa: E402
+from deployment.joint_reach.core import DEFAULT_SPEC, REPO, ActionPipeline, GoalSequence, Policy, Spec, build_obs  # noqa: E402
 
 
 class Abort(RuntimeError):
@@ -209,7 +208,7 @@ def _parse() -> argparse.Namespace:
     p.add_argument("--viewer", action="store_true", help="MuJoCo viewer for --arm mujoco")
     p.add_argument("--viser_port", type=int, default=0,
                    help="if set, a live viser view (measured robot + goal ghost) on this port, in its own process")
-    p.add_argument("--log_dir", default="outputs/deploy/joint_reach")
+    p.add_argument("--log_dir", default="debug_outputs/deployment/joint_reach")
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     return p.parse_args()
 
@@ -282,7 +281,7 @@ async def run(args: argparse.Namespace) -> int:
     async with contextlib.AsyncExitStack() as stack:
         viewer = None
         if args.viser_port:
-            from deploy.joint_reach.live_viser import LiveViewer
+            from deployment.joint_reach.live_viser import LiveViewer
 
             urdf = REPO / json.loads(Path(args.spec).read_text())["robot_urdf"]
             viewer = LiveViewer(urdf, spec.joint_names, na, spec.arm_tol, spec.hand_tol, len(seq.goals),

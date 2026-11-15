@@ -13,8 +13,8 @@ flat_eraser.obj's is 35 mm from the center).
     # FoundationPose env, terminal 1
     python live_tracking.py --mesh_path <eraser.obj> --publish_udp 127.0.0.1:5005
     # deploy env, terminal 2 (check in sim first)
-    python deploy/calibration/follow_eraser.py --arm mujoco --viewer
-    python deploy/calibration/follow_eraser.py --arm <ROBOT_SN>
+    python deployment/calibration/follow_eraser.py --arm mujoco --viewer
+    python deployment/calibration/follow_eraser.py --arm <ROBOT_SN>
 
 Before you start, move the arm (free drive in calibrate_compare.py, or move_home.py) to a pose with the
 flange pointing roughly down, 5-10 cm above the eraser: the height and orientation it keeps. Ctrl+C stops.
@@ -45,7 +45,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from deploy.joint_reach.core import DEFAULT_SPEC, Spec  # noqa: E402
+from deployment.joint_reach.core import DEFAULT_SPEC, Spec  # noqa: E402
 
 
 def _parse() -> argparse.Namespace:

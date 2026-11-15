@@ -29,7 +29,7 @@ __all__ = [
 #: They live **here** rather than only on ``RigidClothCfg`` so the bake can read them without
 #: importing the env config. That is not a style choice: ``RigidClothCfg`` inherits from
 #: ``ClothEnvCfg`` -> ``PlayEnvCfg``, which constructs a ``SimulationCfg(physics=...)`` that exists
-#: only in Isaac Lab 3.0. The bake runs under ``.venv_isaacsim``, where that keyword does not exist,
+#: only in Isaac Lab 3.0. The bake runs under ``.venv/isaacsim``, where that keyword does not exist,
 #: so importing the config chain there raises ``TypeError`` before a single chain is written -- and
 #: Kit's shutdown path exits 0, so the bake reported success and baked nothing.
 #:

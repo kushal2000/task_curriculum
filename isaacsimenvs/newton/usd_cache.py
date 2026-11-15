@@ -2,8 +2,8 @@
 
 ``scene_utils._convert_urdf_to_usd`` drives ``isaaclab.sim.converters.UrdfConverter``, which needs
 the Kit URDF-importer extension. Newton runs kit-less and has no Kit, so conversion cannot happen
-there at all. The split is therefore: **bake once under ``.venv_isaacsim``, read under
-``.venv_isaaclab3``.**
+there at all. The split is therefore: **bake once under ``.venv/isaacsim``, read under
+``.venv/isaaclab3``.**
 
 There is a second, independent reason to do it this way even where Kit *is* available. Both
 backends then consume byte-identical geometry, converted by one importer. Without that, a
@@ -12,7 +12,7 @@ were produced, and is unattributable.
 
 Populate (Isaac Sim venv)::
 
-    OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.newton.usd_cache \
+    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.newton.usd_cache \
         --populate --num_assets_per_type 4
 
 Consume: :func:`install_reader` runs automatically from ``PlayNewtonEnv``.
@@ -37,7 +37,7 @@ from pathlib import Path
 from isaacsimenvs.newton import compat
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CACHE_DIR = REPO_ROOT / ".usd_cache"
+DEFAULT_CACHE_DIR = REPO_ROOT / ".cache" / "usd"
 
 _MANIFEST_NAME = "manifest.json"
 
@@ -116,7 +116,7 @@ def install_reader(cache_dir: Path = DEFAULT_CACHE_DIR) -> None:
     if not cache_dir.is_dir():
         raise RuntimeError(
             f"USD cache missing at {cache_dir}. Populate it first:\n"
-            "  OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python "
+            "  OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python "
             "-m isaacsimenvs.newton.usd_cache --populate"
         )
 

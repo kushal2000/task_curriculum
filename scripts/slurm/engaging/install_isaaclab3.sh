@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build .venv_isaaclab3 (scripts/install_isaaclab3.sh) on an Engaging CPU node, off the login node.
+# Build .venv/isaaclab3 (scripts/install_isaaclab3.sh) on an Engaging CPU node, off the login node.
 #   scripts/slurm/submit.sh scripts/slurm/engaging/install_isaaclab3.sh   (submit from the repo root)
 #SBATCH --job-name=install_il3
 #SBATCH --partition=mit_normal
@@ -8,8 +8,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
-#SBATCH --output=outputs/slurm/%x_%j.out
-#SBATCH --error=outputs/slurm/%x_%j.out
+#SBATCH --output=debug_outputs/train_logs/slurm/%x_%j.out
+#SBATCH --error=debug_outputs/train_logs/slurm/%x_%j.out
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR}"
 module load cmake/3.27.9

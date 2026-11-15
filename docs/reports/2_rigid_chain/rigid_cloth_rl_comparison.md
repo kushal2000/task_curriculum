@@ -361,7 +361,7 @@ because the same class of failure will recur in anything that emulates one manip
 
 **1. The bake imported the env config, and exited 0 having baked nothing.** `bake_rigid_cloth`
 imported `RigidClothCfg`, which inherits `PlayEnvCfg`, which builds a `SimulationCfg(physics=...)`
-that only Isaac Lab 3.0 accepts. The bake runs under `.venv_isaacsim`, where that raises `TypeError` —
+that only Isaac Lab 3.0 accepts. The bake runs under `.venv/isaacsim`, where that raises `TypeError` —
 and Kit's shutdown path calls `os._exit(0)`, so the job reported success. Fixed by moving the three
 URDF parameters into `rigid_cloth_assets.URDF_DEFAULTS`, which the kit-free assets module owns, and
 by making the bake job count the chains it actually baked instead of trusting the exit status.
@@ -761,12 +761,12 @@ TASK=Isaacsimenvs-Cloth-Direct-v0 NUM_ENVS=768 sbatch --array=0-0 \
 sbatch --array=0-17 scripts/cluster/bos14_rigid_cloth_train.sh
 
 # 4. cross-evaluate: every policy on its own manipuland AND on the cloth
-.venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_eval_manifest.py --job <train_job> \
-    --reference outputs/.../nn/0_pretrained_s1_resume_150911.pth
+.venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_eval_manifest.py --job <train_job> \
+    --reference debug_outputs/train_logs/.../nn/0_pretrained_s1_resume_150911.pth
 sbatch --array=0-<N> scripts/cluster/bos14_rigid_cloth_eval.sh
 
 # 5. collate
-.venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_collect.py --job <train_job>
+.venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_collect.py --job <train_job>
 
 # 6. film the same pairs under the evaluation's own settings (four clips)
 sbatch --exclude=bos14-node-092 --array=0-3 scripts/cluster/bos14_rigid_cloth_render.sh
@@ -779,18 +779,18 @@ sbatch --array=0-6 scripts/cluster/bos14_rigid_cloth_match.sh
 sbatch --array=0-11 scripts/cluster/bos14_rigid_cloth_retrain.sh
 sbatch --dependency=afterany:<train_job> --array=0-47 --export=ALL,TRAIN_JOB=<train_job> \
     scripts/cluster/bos14_rigid_cloth_eval_rc2.sh
-.venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py \
+.venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py \
     --round rc2 --round 1 --round 1-e1536 --cutoff 4cm
 
 # the same at both fold cutoffs, which is a second set of evaluation RUNS rather than a re-scoring
 EXTRA_ARGS=env.cloth.keypoint_tolerance=0.015 OUT_PREFIX=docs/results/rc_eval_tol15_ \
     sbatch --array=0-53 --export=ALL,TRAIN_JOB=<train_job> \
     scripts/cluster/bos14_rigid_cloth_eval_rc2.sh
-.venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py \
+.venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py \
     --round rc2 --format rate --exclude_seed box2-surface:fixdr:3
 
 # round 3: the same three fixes on the three many-slat chains, on 96 GB cards
 sbatch --array=0-17 scripts/cluster/bos14_rigid_cloth_retrain_rc3.sh
 sbatch --array=0-77 --export=ALL,TRAIN_JOB=<rc3_job> scripts/cluster/bos14_rigid_cloth_eval_rc3.sh
-.venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py --round rc3 --round rc2
+.venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py --round rc3 --round rc2
 ```

@@ -2,7 +2,7 @@
 
 **What.** `Isaacsimenvs-RigidClothPhysx-Direct-v0` (stage 1, one chain) and
 `Isaacsimenvs-FoldPoolPhysx-Direct-v0` (stage 2, the shape pool) run the rigid fold tasks on PhysX
-(Isaac Sim 5.1, `.venv_isaacsim`) instead of Newton/MJWarp. The task -- reward, fold criterion,
+(Isaac Sim 5.1, `.venv/isaacsim`) instead of Newton/MJWarp. The task -- reward, fold criterion,
 observations, the chain and pool adapters, every startup proof -- is the same code as the Newton
 envs (`cloth_task.py`, `rigid_cloth_task.py`, `fold_pool_task.py`); `physx_envs.py` only expresses
 the manipuland's physics in PhysX terms. Policies are still evaluated on Newton's VBD cloth.
@@ -162,7 +162,7 @@ caps that; the evaluated checkpoint is then at most 60 s stale.
   de-instanced before editing.
 * Rest offset (= Newton's margin, +7.000 mm measured); contact offset fixed above the margin-DR
   range because PhysX rejects rest >= contact.
-* Newton checkpoints pickle `numpy._core` (numpy 2); `.venv_isaacsim` has numpy 1.26 -- aliased in
+* Newton checkpoints pickle `numpy._core` (numpy 2); `.venv/isaacsim` has numpy 1.26 -- aliased in
   `rl_games/algos_torch/torch_ext.safe_load`.
 * `OMNI_KIT_ACCEPT_EULA=YES` is required in batch jobs.
 * Hydra rejects an int for a float field (`...stiffness=100000` -> pass `100000.0`).
@@ -180,7 +180,7 @@ caps that; the evaluated checkpoint is then at most 60 s stale.
     TAG=<name> EXTRA_ARGS="env.physx_chain.hinge_armature=0.001" sbatch --array=0-5 scripts/cluster/bos14_physx_chain_screen.sh
     python3 scripts/analysis/physx_chain_screen_summary.py
     OUT_TAG=_<name> STAGE=replay EXTRA_ARGS="..." sbatch --array=5 scripts/cluster/bos14_contact_fingerprint.sh
-    .venv_isaaclab3/bin/python scripts/analysis/flick_probe_summary.py docs/results/fingerprint_physx_on_physx_*.pt
+    .venv/isaaclab3/bin/python scripts/analysis/flick_probe_summary.py docs/results/fingerprint_physx_on_physx_*.pt
     # validation, scene-build profile
     sbatch --array=0-11 scripts/cluster/bos14_physx_cloth_validate.sh
     ENVS=6144 sbatch scripts/cluster/bos14_physx_build_profile.sh

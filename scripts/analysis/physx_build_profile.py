@@ -1,6 +1,6 @@
 """cProfile the construction of a PhysX fold env: which calls grow faster than the env count.
 
-    .venv_isaacsim/bin/python scripts/analysis/physx_build_profile.py --headless \\
+    .venv/isaacsim/bin/python scripts/analysis/physx_build_profile.py --headless \\
         --task Isaacsimenvs-RigidClothPhysx-Direct-v0 --num_envs 4096 --out prof_4096.txt
 
 Writes the top functions by cumulative and by own time to ``--out`` (text) and the raw stats next to

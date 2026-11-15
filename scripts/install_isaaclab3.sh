@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build the Isaac Lab 3.0 / Newton venv (.venv_isaaclab3), alongside the existing
-# .venv_isaacsim rather than replacing it.
+# Build the Isaac Lab 3.0 / Newton venv (.venv/isaaclab3), alongside the existing
+# .venv/isaacsim rather than replacing it.
 #
 # Isaac Lab 2.3 needs Python 3.11 and Isaac Lab 3.0 needs 3.12, so the two cannot share an
 # interpreter. Both venvs editable-install this same source tree, so `isaacsimenvs.eval`,
@@ -14,32 +14,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV="${ROOT}/${VENV_DIR:-.venv_isaaclab3}"
+VENV="${ROOT}/${VENV_DIR:-.venv/isaaclab3}"
 PY="${VENV}/bin/python"
 LAB="${ROOT}/third_party/IsaacLab"
 
-# Pinned rather than tracking `develop`. This is the tree the SimToolReal->Newton port in
-# github.com/kushal2000/isaac_newton was developed and measured against; its compat patches are
-# written against these exact APIs, and Isaac Lab 3.0 is under active development.
-LAB_COMMIT="a27ec0beb2345cb4618e31b8e42bc09c557ee193"
-# Upstream has since retired `develop`, so clone the default branch and fetch the pinned SHA by
-# itself (GitHub still serves it) rather than relying on any branch containing it.
-
-echo "==> Isaac Lab source checkout: ${LAB}"
-if [[ ! -d "${LAB}/.git" ]]; then
-  mkdir -p "${ROOT}/third_party"
-  # git-lfs is not installed on this machine and IsaacLab registers an LFS filter. The LFS
-  # payloads are documentation media, not code, so the filter is disabled outright rather than
-  # skipped -- with `git-lfs` absent, leaving it registered fails the checkout entirely
-  # ("git-lfs filter-process: not found / the remote end hung up unexpectedly").
-  git -c filter.lfs.smudge= -c filter.lfs.process= -c filter.lfs.required=false \
-      clone https://github.com/isaac-sim/IsaacLab.git "${LAB}"
-fi
-git -C "${LAB}" cat-file -e "${LAB_COMMIT}^{commit}" 2>/dev/null \
-  || git -C "${LAB}" fetch -q origin "${LAB_COMMIT}"
-git -C "${LAB}" -c filter.lfs.smudge= -c filter.lfs.process= -c filter.lfs.required=false \
-    checkout -q "${LAB_COMMIT}"
-echo "    pinned at $(git -C "${LAB}" rev-parse --short HEAD) (VERSION $(cat "${LAB}/VERSION" 2>/dev/null || echo '?'))"
+# Isaac Lab is vendored in the repo at the commit the Newton compat patches (isaacsimenvs/newton/)
+# are written against -- see third_party/VENDORED.md; bump it with scripts/vendor_third_party.sh.
+echo "==> Isaac Lab source: ${LAB} (VERSION $(cat "${LAB}/VERSION" 2>/dev/null || echo '?'))"
+[[ -f "${LAB}/isaaclab.sh" ]] || { echo "missing ${LAB}: it is committed, check the clone" >&2; exit 1; }
 
 echo "==> Creating ${VENV} (Python 3.12)"
 # A Slurm requeue (preemption) reruns this from the top over a half-built venv, which uv refuses
@@ -77,7 +59,7 @@ command -v cmake >/dev/null || {
 }
 (cd "${LAB}" && VIRTUAL_ENV="${VENV}" ./isaaclab.sh -i)
 
-echo "==> Repo packages (same source tree as .venv_isaacsim)"
+echo "==> Repo packages (same source tree as .venv/isaacsim)"
 uv pip install --python "${PY}" -e "${ROOT}/rl_games" --no-deps
 uv pip install --python "${PY}" -e "${ROOT}" --no-deps
 # The Kit-free suite must pass under *both* interpreters -- that is what demonstrates the shared

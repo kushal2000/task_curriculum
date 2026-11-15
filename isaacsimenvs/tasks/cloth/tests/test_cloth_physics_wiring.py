@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-_YAML = Path(__file__).resolve().parents[1] / "isaacsimenvs" / "cfg" / "task" / "Cloth.yaml"
+_YAML = Path(__file__).resolve().parents[4] / "isaacsimenvs" / "cfg" / "task" / "Cloth.yaml"
 
 
 @pytest.fixture(scope="module")

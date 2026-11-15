@@ -6,7 +6,7 @@ the real setup's table and home pose). This script reads that branch's files str
 robots.py (joint order, gains, palm / fingertip bodies and offsets, home pose), the task YAML (action
 pipeline, obs layout, keypoints, table, goal sampling, success test, DR) and the robot URDF (joint
 limits, arm effort limits) -- and writes them in one file, in the policy's joint order
-(deploy/utils/spec_export.py builds the fields). The deploy
+(deployment/utils/spec_export.py builds the fields). The deploy
 code then holds no hand-copied numbers. Writes spec/ (the spec json, and the URDF for the FK).
 
 Static on purpose: the joint limits here are the URDF's, which PhysX normally keeps as they are;
@@ -14,8 +14,8 @@ check_rec1.py (a sim rollout run through the deploy code) checks that. --rollout
 fingertip order the observation really uses, which only the sim rollout shows. The spec in spec/
 was made with:
 
-    .venv_deploy/bin/python deploy/simtoolreal/checks/export_spec.py \
-        --rollout_meta outputs/results/simtoolreal/rec1/rollout_meta.json
+    .venv_deploy/bin/python deployment/simtoolreal/checks/export_spec.py \
+        --rollout_meta debug_outputs/train_logs/results/simtoolreal/rec1/rollout_meta.json
 """
 
 from __future__ import annotations
@@ -28,9 +28,9 @@ from pathlib import Path
 
 import yaml
 
-HERE = Path(__file__).resolve().parent     # deploy/simtoolreal/checks
+HERE = Path(__file__).resolve().parent     # deployment/simtoolreal/checks
 sys.path.insert(0, str(HERE.parents[2]))   # repo root, for deploy.*
-from deploy.utils.spec_export import ROBOT_ROOT_POS, ROBOTS_PY, git_show, rev_parse, spec_fields, table_box   # noqa: E402
+from deployment.utils.spec_export import ROBOT_ROOT_POS, ROBOTS_PY, git_show, rev_parse, spec_fields, table_box   # noqa: E402
 
 DEFAULT_REF = "origin/kushal/2026-10-30_pretraining_real"
 TASK = "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0"

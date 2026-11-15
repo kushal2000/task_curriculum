@@ -1,6 +1,6 @@
 """Tabulate fold-pool evaluations (bos14_fold_pool_eval.sh) by shape and by sheet size.
 
-    .venv_isaaclab3/bin/python scripts/analysis/fold_pool_eval_summary.py --train_job 156603
+    .venv/isaaclab3/bin/python scripts/analysis/fold_pool_eval_summary.py --train_job 156603
 
 Each eval JSON holds one episode per env. The pool env publishes ``done_shape_<shape>`` and
 ``done_fold_<shape>`` per episode, which ``isaacsimenvs.eval.episodes`` keeps as
@@ -60,7 +60,7 @@ def _row(recs: list[dict]) -> str:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--train_job", required=True)
-    p.add_argument("--results", default="outputs/results")
+    p.add_argument("--results", default="debug_outputs/train_logs/results")
     p.add_argument("--prefix", default="fp_eval_")
     args = p.parse_args()
 

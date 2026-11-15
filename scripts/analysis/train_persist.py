@@ -2,7 +2,7 @@
 
     python scripts/analysis/train_persist.py <run_name> [--last 20] [--tag episode_final/done_persist]
 
-Reads outputs/*/*/<run_name>/summaries/events* (TensorBoard) and prints the mean of the tag's last N
+Reads debug_outputs/train_logs/*/*/<run_name>/summaries/events* (TensorBoard) and prints the mean of the tag's last N
 values (``nan`` if the run or tag has none). Used by engaging_fabric_curriculum.sh to decide whether a
 contact-layer stage has learned enough to move on.
 """
@@ -20,7 +20,7 @@ def main() -> None:
     p.add_argument("--tag", default="episode_final/done_persist")
     a = p.parse_args()
     vals = []
-    for f in sorted(glob.glob(f"outputs/*/*/{a.run}/summaries/events*")):
+    for f in sorted(glob.glob(f"debug_outputs/train_logs/*/*/{a.run}/summaries/events*")):
         ea = EventAccumulator(f, size_guidance={"scalars": 0})
         ea.Reload()
         tags = ea.Tags()["scalars"]

@@ -1,5 +1,5 @@
 """Code shared by every deploy task (simtoolreal, rigid2deform, ...). numpy only, except config (omegaconf)
-and link (pyzmq). The shared nodes are in deploy/nodes/, each task's run.py / policy.py in its folder.
+and link (pyzmq). The shared nodes are in deployment/nodes/, each task's run.py / policy.py in its folder.
 
 config       a task's config.yaml + command-line overrides
 link         ZMQ messages between the processes (the topic table is there), starting nodes

@@ -2,8 +2,8 @@
 """Aggregate cloth-fold eval JSONs into the numbers the finetune is judged on.
 
 Usage:
-    python scripts/analysis/cloth_fold_summary.py outputs/results/cloth_nohold_s*.json
-    python scripts/analysis/cloth_fold_summary.py --label finetuned outputs/results/cloth_ft_s*.json
+    python scripts/analysis/cloth_fold_summary.py debug_outputs/train_logs/results/cloth_nohold_s*.json
+    python scripts/analysis/cloth_fold_summary.py --label finetuned debug_outputs/train_logs/results/cloth_ft_s*.json
 
 Reports the two fold criteria separately, because the gap between them IS a diagnostic: many
 first-entries with few holds means the flap reaches the target and springs back.

@@ -1,14 +1,10 @@
-"""Load repo modules by file path, bypassing package `__init__` chains.
+"""Shared pytest setup for every test under isaacsimenvs/ (pytest loads this file automatically).
 
-`import isaacsimenvs.<anything>` fires `isaacsimenvs/__init__.py`, which imports every
-task package, which imports `isaaclab.envs` — and Isaac Lab's sub-namespaces only resolve
-after `AppLauncher` has booted Kit. Booting Kit for a unit test would take minutes and a
-GPU.
-
-So the modules under test are deliberately Kit-free (`generate_cartpole`,
-`generate_bottle`, `difficulty_math`, `curriculum/schedulers`), and this helper loads
-them straight off disk so the package `__init__` never runs. If a test here starts
-needing Kit, the module it is testing has grown a dependency it should not have.
+* Kit guard: in .venv/isaacsim, importing Isaac Lab would boot Kit. ``_NoKitIsaacLab`` makes those
+  imports fail fast, and the hooks below turn that failure into a skip, so the Isaac-Lab-backed
+  tests skip there and run in .venv/isaaclab3.
+* Session fixtures: Kit-free modules that many tests share, loaded once per run with
+  ``isaacsimenvs.utils.testing.load_module`` (by file path, bypassing package ``__init__`` chains).
 """
 
 from __future__ import annotations
@@ -19,22 +15,22 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from isaacsimenvs.utils.testing import REPO_ROOT, load_module  # noqa: F401  re-exported
 
 
 class _NoKitIsaacLab:
     """Make ``import isaaclab*`` raise ModuleNotFoundError where it would boot Kit.
 
-    Under ``.venv_isaacsim`` (Isaac Lab 2.3), importing ``isaaclab`` bootstraps the Omniverse Kit
+    Under ``.venv/isaacsim`` (Isaac Lab 2.3), importing ``isaaclab`` bootstraps the Omniverse Kit
     kernel: minutes of startup, an interactive EULA prompt, and a ``SystemExit`` when stdin is not a
     terminal -- which ``pytest.importorskip`` does not catch, so one such import took the whole
     session down. The Isaac-Lab-backed tests are written for the kit-less Isaac Lab 3 stack
-    (``.venv_isaaclab3``); here they skip instead. Installed only when that stack is absent.
+    (``.venv/isaaclab3``); here they skip instead. Installed only when that stack is absent.
     """
 
     def find_spec(self, name, path=None, target=None):
         if name == "isaaclab" or name.startswith(("isaaclab.", "isaaclab_")):
-            raise ModuleNotFoundError(f"{name}: Isaac Lab would boot Kit here; run this test in .venv_isaaclab3")
+            raise ModuleNotFoundError(f"{name}: Isaac Lab would boot Kit here; run this test in .venv/isaaclab3")
         return None
 
 
@@ -61,19 +57,6 @@ def _skip_if_kit_blocked():
     exc = outcome.excinfo
     if exc is not None and issubclass(exc[0], ModuleNotFoundError) and _NO_KIT_MARK in str(exc[1]):
         outcome.force_exception(pytest.skip.Exception(str(exc[1]), _use_item_location=True))
-
-
-def load_module(rel_path: str, name: str | None = None):
-    """Import `rel_path` (relative to the repo root) as a standalone module."""
-    path = REPO_ROOT / rel_path
-    name = name or path.stem
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:  # pragma: no cover - import plumbing
-        raise ImportError(f"Could not load {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 @pytest.fixture(scope="session")

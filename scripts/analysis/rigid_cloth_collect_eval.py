@@ -1,19 +1,19 @@
 """Collate the rigid-cloth cross-evaluation into the tables `rigid_cloth_rl_comparison.md` prints.
 
-Reads the per-run JSONs that `bos14_rigid_cloth_eval*.sh` writes into `outputs/results/`, pools them
+Reads the per-run JSONs that `bos14_rigid_cloth_eval*.sh` writes into `debug_outputs/train_logs/results/`, pools them
 over eval seeds, and emits one markdown table plus a per-training-seed breakdown. Every published
 table in the write-up is this one program under different flags:
 
     # round 2 (the two matched chains) against round 1 and the reference, at the 4 cm cutoff
-    .venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py \
+    .venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py \
         --round rc2 --round 1 --cutoff 4cm
 
     # the same policies at both cutoffs, dropping the diverged box2-surface fixdr seed
-    .venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py \
+    .venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py \
         --round rc2 --format rate --exclude_seed box2-surface:fixdr:3
 
     # round 3 (the three many-slat chains), carrying round 2 into the same table
-    .venv_isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py --round rc3 --round rc2
+    .venv/isaaclab3/bin/python scripts/analysis/rigid_cloth_collect_eval.py --round rc3 --round rc2
 
 It replaced three forked copies of itself (`_rc2`, `_rc3`, `_tol15`), which differed by an arm list,
 a row label and a percent format while duplicating the pooling -- and had drifted apart: only one of
@@ -33,7 +33,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-RESULTS = Path(__file__).resolve().parents[2] / "outputs/results"
+RESULTS = Path(__file__).resolve().parents[2] / "debug_outputs/train_logs/results"
 
 #: (target, label suffix) per column. "own" is the policy's own manipuland, "vbd" the real cloth;
 #: the bare suffix is the pinned start pose and `__rand` the randomised one.

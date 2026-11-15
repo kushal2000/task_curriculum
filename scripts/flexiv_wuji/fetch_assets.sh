@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Fetch the Flexiv Rizon 4s arm and the Wuji Hand 2 into assets/flexiv_wuji/.
+# Fetch the Flexiv Rizon 4s arm and the Wuji Hand 2 into assets/urdf/flexiv_wuji/.
 #
 #   flexiv_description/  github.com/flexivrobotics/flexiv_description: the Rizon 4s xacro expanded
 #                        to urdf/Rizon4s.urdf with upstream's own create_urdf.py, and its meshes.
 #   wuji_hand2/          github.com/wuji-technology/wuji-description, hand2/hand2_beta2/body: the
 #                        vendor URDFs (with and without the wrist mount), meshes, and MJCF (the
 #                        source of the provisional hand gains in isaacsimenvs/tasks/play/robots.py,
-#                        which tests/test_robot_specs.py checks against it). Beta 2
+#                        which isaacsimenvs/tasks/play/tests/test_robot_specs.py checks against it). Beta 2
 #                        at the commit wuji-hand-teleop's wujihand_urdf was copied from, so the
 #                        hand matches assets/g1_wuji2_description/.
 #
@@ -27,7 +27,7 @@ WUJI_SHA=${WUJI_SHA:-b13f7d52b23cb79e35357303c72b7f61f1d2fda2}
 WUJI_SRC=hand2/hand2_beta2/body
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-DEST=$ROOT/assets/flexiv_wuji
+DEST=$ROOT/assets/urdf/flexiv_wuji
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

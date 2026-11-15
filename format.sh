@@ -15,7 +15,7 @@ echo "xmllint: assets/**/*.urdf"
 # g1_wuji2_description and flexiv_wuji are fetched verbatim from upstream (scripts/*/fetch_assets.sh);
 # leave them be.
 find assets -name "*.urdf" -type f -not -path "assets/g1_wuji2_description/*" \
-  -not -path "assets/flexiv_wuji/*" \
+  -not -path "assets/urdf/flexiv_wuji/*" \
   -exec xmllint --format "{}" --output "{}" \;
 
 echo "✅ Formatting complete."

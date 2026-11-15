@@ -8,10 +8,10 @@ real robot. Trained on branch `kushal/2026-10-30_pretraining_real`, task
 
 Each part is its own process (a "node"). They talk over ZMQ on one machine: every publisher binds
 its own port, and any number of processes can subscribe. Every pose on the bus is in the robot base
-frame. The topics and their fields are listed in [deploy/utils/link.py](../utils/link.py).
+frame. The topics and their fields are listed in [deployment/utils/link.py](../utils/link.py).
 
-The nodes other than the policy are shared with the other deploy tasks (`deploy/rigid2deform/`):
-they live in `deploy/nodes/`, the code every task uses in `deploy/utils/`. This folder has Play's
+The nodes other than the policy are shared with the other deploy tasks (`deployment/rigid2deform/`):
+they live in `deployment/nodes/`, the code every task uses in `deployment/utils/`. This folder has Play's
 own parts: `run.py`, `policy.py`, `goals.py`, `config.yaml`, the spec, the eraser, the checks.
 
 ```
@@ -28,15 +28,15 @@ robot.mode=openloop: no policy, no perception; robot.py sends a sim rollout's jo
 
 | node | runs in | what |
 |---|---|---|
-| [run.py](run.py) | `.venv_deploy` | the entry point: starts the nodes for a robot.mode, ends them on Ctrl-C ([deploy/utils/runner.py](../utils/runner.py)) |
+| [run.py](run.py) | `.venv_deploy` | the entry point: starts the nodes for a robot.mode, ends them on Ctrl-C ([deployment/utils/runner.py](../utils/runner.py)) |
 | [perception.py](perception.py) → [nodes/perception.py](../nodes/perception.py) | FoundationPose env, robot PC GPU | RealSense → FoundationPose → `object_pose` (+ `camera_image` for the viewer); `perception.source=fake`: a fixed pose, no camera (any env) |
 | [robot.py](../nodes/robot.py) | `.venv_deploy` | arm (aioflexiv; or its MuJoCo arm) + hand (aiowuji; or `fake`, no hand); modes `home`, `free_drive`, `policy`, `openloop` |
 | [policy.py](policy.py) | `.venv_deploy` | observation → LSTM → joint targets; goals and the goal test |
 | [viewer.py](../nodes/viewer.py) | `.venv_deploy` | live viser page: robot, targets, object, goal, camera, topic status |
-| [recorder.py](../nodes/recorder.py) | `.venv_deploy` | every message → `outputs/deploy/simtoolreal/recordings/<date>/<date>_<time>_<name>.jsonl` |
+| [recorder.py](../nodes/recorder.py) | `.venv_deploy` | every message → `debug_outputs/deployment/simtoolreal/recordings/<date>/<date>_<time>_<name>.jsonl` |
 | [playback.py](../nodes/playback.py) | `.venv_deploy` | plays a recording back in viser; exports an mp4; never moves the robot |
 
-Other folders: `deploy/utils/` (code every task uses, see [\_\_init\_\_.py](../utils/__init__.py)),
+Other folders: `deployment/utils/` (code every task uses, see [\_\_init\_\_.py](../utils/__init__.py)),
 `spec/` (facts exported from the training env, and the robot URDF), `objects/` (object meshes),
 `checks/` (offline checks against a recorded sim rollout, and the scripts that make the spec and
 the rollout).
@@ -44,17 +44,17 @@ the rollout).
 ## Config
 
 Every node reads [config.yaml](config.yaml): run.py and policy.py directly, the shared nodes because
-run.py passes them `config=deploy/simtoolreal/config.yaml` (start one by hand with that argument too).
+run.py passes them `config=deployment/simtoolreal/config.yaml` (start one by hand with that argument too).
 Override any value on the command line with dotted keys: `run.py robot.mode=home robot.arm=<ROBOT_SN>`.
 A key that is not in the file is an error (a typo stops the run instead of being ignored). To print
-the merged config: `.venv_deploy/bin/python deploy/utils/config.py config=deploy/simtoolreal/config.yaml <overrides>`.
+the merged config: `.venv_deploy/bin/python deployment/utils/config.py config=deployment/simtoolreal/config.yaml <overrides>`.
 
 The spec json (`spec/`) is not a setting: it is copied from the training env. Never edit it by hand.
 
 ## Setup on the robot PC
 
-- `.venv_deploy` (Python 3.12) with `third_party/aioflexiv` and `third_party/aiowuji` (fetched at pinned
-  SHAs by `scripts/fetch_deploy_deps.sh`), plus
+- `.venv_deploy` (Python 3.12) with `third_party/aioflexiv` and `third_party/aiowuji` (vendored at pinned
+  SHAs, `third_party/VENDORED.md`), plus
   `pip install pyzmq "viser==1.1.0" yourdfpy imageio-ffmpeg` (imageio-ffmpeg: the ffmpeg that
   recorder.py and playback.py encode mp4s with).
 - The FoundationPose environment (conda env `foundationpose`, the `kushal2000/FoundationPose` checkout at
@@ -62,7 +62,7 @@ The spec json (`spec/`) is not a setting: it is copied from the training env. Ne
 - The checkpoint at `pretrained_policy/nov6_dr.pth` (gitignored).
 - The robot meshes for the viewer: `scripts/flexiv_wuji/fetch_assets.sh` (the right hand is gitignored).
 - In `config.yaml`: `perception.foundationpose_dir` (the checkout) and `perception.extrinsics` (the
-  camera pose from `deploy/calibration/calibrate_compare.py`; now `left_camera_nov7.json`, D415
+  camera pose from `deployment/calibration/calibrate_compare.py`; now `left_camera_nov7.json`, D415
   821312062243). perception.py opens the camera named in the extrinsics file and refuses another;
   after moving the camera, calibrate again and point `perception.extrinsics` at the new file.
 - The hand and its mount must be set up as the Flexiv tool payload. Flexiv compensates gravity
@@ -73,7 +73,7 @@ The spec json (`spec/`) is not a setting: it is copied from the training env. Ne
 MuJoCo arm, fake hand, fixed object. Two terminals, from the repo root:
 
 ```bash
-PY=.venv_deploy/bin/python; D=deploy/simtoolreal; C=config=$D/config.yaml
+PY=.venv_deploy/bin/python; D=deployment/simtoolreal; C=config=$D/config.yaml
 $PY $D/perception.py perception.source=fake
 $PY $D/run.py robot.arm=mujoco robot.hand=fake run.duration_s=30   # viewer at http://localhost:8091
 ```
@@ -83,7 +83,7 @@ The object does not move here, so no goal is ever reached; each goal times out a
 ## Run on the robot
 
 ```bash
-PY=.venv_deploy/bin/python; D=deploy/simtoolreal; C=config=$D/config.yaml
+PY=.venv_deploy/bin/python; D=deployment/simtoolreal; C=config=$D/config.yaml
 ARM="robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>"
 
 # 1. get the robot to home (the training start pose, spec default_q)
@@ -128,8 +128,8 @@ the hand is connected but never enabled.
 - Ctrl-C on run.py ends everything, in this order: policy, robot (holds, then stops; stopping the
   hand disables it, so the fingers go limp), recorder, viewer.
 
-The nodes can also run one by one, each in its own terminal (`deploy/nodes/robot.py $C robot.mode=...`,
-`deploy/nodes/viewer.py $C`, `policy.py`, `deploy/nodes/recorder.py $C record.name=...`): that is all
+The nodes can also run one by one, each in its own terminal (`deployment/nodes/robot.py $C robot.mode=...`,
+`deployment/nodes/viewer.py $C`, `policy.py`, `deployment/nodes/recorder.py $C record.name=...`): that is all
 run.py does.
 
 ## robot modes
@@ -151,7 +151,7 @@ eraser must lie where the sim's did; nothing checks it.
 
 1. Record the rollout in the training env (Isaac Sim, the training branch's worktree):
    ```bash
-   OUT=$PWD/outputs/results/simtoolreal/lift1 EXTRA_ARGS="--num_envs 256 --candidates 16" \
+   OUT=$PWD/debug_outputs/train_logs/results/simtoolreal/lift1 EXTRA_ARGS="--num_envs 256 --candidates 16" \
        sbatch scripts/cluster/bos14_simtoolreal_lift.sh
    ```
    [checks/record_lift.py](checks/record_lift.py): the env's eraser box pinned to the DexToolBench
@@ -186,7 +186,7 @@ the reason in `joint_state` (`tripped`), so policy.py stops and the viewer shows
 ## Recording and playback
 
 `run.py record.name=<name>` starts recorder.py for that run. It writes every message, as sent, to
-`outputs/deploy/simtoolreal/recordings/<date>/<date>_<time>_<name>.jsonl` (gitignored). Line 1 is the run's full config. Size: about
+`debug_outputs/deployment/simtoolreal/recordings/<date>/<date>_<time>_<name>.jsonl` (gitignored). Line 1 is the run's full config. Size: about
 25 MB/min. recorder.py can also run on its own, e.g. to record a free-drive session.
 
 `record.camera=true` also records the camera: perception.py sends every camera frame raw
@@ -197,7 +197,7 @@ Recordings from before Nov 9 evening have the viewer's 10 Hz JPEGs in the .jsonl
 reads those too.
 
 ```bash
-$PY deploy/nodes/playback.py outputs/deploy/simtoolreal/recordings/<file>.jsonl      # http://localhost:8091: time slider, play, speed
+$PY deployment/nodes/playback.py debug_outputs/deployment/simtoolreal/recordings/<file>.jsonl      # http://localhost:8091: time slider, play, speed
 ```
 
 To export a video, set the 3D view in the browser, then click "export mp4". The browser tab renders
@@ -207,7 +207,7 @@ every frame, the camera image goes on the right, and the video is saved next to 
 ## Checks
 
 `checks/check_rec1.py` runs the deploy code on a rollout recorded in the training env
-(`outputs/results/simtoolreal/rec1`) and compares the numbers.
+(`debug_outputs/train_logs/results/simtoolreal/rec1`) and compares the numbers.
 
 | | max error |
 |---|---|
@@ -217,8 +217,8 @@ every frame, the camera image goes on the right, and the video is saved next to 
 | network actions, CPU vs the sim's GPU | mean 0.004, max 0.09 |
 | own goal sampler vs training's rules (2000 goals) | no rule broken |
 
-Run it after any change to `deploy/utils/observation.py`, `deploy/utils/robot_model.py`,
-`deploy/utils/policy_net.py`, `goals.py` or `policy.py`, and after a new checkpoint or spec. The
+Run it after any change to `deployment/utils/observation.py`, `deployment/utils/robot_model.py`,
+`deployment/utils/policy_net.py`, `goals.py` or `policy.py`, and after a new checkpoint or spec. The
 rollout (32 MB) is gitignored, so it runs only where the rollout is.
 
 | script | what | runs in |

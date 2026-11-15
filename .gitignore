@@ -8,7 +8,6 @@ __pycache__/
 .eggs/
 build/
 dist/
-.pytest_cache/
 
 # Virtual environments
 .venv/
@@ -16,25 +15,37 @@ dist/
 venv/
 env/
 
-# EVERY run artifact goes under outputs/ (isaacsimenvs/utils/paths.py): Hydra run dirs
-# outputs/<date>/<time>/, outputs/wandb/, outputs/slurm/ (scripts/slurm/submit.sh), outputs/results/
-# (eval JSONs and probe dumps), outputs/videos/, outputs/deploy/ (robot recordings and logs).
-outputs/
+# EVERY run artifact goes under debug_outputs/ (isaacsimenvs/utils/paths.py): train_logs/ (Hydra run
+# dirs <date>/<time>/, wandb/, slurm/, results/), videos/ and deployment/ (real-robot recordings and logs).
+debug_outputs/
+# The pre-2026-11-15 location, still present in older checkouts: move it to debug_outputs/train_logs/.
+/outputs/
 
-# Pre-restructure output locations, still present in older checkouts: move their contents into
-# outputs/ (wandb/ -> outputs/wandb/, slurm_logs/ -> outputs/slurm/, videos/ -> outputs/videos/).
+# Every tool cache, one subfolder per tool: usd/ (the baked URDF->USD cache the Newton envs read;
+# written under .venv/isaacsim, regenerate with `python -m isaacsimenvs.newton.usd_cache --populate`),
+# pytest/, ruff/ (pyproject.toml points both here).
+.cache/
+
+# third_party/ is NOT ignored: vendored upstream source, committed (third_party/VENDORED.md).
+
+# Pre-restructure locations, still present in older checkouts: move run artifacts into
+# debug_outputs/train_logs/ (wandb/ -> wandb/, slurm_logs/ -> slurm/), videos/ into
+# debug_outputs/videos/, and caches into .cache/ (.usd_cache/ -> .cache/usd/).
 /wandb/
 /slurm_logs/
 /videos/
 /experiments/
+/.usd_cache/
+/.pytest_cache/
+/.ruff_cache/
 /train_dir/
 /evals/
 /runs/
 
 # Deploy-time state on the robot PC: camera calibration captures and the fitted extrinsics.
-deploy/calibration/captures/
-deploy/calibration/compare/
-deploy/calibration/extrinsics/
+deployment/calibration/captures/
+deployment/calibration/compare/
+deployment/calibration/extrinsics/
 
 # Downloaded artifacts (on portal, pretrained_policy is a symlink to
 # /share/portal/kk837/simtoolreal/pretrained_policy, hence no trailing slash).
@@ -50,27 +61,10 @@ pretrained_assembly/
 /isaac_cache/
 /lift1.zip
 
-# Baked URDF->USD cache: written under .venv_isaacsim, read by the kit-less Newton venv.
-# Regenerate with `python -m isaacsimenvs.newton.usd_cache --populate`.
-.usd_cache/
-
-# Third-party source checkouts, fetched at pinned SHAs instead of being submodules:
-# IsaacLab (scripts/install_isaaclab3.sh) and the robot drivers aioflexiv / aiowuji
-# (scripts/fetch_deploy_deps.sh).
-third_party/
-
-# Flexiv Rizon 4s + Wuji Hand 2 models, fetched at pinned upstream SHAs by
-# scripts/flexiv_wuji/fetch_assets.sh, plus the composed arm+hand URDFs it writes. These ARE
-# committed: the training-time pose viewer loads the robot URDF and its meshes from
-# raw.githubusercontent.com at the run's branch. The right hand's vendor URDF/MJCF stay local; the
-# composed right-hand URDFs and the meshes they reference are committed. Do not move them to LFS --
-# raw GitHub serves LFS files as pointer stubs.
-assets/flexiv_wuji/wuji_hand2/urdf/right*
-assets/flexiv_wuji/wuji_hand2/mjcf/right*
-
-# The right Wuji Hand's sysid fit (robots.FLEXIV_WUJI_RIGHT_REAL holds its values, rounded): kept
-# local, it identifies the lab's hand. tests/test_robot_specs.py skips its check when it is absent.
-assets/flexiv_wuji/wuji_hand2_right_sysid_fit_*.json
+# assets/urdf/flexiv_wuji/ (the Rizon 4s + Wuji Hand 2 models from scripts/flexiv_wuji/fetch_assets.sh
+# and the composed URDFs) is committed in full: the training-time pose viewer loads the robot URDF
+# and its meshes from raw.githubusercontent.com at the run's branch. Do not move it to LFS -- raw
+# GitHub serves LFS files as pointer stubs.
 
 # OS / editor
 .DS_Store

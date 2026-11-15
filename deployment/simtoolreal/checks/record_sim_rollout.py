@@ -12,7 +12,7 @@ next joint targets). check_rec1.py runs those inputs through the deploy code. On
 scripts/cluster/bos14_simtoolreal_record.sh. By hand:
 
     cd <branch worktree>
-    PYTHONPATH=$PWD:$PWD/rl_games .venv_isaacsim/bin/python \
+    PYTHONPATH=$PWD:$PWD/rl_games .venv/isaacsim/bin/python \
         /home/yiboc/mit/task_curriculum_deployment/deploy/simtoolreal/checks/record_sim_rollout.py --headless \
         --checkpoint pretrained_policy/nov6_dr.pth --out <dir>
 
@@ -30,7 +30,7 @@ import time
 from pathlib import Path
 
 TASK = "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0"
-DEPLOY_REPO = Path(__file__).resolve().parents[3]   # deploy/simtoolreal/checks -> repo root
+DEPLOY_REPO = Path(__file__).resolve().parents[3]   # deployment/simtoolreal/checks -> repo root
 
 
 def main() -> None:

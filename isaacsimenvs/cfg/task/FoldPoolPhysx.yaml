@@ -1,8 +1,8 @@
 # Isaacsimenvs-FoldPoolPhysx-Direct-v0 — stage 2: the half-fold task on a shape drawn per episode
-# from the fold-shape pool, on PhysX (Isaac Sim 5.1 / Isaac Lab 2.3, .venv_isaacsim).
+# from the fold-shape pool, on PhysX (Isaac Sim 5.1 / Isaac Lab 2.3, .venv/isaacsim).
 #
 # A flat copy of RigidClothPhysx.yaml (the loader has no inheritance) plus the `fold_pool:` block at
-# the bottom; tests/test_physx_cloth_conventions.py diffs the two. Every env carries all pool shapes
+# the bottom; isaacsimenvs/tasks/cloth/tests/test_physx_cloth_conventions.py diffs the two. Every env carries all pool shapes
 # and uses one per episode; see fold_pool_task.py.
 # `rigid_cloth.variant` is inert here; every other `rigid_cloth:` field applies to the pool's plates.
 #

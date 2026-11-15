@@ -12,7 +12,7 @@ ray cast from the camera over its color image. Both follow the extrinsics as you
     and saves real | sim | overlay to compare/<folder>/<k>.png and all.png (the "compare folder" box,
     default <time>; a new name renames the folder at the next write); free drive then comes back on.
 
-    python deploy/calibration/calibrate_compare.py --arm <ROBOT_SN> --extrinsics deploy/calibration/extrinsics/left_camera_nov7.json
+    python deployment/calibration/calibrate_compare.py --arm <ROBOT_SN> --extrinsics deployment/calibration/extrinsics/left_camera_nov7.json
 
 A new camera: name a file that does not exist yet (and --serial if several cameras are plugged in). The
 camera starts at --start_xyz looking at the arm: drag the gizmo to where the camera really is, "aim at
@@ -36,10 +36,10 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from deploy.calibration.realsense import RealSense  # noqa: E402
-from deploy.calibration.robot_points import ARM_LINKS, RobotSurface, arm_tree, table_planes  # noqa: E402
-from deploy.calibration.robot_proc import RobotProcess  # noqa: E402
-from deploy.joint_reach.core import DEFAULT_SPEC, REPO, Spec  # noqa: E402
+from deployment.calibration.realsense import RealSense  # noqa: E402
+from deployment.calibration.robot_points import ARM_LINKS, RobotSurface, arm_tree, table_planes  # noqa: E402
+from deployment.calibration.robot_proc import RobotProcess  # noqa: E402
+from deployment.joint_reach.core import DEFAULT_SPEC, REPO, Spec  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 ROBOT_RGBA = (0.78, 0.78, 0.8, 1.0)  # one color, so the meshes take an opacity

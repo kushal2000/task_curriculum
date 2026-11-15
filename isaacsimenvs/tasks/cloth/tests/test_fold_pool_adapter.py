@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 
 import pytest
-from conftest import load_module  # noqa: E402  pytest puts tests/ on sys.path
+from isaacsimenvs.utils.testing import load_module
 
 torch = pytest.importorskip("torch")
 np = pytest.importorskip("numpy")

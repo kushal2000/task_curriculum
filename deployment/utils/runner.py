@@ -1,6 +1,6 @@
-"""A task's run.py: the shared nodes (deploy/nodes/) + the task's policy node, on one config.
+"""A task's run.py: the shared nodes (deployment/nodes/) + the task's policy node, on one config.
 
-    run(config_path, policy_script)     # deploy/<task>/run.py calls this, nothing else
+    run(config_path, policy_script)     # deployment/<task>/run.py calls this, nothing else
 
 robot.py in the chosen robot.mode, plus the viewer and the recorder, plus the task's policy in policy
 mode. Every node gets this process's command line and config=<the task's config>, so all of them
@@ -31,7 +31,7 @@ import signal
 import time
 from pathlib import Path
 
-from deploy.nodes.robot import MODES
+from deployment.nodes.robot import MODES
 
 from .config import REPO, load_config, repo_path
 from .link import age, open_subscriber, recv_latest, start_node, stop_node

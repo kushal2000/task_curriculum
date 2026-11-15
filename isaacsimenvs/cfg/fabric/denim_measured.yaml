@@ -10,7 +10,7 @@ cloth:
   edge_kd: 9.11e-05
   soft_contact_mu: 0.265
   self_contact_radius: 0.002
-plastic_yield_curvature: 100.0   # checkerboard mesh (outputs/results/cloth_fold_lift/alt, job 28503469): released fold 3.4 mm high at the crease (flat 2.0; 150 left 5.9), no skew, cantilever unchanged (78.3), no drape set; cost: max rest angle left after unfolding 78 deg (150: 30). Was 150 on the uniform mesh (job 28268743)
+plastic_yield_curvature: 100.0   # checkerboard mesh (debug_outputs/train_logs/results/cloth_fold_lift/alt, job 28503469): released fold 3.4 mm high at the crease (flat 2.0; 150 left 5.9), no skew, cantilever unchanged (78.3), no drape set; cost: max rest angle left after unfolding 78 deg (150: 30). Was 150 on the uniform mesh (job 28268743)
 measured:
   mass_g: 4.1   # 15 x 15 cm swatch
   cantilever_deg: 80   # tip-line angle down from horizontal, 5.25 cm overhang

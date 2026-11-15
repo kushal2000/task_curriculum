@@ -1,12 +1,12 @@
 #!/bin/bash
-# Create .venv_isaacsim exactly as docs/isaacsim_installation.md prescribes.
+# Create .venv/isaacsim exactly as docs/isaacsim_installation.md prescribes.
 # Order matters: torch before isaaclab, typing_extensions after it, repo last with
 # --no-deps so it does not re-resolve the Isaac stack.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
-VENV="${VENV:-.venv_isaacsim}"   # Engaging builds .venv_isaacsim_ct inside a container
+VENV="${VENV:-.venv/isaacsim}"   # Engaging builds .venv/isaacsim_ct inside a container
 PY="$VENV/bin/python"
 
 # Importing isaaclab bootstraps the Kit kernel, which prompts for the EULA on a TTY and
@@ -38,11 +38,12 @@ uv pip install --python "$PY" \
 step "typing_extensions re-pin (must come after isaaclab)"
 uv pip install --python "$PY" "typing_extensions>=4.13"
 
-step "websockets for viser, outside the venv"
-# isaacsim-kernel pins websockets==12.0 and viser needs >=13.1, so viser cannot start in this venv
-# as installed. isaacsimenvs/eval/viser_play.py puts this directory first on sys.path instead; the
-# training venv itself keeps Isaac's pin.
-uv pip install --python "$PY" --target third_party/viser_websockets "websockets==16.0"
+step "websockets for viser (overrides isaacsim-kernel's pin)"
+# isaacsim-kernel pins websockets==12.0, but viser (the live viewer, eval/viser_play.py) needs >=13.1
+# (websockets.asyncio). Nothing a training run loads uses websockets -- only Nucleus search/auth
+# extensions, uvicorn and a haptics device -- so the venv takes the newer one, --no-deps so the
+# resolver does not reject Isaac's pin.
+uv pip install --python "$PY" --no-deps "websockets==16.0"
 
 step "repo package (no deps)"
 uv pip install --python "$PY" -e . --no-deps

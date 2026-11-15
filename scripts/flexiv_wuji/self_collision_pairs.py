@@ -20,10 +20,10 @@ Bodies are the ones left after the importer's ``merge_fixed_joints`` (a link joi
 fixed joint hangs off), named as Isaac Lab names them. The reset pose is the spec's default arm
 pose with the hand at 0, which is what ``reset_utils`` puts the robot in.
 
-    .venv_isaaclab3/bin/python scripts/flexiv_wuji/self_collision_pairs.py flexiv_wuji
-    .venv_isaaclab3/bin/python scripts/flexiv_wuji/self_collision_pairs.py kuka_sharpa --compare-simtoolreal
+    .venv/isaaclab3/bin/python scripts/flexiv_wuji/self_collision_pairs.py flexiv_wuji
+    .venv/isaaclab3/bin/python scripts/flexiv_wuji/self_collision_pairs.py kuka_sharpa --compare-simtoolreal
 
-``tests/test_robot_specs.py`` reruns this for the Flexiv and checks the spec's list against it.
+``isaacsimenvs/tasks/play/tests/test_robot_specs.py`` reruns this for the Flexiv and checks the spec's list against it.
 """
 
 from __future__ import annotations

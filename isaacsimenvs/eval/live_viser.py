@@ -28,7 +28,7 @@ is ~4.
 Geometry comes from Newton's own viewer pipeline (`ViewerBase.set_model` -> `log_geo`), captured
 by a null viewer, so what is drawn is exactly the collision geometry the solver sees.
 
-**PhysX tasks** (`*Physx*`, run in `.venv_isaacsim`; the same `scripts/slurm/viser.sh`): the
+**PhysX tasks** (`*Physx*`, run in `.venv/isaacsim`; the same `scripts/slurm/viser.sh`): the
 same viewer, with the geometry read from the USD stage (each rigid body's collision meshes and
 primitives, in its own frame) and the body poses from Isaac Lab's PhysX views every step. The friction
 sliders are hidden there: PhysX refuses friction DR (`physx_envs`). viser needs websockets >= 13,
@@ -55,7 +55,7 @@ from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_
 ROOT = Path(__file__).resolve().parents[2]
 
 #: Display name -> (checkpoint, default SAPG coef). Paths are relative to the repo root. Only the
-#: generic prior is built in: trained runs live in this checkout's outputs/, so list them in a JSON menu
+#: generic prior is built in: trained runs live in this checkout's debug_outputs/train_logs/, so list them in a JSON menu
 #: ($LIVE_VISER_POLICIES, below) rather than here.
 POLICIES = {
     "generic tool-use prior (untrained on folds)": ("pretrained_policy/model.pth", 50.0),

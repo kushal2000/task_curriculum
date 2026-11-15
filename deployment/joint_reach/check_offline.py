@@ -1,4 +1,4 @@
-"""Check deploy/joint_reach/core.py against a rollout recorded in sim, with no robot.
+"""Check deployment/joint_reach/core.py against a rollout recorded in sim, with no robot.
 
 real_test_sequence.pt (isaacsimenvs/eval/joint_reach_eval.py) holds env 0's no-DR rollout of the real
 test sequence: per policy step the observation, the action, and after the step the joint targets,
@@ -11,7 +11,7 @@ joint positions and velocities. Three checks, each must match to float32 precisi
             differently (step 0 already differs by ~5e-4; a batch-500 TF32 GPU replay gets to 1.5e-3).
             The arm target moves 0.025 rad per unit action per step, so 1e-2 is ~2e-4 rad.
 
-    python deploy/joint_reach/check_offline.py --checkpoint <ckpt>.pth --sequence <dir>/real_test_sequence.pt
+    python deployment/joint_reach/check_offline.py --checkpoint <ckpt>.pth --sequence <dir>/real_test_sequence.pt
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from deploy.joint_reach.core import DEFAULT_SPEC, ActionPipeline, GoalSequence, Policy, Spec, build_obs  # noqa: E402
+from deployment.joint_reach.core import DEFAULT_SPEC, ActionPipeline, GoalSequence, Policy, Spec, build_obs  # noqa: E402
 
 
 def main() -> int:

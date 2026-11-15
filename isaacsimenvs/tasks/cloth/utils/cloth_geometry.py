@@ -27,7 +27,7 @@ def grid_mesh(size: float, resolution: int, diagonals: str = "alternate") -> tup
     * ``flipped``: every cell cut (i, j)-(i+1, j+1), the mirror image of ``uniform``.
 
     A uniform cut couples bending to twist: a released fold springs back as a twist with one end of
-    the crease lifted, and flipping the cut mirrors it exactly (outputs/results/cloth_fold_lift,
+    the crease lifted, and flipping the cut mirrors it exactly (debug_outputs/train_logs/results/cloth_fold_lift,
     {base,flip,alt}: denim skew +7.8 / -7.8 / 0.0 mm, bulge 11.2 / 11.2 / 5.9 mm). The checkerboard
     leaves the cantilever droop within 2 deg of the uniform mesh.
     """

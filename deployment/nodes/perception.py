@@ -3,7 +3,7 @@
 perception.source=camera (default): RealSense -> FoundationPose. Runs in the FoundationPose
 environment on the robot PC (needs its GPU), from the repo root:
 
-    ~/miniconda3/envs/foundationpose/bin/python deploy/nodes/perception.py config=deploy/<task>/config.yaml
+    ~/miniconda3/envs/foundationpose/bin/python deployment/nodes/perception.py config=deployment/<task>/config.yaml
 
   It opens the camera the extrinsics file was calibrated for (its camera_serial), and refuses another.
   1. First frame: an OpenCV window opens; click 4 corners of a box around the object, SAM turns it
@@ -24,11 +24,11 @@ environment on the robot PC (needs its GPU), from the repo root:
 
 perception.source=fake: a fixed pose (perception.fake_pose_base), no camera, to test without one:
 
-    .venv_deploy/bin/python deploy/nodes/perception.py config=deploy/simtoolreal/config.yaml perception.source=fake
+    .venv_deploy/bin/python deployment/nodes/perception.py config=deployment/simtoolreal/config.yaml perception.source=fake
 
   Objects after the first: 15 cm further along base x each. An object whose perception
   (objects.<name>.perception) is not foundationpose is refused. A task that needs its objects placed
-  relative to each other has its own fake sender (deploy/rigid2deform/fake_perception.py).
+  relative to each other has its own fake sender (deployment/rigid2deform/fake_perception.py).
 """
 
 import json
@@ -41,8 +41,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
-from deploy.utils.config import load_config, object_meshes, object_names, repo_path                      # noqa: E402
-from deploy.utils.link import FRAME_PORT, encode_jpeg, open_publisher, send, send_frame, send_object_poses   # noqa: E402
+from deployment.utils.config import load_config, object_meshes, object_names, repo_path                      # noqa: E402
+from deployment.utils.link import FRAME_PORT, encode_jpeg, open_publisher, send, send_frame, send_object_poses   # noqa: E402
 
 
 def publish_fake(cfg, pub) -> None:
@@ -63,7 +63,7 @@ def publish_fake(cfg, pub) -> None:
 
 def track_camera(cfg, pub) -> None:
     """RealSense -> FoundationPose, until Ctrl-C."""
-    from deploy.calibration.realsense import RealSense
+    from deployment.calibration.realsense import RealSense
 
     p = cfg.perception
     if p.foundationpose_dir is None or p.extrinsics is None:

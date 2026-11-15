@@ -15,7 +15,7 @@ and the hinges are invisible inside the seams:
 Drawn from ``forward_kinematics`` alone -- no simulator -- so the picture is the model's own
 geometry rather than a particular run of it.
 
-    .venv_isaaclab3/bin/python -m scripts.analysis.rigid_cloth_diagram
+    .venv/isaaclab3/bin/python -m scripts.analysis.rigid_cloth_diagram
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """Latest values of chosen tensorboard scalars for training runs, matched by run-name substring.
 
-    .venv_isaaclab3/bin/python scripts/analysis/tb_tail.py 0_pxpool_flat_s1_158323 [--tags fold done_fold rewards]
+    .venv/isaaclab3/bin/python scripts/analysis/tb_tail.py 0_pxpool_flat_s1_158323 [--tags fold done_fold rewards]
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ p.add_argument("--tags", nargs="*", default=["rewards/step", "episode_final/done
 p.add_argument("--every", type=int, default=0, help="also print every Nth point of the first tag")
 a = p.parse_args()
 for run in a.runs:
-    for d in sorted(glob.glob(f"outputs/*/*/{run}*/summaries")):
+    for d in sorted(glob.glob(f"debug_outputs/train_logs/*/*/{run}*/summaries")):
         ea = EventAccumulator(d, size_guidance={"scalars": 0})
         ea.Reload()
         tags = ea.Tags()["scalars"]

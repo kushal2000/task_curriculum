@@ -1,12 +1,12 @@
-"""Export what the real-robot joint-reach loop (deploy/joint_reach) needs from the sim, as JSON.
+"""Export what the real-robot joint-reach loop (deployment/joint_reach) needs from the sim, as JSON.
 
 Everything is read from a live env, in the policy's canonical joint order: joint limits (they normalize
 the observation and clamp the targets), the action pipeline's constants, the nominal PD gains and
 effort limits, the default pose, and the observation layout. The deploy code then holds no hand-copied
 numbers.
 
-    .venv_isaacsim/bin/python -m isaacsimenvs.eval.joint_reach_export_spec --headless \
-        --out deploy/joint_reach/spec_flexiv_wuji_hl.json
+    .venv/isaacsim/bin/python -m isaacsimenvs.eval.joint_reach_export_spec --headless \
+        --out deployment/joint_reach/spec_flexiv_wuji_hl.json
 """
 
 from __future__ import annotations

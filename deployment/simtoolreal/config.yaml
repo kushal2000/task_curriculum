@@ -5,19 +5,19 @@
 #   - spec file (spec_path below): facts copied from the training env (joint limits, obs layout,
 #     action pipeline, goal sampling, ...). Never edit by hand; regenerate it from the training branch.
 #
-# run.py and policy.py read this file; run.py hands it to the shared nodes (deploy/nodes/) as
-# config=deploy/simtoolreal/config.yaml. Override any value on the command line with dotted keys, e.g.
+# run.py and policy.py read this file; run.py hands it to the shared nodes (deployment/nodes/) as
+# config=deployment/simtoolreal/config.yaml. Override any value on the command line with dotted keys, e.g.
 #   python run.py robot.mode=home robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>
 #   python run.py run.duration_s=30 record.name=try1
-# A key that is not in this file is an error. deploy/utils/config.py prints the merged config.
+# A key that is not in this file is an error. deployment/utils/config.py prints the merged config.
 #
 # Frames: "env" = the training env's frame. Robot base at (0, 0.8, 0), table top at z = 0.28 m.
 # Lengths in metres, angles in degrees unless the name says otherwise.
 
-spec_path: deploy/simtoolreal/spec/spec_flexiv_wuji_right_hl.json   # robot URDF next to it
+spec_path: deployment/simtoolreal/spec/spec_flexiv_wuji_right_hl.json   # robot URDF next to it
 
 # ------------------------------------------------------------------------------------------- bus
-# The processes talk over ZMQ (deploy/utils/link.py). Each publisher binds its own port; anyone may subscribe.
+# The processes talk over ZMQ (deployment/utils/link.py). Each publisher binds its own port; anyone may subscribe.
 # Every pose on the bus is in the robot base frame.
 bus:
   host: 127.0.0.1           # the machine the publishers run on
@@ -114,7 +114,7 @@ object:
 objects:
   flat_eraser:
     scale: [2.5, 0.7, 1.25]   # 10 x 2.8 x 5 cm grasp box
-    mesh: deploy/simtoolreal/objects/flat_eraser/flat_eraser.obj   # 12.5 x 2.8 x 5 cm, x from -2.75 to 9.75 cm
+    mesh: deployment/simtoolreal/objects/flat_eraser/flat_eraser.obj   # 12.5 x 2.8 x 5 cm, x from -2.75 to 9.75 cm
 
 # ----------------------------------------------------------------------------------- perception
 perception:
@@ -123,7 +123,7 @@ perception:
 
   # camera (runs in the FoundationPose environment on the robot PC)
   foundationpose_dir: ~/FoundationPose   # the kushal2000/FoundationPose checkout (estimater.py, generate_mask.py, weights/)
-  extrinsics: deploy/calibration/extrinsics/left_camera_nov7.json   # T_base_cam from calibrate_compare.py (D415 821312062243)
+  extrinsics: deployment/calibration/extrinsics/left_camera_nov7.json   # T_base_cam from calibrate_compare.py (D415 821312062243)
   camera_serial: null       # null = the extrinsics file's camera_serial; perception.py refuses any other camera
   camera_width: 640         # FoundationPose crops around the object, so a small image is enough
   camera_height: 480        #   (upstream: 960 x 540 from a ZED)
@@ -144,7 +144,7 @@ perception:
 # robot.mode=openloop: send a sim rollout's joint targets with no feedback (no policy, no camera).
 # Made by checks/record_lift.py (cluster: scripts/cluster/bos14_simtoolreal_lift.sh).
 openloop:
-  path: outputs/results/simtoolreal/lift1/openloop.npz
+  path: debug_outputs/train_logs/results/simtoolreal/lift1/openloop.npz
 
 # ----------------------------------------------------------------------------------------- goals
 goals:
@@ -163,7 +163,7 @@ record:
   camera: false             # also record every camera frame (camera_frame) -> <file>.camera.mp4 (H.264)
   camera_codec: libx264     # libx264 (CPU, ~0.4 core at 640x480 60 fps) | h264_nvenc (GPU; this ffmpeg needs driver >= 610)
   camera_quality: 23        # x264 -crf / nvenc -cq: lower = better and bigger; 18 ~ visually lossless
-  dir: outputs/deploy/simtoolreal/recordings
+  dir: debug_outputs/deployment/simtoolreal/recordings
   video_fps: 60             # playback.py's mp4 export
   video_height: 480         # px; the 3D view is 4:3, the camera image is scaled to the same height
 

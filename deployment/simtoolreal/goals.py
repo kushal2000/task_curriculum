@@ -16,8 +16,8 @@ above the table.
 
 import numpy as np
 
-from deploy.utils.observation import keypoint_distance
-from deploy.utils.quat import quat_apply, quat_from_angle_axis, quat_mul, random_quat
+from deployment.utils.observation import keypoint_distance
+from deployment.utils.quat import quat_apply, quat_from_angle_axis, quat_mul, random_quat
 
 
 def object_corners(mesh_path) -> np.ndarray:
