@@ -2,7 +2,9 @@
 
 Plain copies of upstream repos at pinned commits, committed so a clone of this repo is
 complete. Do not edit them in place: change the pin in `scripts/vendor_third_party.sh` and
-rerun it. Each directory keeps its upstream LICENSE.
+rerun it. Each directory keeps its upstream LICENSE. Upstream's git-lfs files are left out:
+without their LFS objects they are only pointer stubs (IsaacLab: test golden images under
+`source/*/test/`).
 
 | dir | upstream | commit | used by |
 |---|---|---|---|

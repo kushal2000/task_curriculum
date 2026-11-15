@@ -30,8 +30,8 @@ for dep in "${DEPS[@]}"; do
   read -r name url commit _ <<<"${dep}"
   [[ $# -eq 0 || " $* " == *" ${name} "* ]] || continue
   echo "==> ${name}: ${url} @ ${commit}"
-  # IsaacLab registers a git-lfs filter and git-lfs is not installed here. Its LFS payloads are
-  # documentation media, not code, so the filter is disabled and those files stay pointer stubs.
+  # IsaacLab registers a git-lfs filter; it is disabled so the clone needs no git-lfs, and the LFS
+  # files are dropped after the archive (below).
   git -c filter.lfs.smudge= -c filter.lfs.process= -c filter.lfs.required=false \
       clone -q --filter=blob:none --no-checkout "${url}" "${TMP}/${name}"
   git -C "${TMP}/${name}" cat-file -e "${commit}^{commit}" 2>/dev/null \
@@ -39,6 +39,15 @@ for dep in "${DEPS[@]}"; do
   rm -rf "${ROOT}/third_party/${name}"
   mkdir -p "${ROOT}/third_party/${name}"
   git -C "${TMP}/${name}" archive "${commit}" | tar -x -C "${ROOT}/third_party/${name}"
+  # Drop upstream's git-lfs files: without their LFS objects they are only pointer stubs, and a
+  # committed stub makes every push here fail on a missing LFS object. (IsaacLab's are test golden
+  # images and stages under source/*/test/, nothing the Newton backend loads.)
+  lfs="$(git -C "${TMP}/${name}" ls-tree -r --name-only "${commit}" \
+          | git -C "${TMP}/${name}" check-attr --source="${commit}" --stdin filter | sed -n 's/: filter: lfs$//p')"
+  if [[ -n "${lfs}" ]]; then
+    (cd "${ROOT}/third_party/${name}" && printf '%s\n' "${lfs}" | xargs -d '\n' rm -f)
+    echo "    dropped $(printf '%s\n' "${lfs}" | wc -l) git-lfs files (pointer stubs)"
+  fi
   echo "    $(find "${ROOT}/third_party/${name}" -type f | wc -l) files"
 done
 
@@ -47,7 +56,9 @@ done
   echo
   echo "Plain copies of upstream repos at pinned commits, committed so a clone of this repo is"
   echo "complete. Do not edit them in place: change the pin in \`scripts/vendor_third_party.sh\` and"
-  echo "rerun it. Each directory keeps its upstream LICENSE."
+  echo "rerun it. Each directory keeps its upstream LICENSE. Upstream's git-lfs files are left out:"
+  echo "without their LFS objects they are only pointer stubs (IsaacLab: test golden images under"
+  echo "\`source/*/test/\`)."
   echo
   echo "| dir | upstream | commit | used by |"
   echo "|---|---|---|---|"
