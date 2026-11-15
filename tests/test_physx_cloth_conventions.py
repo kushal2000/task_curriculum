@@ -100,30 +100,57 @@ def _blocks(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
 
 
-@pytest.mark.parametrize(
-    "newton,physx",
-    [("RigidCloth.yaml", "RigidClothPhysx.yaml"), ("FoldPool.yaml", "FoldPoolPhysx.yaml")],
-)
-def test_physx_yaml_is_the_newton_task(newton, physx):
-    """Same task blocks; only the solver blocks differ."""
+def test_rigid_yaml_is_the_vbd_task():
+    """RigidClothPhysx.yaml is Cloth.yaml with the manipuland and the solver swapped: every block
+    the two share is identical, bar the solver's own `sim.physx`."""
     cfg_dir = REPO / "isaacsimenvs/cfg/task"
-    a, b = _blocks(cfg_dir / newton), _blocks(cfg_dir / physx)
-    newton_only = {"newton", "use_gravcomp", "meshify"}
-    physx_only = {"physx_chain"}
-    assert set(a) - newton_only == set(b) - physx_only
-    for key in set(a) - newton_only:
+    rigid, vbd = _blocks(cfg_dir / "RigidClothPhysx.yaml"), _blocks(cfg_dir / "Cloth.yaml")
+    assert set(rigid) - set(vbd) == {"rigid_cloth", "physx_chain"}
+    assert set(vbd) - set(rigid) == {"newton", "use_gravcomp", "meshify"}
+    for key in set(rigid) & set(vbd):
         if key == "sim":
-            sim_b = dict(b["sim"])
-            assert "physx" in sim_b
-            sim_b.pop("physx")
-            assert a["sim"] == sim_b
-        elif key == "rigid_cloth":
-            # contact_ke / contact_kd are Newton-only (PhysX refuses them); 0 = Newton's default.
-            rc_a = dict(a[key])
-            assert rc_a.pop("contact_ke", 0.0) == 0.0 and rc_a.pop("contact_kd", 0.0) == 0.0
-            assert rc_a == b[key], key
+            a, b = dict(rigid["sim"]), dict(vbd["sim"])
+            a.pop("physx"), b.pop("physx", None)
+            assert a == b
         else:
-            assert a[key] == b[key], key
+            assert rigid[key] == vbd[key], key
+
+
+def test_fold_pool_yaml_is_the_chain_yaml():
+    """FoldPoolPhysx.yaml is RigidClothPhysx.yaml plus `fold_pool`, with the stage-2 differences the
+    yaml header sanctions: the pool table, a 1.5 cm tolerance, and contact-shell-only DR."""
+    cfg_dir = REPO / "isaacsimenvs/cfg/task"
+    rigid, pool = _blocks(cfg_dir / "RigidClothPhysx.yaml"), _blocks(cfg_dir / "FoldPoolPhysx.yaml")
+    assert set(pool) - set(rigid) == {"fold_pool"} and set(rigid) <= set(pool)
+    assert pool["assets"].pop("table_urdf") == "assets/urdf/table_fold_pool.urdf"
+    rigid["assets"].pop("table_urdf")
+    assert pool["cloth"].pop("keypoint_tolerance") == 0.015
+    rigid["cloth"].pop("keypoint_tolerance", None)  # the chain keeps the config default
+    rd = pool["rigid_cloth"].pop("randomization")
+    rigid["rigid_cloth"].pop("randomization")
+    assert rd["enabled"] is True and rd["contact_margin_offset"] == [-0.003, 0.003]
+    for key in ("slat_friction_scale", "fingertip_friction_scale", "hinge_damping_scale", "mass_scale"):
+        assert rd[key] == [1.0, 1.0], key
+    assert rd["hinge_stiffness"] == [0.0, 0.0]
+    pool.pop("fold_pool")
+    assert pool == rigid
+
+
+@pytest.mark.parametrize(
+    "yaml_name, block, module, cls",
+    [
+        ("RigidClothPhysx.yaml", "rigid_cloth", "isaacsimenvs.tasks.cloth.rigid_cloth_cfg", "RigidClothCfg"),
+        ("FoldPoolPhysx.yaml", "fold_pool", "isaacsimenvs.tasks.cloth.fold_pool_cfg", "FoldPoolCfg"),
+    ],
+)
+def test_manipuland_block_is_its_config_class(yaml_name, block, module, cls):
+    """A yaml key with no field is silently dropped by the loader, and a field the yaml leaves out
+    changes whenever the dataclass default does: the block must be exactly the class's fields."""
+    import dataclasses
+
+    mod = pytest.importorskip(module)
+    loaded = _blocks(REPO / "isaacsimenvs/cfg/task" / yaml_name)[block]
+    assert set(loaded) == {f.name for f in dataclasses.fields(getattr(mod, cls))}
 
 
 def test_physx_tasks_are_registered():

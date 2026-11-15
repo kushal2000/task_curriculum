@@ -302,12 +302,7 @@ cloth:
 # rigid_cloth — which of the five approximations, and its physical parameters.
 #
 # Defaults live in RigidClothCfg; this block pins what a run should not silently inherit. Every
-# field here changes the URDF text or the solver state, and the URDF text is the USD cache key --
-# so changing `variant`, `density` or `joint_limit` needs a re-bake (NOT `joint_damping`: it is an
-# actuator gain and never reaches the URDF, see below):
-#
-#   OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.newton.usd_cache \
-#       --populate --rigid_cloth_variants
+# field here changes the chain's URDF or the solver state (PhysX converts the URDF at scene build).
 #
 # The five variants, measured in scripts/analysis/rigid_cloth_probe.py (see
 # docs/reports/2_rigid_chain/rigid_cloth_approximation.md for the full table):

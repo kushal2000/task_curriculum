@@ -12,18 +12,16 @@ from pathlib import Path
 
 import pytest
 
-from isaacsimenvs.tasks.play.robots import (
-    FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_RIGHT_HUMAN_LIKE, KUKA_SHARPA,
-)
+from isaacsimenvs.tasks.play.robots import KUKA_SHARPA, ROBOT_SPECS
 
 REPO = Path(__file__).resolve().parents[1]
 URDFS = {
     "kuka_sharpa": "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf",
-    "flexiv_wuji": "assets/flexiv_wuji/rizon4s_left_wuji.urdf",
-    "flexiv_wuji_human_like": "assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf",
     "flexiv_wuji_right_human_like": "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
+    "flexiv_wuji_right_real": "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
 }
-SPECS = [KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_RIGHT_HUMAN_LIKE]
+#: Every selectable robot; a new one without a URDF entry above fails here rather than going unchecked.
+SPECS = list(ROBOT_SPECS.values())
 
 
 def _bodies(spec) -> set[str]:

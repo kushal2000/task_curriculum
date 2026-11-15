@@ -53,10 +53,6 @@ if _WEBSOCKETS.is_dir():
 #: (robot, robot_self_collision) in a run's config -> the task it trained on.
 TASK_FOR = {
     ("kuka_sharpa", False): "Isaacsimenvs-Play-Direct-v0",
-    ("kuka_sharpa", True): "Isaacsimenvs-PlaySelfCollision-Direct-v0",
-    ("flexiv_wuji", True): "Isaacsimenvs-PlayFlexivWuji-Direct-v0",
-    ("flexiv_wuji_human_like", True): "Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0",
-    ("flexiv_sharpa", True): "Isaacsimenvs-PlayFlexivSharpa-Direct-v0",
 }
 #: SAPG's per-block coefficients: linspace(50, 0, num_actors // expl_coef_block_size)
 #: (rl_games a2c_common.py:342).

@@ -48,7 +48,14 @@ URDFS = {
     "kuka_sharpa": fw.KUKA_SHARPA_URDF,
     "flexiv_wuji": fw.COMPOSED_URDF,
     "flexiv_wuji_human_like": fw.HUMAN_LIKE_URDF,
-    "flexiv_sharpa": fw.FLEXIV_SHARPA_URDF,
+}
+#: The spec whose home pose each derivation uses and whose filter it is compared with. Both left
+#: URDFs belong to robots.FLEXIV_WUJI (no longer a selectable robot, but the base the right-hand
+#: specs carry the filter from, renamed).
+SPECS = {
+    "kuka_sharpa": robots.KUKA_SHARPA,
+    "flexiv_wuji": robots.FLEXIV_WUJI,
+    "flexiv_wuji_human_like": robots.FLEXIV_WUJI,
 }
 #: Deeper than this counts as overlapping (onboard.py's threshold).
 OVERLAP_M = 5e-4
@@ -107,7 +114,7 @@ def _penetration(a: list[trimesh.Trimesh], b: list[trimesh.Trimesh]) -> float:
 
 def derive(robot: str) -> tuple[dict[str, tuple[str, ...]], dict[tuple[str, str], tuple[str, float]]]:
     """``(filter map, {non-jointed pair: (why, depth in m)})`` for a robot spec name."""
-    spec = robots.ROBOT_SPECS[robot]
+    spec = SPECS[robot]
     urdf = yourdfpy.URDF.load(str(URDFS[robot]), load_collision_meshes=False)
     names = urdf.actuated_joint_names
     home = np.array([spec.arm_default_joint_pos.get(n, 0.0) for n in names])
@@ -187,7 +194,7 @@ def main() -> None:
         print(f"    {k!r}: {v!r},")
     print("}")
 
-    spec_map = robots.ROBOT_SPECS[args.robot].self_collision_filter
+    spec_map = SPECS[args.robot].self_collision_filter
     if spec_map:
         same = _pairs(spec_map) == _pairs(adjacency)
         print(f"# robots.{args.robot.upper()}.self_collision_filter "

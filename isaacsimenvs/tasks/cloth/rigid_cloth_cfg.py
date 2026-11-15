@@ -178,20 +178,6 @@ class RigidClothCfg:
     so those pairs are removed from the collision pipeline whenever this is nonzero; a chain's
     joint limits already stop the plies at their geometric contact."""
 
-    contact_ke: float = 0.0
-    """Newton material contact stiffness written onto EVERY shape (robot, table, slats); 0 keeps
-    Newton's default (2500, with ``contact_kd`` 100 -> MuJoCo solref (0.02, 1)). Newton only.
-
-    MJWarp maps ke/kd to ``solref = (2 / kd, kd / 2 / sqrt(ke))``, an acceleration-space softness,
-    so the force stiffness scales with the plate's mass (7-27 g in the fold pool): at the default
-    a pressing finger reaches a plate's mid-plane in ~1/3 of fold-pool env-steps and plates sink up
-    to ~17 mm into the table (scripts/analysis/rigid_overlap_probe.py). Keep ``2 / kd`` above twice
-    the physics substep (MuJoCo's refsafe clamps it there): 1e4 / 200 = solref 0.01 is safe at 2
-    substeps; 4e4 / 400 = 0.005 needs ``newton.num_substeps=4``."""
-
-    contact_kd: float = 0.0
-    """Damping partner of ``contact_ke``; both must be set together."""
-
     fold_lift_from_ply_gap: bool = True
     """Build the fold target at the CHAIN's ply gap instead of the cloth's ``self_contact_radius``.
 

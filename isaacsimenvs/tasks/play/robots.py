@@ -348,6 +348,10 @@ _WUJI_SELF_COLLISION_FILTER = {
         'link7': ('l_index_finger_proximal', 'l_index_finger_proximal_abd', 'l_middle_finger_proximal', 'l_middle_finger_proximal_abd', 'l_pinky_proximal', 'l_pinky_proximal_abd', 'l_ring_finger_proximal', 'l_ring_finger_proximal_abd', 'l_thumb_proximal', 'l_thumb_proximal_abd', 'link6'),
 }
 
+# The LEFT Wuji on the Rizon. Not a selectable robot (it is not in ROBOT_SPECS): it is the base the
+# right-hand specs below are built from (arm gains, armature, fingertip order, finger regexes, the
+# self-collision filter), and tests/test_robot_specs.py checks its numbers against the left URDFs
+# those values were read off.
 FLEXIV_WUJI = RobotSpec(
     name="flexiv_wuji",
     arm_joint_regex="joint[1-7]",
@@ -393,17 +397,6 @@ FLEXIV_WUJI = RobotSpec(
     palm_side_link_names=(),
 )
 
-# The same robot with scripts/flexiv_wuji/flexiv_wuji.py's HUMAN_LIKE_LIMITS_DEG: finger and thumb
-# joints' backward bend cut to rough human values, finger abduction held to +-2 deg. Joints, gains,
-# geometry and default pose are FLEXIV_WUJI's; the limits live in its URDF. The self-collision
-# filter is re-derived on that URDF (self_collision_pairs.py), since the knuckle sweep depends on
-# the joint ranges.
-FLEXIV_WUJI_HUMAN_LIKE = dataclasses.replace(
-    FLEXIV_WUJI,
-    name="flexiv_wuji_human_like",
-    self_collision_filter=_WUJI_SELF_COLLISION_FILTER,
-)
-
 #: Wuji's own sim2real drive for Hand 2 (wuji-isaaclab tasks/reorient/config/wuji_hand2/
 #: hand2_constants.py HAND2_DRIVE, identical to wuji-mjlab's HAND2_REORIENT_ACTUATOR_GAINS /
 #: FORCE_LIMITS): (stiffness N m/rad, damping N m s/rad, effort limit N m) per joint, thumb to
@@ -415,125 +408,6 @@ _WUJI_S2R_DRIVE = (
     (1.299313, 0.045699, 1.06), (0.942641, 0.027846, 0.39), (0.73725, 0.023408, 0.32), (0.710314, 0.022366, 0.29),
     (1.276892, 0.046209, 1.02), (1.013334, 0.028704, 0.41), (0.859159, 0.027436, 0.28), (0.648064, 0.020448, 0.30),
     (1.102915, 0.043816, 0.87), (0.910201, 0.026593, 0.36), (0.861968, 0.027476, 0.28), (0.656704, 0.020611, 0.30),
-)
-
-# FLEXIV_WUJI_HUMAN_LIKE with that drive on the hand (armature is the same 0.0005 / 0.0002 split).
-FLEXIV_WUJI_HUMAN_LIKE_S2R = dataclasses.replace(
-    FLEXIV_WUJI_HUMAN_LIKE,
-    name="flexiv_wuji_human_like_s2r",
-    hand_stiffness={j: d[0] for j, d in zip(_WUJI_JOINTS, _WUJI_S2R_DRIVE)},
-    hand_damping={j: d[1] for j, d in zip(_WUJI_JOINTS, _WUJI_S2R_DRIVE)},
-    hand_effort_limit={j: d[2] for j, d in zip(_WUJI_JOINTS, _WUJI_S2R_DRIVE)},
-)
-
-# ----------------------------------------------------------------------------
-# Flexiv Rizon 4s + the Kuka's left Sharpa (scripts/flexiv_wuji/flexiv_wuji.py
-# compose_flexiv_sharpa_urdf): the Rizon of FLEXIV_WUJI, at its default pose, carrying the hand of
-# KUKA_SHARPA -- arm entries from the one, hand entries from the other.
-# ----------------------------------------------------------------------------
-
-
-def _rename(pairs: dict[str, tuple[str, ...]], names: dict[str, str]) -> dict[str, tuple[str, ...]]:
-    return {names.get(a, a): tuple(names.get(b, b) for b in bs) for a, bs in pairs.items()}
-
-
-_IIWA_TO_RIZON = {"iiwa14_link_7": "link7"}
-_FLEXIV_SHARPA_SELF_COLLISION_FILTER = {
-    # The Rizon's chain, as FLEXIV_WUJI filters it ...
-    **{a: tuple(b for b in bs if not b.startswith("l_"))
-       for a, bs in _WUJI_SELF_COLLISION_FILTER.items() if a in _RIZON_LINKS},
-}
-# ... and SimToolReal's Sharpa pairs, with the palm in the Rizon's link7 instead of the iiwa's.
-for _a, _bs in _rename(_SHARPA_SELF_COLLISION_FILTER, _IIWA_TO_RIZON).items():
-    if _a.startswith("iiwa14_"):
-        continue
-    _kept = tuple(b for b in _bs if not b.startswith("iiwa14_"))
-    _FLEXIV_SHARPA_SELF_COLLISION_FILTER[_a] = tuple(
-        dict.fromkeys(_FLEXIV_SHARPA_SELF_COLLISION_FILTER.get(_a, ()) + _kept))
-del _a, _bs, _kept
-
-FLEXIV_SHARPA = RobotSpec(
-    name="flexiv_sharpa",
-    arm_joint_regex=FLEXIV_WUJI.arm_joint_regex,
-    hand_joint_regex=KUKA_SHARPA.hand_joint_regex,
-    joint_names_canonical=_RIZON_JOINTS + KUKA_SHARPA.hand_joint_names,
-    # The importer merges flange, sharpa_mount and left_hand_C_MC into link7.
-    palm_body_name="link7",
-    # The Kuka's palm centre, carried rigidly with the hand (the same hand, so exact). Depends on
-    # flexiv_wuji.FLEXIV_SHARPA_MOUNT_*; tests/test_robot_specs.py recomputes it.
-    palm_center_offset=(-0.0049, -0.0194, 0.239),
-    fingertip_body_regex=KUKA_SHARPA.fingertip_body_regex,
-    fingertip_link_names=KUKA_SHARPA.fingertip_link_names,
-    fingertip_offset=KUKA_SHARPA.fingertip_offset,
-    arm_stiffness=FLEXIV_WUJI.arm_stiffness,
-    arm_damping=FLEXIV_WUJI.arm_damping,
-    hand_stiffness=KUKA_SHARPA.hand_stiffness,
-    hand_damping=KUKA_SHARPA.hand_damping,
-    hand_armature=KUKA_SHARPA.hand_armature,
-    # The Flexiv keeps one default pose whatever hand it carries; the mount yaw puts the palm down.
-    arm_default_joint_pos=FLEXIV_WUJI.arm_default_joint_pos,
-    self_collision_filter=_FLEXIV_SHARPA_SELF_COLLISION_FILTER,
-    finger_segment_regex=KUKA_SHARPA.finger_segment_regex,
-    palm_side_link_names=KUKA_SHARPA.palm_side_link_names,
-)
-
-# ----------------------------------------------------------------------------
-# Drive-swap controls: each hand with the other hand's drive (stiffness, damping and torque limit;
-# armature stays the hand's own, a motor property). Joints are matched by role; the Sharpa's two
-# joints without a Wuji counterpart take the weakest analogous Wuji joint: thumb MCP_AA <- thumb
-# mcp, pinky CMC <- pinky mcp_abd. Torque limits are the URDF ``effort`` of the source hand.
-# ----------------------------------------------------------------------------
-
-#: Wuji URDF effort [N m], _WUJI_JOINTS order (rizon4s_left_wuji_human_like_joint_limits.urdf).
-_WUJI_URDF_EFFORT = dict(zip(_WUJI_JOINTS, (
-    0.6, 0.6, 0.3, 0.3,
-    2.0, 0.2, 0.3, 0.3,
-    2.0, 0.2, 0.3, 0.3,
-    2.0, 0.2, 0.3, 0.3,
-    2.0, 0.2, 0.3, 0.3,
-)))
-#: Sharpa URDF effort [N m] (rizon4s_left_sharpa.urdf).
-_SHARPA_URDF_EFFORT = {
-    "left_1_thumb_CMC_FE": 3.3, "left_thumb_CMC_AA": 3.3, "left_thumb_MCP_FE": 1.864,
-    "left_thumb_MCP_AA": 1.864, "left_thumb_IP": 0.638,
-    **{f"left_{n}{f}_MCP_FE": 1.864 for n, f in (("2_", "index"), ("3_", "middle"), ("4_", "ring"))},
-    **{f"left_{f}_{j}": e for f in ("index", "middle", "ring", "pinky")
-       for j, e in (("MCP_AA", 1.864), ("PIP", 0.638), ("DIP", 0.189369))},
-    "left_5_pinky_CMC": 0.5285, "left_pinky_MCP_FE": 1.864,
-}
-#: Sharpa joint -> the Wuji joint of the same role.
-_SHARPA_TO_WUJI = {
-    "left_1_thumb_CMC_FE": "l_thumb_cmc_flex", "left_thumb_CMC_AA": "l_thumb_cmc_abd",
-    "left_thumb_MCP_FE": "l_thumb_mcp", "left_thumb_MCP_AA": "l_thumb_mcp", "left_thumb_IP": "l_thumb_ip",
-    "left_5_pinky_CMC": "l_pinky_mcp_abd",
-    **{s: f"l_{w}_{j}" for f, s_mcp, w in (("index", "left_2_index_MCP_FE", "index_finger"),
-                                            ("middle", "left_3_middle_MCP_FE", "middle_finger"),
-                                            ("ring", "left_4_ring_MCP_FE", "ring_finger"),
-                                            ("pinky", "left_pinky_MCP_FE", "pinky"))
-       for s, j in ((s_mcp, "mcp_flex"), (f"left_{f}_MCP_AA", "mcp_abd"),
-                    (f"left_{f}_PIP", "pip"), (f"left_{f}_DIP", "dip"))},
-}
-#: Wuji joint -> the Sharpa joint of the same role (the inverse, minus the two extra Sharpa joints).
-_WUJI_TO_SHARPA = {w: s for s, w in _SHARPA_TO_WUJI.items()
-                   if s not in ("left_thumb_MCP_AA", "left_5_pinky_CMC")}
-
-# Flexiv + Wuji (human-like limits) with the Sharpa's drive.
-FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN = dataclasses.replace(
-    FLEXIV_WUJI_HUMAN_LIKE,
-    name="flexiv_wuji_human_like_sharpagain",
-    hand_stiffness={w: KUKA_SHARPA.hand_stiffness[_WUJI_TO_SHARPA[w]] for w in _WUJI_JOINTS},
-    hand_damping={w: KUKA_SHARPA.hand_damping[_WUJI_TO_SHARPA[w]] for w in _WUJI_JOINTS},
-    hand_effort_limit={w: _SHARPA_URDF_EFFORT[_WUJI_TO_SHARPA[w]] for w in _WUJI_JOINTS},
-)
-# Flexiv + Sharpa with the Wuji's drive (vendor MJCF gains, as FLEXIV_WUJI_HUMAN_LIKE runs).
-FLEXIV_SHARPA_WUJIGAIN = dataclasses.replace(
-    FLEXIV_SHARPA,
-    name="flexiv_sharpa_wujigain",
-    hand_stiffness={s: FLEXIV_WUJI_HUMAN_LIKE.hand_stiffness[_SHARPA_TO_WUJI[s]]
-                    for s in KUKA_SHARPA.hand_joint_names},
-    hand_damping={s: FLEXIV_WUJI_HUMAN_LIKE.hand_damping[_SHARPA_TO_WUJI[s]]
-                  for s in KUKA_SHARPA.hand_joint_names},
-    hand_effort_limit={s: _WUJI_URDF_EFFORT[_SHARPA_TO_WUJI[s]] for s in KUKA_SHARPA.hand_joint_names},
 )
 
 # ----------------------------------------------------------------------------
@@ -684,9 +558,7 @@ FLEXIV_WUJI_RIGHT_REAL = dataclasses.replace(
 
 ROBOT_SPECS: dict[str, RobotSpec] = {
     spec.name: spec for spec in (
-        KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_HUMAN_LIKE_S2R, FLEXIV_SHARPA,
-        FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN, FLEXIV_SHARPA_WUJIGAIN, FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
-        FLEXIV_WUJI_RIGHT_REAL,
+        KUKA_SHARPA, FLEXIV_WUJI_RIGHT_HUMAN_LIKE, FLEXIV_WUJI_RIGHT_REAL,
     )
 }
 

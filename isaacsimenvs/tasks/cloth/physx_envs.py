@@ -585,8 +585,6 @@ class _PhysxClothMixin:
     def _setup_chain_physics(self) -> None:
         """Contacts are already authored; read them back and refuse to run on a mismatch."""
         r, pc = self.cfg.rigid_cloth, self.cfg.physx_chain
-        if r.contact_ke > 0.0 or r.contact_kd > 0.0:
-            raise ValueError("[physx_chain] rigid_cloth.contact_ke / contact_kd are Newton (MJWarp) only")
         m = self._contact_margin_value()
         self._contact_margin = m
         cloth_min = pc.friction_model == "cloth_min"

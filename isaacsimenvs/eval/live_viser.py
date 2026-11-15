@@ -1,6 +1,6 @@
 """Run a fold policy LIVE in a browser (viser), with its knobs on sliders.
 
-    scripts/newton_py -m isaacsimenvs.eval.live_viser --task Isaacsimenvs-FoldPool-Direct-v0
+    scripts/newton_py -m isaacsimenvs.eval.live_viser --task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0
     sbatch scripts/cluster/bos14_live_viser.sh          # on a GPU node; the log prints the tunnel
 
 The env runs on the GPU exactly as `episodes.py` runs it (same reset, same zero-action tick, same
@@ -101,25 +101,12 @@ ARCHIVED_POLICIES = {
     "generic tool-use prior (untrained on folds)": ("pretrained_policy/model.pth", 50.0),
 }
 
-#: Rigid manipulands get the evaluation-sized contact buffer: a policy that folds a 16-17 slat chain
-#: needs ~548k pairs/env, over the yaml's 524288 (see the rigid-cloth notes). The VBD cloth keeps its
-#: yaml default -- the big buffer is pure cost there (it made the cloth step ~2x slower).
-_RIGID_BUF = "env.newton.per_env_triangle_pairs=2097152"
-
-#: Display name -> (gym task, extra hydra overrides). Newton; PHYSX_TASKS for the PhysX viewer.
+#: Display name -> (gym task, extra hydra overrides). Newton (VBD cloth); PHYSX_TASKS for the PhysX viewer.
 TASKS = {
     "VBD cloth, Flexiv + right Wuji human-like (real setup)": ("Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0", []),
-    "VBD cloth, Flexiv + Wuji human-like": ("Isaacsimenvs-ClothFlexivWujiHumanLike-Direct-v0", []),
-    "VBD cloth, Flexiv + Wuji vendor limits": ("Isaacsimenvs-ClothFlexivWuji-Direct-v0", []),
-    "fold pool, Flexiv + Wuji human-like": ("Isaacsimenvs-FoldPoolFlexivWujiHumanLike-Direct-v0", [_RIGID_BUF]),
-    "fold pool (5 shapes, 10-20 cm)": ("Isaacsimenvs-FoldPool-Direct-v0", [_RIGID_BUF]),
     "VBD cloth": ("Isaacsimenvs-Cloth-Direct-v0", []),
     # cloth.task=unfold: the + half starts folded over (cloth.unfold_start_deg), the goal is flat.
     "UNFOLD: VBD cloth, folded start": ("Isaacsimenvs-Cloth-Direct-v0", ["env.cloth.task=unfold"]),
-    **{
-        f"chain {v}": ("Isaacsimenvs-RigidCloth-Direct-v0", [f"env.rigid_cloth.variant={v}", _RIGID_BUF])
-        for v in ("box3-mid", "box2-surface", "cyl-mid-odd", "box-mid-odd", "box-surface")
-    },
 }
 _POOL7 = "env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]"
 # RigidClothPhysx.yaml keeps friction DR ranges, which the PhysX env refuses at build (physx_envs.py).
@@ -128,16 +115,6 @@ _PX_NO_FRIC_DR = ["env.rigid_cloth.randomization.slat_friction_scale=[1.0,1.0]",
 PHYSX_TASKS = {
     "fold pool 7 shapes flat (flat7), Flexiv + right Wuji human-like (real setup)": (
         "Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHumanLike-Direct-v0",
-        ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
-         "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
-    ),
-    "fold pool 7 shapes flat (flat7), Flexiv + Wuji human-like": (
-        "Isaacsimenvs-FoldPoolPhysxFlexivWujiHumanLike-Direct-v0",
-        ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
-         "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
-    ),
-    "fold pool 7 shapes flat (flat7), Flexiv + Wuji vendor limits": (
-        "Isaacsimenvs-FoldPoolPhysxFlexivWuji-Direct-v0",
         ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
          "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
     ),
@@ -269,7 +246,7 @@ def _wxyz_to_mat(q) -> np.ndarray:
 
 def _parse():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--task", default="Isaacsimenvs-FoldPool-Direct-v0")
+    p.add_argument("--task", default="Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0")
     p.add_argument("--policy", default=next(iter(POLICIES)), choices=list(POLICIES))
     p.add_argument("--num_envs", type=int, default=8)
     p.add_argument("--port", type=int, default=8080)

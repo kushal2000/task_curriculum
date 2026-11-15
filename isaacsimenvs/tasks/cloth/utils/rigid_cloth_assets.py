@@ -1,16 +1,9 @@
 """URDF generation and URDF->USD conversion options for the hinged-slat chains.
 
-Split out from the env for **one** reason, and it is not tidiness: the Newton stack replaces
-``scene_utils._convert_urdf_to_usd`` with a **content-addressed cache lookup that raises on a miss**
-(``isaacsimenvs/newton/usd_cache.py``), and the key is a hash of the URDF text plus
-:data:`CONVERT_KWARGS`. So the bake and the run must agree on both, exactly, or the run dies with a
-cache miss -- and if the two ever disagree *silently* (same key, different geometry) the comparison
-the cache exists to protect is gone. Both sides import from here so there is one definition of each.
+One definition of the chain URDF and of :data:`CONVERT_KWARGS`, shared by the PhysX envs
+(``physx_envs.py``) and the analysis scripts that render or probe the chains.
 
-    bake (Isaac Sim venv, has Kit)   usd_cache --populate --rigid_cloth_variants
-    run  (Isaac Lab venv, kit-less)  RigidClothEnv._install_cloth
-
-The URDF text must therefore be **deterministic**: ``write_chain_urdf`` is pure given a
+The URDF text is **deterministic**: ``write_chain_urdf`` is pure given a
 :class:`~rigid_cloth.ChainSpec` and the three physical arguments below, with no timestamps, no
 tempdir paths and no dict-ordering dependence.
 """

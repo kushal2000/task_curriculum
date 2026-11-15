@@ -456,7 +456,7 @@ def test_velocity_includes_the_rotational_term(rigid_cloth, rigid_cloth_adapter,
 def test_every_variant_is_a_valid_config_choice(rigid_cloth):
     """The env's variant guard has to name the same five the model does."""
     cfg_mod = pytest.importorskip(
-        "isaacsimenvs.tasks.cloth.rigid_cloth_env_cfg",
+        "isaacsimenvs.tasks.cloth.rigid_cloth_cfg",
         reason="needs isaaclab.utils.configclass",
     )
     for name in rigid_cloth.VARIANTS:
@@ -479,46 +479,12 @@ def test_the_default_slat_friction_is_the_cloths_effective_value(rigid_cloth):
     grippier than the cloth against everything it touches. The table is the contact a flat sheet
     spends its life in, so the default is what the cloth effectively feels there.
     """
-    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.rigid_cloth_env_cfg")
+    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.rigid_cloth_cfg")
     cfg = cfg_mod.RigidClothCfg()
     want = rigid_cloth.cloth_effective_friction(rigid_cloth.CLOTH_REFERENCE["shape_mu"]["table"])
     assert cfg.friction == pytest.approx(want)
     assert cfg.friction == pytest.approx(math.sqrt(0.25 * 0.5), abs=1e-6)
     assert cfg_mod.RigidClothCfg(slat_friction=0.9).friction == pytest.approx(0.9)
-
-
-def test_the_task_yaml_and_the_config_class_agree(rigid_cloth):
-    """A yaml key with no field is silently dropped by the loader, and vice versa.
-
-    Both directions matter: an unknown key means a setting a run believes it has pinned and has not,
-    and a field absent from the yaml means a value that changes when the dataclass default changes.
-    """
-    import dataclasses
-    from pathlib import Path
-
-    yaml = pytest.importorskip("yaml")
-    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.rigid_cloth_env_cfg")
-    root = Path(__file__).resolve().parents[1]
-    loaded = yaml.safe_load((root / "isaacsimenvs/cfg/task/RigidCloth.yaml").read_text())
-    block = loaded["rigid_cloth"]
-    fields = {f.name for f in dataclasses.fields(cfg_mod.RigidClothCfg)}
-    assert set(block) == fields
-    # And the yaml must not drift from Cloth.yaml on anything else -- "only the manipuland changed"
-    # is the claim the whole comparison rests on.
-    cloth = yaml.safe_load((root / "isaacsimenvs/cfg/task/Cloth.yaml").read_text())
-    assert set(loaded) - set(cloth) == {"rigid_cloth"}
-    # The one sanctioned difference: the contact buffer. A 16-17 slat chain with self-collision needs
-    # ~119k triangle pairs per env against the sheet's ~27k, and under-sizing drops contacts silently.
-    # It is a buffer size, not physics, so it does not break "only the manipuland changed".
-    allowed = {("newton", "per_env_triangle_pairs")}
-    for k in cloth:
-        if isinstance(cloth[k], dict):
-            for kk in cloth[k]:
-                if (k, kk) not in allowed:
-                    assert loaded[k].get(kk) == cloth[k][kk], f"RigidCloth.yaml drifted: {k}.{kk}"
-            assert set(loaded[k]) == set(cloth[k]), f"RigidCloth.yaml drifted: {k} keys"
-        else:
-            assert loaded[k] == cloth[k], f"RigidCloth.yaml drifted from Cloth.yaml: {k}"
 
 
 def test_the_conversion_options_are_the_ones_the_fold_needs(rigid_cloth):
@@ -544,7 +510,7 @@ def test_the_config_defaults_are_the_ones_the_bake_uses():
     been queued, scheduled and started. This fails in 0.1 s instead.
     """
     assets = pytest.importorskip("isaacsimenvs.tasks.cloth.utils.rigid_cloth_assets")
-    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.rigid_cloth_env_cfg")
+    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.rigid_cloth_cfg")
     cfg = cfg_mod.RigidClothCfg()
     # `joint_damping` is the one exception and is checked by the next test instead: the URDF's value
     # is pinned at 0.0 because the importer drops `<dynamics>`, while the config's field is the
@@ -566,7 +532,7 @@ def test_hinge_damping_is_not_claimed_in_the_urdf():
     read as agreeing when only one of them does anything.
     """
     assets = pytest.importorskip("isaacsimenvs.tasks.cloth.utils.rigid_cloth_assets")
-    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.rigid_cloth_env_cfg")
+    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.rigid_cloth_cfg")
     assert assets.URDF_DEFAULTS["joint_damping"] == 0.0
     assert cfg_mod.RigidClothCfg().joint_damping > 0.0, "the actuator must supply real damping"
 
@@ -581,7 +547,7 @@ def test_the_hinges_get_armature_at_every_stiffness():
     default is limp, and the default armature is non-zero -- so a future edit cannot quietly restore
     "actuator only when stiff" without a failure.
     """
-    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.rigid_cloth_env_cfg")
+    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.rigid_cloth_cfg")
     cfg = cfg_mod.RigidClothCfg()
     assert cfg.joint_stiffness == 0.0
     assert cfg.joint_armature > 0.0

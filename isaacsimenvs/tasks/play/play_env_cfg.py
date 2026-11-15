@@ -659,67 +659,8 @@ class PlayEnvCfg(DirectRLEnvCfg):
     domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg()
 
 
-@configclass
-class PlayFlexivWujiEnvCfg(PlayEnvCfg):
-    """Play on a Flexiv Rizon 4s + left Wuji Hand 2 (``Isaacsimenvs-PlayFlexivWuji-Direct-v0``).
-
-    The same task as ``PlayEnvCfg`` except the robot, and robot self-collision, which is on (as for
-    its Kuka control, ``PlaySelfCollisionEnvCfg``). The URDF is composed by
-    ``scripts/flexiv_wuji/fetch_assets.sh``. Note ``student_obs.raycast_dynamic_prim_exprs``
-    still names the Kuka's links, so the raycaster student camera does not see this robot yet.
-    """
-
-    robot: str = "flexiv_wuji"
-    robot_self_collision: bool = True
-    action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
-    assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji.urdf")
-
-
-
-@configclass
-class PlayFlexivWujiHumanLikeEnvCfg(PlayFlexivWujiEnvCfg):
-    """``PlayFlexivWujiEnvCfg`` on the Wuji with human-like joint limits
-    (``Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0``): backward finger bend cut and finger
-    abduction held to +-2 deg (``scripts/flexiv_wuji/flexiv_wuji.py`` HUMAN_LIKE_LIMITS_DEG).
-    Everything else, self-collision included, is the Flexiv task's.
-    """
-
-    robot: str = "flexiv_wuji_human_like"
-    assets: AssetsCfg = AssetsCfg(
-        robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf"
-    )
-
-
-@configclass
-class PlayFlexivSharpaEnvCfg(PlayEnvCfg):
-    """Play on a Flexiv Rizon 4s carrying the Kuka's left Sharpa (``Isaacsimenvs-PlayFlexivSharpa-Direct-v0``).
-
-    The Flexiv tasks' arm and the Kuka's hand; robot self-collision on, as for both. The URDF is
-    written by ``scripts/flexiv_wuji/flexiv_wuji.py``.
-    """
-
-    robot: str = "flexiv_sharpa"
-    robot_self_collision: bool = True
-    assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_left_sharpa.urdf")
-
-
-@configclass
-class PlaySelfCollisionEnvCfg(PlayEnvCfg):
-    """Play on the Kuka + Sharpa with robot self-collision on (``Isaacsimenvs-PlaySelfCollision-Direct-v0``).
-
-    SimToolReal's recipe as Isaac Gym ran it: the control for the Flexiv + Wuji, which has
-    self-collision on too. Reads ``Play.yaml``, which does not set the field.
-    """
-
-    robot_self_collision: bool = True
-
-
 __all__ = [
     "PlayEnvCfg",
-    "PlayFlexivWujiEnvCfg",
-    "PlayFlexivWujiHumanLikeEnvCfg",
-    "PlayFlexivSharpaEnvCfg",
-    "PlaySelfCollisionEnvCfg",
     "AssetsCfg",
     "ObsCfg",
     "StudentObsCfg",
