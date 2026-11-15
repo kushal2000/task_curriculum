@@ -268,7 +268,7 @@ KUKA_SHARPA = RobotSpec(
 
 
 # ----------------------------------------------------------------------------
-# Flexiv Rizon 4s + left Wuji Hand 2 (scripts/flexiv_wuji/). Geometry is derived from the
+# Flexiv Rizon 4s + left Wuji Hand 2 (assets/urdf/flexiv_wuji/tools/). Geometry is derived from the
 # models; the DYNAMICS ARE PROVISIONAL placeholders, to be refined against the hardware.
 # ----------------------------------------------------------------------------
 
@@ -320,7 +320,7 @@ _WUJI_ARMATURE = tuple(
     for name in _WUJI_JOINTS
 )
 
-# Derived by scripts/flexiv_wuji/self_collision_pairs.py (isaacsimenvs/tasks/play/tests/test_robot_specs.py reruns it):
+# Derived by assets/urdf/flexiv_wuji/tools/self_collision_pairs.py (isaacsimenvs/tasks/play/tests/test_robot_specs.py reruns it):
 # each jointed pair, plus the palm (link7, into which l_wrist merges) with every finger's
 # proximal_abd -- touching at reset on the ring and pinky, and through the knuckle's range on
 # the rest, as SimToolReal filters the Sharpa's palm-to-proximal pairs.
@@ -367,7 +367,7 @@ FLEXIV_WUJI = RobotSpec(
     # The importer merges flange, l_mount and l_wrist into link7.
     palm_body_name="link7",
     # The Kuka's palm centre carried over through the canonical hand frame (middle MCP origin,
-    # knuckle-defined axes; scripts/flexiv_wuji/viser_compare.py): same spot relative to the
+    # knuckle-defined axes; scripts/visualization/viser_compare.py): same spot relative to the
     # knuckles. Depends on flexiv_wuji.MOUNT_*; isaacsimenvs/tasks/play/tests/test_robot_specs.py recomputes it.
     palm_center_offset=(-0.0018, -0.015, 0.1948),
     fingertip_body_regex="l_(thumb|index_finger|middle_finger|ring_finger|pinky)_distal",

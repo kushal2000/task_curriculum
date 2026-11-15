@@ -57,7 +57,7 @@ pretrained_assembly/
 /isaac_cache/
 /lift1.zip
 
-# assets/urdf/flexiv_wuji/ (the Rizon 4s + Wuji Hand 2 models from scripts/flexiv_wuji/fetch_assets.sh
+# assets/urdf/flexiv_wuji/ (the Rizon 4s + Wuji Hand 2 models from assets/urdf/flexiv_wuji/tools/fetch_assets.sh
 # and the composed URDFs) is committed in full: the training-time pose viewer loads the robot URDF
 # and its meshes from raw.githubusercontent.com at the run's branch. Do not move it to LFS -- raw
 # GitHub serves LFS files as pointer stubs.

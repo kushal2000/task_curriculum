@@ -1,6 +1,6 @@
 """Mean goals per episode, sampled one episode per environment.
 
-    python isaacsimenvs/eval/episodes.py --task Isaacsimenvs-Play-Direct-v0 --num_envs 64
+    python scripts/evaluation/eval.py --task Isaacsimenvs-Play-Direct-v0 --num_envs 64
 
 The metric is the number of sequential goals a policy reaches in one episode. The episode is the
 honest unit here because the deadline **resets on every goal hit**

@@ -3,7 +3,7 @@
 Every run artifact goes under ``DEBUG_OUTPUTS_DIR`` (``debug_outputs/``, gitignored):
 
 * ``debug_outputs/train_logs/`` (``TRAIN_LOGS_DIR``): Hydra run dirs ``<date>/<time>/0_<name>/``,
-  ``wandb/``, ``slurm/`` (scripts/slurm/submit.sh) and ``results/`` (eval JSONs, probe dumps).
+  ``wandb/``, ``slurm/`` (experiments/submit.sh) and ``results/`` (eval JSONs, probe dumps).
 * ``debug_outputs/videos/`` (``VIDEOS_DIR``): rendered videos, ``<month>/<date>_<name>_<time>.mp4``.
 * ``debug_outputs/deployment/`` (``DEPLOY_DIR``): real-robot run recordings and logs (deployment/).
 
@@ -27,7 +27,7 @@ DEBUG_OUTPUTS_DIR = REPO_ROOT / "debug_outputs"
 TRAIN_LOGS_DIR = DEBUG_OUTPUTS_DIR / "train_logs"
 VIDEOS_DIR = DEBUG_OUTPUTS_DIR / "videos"
 DEPLOY_DIR = DEBUG_OUTPUTS_DIR / "deployment"
-#: Where sbatch writes a job's log until the job knows its own folder (scripts/slurm/submit.sh); a
+#: Where sbatch writes a job's log until the job knows its own folder (experiments/submit.sh); a
 #: training or eval job then moves it there with :func:`adopt_slurm_log`, leaving a symlink.
 SLURM_STAGING_DIR = TRAIN_LOGS_DIR / ".slurm"
 PRETRAINED_DIR = Path(os.environ.get("PRETRAINED_POLICY_DIR", REPO_ROOT / "pretrained_policy"))
@@ -69,7 +69,7 @@ def adopt_slurm_log(dest_dir: Path) -> Path | None:
     """Move this Slurm job's log (and GPU-memory log) from SLURM_STAGING_DIR into ``dest_dir``.
 
     Slurm keeps writing to the moved file -- it holds it open -- and a symlink is left at the
-    staging path, so ``tail -f`` on the old name and scripts/slurm/_common.sh's end-of-job lines
+    staging path, so ``tail -f`` on the old name and experiments/_common.sh's end-of-job lines
     still work. No-op outside Slurm or when the log was written somewhere else.
     """
     tag = job_tag()

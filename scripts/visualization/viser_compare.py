@@ -28,7 +28,7 @@ canonical frame.
 "Write composed URDF" saves the arm + hand with the current mount via ``flexiv_wuji.compose_urdf``
 and prints the values to paste into ``flexiv_wuji.py``.
 
-    .venv/isaaclab3/bin/python scripts/flexiv_wuji/viser_compare.py [--port 8080]
+    .venv/isaaclab3/bin/python scripts/visualization/viser_compare.py [--port 8080]
 
 On the cluster, forward the port: ``ssh -L 8080:localhost:8080 <node>``, then open
 http://localhost:8080.
@@ -48,7 +48,7 @@ from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 from viser.extras import ViserUrdf
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "assets/urdf/flexiv_wuji/tools"))  # flexiv_wuji.py, hand_frames.py
 import flexiv_wuji as fw  # noqa: E402
 from hand_frames import HAND_KEYPOINTS, hand_frame, hand_points  # noqa: E402
 

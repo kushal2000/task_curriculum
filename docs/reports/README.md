@@ -108,7 +108,7 @@ Cloth score = zero-shot on the Newton VBD cloth, 3 training seeds pooled, in the
 | `0_pxpool_ft7lr_flat_s*` | 158820 | PhysX 7-shape pool | run 2 | +1.2e9 | **not measured** (the ep_1526 checkpoints are unevaluated; 81 / 54 / 48 / 21% is the ~epoch-10 policy) | finetune_7shapes |
 | `0_pxpool_ft7lr_initfold_s*` | 158821 | PhysX 7-shape pool | run 1 | +1.2e9 | **not measured** (48 / 51 / 16 / 26% is the ~epoch-10 policy) | finetune_7shapes |
 
-The four policies in the live viewer's menu (`isaacsimenvs/eval/live_viser.py`): run 2 s3, run 1 s1,
+The four policies in the live viewer's menu (`scripts/visualization/live_viser.py`): run 2 s3, run 1 s1,
 run 3 s3, 157622 s1.
 
 ## Smaller findings without their own report

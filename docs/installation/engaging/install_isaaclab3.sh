@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build .venv/isaaclab3 (docs/installation/install_isaaclab3.sh) on an Engaging CPU node, off the login node.
-#   scripts/slurm/submit.sh docs/installation/engaging/install_isaaclab3.sh   (submit from the repo root)
+#   experiments/submit.sh docs/installation/engaging/install_isaaclab3.sh   (submit from the repo root)
 #SBATCH --job-name=install_il3
 #SBATCH --partition=mit_normal
 #SBATCH --nodes=1

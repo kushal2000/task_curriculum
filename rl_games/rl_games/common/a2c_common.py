@@ -112,7 +112,7 @@ class A2CBase(BaseAlgorithm):
             # `rendezvous._create_c10d_store` attaches to the AGENT's store on MASTER_PORT --
             # while the hand-rolled `tcp://127.0.0.1:<hashed port>` below asks for a different one.
             # The two disagree and the store creation blocks for the full two-hour timeout with no
-            # output: a silent hang carrying no information about its cause. `isaacsimenvs/train.py
+            # output: a silent hang carrying no information about its cause. `scripts/training/train.py
             # --distributed` therefore initialises the group first via env://, which is torchrun's
             # own rendezvous, and this branch becomes a no-op.
             if not dist.is_initialized():
@@ -290,7 +290,7 @@ class A2CBase(BaseAlgorithm):
         self.train_dir = config.get('train_dir', 'runs')
 
         # a folder inside of train_dir containing everything related to a particular experiment.
-        # `experiment_dir` overrides it outright (isaacsimenvs/train.py sets it to the run folder, so
+        # `experiment_dir` overrides it outright (scripts/training/train.py sets it to the run folder, so
         # nn/ and summaries/ sit directly in it; the experiment name still names the checkpoints).
         self.experiment_dir = config.get('experiment_dir') or os.path.join(self.train_dir, self.experiment_name)
 

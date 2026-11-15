@@ -1,7 +1,7 @@
 # Vendored third-party source
 
 Plain copies of upstream repos at pinned commits, committed so a clone of this repo is
-complete. Do not edit them in place: change the pin in `scripts/vendor_third_party.sh` and
+complete. Do not edit them in place: change the pin in `third_party/vendor.sh` and
 rerun it. Each directory keeps its upstream LICENSE. Upstream's git-lfs files are left out:
 without their LFS objects they are only pointer stubs (IsaacLab: test golden images under
 `source/*/test/`).

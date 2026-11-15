@@ -16,8 +16,8 @@
 # are joined into rizon4s_left_wuji.urdf (flexiv_wuji.py, at its MOUNT_*), the model the
 # Isaacsimenvs-PlayFlexivWuji-Direct-v0 task loads.
 #
-#   scripts/flexiv_wuji/fetch_assets.sh
-#   FLEXIV_SHA=<sha> WUJI_SHA=<sha> scripts/flexiv_wuji/fetch_assets.sh
+#   assets/urdf/flexiv_wuji/tools/fetch_assets.sh
+#   FLEXIV_SHA=<sha> WUJI_SHA=<sha> assets/urdf/flexiv_wuji/tools/fetch_assets.sh
 set -euo pipefail
 
 FLEXIV_REPO=https://github.com/flexivrobotics/flexiv_description.git
@@ -26,7 +26,7 @@ WUJI_REPO=https://github.com/wuji-technology/wuji-description.git
 WUJI_SHA=${WUJI_SHA:-b13f7d52b23cb79e35357303c72b7f61f1d2fda2}
 WUJI_SRC=hand2/hand2_beta2/body
 
-ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 DEST=$ROOT/assets/urdf/flexiv_wuji
 
 tmp=$(mktemp -d)
@@ -105,5 +105,5 @@ cp -r "$tmp/flexiv_description/meshes" "$DEST/flexiv_description/"
 cp -r "$tmp/wuji/$WUJI_SRC/urdf" "$tmp/wuji/$WUJI_SRC/meshes" "$tmp/wuji/$WUJI_SRC/mjcf" "$DEST/wuji_hand2/"
 
 printf '%s %s\n%s %s\n' "$FLEXIV_REPO" "$FLEXIV_SHA" "$WUJI_REPO" "$WUJI_SHA" > "$DEST/UPSTREAM"
-python3 "$ROOT/scripts/flexiv_wuji/flexiv_wuji.py"
+python3 "$ROOT/assets/urdf/flexiv_wuji/tools/flexiv_wuji.py"
 echo "Rizon 4s @ ${FLEXIV_SHA:0:12} + Wuji Hand 2 @ ${WUJI_SHA:0:12} -> ${DEST#$ROOT/}"

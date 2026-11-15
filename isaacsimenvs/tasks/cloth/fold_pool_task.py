@@ -671,7 +671,7 @@ class FoldPoolTaskMixin:
         # How many steps a fold takes. The logger averages `episode_final` over finished episodes,
         # so `fold_steps` (the episode length if it folded, else 0) divided by `done_fold` is the
         # mean length of a folded episode; `fold_steps_flat_start` / `fold_flat_start` the same for
-        # episodes that started flat. Not `done_*`: eval/episodes.py reads those as booleans.
+        # episodes that started flat. Not `done_*`: scripts/evaluation/eval.py reads those as booleans.
         # `episode_length_buf` already counts this step (DirectRLEnv.step increments it before
         # `_get_dones`), so it equals eval's `per_env_length` for an episode ending here.
         entered = self._termination_reasons["fold"].bool()

@@ -13,7 +13,7 @@ Isaac Sim builds one robot per process. The run dropdown lists every run of ever
 layout) without touching the env; "load env" restarts this viewer in place -- same process, same
 port -- on the chosen run's robot, and the browser reconnects once it is built (about 30 s).
 
-    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.eval.viser_play \\
+    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python scripts/visualization/viser_play.py \\
         --run play_scratch_flexiv_sharpa_ft05_nodr_249241 --port 8081
 
 ``--run`` takes a run name (or a unique part of one), a run directory, or a ``.pth``. The newest
@@ -446,7 +446,7 @@ def main() -> None:
             if state["want_restart"] is not None:
                 # A new robot needs a new Isaac Sim stage, so a new process: replace this one with
                 # the same command on the chosen checkpoint. Same PID and port; exec frees the GPU.
-                argv = [sys.executable, "-m", "isaacsimenvs.eval.viser_play",
+                argv = [sys.executable, str(Path(__file__).resolve()),
                         "--run", str(state["want_restart"]), "--port", str(args.port),
                         "--num_assets_per_type", str(args.num_assets_per_type),
                         "--seed", str(args.seed), "--device", args.device]

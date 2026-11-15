@@ -1,5 +1,5 @@
 # PlayFlexivWujiRightHumanLike — the Play task on a Flexiv Rizon 4s + RIGHT Wuji Hand 2 with
-# human-like joint limits (scripts/flexiv_wuji/flexiv_wuji.py HUMAN_LIKE_LIMITS_DEG).
+# human-like joint limits (assets/urdf/flexiv_wuji/tools/flexiv_wuji.py HUMAN_LIKE_LIMITS_DEG).
 #
 # A FULL COPY of Play.yaml, for the reason PlayNewton.yaml gives: the overlay loader reads one file
 # with no inheritance. `tests/test_playflexivwuji_overlay.py` asserts it agrees with Play.yaml on
@@ -9,7 +9,7 @@
 #   * `robot` — selects robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE (gains, palm/fingertip bodies, joint order)
 #   * `action_space` — 27 (7 arm + 20 hand) instead of 29; PlayEnv recomputes it from the robot
 #   * `assets.table_urdf`, `reset.table_*`, `reset.target_volume_*` — the real setup's table
-#   * `assets.robot_urdf` — written by scripts/flexiv_wuji/flexiv_wuji.py
+#   * `assets.robot_urdf` — written by assets/urdf/flexiv_wuji/tools/flexiv_wuji.py
 robot: flexiv_wuji_right_human_like
 
 # -----------------------------------------------------------------------------

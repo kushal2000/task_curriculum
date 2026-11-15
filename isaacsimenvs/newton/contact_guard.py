@@ -122,7 +122,7 @@ def assert_no_buffer_overflow(env, steps: int = 20, action=None) -> None:
     hand is not touching the object and the contact count is at its lowest. A 24-segment cable
     passed this check and then overflowed for hundreds of steps once the policy started
     manipulating. Use `capture_fd_output` around the whole rollout as well -- see
-    `eval/episodes.py`.
+    `scripts/evaluation/eval.py`.
 
     Raises:
         RuntimeError: with the offending lines, the env count, and the usual cause.

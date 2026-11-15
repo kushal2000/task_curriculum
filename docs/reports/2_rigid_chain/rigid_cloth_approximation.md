@@ -669,7 +669,7 @@ OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.newton.usd_ca
     --populate --rigid_cloth_variants
 
 # then, per variant
-.venv/isaaclab3/bin/python isaacsimenvs/train.py \
+.venv/isaaclab3/bin/python scripts/training/train.py \
     --task Isaacsimenvs-RigidCloth-Direct-v0 \
     --agent rl_games_sapg_cfg_entry_point --headless \
     env.rigid_cloth.variant=box3-mid env.scene.num_envs=768

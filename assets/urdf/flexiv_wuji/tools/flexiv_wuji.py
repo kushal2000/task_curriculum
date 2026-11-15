@@ -9,7 +9,7 @@ table, are mirrored as constants below so this script runs without Isaac Lab.
 
 Pure numpy + stdlib + yourdfpy, run with ``.venv/isaaclab3/bin/python``.
 
-    python scripts/flexiv_wuji/flexiv_wuji.py   # write COMPOSED_URDF and HUMAN_LIKE_URDF with MOUNT_*
+    python assets/urdf/flexiv_wuji/tools/flexiv_wuji.py   # write COMPOSED_URDF and HUMAN_LIKE_URDF with MOUNT_*
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 ASSET_DIR = REPO_ROOT / "assets" / "urdf" / "flexiv_wuji"
 
 FLEXIV_URDF = ASSET_DIR / "flexiv_description" / "urdf" / "Rizon4s.urdf"
@@ -123,7 +123,7 @@ FLEXIV_DEFAULT_ARM_POS = {
 
 def _require(path: Path) -> Path:
     if not path.is_file():
-        raise FileNotFoundError(f"{path} is missing; run scripts/flexiv_wuji/fetch_assets.sh")
+        raise FileNotFoundError(f"{path} is missing; run assets/urdf/flexiv_wuji/tools/fetch_assets.sh")
     return path
 
 

@@ -3,22 +3,22 @@
 # debug_outputs/train_logs/.slurm/ until the job knows its own folder: a training job then moves it
 # into its run folder, an eval job into <experiment>/results/ (a symlink stays behind).
 #
-#   scripts/slurm/submit.sh [sbatch options] scripts/slurm/<train|eval|viser>.sh [job args]
+#   experiments/submit.sh [sbatch options] experiments/<train|eval>.sh [job args]
 #
-#   scripts/slurm/submit.sh \
-#       scripts/slurm/train.sh --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHLRL-Direct-v0 \
-#       --experiment flat7RW_base --checkpoint pretrained_policy/kuka_sharpa/model.pth
-#   scripts/slurm/submit.sh --array=0-2 scripts/slurm/train.sh ...   # seeds 1-3 (agent.params.seed)
+#   experiments/submit.sh \
+#       experiments/train.sh --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 \
+#       --experiment rigid_cloth_flexiv_wuji_full_dr --checkpoint pretrained_policy/flexiv_wuji/model.pth
+#   experiments/submit.sh --array=0-2 experiments/train.sh ...   # seeds 1-3 (agent.params.seed)
 #
 # sbatch options must be written --opt=value (the first argument not starting with '-' is the job
 # script). They override the job script's #SBATCH defaults (portal: --partition=portal, one RTX 6000
 # Ada), which is how one script serves every cluster -- e.g. on bos14
-#   scripts/slurm/submit.sh --partition=gpu_a100 --gres=gpu:rtxpro6000:1 scripts/slurm/train.sh ...
+#   experiments/submit.sh --partition=gpu_a100 --gres=gpu:rtxpro6000:1 experiments/train.sh ...
 #
 # Works on every cluster checkout: the repo root is this file's location, not a hardcoded path.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "${ROOT}/debug_outputs/train_logs/.slurm"
 
 opts=()

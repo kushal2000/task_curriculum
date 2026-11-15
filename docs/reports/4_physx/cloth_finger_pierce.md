@@ -33,5 +33,5 @@ shrinks with the spacing; it does cut the long hangs (>= 30 steps: 30 -> 21 -> 1
 
 The fix is a contact model in which the sheet's FACES collide with the hand (triangle/edge vs shape),
 which Newton's VBD does not have -- or a policy that learns not to press through (the reference
-mostly does). The live viewer (`isaacsimenvs/eval/live_viser.py`) draws a pierced finger's axis red
+mostly does). The live viewer (`scripts/visualization/live_viser.py`) draws a pierced finger's axis red
 and names it in the status panel.

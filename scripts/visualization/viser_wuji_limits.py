@@ -11,7 +11,7 @@ Each robot has its own sliders, over its own URDF limits: arm joints, hand joint
 "Copy vendor pose to human-like" puts the right robot in the left one's pose, clamped to its
 limits. The readout lists every hand joint where the two differ, in degrees.
 
-    .venv/isaaclab3/bin/python scripts/flexiv_wuji/viser_wuji_limits.py [--port 8080]
+    .venv/isaaclab3/bin/python scripts/visualization/viser_wuji_limits.py [--port 8080]
 
 On the cluster, forward the port: ``ssh -L 8080:localhost:8080 <node>``, then open
 http://localhost:8080.
@@ -30,7 +30,7 @@ import viser
 import yourdfpy
 from viser.extras import ViserUrdf
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "assets/urdf/flexiv_wuji/tools"))  # flexiv_wuji.py, hand_frames.py
 import flexiv_wuji as fw  # noqa: E402
 from viser_compare import TABLE_COLOR, JointSliders  # noqa: E402
 

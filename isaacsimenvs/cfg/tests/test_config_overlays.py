@@ -131,9 +131,9 @@ def test_every_yaml_key_maps_to_a_config_field(yaml_rel, root_cls, modules):
     assert not problems, f"{yaml_rel}:\n  " + "\n  ".join(problems)
 
 
-# --- cfg/experiment/: run recipes layered over a task YAML (train.py --experiment) ---------------
+# --- experiments/configs/: run recipes layered over a task YAML (train.py --experiment) ---------------
 
-EXPERIMENT_DIR = REPO_ROOT / "isaacsimenvs/cfg/experiment"
+EXPERIMENT_DIR = REPO_ROOT / "experiments/configs"
 # Per task id: env root configclass, its modules, and the SAPG agent YAML.
 EXPERIMENT_TASKS = {
     "Isaacsimenvs-FoldPoolPhysx-Direct-v0": (
@@ -148,8 +148,27 @@ EXPERIMENT_TASKS = {
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
     ),
+    # The deformable (VBD) sheet on Newton.
+    "Isaacsimenvs-Cloth-Direct-v0": (
+        "ClothEnvCfg",
+        [
+            "isaacsimenvs/tasks/cloth/cloth_env_cfg.py",
+            "isaacsimenvs/tasks/cloth/newton_base_env_cfg.py",
+            "isaacsimenvs/tasks/cloth/cloth_cfg.py",
+            PLAY_CFG,
+            CURRICULUM_CFG,
+        ],
+        "isaacsimenvs/cfg/train/ClothSAPG.yaml",
+    ),
+    # Play pretraining on the identified right hand (tasks/play/__init__.py).
+    "Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0": (
+        "PlayFlexivWujiRightHumanLikeEnvCfg",
+        [PLAY_CFG],
+        "isaacsimenvs/cfg/train/PlaySAPG.yaml",
+    ),
 }
 # The robot-swapped ids (tasks/cloth/__init__.py) share their base task's cfg and agent YAML.
+EXPERIMENT_TASKS["Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0"] = EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"]
 for _robot in ("FlexivWuji", "FlexivWujiHumanLike", "FlexivWujiHumanLikeS2R", "FlexivSharpa",
                "FlexivWujiRightHumanLike", "FlexivWujiRightReal", "FlexivWujiRightHLRL"):
     EXPERIMENT_TASKS[f"Isaacsimenvs-FoldPoolPhysx{_robot}-Direct-v0"] = EXPERIMENT_TASKS[

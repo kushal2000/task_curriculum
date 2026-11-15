@@ -19,7 +19,7 @@ PY="${VENV}/bin/python"
 LAB="${ROOT}/third_party/IsaacLab"
 
 # Isaac Lab is vendored in the repo at the commit the Newton compat patches (isaacsimenvs/newton/)
-# are written against -- see third_party/VENDORED.md; bump it with scripts/vendor_third_party.sh.
+# are written against -- see third_party/VENDORED.md; bump it with third_party/vendor.sh.
 echo "==> Isaac Lab source: ${LAB} (VERSION $(cat "${LAB}/VERSION" 2>/dev/null || echo '?'))"
 [[ -f "${LAB}/isaaclab.sh" ]] || { echo "missing ${LAB}: it is committed, check the clone" >&2; exit 1; }
 
@@ -28,7 +28,7 @@ echo "==> Creating ${VENV} (Python 3.12)"
 # without --clear. Only then: a manual rerun keeps refusing rather than wiping a working venv.
 CLEAR=()
 [[ "${SLURM_RESTART_COUNT:-0}" -gt 0 ]] && CLEAR=(--clear)
-uv venv "${VENV}" --python 3.12 --seed "${CLEAR[@]}"
+uv venv "${VENV}" --python 3.12 --python-preference only-managed --seed "${CLEAR[@]}"
 
 # Installed mainly so the venv has a working torch before Isaac Lab's own installer runs.
 # NOTE: `isaaclab.sh -i` below replaces this with its own pin -- the venv ends up on
@@ -65,7 +65,7 @@ uv pip install --python "${PY}" -e "${ROOT}" --no-deps
 # The Kit-free suite must pass under *both* interpreters -- that is what demonstrates the shared
 # task modules are genuinely shared rather than accidentally 3.11-only.
 uv pip install --python "${PY}" pytest
-# viser's URDF loader; Isaac Lab brings viser but not yourdfpy. Used by scripts/flexiv_wuji/.
+# viser's URDF loader; Isaac Lab brings viser but not yourdfpy. Used by assets/urdf/flexiv_wuji/tools/.
 uv pip install --python "${PY}" yourdfpy
 
 echo "==> Verifying"

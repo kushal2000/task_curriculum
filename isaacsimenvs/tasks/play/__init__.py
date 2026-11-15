@@ -73,3 +73,19 @@ gym.register(
     },
 )
 
+# The same Play setup with the identified right hand (sysid dynamics, real joint limits): the
+# PlayFlexivWujiRightHumanLike task with only the robot swapped (cfg/robot/flexiv_wuji_right_real_play.yaml).
+gym.register(
+    id="Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0",
+    entry_point="isaacsimenvs.tasks.play.play_env:PlayEnv",
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "isaacsimenvs.tasks.play.play_env_cfg:PlayFlexivWujiRightHumanLikeEnvCfg",
+        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "PlayFlexivWujiRightHumanLike.yaml"),
+        "env_cfg_robot_yaml_entry_point": str(_CFG_DIR / "robot" / "flexiv_wuji_right_real_play.yaml"),
+        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
+    },
+)
+

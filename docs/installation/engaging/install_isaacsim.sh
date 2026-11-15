@@ -1,12 +1,12 @@
 #!/bin/bash
 # Isaac Sim (PhysX) on Engaging, inside an Apptainer container.
-#   scripts/slurm/submit.sh docs/installation/engaging/install_isaacsim.sh   (submit from the repo root)
+#   experiments/submit.sh docs/installation/engaging/install_isaacsim.sh   (submit from the repo root)
 #
 # Isaac Sim 5.1's pip wheels need glibc >= 2.35 and every Engaging node is Rocky 8 (glibc 2.28),
 # so the Kit stack cannot run natively. The official image (Ubuntu, glibc 2.35) supplies the OS;
 # the Python stack is still docs/installation/install_isaacsim.sh (isaaclab 2.3.2 / Isaac Sim 5.1), built
 # from INSIDE the container into .venv/isaacsim_ct so pip accepts the 2_35 wheels. Run it with
-# scripts/isaacsim_py, the container's counterpart of scripts/newton_py.
+# experiments/isaacsim_py, the container's counterpart of .venv/isaaclab3/bin/python.
 #SBATCH --job-name=install_isim
 #SBATCH --partition=mit_normal
 #SBATCH --nodes=1

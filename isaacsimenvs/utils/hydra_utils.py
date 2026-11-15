@@ -9,7 +9,7 @@ Precedence (lowest → highest):
     1. CartpoleEnvCfg() defaults (Python)
     2. cfg/task/Cartpole.yaml overlay (file — optional, via new gym kwarg
        `env_cfg_yaml_entry_point`)
-    3. cfg/experiment/<name>.yaml (optional, `train.py --experiment <name>`): one run recipe's
+    3. experiments/configs/<name>.yaml (optional, `train.py --experiment <name>`): one run recipe's
        `env:` and `agent:` overrides, so the recipe lives in the repo rather than in a launcher
     4. Hydra CLI overrides (e.g. `env.scene.num_envs=4096`)
 
@@ -39,7 +39,7 @@ from isaaclab.envs.utils.spaces import (
 from isaaclab.utils import replace_slices_with_strings, replace_strings_with_slices
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
-EXPERIMENT_DIR = Path(__file__).resolve().parents[1] / "cfg" / "experiment"
+EXPERIMENT_DIR = Path(__file__).resolve().parents[2] / "experiments" / "configs"
 
 
 def _deep_merge(base: dict, over: dict) -> dict:
@@ -51,7 +51,7 @@ def _deep_merge(base: dict, over: dict) -> dict:
 
 
 def load_experiment(name: str) -> dict:
-    """``cfg/experiment/<name>.yaml`` with its ``base:`` chain merged underneath it."""
+    """``experiments/configs/<name>.yaml`` with its ``base:`` chain merged underneath it."""
     with open(EXPERIMENT_DIR / f"{name}.yaml") as f:
         exp = yaml.safe_load(f) or {}
     base = exp.pop("base", None)
@@ -76,7 +76,7 @@ def hydra_task_config_with_yaml(
         yaml_entry_point: Key in the task's gym kwargs pointing to the task YAML
             overlay. If absent from the registered kwargs, no overlay is applied
             and behavior matches Isaac Lab's stock decorator.
-        experiment: Name of a ``cfg/experiment/`` YAML layered over the task YAML, or ``None``.
+        experiment: Name of a ``experiments/configs/`` YAML layered over the task YAML, or ``None``.
     """
 
     def decorator(func):

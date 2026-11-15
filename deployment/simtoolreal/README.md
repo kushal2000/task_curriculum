@@ -60,7 +60,7 @@ The spec json (`spec/`) is not a setting: it is copied from the training env. Ne
 - The FoundationPose environment (conda env `foundationpose`, the `kushal2000/FoundationPose` checkout at
   `~/FoundationPose`), plus `pip install pyzmq omegaconf pyrealsense2`.
 - The checkpoint at `pretrained_policy/flexiv_wuji/model.pth` (gitignored).
-- The robot meshes for the viewer: `scripts/flexiv_wuji/fetch_assets.sh` (the right hand is gitignored).
+- The robot meshes for the viewer: `assets/urdf/flexiv_wuji/tools/fetch_assets.sh` (the right hand is gitignored).
 - In `config.yaml`: `perception.foundationpose_dir` (the checkout) and `perception.extrinsics` (the
   camera pose, committed as `deployment/extrinsics/left_camera_nov7.json`, D415
   821312062243). perception.py opens the camera named in the extrinsics file and refuses another;

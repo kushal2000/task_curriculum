@@ -1,9 +1,8 @@
 # Sourced by the job scripts here. The working directory is the repo root (submit.sh --chdir).
 #
 # Picks the interpreter from the --task in the job's arguments, so the command names the backend:
-#   Isaacsimenvs-Cloth*  -> Newton / VBD     scripts/newton_py (.venv/isaaclab3)
-#   everything else      -> PhysX (Kit)      .venv/isaacsim, or scripts/isaacsim_py (the Isaac Sim
-#                                            container) where .venv/isaacsim_ct exists (Engaging)
+#   Isaacsimenvs-Cloth*  -> Newton / VBD     .venv/isaaclab3
+#   everything else      -> PhysX (Kit)      .venv/isaacsim
 # and logs the job's provenance and its GPU memory next to the job log (debug_outputs/train_logs/.slurm/
 # until the job moves both into its own folder: train.py does it for training, adopt_log for eval).
 
@@ -21,11 +20,11 @@ done
 
 if [[ "$TASK" == Isaacsimenvs-Cloth* ]]; then
     BACKEND=newton
-    PY=(scripts/newton_py)
+    PY=(.venv/isaaclab3/bin/python)
     HEADLESS=()
 else
     BACKEND=physx
-    if [[ -d .venv/isaacsim_ct ]]; then PY=(scripts/isaacsim_py); else PY=(.venv/isaacsim/bin/python); fi
+    PY=(.venv/isaacsim/bin/python)
     HEADLESS=(--headless)
 fi
 

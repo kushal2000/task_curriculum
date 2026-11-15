@@ -1,7 +1,7 @@
 """Run a fold policy LIVE in a browser (viser), with its knobs on sliders.
 
-    scripts/newton_py -m isaacsimenvs.eval.live_viser --task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0
-    scripts/slurm/submit.sh scripts/slurm/viser.sh --task <id>   # on a GPU node; the log prints the tunnel
+    .venv/isaaclab3/bin/python scripts/visualization/live_viser.py --task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0
+    .venv/isaacsim/bin/python scripts/visualization/live_viser.py --headless --task <PhysX id>   # on a GPU node, then ssh -L <port>
 
 The env runs on the GPU exactly as `episodes.py` runs it (same reset, same zero-action tick, same
 player), a handful of envs at once; one of them is drawn. What can change WITHOUT a restart:
@@ -28,7 +28,7 @@ is ~4.
 Geometry comes from Newton's own viewer pipeline (`ViewerBase.set_model` -> `log_geo`), captured
 by a null viewer, so what is drawn is exactly the collision geometry the solver sees.
 
-**PhysX tasks** (`*Physx*`, run in `.venv/isaacsim`; the same `scripts/slurm/viser.sh`): the
+**PhysX tasks** (`*Physx*`, run in `.venv/isaacsim`): the
 same viewer, with the geometry read from the USD stage (each rigid body's collision meshes and
 primitives, in its own frame) and the body poses from Isaac Lab's PhysX views every step. The friction
 sliders are hidden there: PhysX refuses friction DR (`physx_envs`). viser needs websockets >= 13,
@@ -195,7 +195,7 @@ _UNIT = {"hinge_stiffness": 1e-4, "contact_margin_offset": 1e-3}
 
 OUTCOMES = ("fold_held", "fold", "fall", "hand_far", "nonfinite", "timeout")
 #: Under ``cloth.release_persist`` a fold only scores once it survives the hand leaving, as in
-#: training and ``eval/episodes.py``; a fold still held with the hand on at the timeout is
+#: training and ``scripts/evaluation/eval.py``; a fold still held with the hand on at the timeout is
 #: "fold_hand_on", NOT a success.
 RELEASE_OUTCOMES = ("persist", "persist_fail")
 
@@ -1230,7 +1230,7 @@ def main() -> None:
                 time.sleep(0.5)
                 # Keep every override that is not a task choice (e.g. the contact buffer size).
                 keep = [a for a in hydra_args if not a.startswith(task_keys)]
-                argv = [sys.executable, "-m", "isaacsimenvs.eval.live_viser", "--task", task,
+                argv = [sys.executable, str(Path(__file__).resolve()), "--task", task,
                         "--policy", pol, "--num_envs", str(nenv), "--port", str(args.port),
                         "--even_sizes", str(args.even_sizes), *(["--headless"] if physx else []),
                         *keep, *ov]

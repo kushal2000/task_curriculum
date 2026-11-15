@@ -1,7 +1,7 @@
 #!/bin/bash
-# Train any task: scripts/slurm/submit.sh [sbatch options] scripts/slurm/train.sh --task <id> [train.py args]
+# Train any task: experiments/submit.sh [sbatch options] experiments/train.sh --task <id> [train.py args]
 #
-# The args go to isaacsimenvs.train unchanged (--experiment, --checkpoint, --checkpoint_load_mode,
+# The args go to scripts/training/train.py unchanged (--experiment, --checkpoint, --checkpoint_load_mode,
 # --wandb_*, hydra overrides). In an array job, task i gets agent.params.seed=i+1 unless the args
 # set a seed. The run itself lands in debug_outputs/train_logs/<date>/<time>/ (Hydra) and wandb in debug_outputs/train_logs/wandb/.
 #
@@ -17,7 +17,7 @@
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=100G
 #SBATCH --time=2-00:00:00
-source scripts/slurm/_common.sh
+source experiments/_common.sh
 
 ARGS=("$@")
 if [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]] && ! printf '%s\n' "$@" | grep -q '^agent.params.seed='; then
@@ -40,7 +40,7 @@ export WANDB_CONSOLE="${WANDB_CONSOLE:-off}"
 
 gpu_log_start
 START=$(date +%s)
-"${PY[@]}" -m isaacsimenvs.train "${HEADLESS[@]}" "${ARGS[@]}"
+"${PY[@]}" scripts/training/train.py "${HEADLESS[@]}" "${ARGS[@]}"
 RC=$?
 gpu_log_stop
 echo "[slurm] exit=$RC wall_s=$(( $(date +%s) - START ))"

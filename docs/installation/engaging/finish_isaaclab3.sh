@@ -1,6 +1,6 @@
 #!/bin/bash
 # Finish .venv/isaaclab3 on Engaging after `isaaclab.sh -i` stops at isaaclab_ov.
-#   scripts/slurm/submit.sh docs/installation/engaging/finish_isaaclab3.sh   (submit from the repo root)
+#   experiments/submit.sh docs/installation/engaging/finish_isaaclab3.sh   (submit from the repo root)
 #
 # isaaclab_ov needs `ovstage`, which ships only manylinux_2_35 wheels; every Engaging node is
 # Rocky 8 (glibc 2.28), so it can never install here. Nothing on the kit-less Newton path needs it
@@ -56,7 +56,7 @@ PY
 
 if [[ -n "${CKPT:-}" ]]; then
   echo "==> Loading ${CKPT} with ${POLICY_CFG:-checkpoints/config.yaml} (CPU)"
-  scripts/newton_py - "$CKPT" "${POLICY_CFG:-checkpoints/config.yaml}" <<'PY'
+  .venv/isaaclab3/bin/python - "$CKPT" "${POLICY_CFG:-checkpoints/config.yaml}" <<'PY'
 import sys, torch
 from isaacsimenvs.eval.player import PretrainedPlayer
 p = PretrainedPlayer(sys.argv[2], sys.argv[1], num_envs=2, device="cpu", expl_coef=0.0)

@@ -6,7 +6,7 @@
 # Isaac Lab's own pins for those (pyproject [tool.uv].override-dependencies / [tool.isaaclab.versions]).
 # newton[importers] is left out: its open3d dependency is also manylinux_2_35-only, and the probes build
 # their sheets with ModelBuilder.add_cloth_mesh (no USD / mesh importers).
-#   scripts/slurm/submit.sh docs/installation/engaging/probe_deps.sh   (from the repo root, after the venv exists)
+#   experiments/submit.sh docs/installation/engaging/probe_deps.sh   (from the repo root, after the venv exists)
 #SBATCH --job-name=probe_deps
 #SBATCH --partition=mit_preemptable
 #SBATCH --nodes=1

@@ -19,14 +19,15 @@ OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.newton.usd_ca
 
 Newton needs every robot URDF it loads in `.cache/usd/`; for the right Wuji, run the populate step again
 with `--task Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 env.assets.table_urdf=assets/urdf/table_narrow.urdf`.
-Run Newton code through `scripts/newton_py`, which fixes the venv's libstdc++.
+Newton code runs on `.venv/isaaclab3/bin/python` directly: the venv is built on uv's own Python, not anaconda's,
+whose old `libstdc++` once needed a launcher workaround.
 
 The robot models (`assets/urdf/`) and third-party source (`third_party/`) are committed, so there is
 nothing else to fetch. The Play priors (`pretrained_policy/`) are not: see the main README.
 
 **Engaging cluster:** the host glibc is too old for Isaac Sim's wheels, so `engaging/` builds the same
-venvs inside an Apptainer container (`.venv/isaacsim_ct`, run through `scripts/isaacsim_py`). Submit each
-from the repo root, e.g. `scripts/slurm/submit.sh docs/installation/engaging/install_isaacsim.sh`.
+venvs inside an Apptainer container (`.venv/isaacsim_ct`). Submit each
+from the repo root, e.g. `experiments/submit.sh docs/installation/engaging/install_isaacsim.sh`.
 
 ## The Isaac Sim venv by hand
 

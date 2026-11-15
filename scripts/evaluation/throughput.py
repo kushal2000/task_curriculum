@@ -1,6 +1,6 @@
 """Simulation throughput for a task, at a given environment count.
 
-    scripts/newton_py -m isaacsimenvs.eval.throughput --num_envs 64
+    .venv/isaaclab3/bin/python scripts/evaluation/throughput.py --num_envs 64
 
 Reports environment-steps per second (``num_envs`` x policy steps per second), which is the number
 that matters for training budget, alongside per-step wall time.

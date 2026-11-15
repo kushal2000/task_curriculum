@@ -1,8 +1,8 @@
 #!/bin/bash
-# Evaluate a checkpoint: scripts/slurm/submit.sh [sbatch options] scripts/slurm/eval.sh \
+# Evaluate a checkpoint: experiments/submit.sh [sbatch options] experiments/eval.sh \
 #     --experiment_dir experiments/<day> --task <id> --checkpoint <run>/nn/<name>.pth [episodes.py args]
 #
-# Runs isaacsimenvs.eval.episodes. The JSON and this job's Slurm log go to
+# Runs scripts/evaluation/eval.py. The JSON and this job's Slurm log go to
 # <experiment_dir>/results/<job name>_<job id>.json and slurm_<job id>.out (or pass --out yourself).
 #
 #SBATCH --job-name=eval
@@ -13,7 +13,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=06:00:00
-source scripts/slurm/_common.sh
+source experiments/_common.sh
 
 EXP_DIR=""
 ARGS=()
@@ -31,7 +31,7 @@ fi
 [[ -n "$EXP_DIR" ]] && adopt_log "$EXP_DIR/results"
 
 gpu_log_start
-"${PY[@]}" -m isaacsimenvs.eval.episodes "${HEADLESS[@]}" "${ARGS[@]}"
+"${PY[@]}" scripts/evaluation/eval.py "${HEADLESS[@]}" "${ARGS[@]}"
 RC=$?
 gpu_log_stop
 exit $RC

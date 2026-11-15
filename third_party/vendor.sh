@@ -4,8 +4,8 @@
 # the SHA, run, commit the diff). It replaces each third_party/<name>/ with `git archive <sha>` of
 # its upstream and rewrites third_party/VENDORED.md.
 #
-#   scripts/vendor_third_party.sh            # every dep
-#   scripts/vendor_third_party.sh aiowuji    # just one
+#   third_party/vendor.sh            # every dep
+#   third_party/vendor.sh aiowuji    # just one
 #
 # Then reinstall whatever venv uses the dep: docs/installation/install_isaaclab3.sh for IsaacLab, or
 #   uv pip install --python .venv_deploy/bin/python -e third_party/aioflexiv -e third_party/aiowuji
@@ -55,7 +55,7 @@ done
   echo "# Vendored third-party source"
   echo
   echo "Plain copies of upstream repos at pinned commits, committed so a clone of this repo is"
-  echo "complete. Do not edit them in place: change the pin in \`scripts/vendor_third_party.sh\` and"
+  echo "complete. Do not edit them in place: change the pin in \`third_party/vendor.sh\` and"
   echo "rerun it. Each directory keeps its upstream LICENSE. Upstream's git-lfs files are left out:"
   echo "without their LFS objects they are only pointer stubs (IsaacLab: test golden images under"
   echo "\`source/*/test/\`)."

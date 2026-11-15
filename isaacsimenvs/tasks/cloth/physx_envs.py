@@ -7,7 +7,7 @@ only expresses the manipuland's physics in PhysX terms. Policies move between th
 (PhysX steps this robot ~10x faster than MJWarp per GPU, see ``scripts/cluster/bos14_engine_bench.sh``),
 evaluate on the Newton VBD cloth.
 
-    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.train --headless \\
+    OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python scripts/training/train.py --headless \\
         --task Isaacsimenvs-RigidClothPhysx-Direct-v0 --agent rl_games_sapg_cfg_entry_point
 
 **Contact matching** (what the Newton chain does with MJWarp-specific writes):

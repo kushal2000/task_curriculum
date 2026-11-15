@@ -58,7 +58,7 @@ def deep_merge(base: dict, over: dict) -> dict:
 
 
 def load_experiment(ref: str, name: str) -> dict:
-    """hydra_utils.load_experiment: cfg/experiment/<name>.yaml over its `base:` chain."""
+    """hydra_utils.load_experiment: experiments/configs/<name>.yaml over its `base:` chain."""
     exp = yaml.safe_load(git_show(ref, f"{CFG}/experiment/{name}.yaml")) or {}
     base = exp.pop("base", None)
     return deep_merge(load_experiment(ref, base), exp) if base else exp
@@ -218,7 +218,7 @@ def flat(spec: dict) -> dict:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--ref", default=DEFAULT_REF, help="git ref of the training branch")
-    p.add_argument("--experiment", default=DEFAULT_EXPERIMENT, help="cfg/experiment/<name>.yaml of the run")
+    p.add_argument("--experiment", default=DEFAULT_EXPERIMENT, help="experiments/configs/<name>.yaml of the run")
     p.add_argument("--out", type=Path, default=HERE.parent / "spec" / "spec_flexiv_wuji_right_fold.json")
     p.add_argument("--compare", action="store_true",
                    help=f"build all of {POLICY_EXPERIMENTS} and print every field that differs")

@@ -12,7 +12,7 @@ from scratch.
 ## Setup
 
 ```bash
-scripts/flexiv_wuji/fetch_assets.sh
+assets/urdf/flexiv_wuji/tools/fetch_assets.sh
 ```
 
 Fetches the Rizon 4s (flexivrobotics/flexiv_description, xacro expanded with upstream's own
