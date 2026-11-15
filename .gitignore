@@ -94,3 +94,10 @@ docs/results/rigid_cloth_spawn_*.json
 # The right Wuji Hand's sysid fit (robots.FLEXIV_WUJI_RIGHT_REAL holds its values, rounded): kept local,
 # it identifies the lab's hand. tests/test_robot_specs.py skips its check when the file is absent.
 assets/flexiv_wuji/wuji_hand2_right_sysid_fit_*.json
+docs/results/**/*.npz
+
+# Local-only binaries: policy zips, the Isaac Lab overlay image, prior checkpoints, pip cache.
+/fabric_*.zip
+/isaaclab_overlay.img
+/checkpoints/
+/isaac_cache/

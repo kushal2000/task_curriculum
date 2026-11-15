@@ -84,7 +84,14 @@ def build_robot_articulation_usd_cfg(
     usd_path: str,
     spec: RobotSpec = KUKA_SHARPA,
     root_pos: tuple[float, float, float] = (0.0, 0.8, 0.0),
+    arm_effort_limit=None,
 ) -> ArticulationCfg:
+    """``arm_effort_limit``: one drive force ceiling [N m] per arm joint, or empty/None for the USD's."""
+    arm_effort = None
+    if arm_effort_limit:
+        if len(arm_effort_limit) != len(spec.arm_joint_names):
+            raise ValueError(f"arm_effort_limit needs {len(spec.arm_joint_names)} values, got {list(arm_effort_limit)}")
+        arm_effort = {name: float(v) for name, v in zip(spec.arm_joint_names, arm_effort_limit)}
     return ArticulationCfg(
         prim_path="/World/envs/env_.*/Robot",
         spawn=UsdFileCfg(usd_path=usd_path),
@@ -102,6 +109,7 @@ def build_robot_articulation_usd_cfg(
                 joint_names_expr=[spec.arm_joint_regex],
                 stiffness=spec.arm_stiffness,
                 damping=spec.arm_damping,
+                effort_limit_sim=arm_effort,
             ),
             "hand": ImplicitActuatorCfg(
                 joint_names_expr=[spec.hand_joint_regex],
@@ -1681,7 +1689,8 @@ def setup_scene(env) -> None:
 
     # 4. Spawn assets.
     env.robot = Articulation(build_robot_articulation_usd_cfg(
-        robot_usd_path, spec=env.robot_spec, root_pos=env.cfg.robot_root_pos))
+        robot_usd_path, spec=env.robot_spec, root_pos=env.cfg.robot_root_pos,
+        arm_effort_limit=list(env.cfg.action.arm_effort_limit)))
     env.table = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/Table", table_usd_paths))
     env.object = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/Object", object_usd_paths))
     env.goal_viz = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/GoalViz", goalviz_usd_paths))

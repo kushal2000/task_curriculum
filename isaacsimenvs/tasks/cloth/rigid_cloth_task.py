@@ -53,6 +53,18 @@ class RigidClothTaskMixin:
             self._calibrate_and_verify_placement()
         else:
             print("[rigid_cloth] WARNING placement verification SKIPPED (RC_SKIP_VERIFY=1)", flush=True)
+        # task: unfold on the single chain -- start folded by `cloth.unfold_start_deg` (180 = the
+        # tightest fold). Only now: the placement check above needs the chain to reset flat. The pool
+        # has its own folded starts (`fold_pool.init_fold_starts: target`).
+        if cfg.cloth.task in ("unfold", "mixed") and not hasattr(cfg, "fold_pool"):
+            names = list(self._chain.joint_names)
+            fold_q = torch.zeros(len(names))
+            for i, a in enumerate(rc.chain_fold_angles(cfg.rigid_cloth.spec, cfg.rigid_cloth.joint_limit)):
+                if a:
+                    fold_q[names.index(rc.slat_joint_name(i))] = float(a)
+            self.object.set_fold_start(fold_q, cfg.cloth.unfold_start_deg)
+            print(f"[rigid_cloth] unfold: folded start {list(cfg.cloth.unfold_start_deg)} deg, "
+                  f"full fold {dict(zip(names, map(math.degrees, fold_q.tolist())))} deg", flush=True)
         self._init_physics_randomization()
 
     # ------------------------------------------------------------------ physics hooks

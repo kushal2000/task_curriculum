@@ -178,6 +178,11 @@ EXPERIMENT_TASKS = {
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
     ),
+    "Isaacsimenvs-JointReachFlexivWujiRightHumanLike-Direct-v0": (
+        "JointReachEnvCfg",
+        ["isaacsimenvs/tasks/joint_reach/joint_reach_env_cfg.py", PLAY_CFG, CURRICULUM_CFG],
+        "isaacsimenvs/cfg/train/JointReachSAPG.yaml",
+    ),
 }
 # The robot-swapped ids (tasks/cloth/__init__.py) share their base task's cfg and agent YAML.
 for _robot in ("FlexivWuji", "FlexivWujiHumanLike", "FlexivWujiHumanLikeS2R", "FlexivSharpa",

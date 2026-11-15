@@ -9,7 +9,7 @@ from __future__ import annotations
 __all__ = ["grid_mesh", "half_indices", "half_mesh", "keypoint_indices", "folded_targets"]
 
 
-def grid_mesh(size: float, resolution: int) -> tuple[list, list]:
+def grid_mesh(size: float, resolution: int, diagonals: str = "alternate") -> tuple[list, list]:
     """Vertices and triangle indices for a flat square sheet in the local XY plane.
 
     Vertices are row-major in ``x`` then ``y``, centred on the origin, at ``z = 0``. Row-major
@@ -19,7 +19,20 @@ def grid_mesh(size: float, resolution: int) -> tuple[list, list]:
     Returns:
         ``(vertices, indices)`` -- ``resolution**2`` points and ``2*(resolution-1)**2`` triangles
         as a flat index list, the form ``add_cloth_mesh`` expects.
+
+    ``diagonals`` picks how each cell is cut into two triangles:
+
+    * ``alternate`` (default): the two cuts in a checkerboard, so the mesh has no handedness.
+    * ``uniform``: every cell cut (i, j+1)-(i+1, j), the mesh before 2026-11-09.
+    * ``flipped``: every cell cut (i, j)-(i+1, j+1), the mirror image of ``uniform``.
+
+    A uniform cut couples bending to twist: a released fold springs back as a twist with one end of
+    the crease lifted, and flipping the cut mirrors it exactly (docs/results/cloth_fold_lift,
+    {base,flip,alt}: denim skew +7.8 / -7.8 / 0.0 mm, bulge 11.2 / 11.2 / 5.9 mm). The checkerboard
+    leaves the cantilever droop within 2 deg of the uniform mesh.
     """
+    if diagonals not in ("alternate", "uniform", "flipped"):
+        raise ValueError(f"diagonals must be alternate, uniform or flipped, got {diagonals!r}")
     if resolution < 2:
         raise ValueError(f"resolution must be >= 2, got {resolution}")
 
@@ -38,9 +51,11 @@ def grid_mesh(size: float, resolution: int) -> tuple[list, list]:
             b = a + 1
             c = (i + 1) * resolution + j
             d = c + 1
-            # Consistent winding: a degenerate or inconsistently wound triangle gives the solver a
-            # zero or inverted normal, which shows up as a sheet that self-intersects at rest.
-            idx += [a, c, b, b, c, d]
+            # Consistent winding (+z normals either way): a degenerate or inconsistently wound
+            # triangle gives the solver a zero or inverted normal, which shows up as a sheet that
+            # self-intersects at rest.
+            flip = diagonals == "flipped" or (diagonals == "alternate" and (i + j) % 2 == 1)
+            idx += [a, c, d, a, d, b] if flip else [a, c, b, b, c, d]
     return verts, idx
 
 

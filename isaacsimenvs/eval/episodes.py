@@ -133,6 +133,19 @@ def main() -> None:
         help="Keep domain randomisation on (default: off; see disable_randomization).",
     )
     parser.add_argument(
+        "--skip_episodes",
+        type=int,
+        default=0,
+        help="Score each env's (K+1)-th episode instead of its first: the first K run and are "
+        "discarded, so the scored episode starts from the env's own reset, as most training "
+        "episodes do. Raise --max_steps to fit them.",
+    )
+    parser.add_argument(
+        "--stochastic",
+        action="store_true",
+        help="Sample actions from the policy's Gaussian, as in training (default: its mean).",
+    )
+    parser.add_argument(
         "--single_variant",
         action="store_true",
         help="Give every env the same object. Required for Newton (SolverMuJoCo rejects "
@@ -219,11 +232,24 @@ def main() -> None:
         lifted = torch.zeros(num_envs, dtype=torch.bool, device=device)
         max_obj_z = torch.full((num_envs,), -1e9, device=device)
         contributed = torch.zeros(num_envs, dtype=torch.bool, device=device)
+        # --skip_episodes: episodes each env has finished; an env is scored once this reaches K.
+        ep_done = torch.zeros(num_envs, dtype=torch.long, device=device)
+        skip = int(args_cli.skip_episodes)
         # Fold diagnostics, only for an env that defines a fold (duck-typed, so the cable and play
         # tasks are untouched).
         _has_fold = hasattr(inner, "fold_error") and hasattr(inner, "footprint_ratio")
         best_fold_err = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
-        best_footprint = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
+        # Unfold succeeds on a LARGE footprint, so its best is the maximum.
+        _unfold = _has_fold and getattr(inner.cfg.cloth, "task", "fold") == "unfold"
+        best_footprint = (
+            torch.full((num_envs,), float("-inf") if _unfold else float("inf"), device=device)
+            if _has_fold else None
+        )
+        # Unfold: the sheet's height range and lowest-point lift over the table on its LAST step
+        # (`flat_on_table`, cached pre-reset by `_get_dones`), NaN while censored.
+        _has_flat = _has_fold and getattr(inner.cfg.cloth, "task", "fold") in ("unfold", "mixed")
+        final_spread = torch.full((num_envs,), float("nan"), device=device) if _has_flat else None
+        final_lift = torch.full((num_envs,), float("nan"), device=device) if _has_flat else None
         reason = {name: torch.zeros(num_envs, dtype=torch.bool, device=device) for name in REASONS}
         # Any OTHER `done_<name>` the env publishes, per env -- e.g. the fold pool's
         # `shape_<shape>` / `fold_<shape>`, which is what splits a result by shape. Discovered from
@@ -243,7 +269,7 @@ def main() -> None:
         step = 0
         try:
           while step < args_cli.max_steps and not bool(contributed.all()):
-              action = player.get_action(obs["policy"], deterministic=True)
+              action = player.get_action(obs["policy"], deterministic=not args_cli.stochastic)
               # The twin of the trace in `render_newton.py`; see `_TRACE`.
               if _TRACE and step < _TRACE:
                   print(
@@ -253,14 +279,15 @@ def main() -> None:
                       flush=True,
                   )
               obs, _rew, terminated, truncated, extras = env.step(action.to(device))
+              scoring = ~contributed & (ep_done >= skip)
 
               # Only while the env is still on its first episode. An env that finished early keeps
               # stepping until the others catch up, and counting those later lifts would report a
               # statistic about a set of episodes that no other number here describes.
-              lifted |= inner._lifted_object.bool() & ~contributed
+              lifted |= inner._lifted_object.bool() & scoring
               obj_z = (inner.object.data.root_pos_w - inner.scene.env_origins)[:, 2]
-              max_obj_z = torch.where(~contributed, torch.maximum(max_obj_z, obj_z), max_obj_z)
-              steps_alive += (~contributed).long()
+              max_obj_z = torch.where(scoring, torch.maximum(max_obj_z, obj_z), max_obj_z)
+              steps_alive += scoring.long()
 
               # How CLOSE did it get? A pass/fail goal count cannot tell "nowhere near" from "just
               # outside the tolerance", and those imply completely different next steps. Tracked
@@ -268,14 +295,16 @@ def main() -> None:
               if best_fold_err is not None:
                   fe = inner.fold_error()
                   best_fold_err = torch.where(
-                      ~contributed, torch.minimum(best_fold_err, fe), best_fold_err
+                      scoring, torch.minimum(best_fold_err, fe), best_fold_err
                   )
                   fp = inner.footprint_ratio()
                   best_footprint = torch.where(
-                      ~contributed, torch.minimum(best_footprint, fp), best_footprint
+                      scoring,
+                      (torch.maximum if _unfold else torch.minimum)(best_footprint, fp),
+                      best_footprint,
                   )
 
-              done = (terminated.bool() | truncated.bool()) & ~contributed
+              done = (terminated.bool() | truncated.bool()) & scoring
               if bool(done.any()):
                   idx = done.nonzero(as_tuple=True)[0]
                   final = extras["episode_final"]
@@ -287,6 +316,9 @@ def main() -> None:
                       # A reason the env does not publish (the cloth-only ones, on Play) stays False.
                       if f"done_{name}" in final:
                           reason[name][idx] = final[f"done_{name}"][idx].bool()
+                  if final_spread is not None:
+                      final_spread[idx] = inner._flat_spread[idx]
+                      final_lift[idx] = inner._flat_lift[idx]
                   for key, value in final.items():
                       name = key[len("done_"):]
                       if key.startswith("done_") and name not in REASONS:
@@ -298,6 +330,7 @@ def main() -> None:
               # An episode that has ended carries no hidden state worth keeping; the policy never
               # saw a rollout stitched across a reset.
               ended = terminated.bool() | truncated.bool()
+              ep_done += (ended & (ep_done < skip)).long()
               if bool(ended.any()):
                   player.reset_rnn(ended.nonzero(as_tuple=True)[0])
 
@@ -351,6 +384,8 @@ def main() -> None:
             "success_tolerance": args_cli.success_tolerance,
             "keypoint_scale": float(inner.cfg.reward.keypoint_scale),
             "randomization": bool(args_cli.randomize),
+            "stochastic": bool(args_cli.stochastic),
+            "skip_episodes": skip,
             "single_variant": bool(args_cli.single_variant),
             "seed": args_cli.seed,
             "num_assets_per_type": int(inner.cfg.assets.num_assets_per_type),
@@ -387,18 +422,28 @@ def main() -> None:
             tol = float(inner.cfg.cloth.keypoint_tolerance)
             result["fold"] = {
                 "keypoint_tolerance": tol,
+                "task": "unfold" if _unfold else "fold",
                 "max_folded_footprint": float(inner.cfg.cloth.max_folded_footprint),
+                "min_unfolded_footprint": float(getattr(inner.cfg.cloth, "min_unfolded_footprint", 1.0)),
                 # Best (minimum) over the episode, per env: the closest the policy ever came.
                 "best_fold_err": [round(float(v), 4) for v in fe],
                 "best_footprint": [round(float(v), 4) for v in fp],
                 "best_fold_err_mean": round(float(fe.mean()), 4),
                 "best_fold_err_min": round(float(fe.min()), 4),
+                **({
+                    "unfold_on_table": bool(inner.cfg.cloth.unfold_on_table),
+                    "on_table_max_spread": float(inner.cfg.cloth.on_table_max_spread),
+                    "on_table_max_lift": float(inner.cfg.cloth.on_table_max_lift),
+                    "final_flat_spread": [round(float(v), 4) for v in final_spread.cpu()],
+                    "final_flat_lift": [round(float(v), 4) for v in final_lift.cpu()],
+                } if final_spread is not None else {}),
                 "envs_within_tolerance": int((fe < tol).sum()),
                 # A fold has to satisfy BOTH conditions at once; these counts are per-condition and
                 # over the whole episode, so they are an upper bound on how close it came, not
                 # evidence that both held on the same step.
                 "envs_within_footprint": int(
-                    (fp < float(inner.cfg.cloth.max_folded_footprint)).sum()
+                    (fp > float(inner.cfg.cloth.min_unfolded_footprint)).sum() if _unfold
+                    else (fp < float(inner.cfg.cloth.max_folded_footprint)).sum()
                 ),
             }
 

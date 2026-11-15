@@ -22,7 +22,8 @@ LAB="${ROOT}/third_party/IsaacLab"
 # github.com/kushal2000/isaac_newton was developed and measured against; its compat patches are
 # written against these exact APIs, and Isaac Lab 3.0 is under active development.
 LAB_COMMIT="a27ec0beb2345cb4618e31b8e42bc09c557ee193"
-LAB_REF="develop"
+# Upstream has since retired `develop`, so clone the default branch and fetch the pinned SHA by
+# itself (GitHub still serves it) rather than relying on any branch containing it.
 
 echo "==> Isaac Lab source checkout: ${LAB}"
 if [[ ! -d "${LAB}/.git" ]]; then
@@ -32,14 +33,20 @@ if [[ ! -d "${LAB}/.git" ]]; then
   # skipped -- with `git-lfs` absent, leaving it registered fails the checkout entirely
   # ("git-lfs filter-process: not found / the remote end hung up unexpectedly").
   git -c filter.lfs.smudge= -c filter.lfs.process= -c filter.lfs.required=false \
-      clone --branch "${LAB_REF}" https://github.com/isaac-sim/IsaacLab.git "${LAB}"
+      clone https://github.com/isaac-sim/IsaacLab.git "${LAB}"
 fi
+git -C "${LAB}" cat-file -e "${LAB_COMMIT}^{commit}" 2>/dev/null \
+  || git -C "${LAB}" fetch -q origin "${LAB_COMMIT}"
 git -C "${LAB}" -c filter.lfs.smudge= -c filter.lfs.process= -c filter.lfs.required=false \
     checkout -q "${LAB_COMMIT}"
 echo "    pinned at $(git -C "${LAB}" rev-parse --short HEAD) (VERSION $(cat "${LAB}/VERSION" 2>/dev/null || echo '?'))"
 
 echo "==> Creating ${VENV} (Python 3.12)"
-uv venv "${VENV}" --python 3.12 --seed
+# A Slurm requeue (preemption) reruns this from the top over a half-built venv, which uv refuses
+# without --clear. Only then: a manual rerun keeps refusing rather than wiping a working venv.
+CLEAR=()
+[[ "${SLURM_RESTART_COUNT:-0}" -gt 0 ]] && CLEAR=(--clear)
+uv venv "${VENV}" --python 3.12 --seed "${CLEAR[@]}"
 
 # Installed mainly so the venv has a working torch before Isaac Lab's own installer runs.
 # NOTE: `isaaclab.sh -i` below replaces this with its own pin -- the venv ends up on

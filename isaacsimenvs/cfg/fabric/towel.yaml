@@ -1,0 +1,15 @@
+# Towel. No shear source: tri at the env default. Thick pile: self-contact radius 3.7 mm.
+# Where each value comes from: isaacsimenvs/tasks/cloth/utils/fabrics.py
+cloth:
+  density: 0.44
+  tri_ke: 100.0
+  tri_ka: 100.0
+  edge_ke: 0.00202
+  edge_kd: 0.00022
+  soft_contact_mu: 0.41
+  self_contact_radius: 0.0037
+  self_contact_margin: 0.0055
+plastic_yield_curvature: 100.0
+literature:
+  bending_rigidity: 1.4e-05   # B [N m], KES / cantilever
+  tri_range: [600.0, 3700.0]   # tri_ke = tri_ka = 3E/8 from tensile data (10-31), not applied

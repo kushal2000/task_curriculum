@@ -18,6 +18,14 @@ from __future__ import annotations
 import torch
 from isaaclab.utils.math import quat_from_matrix
 
+from isaacsimenvs.curriculum import (
+    allocate_curriculum_buffers,
+    log_curriculum,
+    record_episode_success,
+    sample_difficulty,
+    update_curriculum,
+)
+
 from isaacsimenvs.tasks.cloth.utils.usd_bulk import bulk_edit_layer
 from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
     folded_targets,
@@ -83,6 +91,7 @@ class ClothTaskMixin:
     """The fold task, independent of the simulator the Play env underneath runs on."""
 
     def __init__(self, cfg: ClothEnvCfg, render_mode: str | None = None, **kwargs):
+        cfg.cloth.check_task()  # CLI overrides land after ClothCfg.__post_init__
         super().__init__(cfg, render_mode, **kwargs)
         self._init_fold_targets()
         self._fold_hold = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
@@ -103,10 +112,52 @@ class ClothTaskMixin:
         # Set in `_get_dones`, consumed by `_get_rewards` in the same step: which envs earned the
         # sparse bonus this step, under the fold criterion rather than the inherited one.
         self._fold_bonus_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        # Release-and-persist (`cloth.release_persist`): per-episode state, written in `_get_dones`,
+        # consumed by `_get_rewards` in the same step, cleared in `_reset_idx`.
+        self._release_mode = bool(cfg.cloth.release_persist)
+        if self._release_mode and (self._unfold or self._mixed):
+            raise ValueError("cloth.release_persist is defined for task=fold only")
+        n, dev = self.num_envs, self.device
+        self._release_contact_ids = None
+        self._touch_cache = None  # release_touch=contact: robot-shape mask etc., built on first use
+        if str(cfg.cloth.release_touch) not in ("origin", "contact"):
+            raise ValueError(f"cloth.release_touch must be origin or contact, got {cfg.cloth.release_touch!r}")
+        self._entry_paid = torch.zeros(n, dtype=torch.bool, device=dev)    # fold entry bonus paid
+        self._released = torch.zeros(n, dtype=torch.bool, device=dev)      # I_rel, latched
+        self._rel_streak = torch.zeros(n, dtype=torch.long, device=dev)    # folded & clear, in a row
+        self._persist_steps = torch.zeros(n, dtype=torch.long, device=dev)
+        self._best_clear = torch.full((n,), -1.0, dtype=torch.float32, device=dev)  # d*, -1 = unset
+        self._release_rew_step = torch.zeros(n, dtype=torch.float32, device=dev)
+        self._release_latch_mask = torch.zeros(n, dtype=torch.bool, device=dev)
+        self._persist_step_mask = torch.zeros(n, dtype=torch.bool, device=dev)
+        self._persist_done = torch.zeros(n, dtype=torch.bool, device=dev)
+        self._persist_fail = torch.zeros(n, dtype=torch.bool, device=dev)
         # Fold error of a perfectly flat sheet -- the worst legitimate value. Used as the stand-in
         # when an env's fold error is non-finite, so the substitution can never look like progress.
-        self._flat_fold_err = float(self.fold_error().nan_to_num(nan=0.0).max().item())
+        # Unfold: the worst start is folded flat, its far corners one sheet side from their targets.
+        if self._unfold:
+            self._flat_fold_err = float(torch.as_tensor(self._task_span()).max())
+        else:
+            self._flat_fold_err = float(self.fold_error().nan_to_num(nan=0.0).max().item())
+            if self._mixed:  # the worse of the two tasks' worst values
+                self._flat_fold_err = max(self._flat_fold_err, float(torch.as_tensor(self._task_span()).max()))
         self._drive_goal_marker()
+        # Unfold start curriculum (PhysX envs with `curriculum.enabled`): the folded start opens up to
+        # `cloth.unfold_curriculum_deg[0]` and closes toward `[1]` as the policy succeeds.
+        cur = getattr(cfg, "curriculum", None)
+        self._unfold_cur = bool(cur is not None and cur.enabled)
+        if self._unfold_cur:
+            if not (self._unfold or self._mixed):
+                raise ValueError("curriculum.enabled drives the unfold start angle: it needs cloth.task=unfold or mixed")
+            if int(cur.score_last_n_envs) > self.num_envs:
+                # `record_episode_success` would then score every env, explorers included.
+                raise ValueError(f"curriculum.score_last_n_envs {cur.score_last_n_envs} > num_envs {self.num_envs}: "
+                                 "set it to the SAPG block (num_envs / 6)")
+            allocate_curriculum_buffers(self)
+            lo, hi = (float(v) for v in cfg.cloth.unfold_curriculum_deg)
+            print(f"[cloth] unfold start curriculum: {lo:g} -> {hi:g} deg, {cur.difficulty_levels} levels, "
+                  f"advance at {cur.adapt_success_threshold:g} success, scoring the last "
+                  f"{cur.score_last_n_envs or self.num_envs} envs", flush=True)
 
     # ------------------------------------------------------------------ construction
 
@@ -247,6 +298,40 @@ class ClothTaskMixin:
 
     # ------------------------------------------------------------------ the fold
 
+    @property
+    def _unfold(self) -> bool:
+        """``cloth.task: unfold`` -- start folded, target the flat sheet."""
+        return self.cfg.cloth.task == "unfold"
+
+    @property
+    def _mixed(self) -> bool:
+        """``cloth.task: mixed`` -- each episode draws fold or unfold (``_unfold_envs``)."""
+        return self.cfg.cloth.task == "mixed"
+
+    def _unfold_envs(self) -> torch.Tensor:
+        """``(num_envs,)`` bool: which envs' current episode is an unfold."""
+        m = getattr(self, "_unfold_env", None)
+        if m is None:
+            m = torch.full((self.num_envs,), self._unfold, dtype=torch.bool, device=self.device)
+            self._unfold_env = m
+        return m
+
+    def _draw_task(self, env_ids: torch.Tensor) -> None:
+        """``task: mixed``: draw the next episode's task for ``env_ids``. Before the reset writes the
+        start (which follows the task) and after the curriculum scored the ending episode."""
+        if self._mixed:
+            self._unfold_envs()[env_ids] = torch.rand(env_ids.numel(), device=self.device) < float(self.cfg.cloth.unfold_prob)
+
+    def _by_task(self, unfold: torch.Tensor, fold: torch.Tensor) -> torch.Tensor:
+        """Per env, ``unfold`` where the episode is an unfold and ``fold`` elsewhere (leading axis N)."""
+        m = self._unfold_envs().view(-1, *([1] * (fold.dim() - 1)))
+        return torch.where(m, unfold, fold)
+
+    def _task_span(self):
+        """Sheet side [m] (a float, or ``(num_envs,)`` where sizes differ per env): how far a far
+        corner travels between the flat sheet and the half fold."""
+        return float(self.cfg.cloth.size)
+
     def _init_fold_targets(self) -> None:
         """World-frame targets for the tracked keypoints, per env."""
         c = self.cfg.cloth
@@ -293,12 +378,17 @@ class ClothTaskMixin:
         # when it is translated.
         def _folded_rest(sel: torch.Tensor) -> torch.Tensor:
             f = rest[sel].clone()
+            if self._unfold:  # the target is the flat sheet itself, on the same live frame
+                return f
             f[:, ax] = 2.0 * crease_local - f[:, ax]
             f[:, 2] = f[:, 2] + c.self_contact_radius
             return f
 
         self._mv_folded_rest = _folded_rest(self._moving_idx)
         self._kp_folded_rest = _folded_rest(self._kp_idx_t)
+        # task: mixed -- the unfold episodes' targets, the flat rest itself.
+        self._mv_flat_rest = rest[self._moving_idx].clone()
+        self._kp_flat_rest = rest[self._kp_idx_t].clone()
         st_rest = rest[torch.tensor(
             half_indices(c.resolution, c.fold_axis, positive=False),
             device=self.device, dtype=torch.long,
@@ -338,6 +428,8 @@ class ClothTaskMixin:
         # `self_contact_radius`, MEASURED: two plies settle 2.5 mm apart at scr = 2 mm, while the
         # sheet floats 8.0 mm above the TABLE at particle_radius = 8 mm. Two different offsets for
         # two different contact pairs; only the cloth-cloth one governs a fold.
+        if self._mixed:
+            return self._by_task(self._folded_w(self._kp_flat_rest), self._folded_w(self._kp_folded_rest))
         return self._folded_w(self._kp_folded_rest)
 
     def _stationary_frame(self, parts: torch.Tensor):
@@ -407,6 +499,8 @@ class ClothTaskMixin:
         Shares :meth:`_folded_w` with the scored targets, so the drawing cannot drift from the
         criterion -- the ghost is the goal, over every particle instead of over four keypoints.
         """
+        if self._mixed:
+            return self._by_task(self._folded_w(self._mv_flat_rest), self._folded_w(self._mv_folded_rest))
         out = self._folded_w(self._mv_folded_rest)
         return out
 
@@ -421,10 +515,124 @@ class ClothTaskMixin:
         _, idx = half_mesh(
             float(self.cfg.cloth.size), int(self.cfg.cloth.resolution), self.cfg.cloth.fold_axis
         )
+        if self._unfold:  # the flat goal is not reflected, so its winding is the rest sheet's
+            return list(idx)
         return [v for t in range(0, len(idx), 3) for v in reversed(idx[t : t + 3])]
 
     def _particles_w(self) -> torch.Tensor:
         return self.object._particles()
+
+    def hand_cloth_distance(self) -> torch.Tensor:
+        """``(num_envs,)``: nearest distance [m] from any fingertip or palm body ORIGIN to any cloth
+        particle. The release test (``cloth.release_clearance``) uses this, not
+        ``_curr_fingertip_distances``, which measures to the sheet's fitted frame origin (its
+        centre): a fingertip pinning a corner is far from the centre while still touching."""
+        if self._release_contact_ids is None:  # resolved lazily: the robot's bodies exist after setup
+            rx = str(self.cfg.cloth.release_contact_bodies)
+            if rx:
+                ids, names = self.robot.find_bodies(rx)
+                if not ids:
+                    raise ValueError(f"cloth.release_contact_bodies={rx!r} matched no robot body")
+                print(f"[cloth] release contact bodies ({len(ids)}): {names}", flush=True)
+                self._release_contact_ids = list(ids)
+            else:
+                self._release_contact_ids = list(self._fingertip_body_ids) + [self._palm_body_id]
+        hand = self.robot.data.body_state_w[:, self._release_contact_ids, 0:3]
+        hand = hand.torch if hasattr(hand, "torch") else hand
+        d = torch.cdist(hand.float(), self._particles_w().float()).amin(dim=(1, 2))
+        return torch.nan_to_num(d, nan=0.0)  # a diverged env reads as touching: never released
+
+    def _cloth_contact_buffer(self):
+        """``(contacts, entry)``: the hand-cloth contacts the cloth (VBD) entry steps on, and that
+        entry. Under ``SolverCoupledProxy`` they come from the proxy pipeline built on the cloth view
+        (``get_proxy_contacts(<rigid entry>, "cloth")``; particle / edge / face records, shape and
+        particle ids global, body ids LOCAL to the cloth view). ``(None, entry)`` before the first
+        step or without a proxy pipeline."""
+        from isaaclab_newton.physics import NewtonManager
+
+        solver = NewtonManager._solver
+        cloth = solver.solver("cloth")
+        name = next((k for k, e in getattr(solver, "_entries", {}).items() if e.solver is cloth), None)
+        if name is None:
+            return None, None
+        entry = solver._entries[name]
+        for src, dst in getattr(solver, "_proxy_collision_configs", {}):
+            if dst == name:
+                return solver.get_proxy_contacts(src, dst), entry
+        return getattr(solver, "_entry_contact_buffers", {}).get(name), entry
+
+    def hand_cloth_touching(self) -> torch.Tensor:
+        """``(num_envs,)`` bool: any robot shape is in contact with the env's cloth this step
+        (``cloth.release_touch=contact``). Reads the cloth solver's own contact records and evaluates
+        each one's gap as VBD's body-particle / edge / face contact does (``-penetration_depth``:
+        ``n . (x - bx) - radius - shape_margin``, ``x`` the barycentric point over the record's
+        particles, ``bx`` the body-side point at the current body pose); touching = gap <
+        ``release_touch_gap``. A non-finite gap reads as touching."""
+        import warp as wp
+        from isaaclab_newton.physics import NewtonManager
+
+        out = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        buf, entry = self._cloth_contact_buffer()
+        if buf is None or buf.soft_contact_max == 0:
+            return out
+        model, state = NewtonManager._model, NewtonManager._state_0
+        if self._touch_cache is None:
+            import re
+
+            view, dev = entry.view, self.device
+            labels = list(model.body_label)
+            sb_local = view.shape_body.numpy()  # body ids local to the cloth view
+            l2g = entry.body_local_to_global.numpy() if entry.body_local_to_global is not None else None
+            sb = [int(l2g[b]) if (l2g is not None and b >= 0) else int(b) for b in sb_local]
+            robot = [b >= 0 and re.search(r"/Robot/", str(labels[b])) is not None for b in sb]
+            if not any(robot):
+                raise RuntimeError("cloth.release_touch=contact: no robot shape found in the cloth view")
+            if int(view.particle_count) != int(model.particle_count):
+                raise RuntimeError("cloth.release_touch=contact assumes the cloth view keeps the model's particle ids")
+            margin = view.shape_margin
+            margin = wp.to_torch(margin).float() if margin is not None and margin.shape[0] > 0 \
+                else torch.zeros(len(sb), device=dev)
+            self._touch_cache = {
+                "robot": torch.tensor(robot, dtype=torch.bool, device=dev),
+                "shape_body": torch.tensor(sb, dtype=torch.long, device=dev),  # GLOBAL body ids
+                "margin": margin,
+                "world": wp.to_torch(model.particle_world).long(),
+                "radius": wp.to_torch(model.particle_radius).float(),
+            }
+            print(f"[cloth] release_touch=contact: {sum(robot)} robot shapes in the cloth view, gap < "
+                  f"{float(self.cfg.cloth.release_touch_gap) * 1e3:.1f} mm counts as touching", flush=True)
+        tc = self._touch_cache
+        m = int(buf.soft_contact_max)
+        count = wp.to_torch(buf.soft_contact_count).long()  # (1,), stays on device
+        shape = wp.to_torch(buf.soft_contact_shape).long()
+        sel = (torch.arange(m, device=self.device) < count) & (shape >= 0)
+        sel &= tc["robot"][shape.clamp(min=0)]
+        ids = sel.nonzero(as_tuple=True)[0]
+        if ids.numel() == 0:
+            return out
+        shape = shape[ids]
+        corners = wp.to_torch(buf.soft_contact_indices).view(m, 3)[ids].long()
+        bary = wp.to_torch(buf.soft_contact_barycentric).view(m, 3)[ids].float()
+        normal = wp.to_torch(buf.soft_contact_normal).view(m, 3)[ids].float()
+        body_pos = wp.to_torch(buf.soft_contact_body_pos).view(m, 3)[ids].float()
+        pq = wp.to_torch(state.particle_q).view(-1, 3).float()
+        ok = corners >= 0
+        cc = corners.clamp(min=0)
+        x = (bary.unsqueeze(-1) * pq[cc] * ok.unsqueeze(-1)).sum(1)
+        radius = torch.where(ok, tc["radius"][cc], torch.zeros_like(bary)).amax(1)
+        body = tc["shape_body"][shape]
+        bq = wp.to_torch(state.body_q).view(-1, 7).float()[body.clamp(min=0)]
+        p, qv, qw = bq[:, 0:3], bq[:, 3:6], bq[:, 6:7]  # warp transform: p, then quat xyzw
+        t = 2.0 * torch.cross(qv, body_pos, dim=-1)
+        bx = body_pos + qw * t + torch.cross(qv, t, dim=-1) + p
+        gap = (normal * (x - bx)).sum(-1) - radius - tc["margin"][shape]
+        self._touch_last_gap = gap  # diagnostics (cloth_touch_probe)
+        self._touch_last_env = tc["world"][cc[:, 0]]
+        touch = ~(gap >= float(self.cfg.cloth.release_touch_gap))  # NaN -> touching
+        env = self._touch_last_env
+        env = env[touch & (env >= 0) & (env < self.num_envs)]
+        out[env] = True
+        return out
 
     def cloth_keypoints_w(self) -> torch.Tensor:
         """Tracked keypoint positions, ``(num_envs, K, 3)`` in world coordinates."""
@@ -488,13 +696,17 @@ class ClothTaskMixin:
         # could be randomised.
         r, _ = self._stationary_frame(self._particles_w())        # (N, 3, 3) rest -> current
         fold_rest = torch.eye(3, device=self.device).repeat(self.num_envs, 1, 1)
-        # 180 degrees about rest y (fold_axis == "x") or about rest x.
-        if self.cfg.cloth.fold_axis == "x":
+        # 180 degrees about rest y (fold_axis == "x") or about rest x. Unfold: the rest attitude.
+        if self._unfold:
+            pass
+        elif self.cfg.cloth.fold_axis == "x":
             fold_rest[:, 0, 0] = -1.0
             fold_rest[:, 2, 2] = -1.0
         else:
             fold_rest[:, 1, 1] = -1.0
             fold_rest[:, 2, 2] = -1.0
+        if self._mixed:
+            fold_rest = self._by_task(torch.eye(3, device=self.device).expand_as(fold_rest), fold_rest)
         pose[:, 3:7] = self._goal_quat_from_matrix(torch.bmm(r, fold_rest))
         self.goal_viz.write_root_pose_to_sim(pose)
 
@@ -579,7 +791,20 @@ class ClothTaskMixin:
 
         # --- the sparse bonus, keyed on the fold criterion ------------------------------------
         reward = reward - terms["bonus_rew"]
-        fold_bonus = self._fold_bonus_mask.float() * float(rew_cfg.reach_goal_bonus)
+        if self._release_mode:
+            c = self.cfg.cloth
+            fold_bonus = self._fold_bonus_mask.float() * float(c.fold_entry_bonus)
+            release_rew = self._release_rew_step + self._release_latch_mask.float() * float(c.release_bonus)
+            persist_rew = (
+                self._persist_step_mask.float() * float(c.persist_rew_per_step)
+                + self._persist_done.float() * float(c.persist_bonus)
+                + self._persist_fail.float() * float(c.persist_fail_penalty)
+            )
+            reward = reward + release_rew + persist_rew
+            terms["release_rew"] = release_rew
+            terms["persist_rew"] = persist_rew
+        else:
+            fold_bonus = self._fold_bonus_mask.float() * float(rew_cfg.reach_goal_bonus)
         reward = reward + fold_bonus
         terms["bonus_rew"] = fold_bonus
 
@@ -634,6 +859,9 @@ class ClothTaskMixin:
         terms["total_reward"] = reward
         self.extras["fold_err_mean"] = float(fold_err.mean())
         self.extras["fold_rate"] = float(self._fold_bonus_mask.float().mean())
+        if self._unfold_cur:
+            log_curriculum(self)
+            self.extras["curriculum/start_deg_max"] = float(self._unfold_start_deg(slice(None)).max())
         log_step_metrics(self)
         return reward
 
@@ -768,11 +996,44 @@ class ClothTaskMixin:
         coord = torch.einsum("npi,ni->np", parts, axis_dir)       # (N, P)
         return (coord.amax(dim=1) - coord.amin(dim=1)) / self.cfg.cloth.size
 
+    def footprint_ok(self, footprint: torch.Tensor) -> torch.Tensor:
+        """The footprint half of success: halved for a fold, near full for an unfold."""
+        if self._unfold:
+            return footprint > self.cfg.cloth.min_unfolded_footprint
+        if self._mixed:
+            return self._by_task(footprint > self.cfg.cloth.min_unfolded_footprint,
+                                 footprint < self.cfg.cloth.max_folded_footprint)
+        return footprint < self.cfg.cloth.max_folded_footprint
+
+    def flat_on_table(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """``(spread, lift, ok)``, each ``(num_envs,)``: does the sheet lie flat on the table?
+
+        ``spread`` is the height range over all particles (max z - min z), ``lift`` the lowest
+        particle's height above the table's collision surface. Both are needed: spread alone passes
+        a level sheet held in the air, lift alone a sheet with one edge down and the rest raised.
+        The surface is taken per env, because the table height is drawn per reset
+        (``reset.table_reset_z_range``)."""
+        c = self.cfg.cloth
+        z = self._particles_w()[..., 2]
+        low = z.amin(dim=1)
+        spread = z.amax(dim=1) - low
+        surface = self.scene.env_origins[:, 2] + self._table_z_per_env + c.table_half_thickness
+        lift = low - surface
+        self._flat_spread, self._flat_lift = spread, lift  # read by the eval at episode end
+        return spread, lift, (spread < c.on_table_max_spread) & (lift < c.on_table_max_lift)
+
     def is_folded(self) -> torch.Tensor:
-        """Both conditions: keypoints on target AND the footprint halved."""
-        return (self.fold_error() < self.cfg.cloth.keypoint_tolerance) & (
-            self.footprint_ratio() < self.cfg.cloth.max_folded_footprint
+        """Both conditions: keypoints on target AND the footprint halved (unfold: back to full).
+        With ``cloth.unfold_on_table`` an unfold must also lie flat on the table.
+
+        Named for the fold; with ``cloth.task: unfold`` it is the unfold's success test."""
+        ok = (self.fold_error() < self.cfg.cloth.keypoint_tolerance) & self.footprint_ok(
+            self.footprint_ratio()
         )
+        if self.cfg.cloth.unfold_on_table and (self._unfold or self._mixed):
+            flat = self.flat_on_table()[2]
+            ok = ok & (flat | ~self._unfold_envs()) if self._mixed else ok & flat
+        return ok
 
     #: Any |reward| above this is a diverging env, not a task outcome: the largest the task can
     #: legitimately pay in one step is `reach_goal_bonus` (1000) plus shaping of order 100.
@@ -799,6 +1060,13 @@ class ClothTaskMixin:
         a reward keyed on `_successes` would have been farmable at 11.25 cm without ever folding.
         Snapshot and restore so the fold is the only writer.
         """
+        if getattr(self, "_unfold_cur", False):
+            hi = self._curr_hi
+            update_curriculum(self)
+            if self._curr_hi != hi:
+                lo_deg, hi_deg = (float(v) for v in self.cfg.cloth.unfold_curriculum_deg)
+                print(f"[cloth] unfold curriculum step {self._curr_frame}: success {self._curr_succ_rate:.2f} -> "
+                      f"starts up to {lo_deg + self._curr_hi * (hi_deg - lo_deg):.1f} deg", flush=True)
         successes_before = self._successes.clone()
         terminated, truncated = super()._get_dones()
         self._successes.copy_(successes_before)
@@ -817,10 +1085,14 @@ class ClothTaskMixin:
 
         # `_get_rewards` runs after `_get_dones` in the same step, so this is the mask the sparse
         # bonus pays on. Keyed on the fold criterion, never on the inherited `_is_success`.
-        self._fold_bonus_mask.copy_(entered)
+        if self._release_mode:
+            success = self._update_release(folded, entered)
+        else:
+            self._fold_bonus_mask.copy_(entered)
+            success = entered
 
-        if bool(entered.any()):
-            ids = entered.nonzero(as_tuple=True)[0]
+        if bool(success.any()):
+            ids = success.nonzero(as_tuple=True)[0]
             self._successes[ids] += 1
 
         # NOTE: `episode_length_buf` is deliberately NOT reset here. The inherited task chains
@@ -836,10 +1108,107 @@ class ClothTaskMixin:
 
         self._termination_reasons["fold"] = entered
         self._termination_reasons["fold_held"] = held
+        if self._unfold or self._mixed:
+            # Whether a success lay flat on the table, published with or without
+            # `cloth.unfold_on_table`, so one eval of an old policy shows both success rates.
+            self._termination_reasons["on_table"] = entered & self.flat_on_table()[2]
+        if self._mixed:
+            # Averaged over finished episodes (logged as done_<key>): task_unfold = their unfold share;
+            # unfold_ok / fold_ok over the matching share are the per-task success rates.
+            u = self._unfold_envs()
+            self._termination_reasons["task_unfold"] = u.clone()
+            self._termination_reasons["unfold_ok"] = entered & u
+            self._termination_reasons["fold_ok"] = entered & ~u
         self._termination_reasons["nonfinite"] = nonfinite
+        if self._release_mode:
+            self._termination_reasons["released"] = self._released.clone()
+            self._termination_reasons["persist"] = self._persist_done.clone()
+            self._termination_reasons["persist_fail"] = self._persist_fail.clone()
+            fail_end = self._persist_fail if self.cfg.cloth.persist_fail_terminates else torch.zeros_like(self._persist_fail)
+            return terminated | self._persist_done | fail_end | nonfinite, truncated
         return terminated | entered | nonfinite, truncated
 
+    def _update_release(self, folded: torch.Tensor, entered: torch.Tensor) -> torch.Tensor:
+        """``cloth.release_persist``: advance the release / persist state for this step and return
+        the success mask (the fold held ``persist_window_steps`` with the hand clear).
+
+        Writes the per-step masks `_get_rewards` pays on. The fold must first be ENTERED (the
+        ``success_steps`` hold, which pays ``fold_entry_bonus`` once) before a release can latch, so
+        a hand that never touched the sheet cannot release anything."""
+        c = self.cfg.cloth
+        self._fold_bonus_mask.copy_(entered & ~self._entry_paid)  # fold entry, paid once
+        self._entry_paid |= entered
+
+        d = self.hand_cloth_distance()
+        if str(c.release_touch) == "contact":  # no robot shape in contact with the sheet at all
+            clear = ~self.hand_cloth_touching()
+            self.extras["hand_cloth_touch"] = float((~clear).float().mean())
+        else:
+            clear = d > float(c.release_clearance)
+
+        # r_release ratchet: d* = running max of the capped clearance while folded, not yet released.
+        track = folded & self._entry_paid & ~self._released
+        d_cap = d.clamp(max=float(c.release_clearance))
+        unset = track & (self._best_clear < 0.0)
+        self._best_clear = torch.where(unset, d_cap, self._best_clear)
+        gain = torch.where(track, (d_cap - self._best_clear).clamp(min=0.0), torch.zeros_like(d))
+        self._best_clear = torch.where(track, torch.maximum(self._best_clear, d_cap), self._best_clear)
+        self._release_rew_step.copy_(gain * float(c.release_dist_rew_scale))
+
+        # I_rel latches on `release_latch_steps` in a row of folded & clear (and, with
+        # `release_fold_tolerance`, fold error under it), after the fold entry.
+        latch_ok = folded & clear & self._entry_paid
+        if float(c.release_fold_tolerance) > 0.0:  # release only a fold cleaner than the criterion's
+            latch_ok = latch_ok & (self.fold_error() < float(c.release_fold_tolerance))
+        self._rel_streak = torch.where(latch_ok, self._rel_streak + 1, torch.zeros_like(self._rel_streak))
+        newly = ~self._released & (self._rel_streak >= int(c.release_latch_steps))
+        self._release_latch_mask.copy_(newly)
+        self._released |= newly
+
+        # Persist: count folded & clear steps after the latch (re-touching pauses, does not reset).
+        ok = self._released & folded & clear
+        self._persist_step_mask.copy_(ok)
+        if c.persist_consecutive:  # a re-touch or fold loss restarts the window
+            self._persist_steps = torch.where(ok, self._persist_steps + 1, torch.zeros_like(self._persist_steps))
+        else:
+            self._persist_steps += ok.long()
+        self._persist_done.copy_(self._released & (self._persist_steps >= int(c.persist_window_steps)))
+        self._persist_fail.copy_(self._released & ~folded)
+        self.extras["hand_cloth_dist"] = float(d.mean())
+        return self._persist_done
+
+    def _unfold_curriculum_reset(self, env_ids: torch.Tensor) -> None:
+        """Score the episodes ending at ``env_ids`` (success = the unfold entered, the episode's
+        ``fold`` end) and draw their next start difficulty. Before the reset writes the start: the
+        pool calls it ahead of its start draw, the chain here."""
+        if not getattr(self, "_unfold_cur", False):
+            return
+        reasons = getattr(self, "_termination_reasons", None)
+        if reasons is not None and "fold" in reasons:
+            ids = env_ids[self._unfold_envs()[env_ids]] if self._mixed else env_ids  # mixed: unfolds only
+            record_episode_success(self, ids, reasons["fold"][ids])
+        sample_difficulty(self, env_ids)
+
+    def _unfold_start_deg(self, env_ids) -> torch.Tensor:
+        """The curriculum's start angle [deg] for ``env_ids``."""
+        lo, hi = (float(v) for v in self.cfg.cloth.unfold_curriculum_deg)
+        return lo + self._difficulty[env_ids, 0] * (hi - lo)
+
     def _reset_idx(self, env_ids):
+        if (getattr(self, "_unfold_cur", False) or self._mixed) and not hasattr(self.cfg, "fold_pool") \
+                and hasattr(self.object, "set_start_deg"):
+            ids = torch.arange(self.num_envs, device=self.device) if env_ids is None else \
+                torch.as_tensor(env_ids, device=self.device, dtype=torch.long).reshape(-1)
+            self._unfold_curriculum_reset(ids)
+            self._draw_task(ids)
+            if getattr(self, "_unfold_cur", False):
+                deg = self._unfold_start_deg(ids)
+            else:
+                lo, hi = (float(v) for v in self.cfg.cloth.unfold_start_deg)
+                deg = torch.empty(ids.numel(), device=self.device).uniform_(lo, hi)
+            if self._mixed:  # the fold episodes start flat
+                deg = deg * self._unfold_envs()[ids]
+            self.object.set_start_deg(ids, deg)
         super()._reset_idx(env_ids)
         if hasattr(self, "_fold_hold"):
             self._fold_hold[env_ids] = 0
@@ -848,6 +1217,14 @@ class ClothTaskMixin:
             # the previous one's best fold error (which would make all progress unrewarded).
             self._closest_fold_err[env_ids] = -1.0
             self._fold_bonus_mask[env_ids] = False
+        if hasattr(self, "_released"):
+            for buf in (self._entry_paid, self._released, self._release_latch_mask,
+                        self._persist_step_mask, self._persist_done, self._persist_fail):
+                buf[env_ids] = False
+            self._rel_streak[env_ids] = 0
+            self._persist_steps[env_ids] = 0
+            self._release_rew_step[env_ids] = 0.0
+            self._best_clear[env_ids] = -1.0
         # The task re-samples `goal_viz` on reset; put it back on the fold target.
         if hasattr(self, "_fold_targets_xy"):
             self._drive_goal_marker()
@@ -859,6 +1236,9 @@ class ClothTaskMixin:
         visibly distinct from one that does not touch it -- the distinction that took far too long
         to establish on the cable.
         """
+        unfold_frac = (1.0 - self.fold_error() / torch.as_tensor(self._task_span())).clamp(0.0, 1.0)
+        if self._unfold:  # from folded flat (far corners one sheet side away) to flat
+            return unfold_frac
         start = (
             torch.tensor(
                 [self._cloth_rest_local[i] for i in self._cloth_kp_idx],
@@ -873,4 +1253,5 @@ class ClothTaskMixin:
             + self.scene.env_origins.unsqueeze(1)
         )
         span = (start - self.fold_targets_w()).norm(dim=-1).amax(dim=-1).clamp(min=1e-6)
-        return (1.0 - self.fold_error() / span).clamp(0.0, 1.0)
+        frac = (1.0 - self.fold_error() / span).clamp(0.0, 1.0)
+        return self._by_task(unfold_frac, frac) if self._mixed else frac

@@ -211,13 +211,16 @@ def _hud_lines(inner, world: int, step: int, folds: int = 0):
     c = inner.cfg.cloth
     err = float(inner.fold_error()[world])
     fp = float(inner.footprint_ratio()[world])
+    unfold = getattr(c, "task", "fold") == "unfold"
     tol, max_fp = float(c.keypoint_tolerance), float(c.max_folded_footprint)
-    within = err < tol and fp < max_fp
+    fp_ok = fp > float(c.min_unfolded_footprint) if unfold else fp < max_fp
+    within = err < tol and fp_ok
     return (
         [
             f"step      {step:4d}",
             f"fold err  {err:6.3f} m  (tol {tol:.3f})",
-            f"footprint {fp:6.3f}    (max {max_fp:.3f})",
+            (f"footprint {fp:6.3f}    (min {float(c.min_unfolded_footprint):.3f})" if unfold
+             else f"footprint {fp:6.3f}    (max {max_fp:.3f})"),
             # NOT `_successes`: that counter is incremented and then zeroed by the reset
             # inside one `env.step()`, so it reads 0 on every frame of a clip that folds a
             # dozen times. `folds` is counted by the caller off the termination itself.
@@ -689,7 +692,10 @@ def main() -> None:
             dr = env_cfg.domain_randomization
             dr.use_obs_delay = dr.use_action_delay = dr.use_object_state_delay_noise = False
             dr.object_scale_noise_multiplier_range = (1.0, 1.0)
-            dr.joint_velocity_obs_noise_std = 0.0
+            dr.joint_velocity_obs_noise_std = dr.joint_pos_obs_noise_std = dr.action_noise_std = 0.0
+            dr.object_pose_bias_xyz = (0.0, 0.0, 0.0)
+            dr.object_pose_bias_rot_degrees = 0.0
+            dr.robot_stiffness_scale_range = dr.robot_damping_scale_range = (1.0, 1.0)
             dr.force_scale = dr.torque_scale = 0.0
             print(
                 f"[render] reset randomisation KEPT: xy noise "

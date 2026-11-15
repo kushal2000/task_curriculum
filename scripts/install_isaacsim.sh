@@ -6,7 +6,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
-VENV=".venv_isaacsim"
+VENV="${VENV:-.venv_isaacsim}"   # Engaging builds .venv_isaacsim_ct inside a container
 PY="$VENV/bin/python"
 
 # Importing isaaclab bootstraps the Kit kernel, which prompts for the EULA on a TTY and

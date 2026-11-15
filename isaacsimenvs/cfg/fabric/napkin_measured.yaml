@@ -1,0 +1,21 @@
+# Napkin, from measurements of a 15 x 15 cm swatch (2026-11-07). Literature preset: napkin.yaml.
+# density = mass / area; edge_ke tuned by fabric_cantilever.py so the env's 5 cm flap matches the elastica
+# for the measured bending length; edge_kd = 1e-3 x density / 2.0; soft_contact_mu = mu_table^2 / 0.5
+# (Cloth.yaml table_friction 0.5); tri_ke = tri_ka from napkin.yaml (stretch not measured).
+cloth:
+  density: 0.04
+  tri_ke: 100.0
+  tri_ka: 100.0
+  edge_ke: 0.00363   # cantilever fit (247 x B), job 28243812
+  edge_kd: 2.0e-05
+  soft_contact_mu: 0.265
+  self_contact_radius: 0.002
+plastic_yield_curvature: 30.0   # 7x7 touch fold, job 28369790 (cloth_plasticity_measured_r7_touch_v3_ns): let go -> springs open to 37 deg (3.2 cm), pressed 0.93 N -> stays 3 deg (0.65 cm), reopen 179 deg leaving a ~29 deg crease, drape +0.9 deg. Was 150 (springs flat even pressed)
+measured:
+  mass_g: 0.9   # 15 x 15 cm swatch
+  cantilever_deg: 25   # tip-line angle down from horizontal, 5.25 cm overhang
+  friction_deg: 20   # sliding angle on a table / board
+  fold_test: folded over and let go -> springs back completely flat
+  press_test: 213.1 g weight on the folded swatch -> lies flat; unfolds flat with no crease
+  bending_length_m: 0.03344
+  bending_rigidity: 1.467e-05   # B = rho g c^3 [N m], read by fabric_cantilever.py
