@@ -19,11 +19,11 @@ from pathlib import Path
 
 
 def slurm_header(name: str) -> dict:
-    """``[ftfab]`` lines of slurm_logs/ftfab*_<job>_0.out, keyed by the job id at the end of ``name``."""
+    """``[ftfab]`` lines of outputs/slurm/ftfab*_<job>_0.out, keyed by the job id at the end of ``name``."""
     m = re.search(r"_(\d+)$", name)
     if not m:
         return {}
-    logs = glob.glob(f"slurm_logs/ftfab*_{m.group(1)}_*.out")
+    logs = glob.glob(f"outputs/slurm/ftfab*_{m.group(1)}_*.out")
     out = {"slurm_job": m.group(1)}
     if not logs:
         return out

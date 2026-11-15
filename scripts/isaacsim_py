@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run .venv_isaacsim_ct's Python inside the Isaac Sim 5.1 container (Engaging: the host glibc is
-# too old for Isaac Sim's wheels -- see scripts/cluster/engaging_install_isaacsim.sh).
+# too old for Isaac Sim's wheels -- see scripts/slurm/engaging/install_isaacsim.sh).
 #
 #   scripts/isaacsim_py -m isaacsimenvs.eval.episodes --headless --task Isaacsimenvs-FoldPoolPhysx-Direct-v0 ...
 set -euo pipefail

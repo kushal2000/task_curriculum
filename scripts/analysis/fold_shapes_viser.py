@@ -10,7 +10,7 @@ of its plates by hand instead.
     .venv_isaaclab3/bin/python scripts/analysis/fold_shapes_viser.py --port 8090
     .venv_isaaclab3/bin/python scripts/analysis/fold_shapes_viser.py --shapes cross4-mid corners8-mid
 
-Plate-plate contact is excluded, as in ``RigidClothEnv`` (which drops every slat-slat pair);
+Plate-plate contact is excluded, as in the rigid-cloth task (which drops every slat-slat pair);
 plates touch only the table. MuJoCo CPU, not the env's MJWarp, and without its +7 mm contact margin.
 """
 

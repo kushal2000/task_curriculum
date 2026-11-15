@@ -38,8 +38,8 @@ def _episodes(path: Path) -> tuple[list[dict], dict]:
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--results", default="docs/results/contact_stiffness")
-    p.add_argument("--speed_job", default=None, help="speed array job id (slurm_logs/cstiff_<id>_<cfg>.out)")
+    p.add_argument("--results", default="outputs/results/contact_stiffness")
+    p.add_argument("--speed_job", default=None, help="speed array job id (outputs/slurm/cstiff_<id>_<cfg>.out)")
     args = p.parse_args()
 
     groups: dict[tuple, list[dict]] = defaultdict(list)
@@ -86,7 +86,7 @@ def main() -> None:
     if args.speed_job:
         print("\nspeed (1536 envs, rl_games fps step, mean of the second half of the epochs)")
         for i, cfg in enumerate(CFGS):
-            log = Path(f"slurm_logs/cstiff_{args.speed_job}_{i}.out")
+            log = Path(f"outputs/slurm/cstiff_{args.speed_job}_{i}.out")
             if not log.exists():
                 continue
             fps = [float(x.replace(",", "")) for x in re.findall(r"fps step\s*:\s*([0-9,.]+)", log.read_text())]

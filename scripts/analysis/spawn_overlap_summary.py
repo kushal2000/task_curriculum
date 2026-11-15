@@ -1,6 +1,6 @@
 """Does the sheet start inside / against the hand? From fold_start_probe.py dumps.
 
-    .venv_isaaclab3/bin/python scripts/analysis/spawn_overlap_summary.py docs/results/fold_start_probe_overlap_*.pt
+    .venv_isaaclab3/bin/python scripts/analysis/spawn_overlap_summary.py outputs/results/fold_start_probe_overlap_*.pt
 
 The sheet spawns cloth.start_height (15 cm) above the table and falls. Until it lands nothing but the
 robot can touch it, so any motion beyond free fall in the first steps is contact with the hand.

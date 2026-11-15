@@ -60,7 +60,7 @@ def _row(recs: list[dict]) -> str:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--train_job", required=True)
-    p.add_argument("--results", default="docs/results")
+    p.add_argument("--results", default="outputs/results")
     p.add_argument("--prefix", default="fp_eval_")
     args = p.parse_args()
 

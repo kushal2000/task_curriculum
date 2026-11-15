@@ -293,7 +293,7 @@ def run_model(fab, fs, ke, thicks, scen, iters, rec_every):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="docs/results/cloth_finger_probe")
+    ap.add_argument("--out", default="outputs/results/cloth_finger_probe")
     ap.add_argument("--fabric", default="cotton")
     ap.add_argument("--thickness", type=float, nargs="+", default=[0.016, 0.002, 0.0005])
     ap.add_argument("--scenarios", nargs="+", default=SCENARIOS)

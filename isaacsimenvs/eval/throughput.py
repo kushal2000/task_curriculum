@@ -30,6 +30,8 @@ import sys
 import time
 from pathlib import Path
 
+from isaacsimenvs.utils.paths import PRETRAINED_CHECKPOINT, PRETRAINED_CONFIG
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -56,10 +58,10 @@ def main() -> None:
     )
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument(
-        "--checkpoint", default="/share/portal/kk837/simtoolreal/pretrained_policy/model.pth"
+        "--checkpoint", default=str(PRETRAINED_CHECKPOINT)
     )
     parser.add_argument(
-        "--policy_config", default="/share/portal/kk837/simtoolreal/pretrained_policy/config.yaml"
+        "--policy_config", default=str(PRETRAINED_CONFIG)
     )
     args_cli, hydra_args = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + hydra_args

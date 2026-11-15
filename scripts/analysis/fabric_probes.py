@@ -255,7 +255,7 @@ def ply(a):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("probe", choices=["stretch", "ply"])
-    ap.add_argument("--out", default="docs/results/fabric_probes")
+    ap.add_argument("--out", default="outputs/results/fabric_probes")
     ap.add_argument("--iters", type=int, nargs="+", default=[12, 48])
     ap.add_argument("--seconds", type=float, default=3.0)
     ap.add_argument("--radii", type=float, nargs="+", default=[5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3])

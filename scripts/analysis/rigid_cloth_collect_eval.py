@@ -1,6 +1,6 @@
 """Collate the rigid-cloth cross-evaluation into the tables `rigid_cloth_rl_comparison.md` prints.
 
-Reads the per-run JSONs that `bos14_rigid_cloth_eval*.sh` writes into `docs/results/`, pools them
+Reads the per-run JSONs that `bos14_rigid_cloth_eval*.sh` writes into `outputs/results/`, pools them
 over eval seeds, and emits one markdown table plus a per-training-seed breakdown. Every published
 table in the write-up is this one program under different flags:
 
@@ -33,7 +33,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-RESULTS = Path(__file__).resolve().parents[2] / "docs/results"
+RESULTS = Path(__file__).resolve().parents[2] / "outputs/results"
 
 #: (target, label suffix) per column. "own" is the policy's own manipuland, "vbd" the real cloth;
 #: the bare suffix is the pinned start pose and `__rand` the randomised one.

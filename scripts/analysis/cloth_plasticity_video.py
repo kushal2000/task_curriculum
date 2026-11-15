@@ -8,7 +8,7 @@ Each fabric's npz holds one sheet per (kappa, press) label; the video shows the 
 that fabric's preset ``plastic_yield_curvature`` (isaacsimenvs/cfg/fabric/<fabric>.yaml), or --kappa.
 
     .venv_isaaclab3/bin/python -I scripts/analysis/cloth_plasticity_video.py \
-        --data docs/results/cloth_plasticity_measured_current_seq --out videos/plasticity_seq
+        --data outputs/results/cloth_plasticity_measured_current_seq --out videos/plasticity_seq
 
 Per frame: the sheet (gold = stationary half, vermilion = the flap, as render_newton.py), the phase,
 the time, and the flap's opening angle (0 = folded flat, 180 = flat sheet) from the crease to the far
@@ -85,7 +85,7 @@ def render(frames, faces, times, phases, res, title, out: Path, fps: int, elev: 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default="docs/results/cloth_plasticity_measured_current_seq")
+    ap.add_argument("--data", default="outputs/results/cloth_plasticity_measured_current_seq")
     ap.add_argument("--out", default="videos/plasticity_seq")
     ap.add_argument("--fabrics", nargs="*", default=None, help="default: every fabric in the npz")
     ap.add_argument("--kappa", type=float, default=None, help="override the preset kappa for every fabric")

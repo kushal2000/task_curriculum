@@ -27,6 +27,7 @@ import sys
 from pathlib import Path
 
 from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
+from isaacsimenvs.utils.paths import PRETRAINED_CHECKPOINT, PRETRAINED_CONFIG, VIDEOS_DIR
 
 #: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums. Both this
 #: module and its sibling print the identical line, so a render that disagrees with an evaluation
@@ -590,8 +591,8 @@ def main() -> None:
         help="aim point relative to the filmed env's origin. Default is roughly the object's "
         "start height (table_reset_z 0.38 + table_object_z_offset 0.25).",
     )
-    parser.add_argument("--checkpoint", default="/share/portal/kk837/simtoolreal/pretrained_policy/model.pth")
-    parser.add_argument("--policy_config", default="/share/portal/kk837/simtoolreal/pretrained_policy/config.yaml")
+    parser.add_argument("--checkpoint", default=str(PRETRAINED_CHECKPOINT))
+    parser.add_argument("--policy_config", default=str(PRETRAINED_CONFIG))
     parser.add_argument(
         "--sapg_expl_coef", type=float, default=50.0,
         help="SAPG block conditioning: 50.0 = block 0, 0.0 = last block. See eval/player.py.",
@@ -638,7 +639,7 @@ def main() -> None:
     parser.add_argument("--num_assets_per_type", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda:0")
-    parser.add_argument("--out", type=Path, default=Path("videos/play_newton.mp4"))
+    parser.add_argument("--out", type=Path, default=VIDEOS_DIR / "render_newton.mp4")
     parser.add_argument(
         "--no_goal", action="store_true", help="do not render the goal marker at all"
     )

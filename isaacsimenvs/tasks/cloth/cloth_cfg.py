@@ -230,7 +230,7 @@ class ClothCfg:
     on_table_max_spread: float = 0.015
     """``unfold_on_table``: largest height range over all particles (max z - min z) [m] that
     counts as flat. A level sheet at rest has ~0; 1.5 cm is about one VBD sheet thickness, a 9 deg
-    tilt on a 10 cm sheet. Measured on old unfold successes (docs/results/flat_on_table): rigid
+    tilt on a 10 cm sheet. Measured on old unfold successes (outputs/results/flat_on_table): rigid
     sheets still tilted span 6-14 cm, VBD wrinkles pass 49 / 78 / 91 % at 1 / 1.5 / 2 cm."""
 
     on_table_max_lift: float = 0.015

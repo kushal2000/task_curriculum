@@ -513,7 +513,7 @@ _WUJI_RIGHT_SYSID = {
     "r_pinky_dip": (0.157, 5.652e-05, 0.004776, 0.01838),  # pinky_S4
 }
 #: Per hand joint: the sysid fit's passive spring (stiffness N m/rad, rest angle rad), 4 significant
-#: figures. Replayed in PhysX (docs/results/flexiv_right_sysid_replay, 11-10) it halves the tracking
+#: figures. Replayed in PhysX (outputs/results/flexiv_right_sysid_replay, 11-10) it halves the tracking
 #: error against the real trials: 23.6 -> 14.3 mrad at dt 1/120 (12.0 at 1/1000, = the MuJoCo fit).
 _WUJI_RIGHT_SPRING = {
     "r_thumb_cmc_flex": (0.0843, 0.0619),  # thumb_S1

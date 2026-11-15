@@ -33,7 +33,7 @@ robot.mode=openloop: no policy, no perception; robot.py sends a sim rollout's jo
 | [robot.py](../nodes/robot.py) | `.venv_deploy` | arm (aioflexiv; or its MuJoCo arm) + hand (aiowuji; or `fake`, no hand); modes `home`, `free_drive`, `policy`, `openloop` |
 | [policy.py](policy.py) | `.venv_deploy` | observation → LSTM → joint targets; goals and the goal test |
 | [viewer.py](../nodes/viewer.py) | `.venv_deploy` | live viser page: robot, targets, object, goal, camera, topic status |
-| [recorder.py](../nodes/recorder.py) | `.venv_deploy` | every message → `recordings/<date>/<date>_<time>_<name>.jsonl` |
+| [recorder.py](../nodes/recorder.py) | `.venv_deploy` | every message → `outputs/deploy/simtoolreal/recordings/<date>/<date>_<time>_<name>.jsonl` |
 | [playback.py](../nodes/playback.py) | `.venv_deploy` | plays a recording back in viser; exports an mp4; never moves the robot |
 
 Other folders: `deploy/utils/` (code every task uses, see [\_\_init\_\_.py](../utils/__init__.py)),
@@ -151,7 +151,7 @@ eraser must lie where the sim's did; nothing checks it.
 
 1. Record the rollout in the training env (Isaac Sim, the training branch's worktree):
    ```bash
-   OUT=$PWD/docs/results/simtoolreal/lift1 EXTRA_ARGS="--num_envs 256 --candidates 16" \
+   OUT=$PWD/outputs/results/simtoolreal/lift1 EXTRA_ARGS="--num_envs 256 --candidates 16" \
        sbatch scripts/cluster/bos14_simtoolreal_lift.sh
    ```
    [checks/record_lift.py](checks/record_lift.py): the env's eraser box pinned to the DexToolBench
@@ -186,7 +186,7 @@ the reason in `joint_state` (`tripped`), so policy.py stops and the viewer shows
 ## Recording and playback
 
 `run.py record.name=<name>` starts recorder.py for that run. It writes every message, as sent, to
-`recordings/<date>/<date>_<time>_<name>.jsonl` (gitignored). Line 1 is the run's full config. Size: about
+`outputs/deploy/simtoolreal/recordings/<date>/<date>_<time>_<name>.jsonl` (gitignored). Line 1 is the run's full config. Size: about
 25 MB/min. recorder.py can also run on its own, e.g. to record a free-drive session.
 
 `record.camera=true` also records the camera: perception.py sends every camera frame raw
@@ -197,7 +197,7 @@ Recordings from before Nov 9 evening have the viewer's 10 Hz JPEGs in the .jsonl
 reads those too.
 
 ```bash
-$PY deploy/nodes/playback.py $D/recordings/<file>.jsonl      # http://localhost:8091: time slider, play, speed
+$PY deploy/nodes/playback.py outputs/deploy/simtoolreal/recordings/<file>.jsonl      # http://localhost:8091: time slider, play, speed
 ```
 
 To export a video, set the 3D view in the browser, then click "export mp4". The browser tab renders
@@ -207,7 +207,7 @@ every frame, the camera image goes on the right, and the video is saved next to 
 ## Checks
 
 `checks/check_rec1.py` runs the deploy code on a rollout recorded in the training env
-(`docs/results/simtoolreal/rec1`) and compares the numbers.
+(`outputs/results/simtoolreal/rec1`) and compares the numbers.
 
 | | max error |
 |---|---|

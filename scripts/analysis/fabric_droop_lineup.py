@@ -1,6 +1,6 @@
 """Side-by-side cantilever droop of the default VBD cloth and the 6 tuned fabric presets
 (bos14_fabric_eval.sh), for a screenshot. Reuses fabric_cantilever.simulate; GPU job.
-Output: docs/results/fabric_droop/droop.npz (read by fabric_droop_viser.py / fabric_droop_render.py).
+Output: outputs/results/fabric_droop/droop.npz (read by fabric_droop_viser.py / fabric_droop_render.py).
 """
 
 import importlib.util
@@ -21,7 +21,7 @@ SHEETS = [
 ]
 
 def main():
-    out = ROOT / "docs/results/fabric_droop"
+    out = ROOT / "outputs/results/fabric_droop"
     out.mkdir(parents=True, exist_ok=True)
     specs = [dict(rho=r, tri=t, ke=ke, kd=kd) for _, r, t, ke, kd in SHEETS]
     frames, times, vmax = fc.simulate(specs, 8.0, record_every=2)

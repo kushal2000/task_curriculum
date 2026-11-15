@@ -144,7 +144,7 @@ perception:
 # robot.mode=openloop: send a sim rollout's joint targets with no feedback (no policy, no camera).
 # Made by checks/record_lift.py (cluster: scripts/cluster/bos14_simtoolreal_lift.sh).
 openloop:
-  path: docs/results/simtoolreal/lift1/openloop.npz
+  path: outputs/results/simtoolreal/lift1/openloop.npz
 
 # ----------------------------------------------------------------------------------------- goals
 goals:
@@ -163,7 +163,7 @@ record:
   camera: false             # also record every camera frame (camera_frame) -> <file>.camera.mp4 (H.264)
   camera_codec: libx264     # libx264 (CPU, ~0.4 core at 640x480 60 fps) | h264_nvenc (GPU; this ffmpeg needs driver >= 610)
   camera_quality: 23        # x264 -crf / nvenc -cq: lower = better and bigger; 18 ~ visually lossless
-  dir: deploy/simtoolreal/recordings
+  dir: outputs/deploy/simtoolreal/recordings
   video_fps: 60             # playback.py's mp4 export
   video_height: 480         # px; the 3D view is 4:3, the camera image is scaled to the same height
 

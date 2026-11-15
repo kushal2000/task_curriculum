@@ -18,7 +18,7 @@ STARTS = ("pinned", "rand")
 def main() -> None:
     cells = defaultdict(lambda: [0, 0, 0])  # (tag, policy, start) -> held, falls, episodes
     pat = re.compile(r"pxscreen_(.+)_(ref|newton|physx)_(pinned|rand)_s\d+\.json$")
-    for path in sorted(glob.glob("docs/results/pxscreen_*.json")):
+    for path in sorted(glob.glob("outputs/results/pxscreen_*.json")):
         m = pat.search(path)
         if not m:
             continue

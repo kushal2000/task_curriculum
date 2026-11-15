@@ -39,8 +39,10 @@ from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_
 #: can be diffed step by step instead of reasoned about.
 _TRACE = int(os.environ.get("RC_TRACE", "0") or 0)
 
-DEFAULT_CHECKPOINT = "/share/portal/kk837/simtoolreal/pretrained_policy/model.pth"
-DEFAULT_POLICY_CFG = "/share/portal/kk837/simtoolreal/pretrained_policy/config.yaml"
+from isaacsimenvs.utils.paths import PRETRAINED_CHECKPOINT, PRETRAINED_CONFIG  # noqa: E402
+
+DEFAULT_CHECKPOINT = str(PRETRAINED_CHECKPOINT)
+DEFAULT_POLICY_CFG = str(PRETRAINED_CONFIG)
 
 # Termination causes published by `play/utils/logging_utils.py`. Reported as a histogram: two
 # backends can agree on the mean while failing for entirely different reasons, and that is not

@@ -12,6 +12,7 @@ from datetime import datetime
 
 from rl_games.common.algo_observer import AlgoObserver
 
+from isaacsimenvs.utils.paths import WANDB_DIR
 from isaacsimenvs.utils.reformat import omegaconf_to_dict
 
 
@@ -80,6 +81,7 @@ class WandbAlgoObserver(AlgoObserver):
                 id=wandb_unique_id,
                 name=display_name,
                 resume=True,
+                dir=str(WANDB_DIR),
             )
             wandb.run.log_code(root=logcode_dir)
             print(f"[Wandb] run dir: {wandb.run.dir} (log_code root: {logcode_dir})")

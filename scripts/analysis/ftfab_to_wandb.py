@@ -23,7 +23,7 @@ from pathlib import Path
 
 FABRICS = ["big_napkin", "chiffon", "cotton", "denim", "napkin", "silk", "towel"]
 COEFS = [50, 40, 30, 20, 10, 0]
-RES = Path("docs/results/px_matrix")
+RES = Path("outputs/results/px_matrix")
 PRIOR = "checkpoints/last_0_pxpool_flat7DRABC_s1_175385_ep_3052_rew__1198.3557_.pth"
 FRAMES_PER_EPOCH = 768 * 32
 

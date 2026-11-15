@@ -479,7 +479,7 @@ def run_drape(a, fab):
 def main():
     global ITERS, MESH, SELF_MU, SET_KAPPA, PARTICLE_RADIUS, SOFT_KE
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="docs/results/cloth_plasticity")
+    ap.add_argument("--out", default="outputs/results/cloth_plasticity")
     ap.add_argument("--fabrics", nargs="+", default=list(FABRICS))
     ap.add_argument("--kappa", type=float, nargs="+", default=[math.inf, 100.0, 50.0, 25.0, 12.0, 6.0],
                     help="yield curvature [1/m]; inf = elastic. Yield angle per grid cell = kappa * 16.7 mm")

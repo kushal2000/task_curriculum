@@ -10,7 +10,7 @@ The conversion whose replay best matches the sim trajectory is the one to deploy
         --hand_disabled_joints 3 17 --num_goals 3
 
     # only analyse existing replay logs
-    python deploy/joint_reach/hand_gain_sweep.py --sequence <seq>.pt --logs deploy/logs/jr_replay_*.npz
+    python deploy/joint_reach/hand_gain_sweep.py --sequence <seq>.pt --logs outputs/deploy/joint_reach/jr_replay_*.npz
 
 Per joint, for each run:
   dev   mean |q_real - q_sim| over the run: how far the hand's trajectory is from the sim's (main metric)
@@ -98,7 +98,7 @@ def main() -> int:
     p.add_argument("--hand_disabled_joints", type=int, nargs="*", default=[])
     p.add_argument("--num_goals", type=int, default=3)
     p.add_argument("--viser_port", type=int, default=0)
-    p.add_argument("--log_dir", default="deploy/logs/hand_gain_sweep")
+    p.add_argument("--log_dir", default="outputs/deploy/joint_reach/hand_gain_sweep")
     p.add_argument("--yes", action="store_true")
     args = p.parse_args()
     sys.stdout.reconfigure(line_buffering=True)  # interleave with the run_real subprocesses' output

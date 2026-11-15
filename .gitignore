@@ -8,6 +8,7 @@ __pycache__/
 .eggs/
 build/
 dist/
+.pytest_cache/
 
 # Virtual environments
 .venv/
@@ -15,89 +16,64 @@ dist/
 venv/
 env/
 
-# Training / experiment outputs
-train_dir/
+# EVERY run artifact goes under outputs/ (isaacsimenvs/utils/paths.py): Hydra run dirs
+# outputs/<date>/<time>/, outputs/wandb/, outputs/slurm/ (scripts/slurm/submit.sh), outputs/results/
+# (eval JSONs and probe dumps), outputs/videos/, outputs/deploy/ (robot recordings and logs).
 outputs/
-deploy/logs/
+
+# Pre-restructure output locations, still present in older checkouts: move their contents into
+# outputs/ (wandb/ -> outputs/wandb/, slurm_logs/ -> outputs/slurm/, videos/ -> outputs/videos/).
+/wandb/
+/slurm_logs/
+/videos/
+/experiments/
+/train_dir/
+/evals/
+/runs/
+
+# Deploy-time state on the robot PC: camera calibration captures and the fitted extrinsics.
 deploy/calibration/captures/
 deploy/calibration/compare/
 deploy/calibration/extrinsics/
-wandb/
-# Ignore the CONTENTS, not the directory: git cannot re-include a file whose parent directory is
-# excluded, so `videos/` + `!videos/README.md` silently keeps the README untracked.
-videos/*
-!videos/README.md
-evals/
-runs/
-experiments/runs/
 
-# Downloaded artifacts
-pretrained_policy/
+# Downloaded artifacts (on portal, pretrained_policy is a symlink to
+# /share/portal/kk837/simtoolreal/pretrained_policy, hence no trailing slash).
+/pretrained_policy
 pretrained_assembly/
+
+# Large media and local-only binaries: renders, policy zips, the Isaac Lab overlay image, prior
+# checkpoints, pip cache.
+*.mp4
+/fabric_*.zip
+/isaaclab_overlay.img
+/checkpoints/
+/isaac_cache/
+/lift1.zip
 
 # Baked URDF->USD cache: written under .venv_isaacsim, read by the kit-less Newton venv.
 # Regenerate with `python -m isaacsimenvs.newton.usd_cache --populate`.
 .usd_cache/
 
-# Third-party source checkouts (Isaac Lab 3.0 for the Newton backend).
-# Not a submodule by choice: the pinned SHA lives in scripts/install_isaaclab3.sh, so the
-# checkout is reproducible without carrying submodule machinery in the repo.
+# Third-party source checkouts, fetched at pinned SHAs instead of being submodules:
+# IsaacLab (scripts/install_isaaclab3.sh) and the robot drivers aioflexiv / aiowuji
+# (scripts/fetch_deploy_deps.sh).
 third_party/
 
-# Pytest
-.pytest_cache/
+# Flexiv Rizon 4s + Wuji Hand 2 models, fetched at pinned upstream SHAs by
+# scripts/flexiv_wuji/fetch_assets.sh, plus the composed arm+hand URDFs it writes. These ARE
+# committed: the training-time pose viewer loads the robot URDF and its meshes from
+# raw.githubusercontent.com at the run's branch. The right hand's vendor URDF/MJCF stay local; the
+# composed right-hand URDFs and the meshes they reference are committed. Do not move them to LFS --
+# raw GitHub serves LFS files as pointer stubs.
+assets/flexiv_wuji/wuji_hand2/urdf/right*
+assets/flexiv_wuji/wuji_hand2/mjcf/right*
 
-# Large media. Renders live under videos/ (ignored above) and are reproducible from
-# `isaacsimenvs/eval/render_newton.py`, so none of them belong in history.
-*.mp4
+# The right Wuji Hand's sysid fit (robots.FLEXIV_WUJI_RIGHT_REAL holds its values, rounded): kept
+# local, it identifies the lab's hand. tests/test_robot_specs.py skips its check when it is absent.
+assets/flexiv_wuji/wuji_hand2_right_sysid_fit_*.json
 
 # OS / editor
 .DS_Store
 *.swp
 .idea/
 .vscode/
-
-# SLURM job logs: large, regenerable, and one per run
-slurm_logs/
-
-# G1 + Wuji Hand 2 models, fetched at a pinned upstream SHA by scripts/g1_wuji/fetch_assets.sh.
-# Also holds the URDF->USD conversions the Isaac Sim replayer writes under usd/.
-assets/g1_wuji2_description/
-
-# Raw eval / probe output under docs/results: one JSON per eval task, per-env tensors (.pt), debug
-# plots. The readable write-ups and the tables quoted from these files live in docs/reports; the
-# summary scripts regenerate the tables from a local copy. Files already committed here stay
-# tracked (ignore rules do not affect tracked files); new raw output stays local.
-docs/results/**/*.json
-docs/results/**/*.pt
-docs/results/**/*.png
-
-# Flexiv Rizon 4s + Wuji Hand 2 models, fetched at pinned upstream SHAs by
-# scripts/flexiv_wuji/fetch_assets.sh, plus the composed arm+hand URDF it writes. Unlike
-# g1_wuji2_description these ARE committed: the training-time pose viewer loads the robot URDF and
-# its meshes from raw.githubusercontent.com at the run's branch. Only what the composed left-hand
-# robot and the right-hand human-like robot reference is kept; the rest of the right hand is ignored. Do not move them to LFS -- raw GitHub
-# serves LFS files as pointer stubs.
-assets/flexiv_wuji/wuji_hand2/urdf/right*
-assets/flexiv_wuji/wuji_hand2/mjcf/right*
-
-# Per-env probe dumps under docs/results. Every entry of these is one array element PER ENV, so a
-# 1536-env probe is 3 MB of raw state while the numbers the write-ups quote are the scalar summary
-# fields beside it (`rests_flat`, `stable`, `fold_solvable`, `timing`). Every other tracked file in
-# docs/results is a few KB for this reason. Regenerate with
-# `scripts/analysis/rigid_cloth_env_probe.py` via `scripts/cluster/bos14_rigid_cloth_probe.sh`
-# (and the armature/spawn-height sweeps, which are the same probe over a parameter).
-docs/results/rigid_cloth_env_probe_*.json
-docs/results/rigid_cloth_arm_*.json
-docs/results/rigid_cloth_spawn_*.json
-
-# The right Wuji Hand's sysid fit (robots.FLEXIV_WUJI_RIGHT_REAL holds its values, rounded): kept local,
-# it identifies the lab's hand. tests/test_robot_specs.py skips its check when the file is absent.
-assets/flexiv_wuji/wuji_hand2_right_sysid_fit_*.json
-docs/results/**/*.npz
-
-# Local-only binaries: policy zips, the Isaac Lab overlay image, prior checkpoints, pip cache.
-/fabric_*.zip
-/isaaclab_overlay.img
-/checkpoints/
-/isaac_cache/

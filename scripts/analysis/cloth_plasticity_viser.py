@@ -19,8 +19,8 @@ from fabric_textures import add_fabric_mesh  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 # The 11-04 run's --out, else the probe's own default --out.
-DEFAULT_DATA = next((d for d in ("docs/results/cloth_plasticity_7fab_pin", "docs/results/cloth_plasticity")
-                     if (ROOT / d / "fold.npz").exists()), "docs/results/cloth_plasticity_7fab_pin")
+DEFAULT_DATA = next((d for d in ("outputs/results/cloth_plasticity_7fab_pin", "outputs/results/cloth_plasticity")
+                     if (ROOT / d / "fold.npz").exists()), "outputs/results/cloth_plasticity_7fab_pin")
 RES = 7
 NP = RES * RES
 DX = 0.17  # sheet spacing along x (the fold axis), so the side view looks along the crease

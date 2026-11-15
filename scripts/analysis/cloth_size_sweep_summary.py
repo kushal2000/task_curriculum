@@ -2,8 +2,8 @@
 
     python3 scripts/analysis/cloth_size_sweep_summary.py [--md docs/reports/4_physx/large_cloth_size_sweep.md]
 
-10 cm: docs/results/px_matrix/one_flat_s<seed>__on_vbd__<start>__<cut>_s<es>.json (the standard eval).
-Others: docs/results/large_cloth/sweep/one_flat_s<seed>__<size>__<start>__<cut>_s<es>.json
+10 cm: outputs/results/px_matrix/one_flat_s<seed>__on_vbd__<start>__<cut>_s<es>.json (the standard eval).
+Others: outputs/results/large_cloth/sweep/one_flat_s<seed>__<size>__<start>__<cut>_s<es>.json
 (bos14_cloth_size_sweep.sh). Also reports falls and non-finite episodes per size. "?" = missing.
 """
 
@@ -19,8 +19,8 @@ CELLS = [("pinned", "4cm"), ("rand", "4cm"), ("pinned", "1p5cm"), ("rand", "1p5c
 
 def path(size: str, seed: int, start: str, cut: str, es: int) -> str:
     if size == "10cm":
-        return f"docs/results/px_matrix/one_flat_s{seed}__on_vbd__{start}__{cut}_s{es}.json"
-    return f"docs/results/large_cloth/sweep/one_flat_s{seed}__{size}__{start}__{cut}_s{es}.json"
+        return f"outputs/results/px_matrix/one_flat_s{seed}__on_vbd__{start}__{cut}_s{es}.json"
+    return f"outputs/results/large_cloth/sweep/one_flat_s{seed}__{size}__{start}__{cut}_s{es}.json"
 
 
 def load(p: str):

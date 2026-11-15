@@ -15,7 +15,7 @@ COLORS = ["#9696a0", "#eba9be", "#f0d278", "#78b4e6", "#e6965a", "#78c88c", "#46
 
 
 def main():
-    data = ROOT / "docs/results/fabric_droop"
+    data = ROOT / "outputs/results/fabric_droop"
     d = np.load(data / "droop.npz")
     info = json.loads((data / "angles.json").read_text())
     frames, faces, names = d["frames"], d["faces"], [str(n) for n in d["names"]]

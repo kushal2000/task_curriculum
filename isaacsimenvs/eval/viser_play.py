@@ -91,7 +91,7 @@ class Run:
 
     def _logged_robot_and_task(self) -> tuple[str, str] | None:
         m = re.search(r"_(\d+)$", self.name)
-        log = REPO / "slurm_logs" / f"play_scratch_{m.group(1)}.out" if m else None
+        log = REPO / "outputs" / "slurm" / f"play_scratch_{m.group(1)}.out" if m else None
         if log is None or not log.is_file():
             return None
         with log.open(errors="replace") as f:

@@ -186,7 +186,7 @@ def droop(sheet_q):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="docs/results/fabric_cantilever")
+    ap.add_argument("--out", default="outputs/results/fabric_cantilever")
     ap.add_argument("--rounds", type=int, default=5)
     ap.add_argument("--settle", type=float, default=6.0)
     ap.add_argument("--drop", type=float, default=8.0)

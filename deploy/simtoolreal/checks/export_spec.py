@@ -15,7 +15,7 @@ fingertip order the observation really uses, which only the sim rollout shows. T
 was made with:
 
     .venv_deploy/bin/python deploy/simtoolreal/checks/export_spec.py \
-        --rollout_meta docs/results/simtoolreal/rec1/rollout_meta.json
+        --rollout_meta outputs/results/simtoolreal/rec1/rollout_meta.json
 """
 
 from __future__ import annotations

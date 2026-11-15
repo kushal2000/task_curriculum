@@ -2,7 +2,7 @@
 
     python3 scripts/analysis/contact_fingerprint_compare.py --source newton [--tag _x]
 
-Reads ``docs/results/fingerprint_<source>_on_{vbd,newton,physx}<tag>.pt`` (bos14_contact_fingerprint.sh)
+Reads ``outputs/results/fingerprint_<source>_on_{vbd,newton,physx}<tag>.pt`` (bos14_contact_fingerprint.sh)
 and prints, every few steps until an env's episode first resets, the env-median of: sheet centroid
 drift in the table plane, lowest and highest particle above the table, and fold error. The
 centroid/height traces are what the policy's contact strategy depends on -- a sheet that slides
@@ -40,7 +40,7 @@ def main() -> None:
     args = ap.parse_args()
     runs = {}
     for target in ("vbd", "newton", "physx"):
-        path = f"docs/results/fingerprint_{args.source}_on_{target}{args.tag}.pt"
+        path = f"outputs/results/fingerprint_{args.source}_on_{target}{args.tag}.pt"
         try:
             runs[target] = torch.load(path)
         except FileNotFoundError:

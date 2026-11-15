@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fabric_textures import add_fabric_mesh  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DATA = "docs/results/fabric_droop"
+DEFAULT_DATA = "outputs/results/fabric_droop"
 DX = 0.17  # sheet spacing along x
 COLORS = [(150, 150, 160), (235, 170, 190), (240, 210, 120), (120, 180, 230), (230, 150, 90), (120, 200, 140), (70, 100, 170)]
 

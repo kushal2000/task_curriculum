@@ -3,7 +3,7 @@
 
     python3 scripts/analysis/px_eval_fold_steps.py one_flat ft7lr_flat_last [--targets vbd physx_pool]
 
-Reads docs/results/px_matrix/<tag>_s<seed>__on_<target>__<start>__<cut>_s<es>.json, pools every
+Reads outputs/results/px_matrix/<tag>_s<seed>__on_<target>__<start>__<cut>_s<es>.json, pools every
 training seed and eval seed, and keeps the episodes with a held fold (`per_env_goals` >= 1). An
 episode ends 10 steps after its fold is first entered (`env.termination.success_steps=10`), so the
 length is the steps to fold + ~10. Per cell: "median / mean (folded episodes)"; "-" if none.
@@ -21,7 +21,7 @@ TARGETS = ["physx_pool", "physx_box3", "newton_pool", "newton_box3", "vbd", "phy
 
 def lengths(tag: str, target: str, start: str, cut: str) -> list[int]:
     out = []
-    for path in glob.glob(f"docs/results/px_matrix/{tag}_s[123]__on_{target}__{start}__{cut}_s*.json"):
+    for path in glob.glob(f"outputs/results/px_matrix/{tag}_s[123]__on_{target}__{start}__{cut}_s*.json"):
         d = json.load(open(path))
         out += [n for n, g in zip(d["per_env_length"], d["per_env_goals"]) if g >= 1]
     return out

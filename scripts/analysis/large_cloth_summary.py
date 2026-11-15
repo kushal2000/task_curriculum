@@ -2,7 +2,7 @@
 
     python3 scripts/analysis/large_cloth_summary.py [--tag s20] [--md docs/reports/4_physx/large_cloth_menu_policies_s20.md]
 
-Large: docs/results/large_cloth/<tag>/<policy>__<pinned|rand>__<4cm|1p5cm>_s<es>.json
+Large: outputs/results/large_cloth/<tag>/<policy>__<pinned|rand>__<4cm|1p5cm>_s<es>.json
 (bos14_large_cloth_eval.sh). 10 cm: the same checkpoints' existing evals -- px_matrix for the
 2026-10-06 runs, rc_eval_[tol15_]pxpool_pxs1_arm1e3_e6144_s1 for 157622. "?" = file missing.
 """
@@ -41,12 +41,12 @@ def main() -> None:
     rows = ["| policy | cloth | " + " | ".join(f"{c} {s}" for s, c in CELLS) + " |",
             "|---|---|" + "---|" * len(CELLS)]
     for key, (label, small) in POLICIES.items():
-        big = [held([f"docs/results/large_cloth/{a.tag}/{key}__{s}__{c}_s{es}.json" for es in (1, 2)])
+        big = [held([f"outputs/results/large_cloth/{a.tag}/{key}__{s}__{c}_s{es}.json" for es in (1, 2)])
                for s, c in CELLS]
         ref = []
         for s, c in CELLS:
             ref.append(held([
-                "docs/results/" + small.format(start=s, cut=c, es=es, tol="tol15_" if c == "1p5cm" else "",
+                "outputs/results/" + small.format(start=s, cut=c, es=es, tol="tol15_" if c == "1p5cm" else "",
                                                rand="__rand" if s == "rand" else "")
                 for es in (1, 2)
             ]))

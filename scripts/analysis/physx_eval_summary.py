@@ -3,7 +3,7 @@
     python3 scripts/analysis/physx_eval_summary.py px_arm1e3 pxpool_box3_arm1e3_e6144 ...
 
 Each argument is a policy label (``px_<RUN_TAG>`` for chains, ``pxpool_<RUN_TAG>`` for pools). Reads
-``docs/results/rc_eval_[tol15_]<label>_s<seed>__on_<target>[__rand]_c0_s<es>.json`` and prints the
+``outputs/results/rc_eval_[tol15_]<label>_s<seed>__on_<target>[__rand]_c0_s<es>.json`` and prints the
 held folds out of 64 (32 envs x 2 eval seeds) per seed, and the share over all seeds.
 """
 
@@ -19,7 +19,7 @@ def cell(prefix: str, label: str, target: str, rand: bool) -> str:
     per_seed = []
     for seed in (1, 2, 3):
         held = n = 0
-        pat = f"docs/results/{prefix}{label}_s{seed}__on_{target}{'__rand' if rand else ''}_c0_s*.json"
+        pat = f"outputs/results/{prefix}{label}_s{seed}__on_{target}{'__rand' if rand else ''}_c0_s*.json"
         for path in glob.glob(pat):
             d = json.load(open(path))
             held += int(d["termination_reasons"].get("fold_held", 0))

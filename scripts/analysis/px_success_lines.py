@@ -3,9 +3,9 @@ and on the VBD cloth, pinned and randomised starts. One figure per cutoff.
 
     .venv_isaaclab3/bin/python scripts/analysis/px_success_lines.py
 
-Reads docs/results/px_matrix (bos14_px_eval_matrix.sh). A point is the held-fold share pooled over
+Reads outputs/results/px_matrix (bos14_px_eval_matrix.sh). A point is the held-fold share pooled over
 the three training seeds (equal episodes per seed, so = their mean). Writes
-docs/results/px_success_lines_{4cm,1p5cm}.png.
+outputs/results/px_success_lines_{4cm,1p5cm}.png.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def rate(tag: str, target: str, start: str, cut: str) -> float:
     """Held-fold %, pooled over the three training seeds and both eval seeds."""
     held = n = 0
     for seed in (1, 2, 3):
-        files = glob.glob(f"docs/results/px_matrix/{tag}_s{seed}__on_{target}__{start}__{cut}_s*.json")
+        files = glob.glob(f"outputs/results/px_matrix/{tag}_s{seed}__on_{target}__{start}__{cut}_s*.json")
         assert len(files) == 2, (tag, seed, target, start, cut, files)
         for path in files:
             d = json.load(open(path))
@@ -90,7 +90,7 @@ def plot(cut: str, cut_label: str) -> None:
     fig.suptitle(f"Held-fold success at the {cut_label} cutoff", x=0.06, ha="left", color=INK,
                  fontsize=12, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.97))
-    out = f"docs/results/px_success_lines_{cut}.png"
+    out = f"outputs/results/px_success_lines_{cut}.png"
     fig.savefig(out, facecolor="white")
     print(out)
 

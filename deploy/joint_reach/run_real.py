@@ -23,7 +23,7 @@ joint within 3 deg at the end of its hold) and printed next to the sim's result.
 Install (the robot PC; Python >= 3.12 for aioflexiv, no Isaac Sim):
     scripts/fetch_deploy_deps.sh
     pip install torch numpy pyyaml omegaconf gym==0.23.1 -e rl_games -e third_party/aioflexiv -e third_party/aiowuji
-and copy the checkpoint and real_test_sequence.pt over (outputs/ and docs/results/ are not in git).
+and copy the checkpoint and real_test_sequence.pt over (outputs/ and outputs/results/ are not in git).
 --viser_port 8090 opens a live view (measured robot, goal ghost, fingertip goals); it also needs viser yourdfpy.
 Check the install with check_offline.py first.
 
@@ -209,7 +209,7 @@ def _parse() -> argparse.Namespace:
     p.add_argument("--viewer", action="store_true", help="MuJoCo viewer for --arm mujoco")
     p.add_argument("--viser_port", type=int, default=0,
                    help="if set, a live viser view (measured robot + goal ghost) on this port, in its own process")
-    p.add_argument("--log_dir", default="deploy/logs")
+    p.add_argument("--log_dir", default="outputs/deploy/joint_reach")
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     return p.parse_args()
 

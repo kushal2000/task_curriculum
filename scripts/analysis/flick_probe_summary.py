@@ -1,6 +1,6 @@
 """How far the UNTOUCHED plate jumps when a fingertip presses the other one (the PhysX "flick").
 
-    python3 scripts/analysis/flick_probe_summary.py docs/results/fingerprint_physx_on_physx_p*.pt
+    python3 scripts/analysis/flick_probe_summary.py outputs/results/fingerprint_physx_on_physx_p*.pt
 
 Reads cloth_obs_parity.py dumps replaying the PhysX policy's recorded actions (bos14_contact_fingerprint.sh
 STAGE=replay, task 5). Around step 27 that policy's thumb presses the -x plate near its outer edge;

@@ -25,7 +25,7 @@ from deploy.utils.quat import quat_apply, quat_conj, quat_mul                   
 from deploy.utils.robot_model import link_pose, load_robot_model                                  # noqa: E402
 from deploy.utils.spec import load_spec                                                           # noqa: E402
 
-REC = "docs/results/simtoolreal/rec1/rollout.npz"
+REC = "outputs/results/simtoolreal/rec1/rollout.npz"
 EVERY = 10
 NET_ENVS = 4
 

@@ -1,8 +1,8 @@
 """Draw and summarise a ``fold_start_probe.py`` dump: what the partly folded starts look like and how
 they behave over the probe's zero-action seconds.
 
-    .venv_isaaclab3/bin/python scripts/analysis/fold_start_probe_plot.py docs/results/fold_start_probe.pt \\
-        --png docs/results/fold_start_probe.png
+    .venv_isaaclab3/bin/python scripts/analysis/fold_start_probe_plot.py outputs/results/fold_start_probe.pt \\
+        --png outputs/results/fold_start_probe.png
 """
 
 from __future__ import annotations

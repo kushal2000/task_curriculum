@@ -1,7 +1,7 @@
 """Run a fold policy LIVE in a browser (viser), with its knobs on sliders.
 
     scripts/newton_py -m isaacsimenvs.eval.live_viser --task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0
-    sbatch scripts/cluster/bos14_live_viser.sh          # on a GPU node; the log prints the tunnel
+    scripts/slurm/submit.sh scripts/slurm/viser.sh --task <id>   # on a GPU node; the log prints the tunnel
 
 The env runs on the GPU exactly as `episodes.py` runs it (same reset, same zero-action tick, same
 player), a handful of envs at once; one of them is drawn. What can change WITHOUT a restart:
@@ -28,7 +28,7 @@ is ~4.
 Geometry comes from Newton's own viewer pipeline (`ViewerBase.set_model` -> `log_geo`), captured
 by a null viewer, so what is drawn is exactly the collision geometry the solver sees.
 
-**PhysX tasks** (`*Physx*`, run in `.venv_isaacsim`; `scripts/cluster/bos14_live_viser_physx.sh`): the
+**PhysX tasks** (`*Physx*`, run in `.venv_isaacsim`; the same `scripts/slurm/viser.sh`): the
 same viewer, with the geometry read from the USD stage (each rigid body's collision meshes and
 primitives, in its own frame) and the body poses from Isaac Lab's PhysX views every step. The friction
 sliders are hidden there: PhysX refuses friction DR (`physx_envs`). viser needs websockets >= 13,
@@ -54,16 +54,11 @@ from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_
 
 ROOT = Path(__file__).resolve().parents[2]
 
-#: Display name -> (checkpoint, default SAPG coef). Paths are relative to the repo root.
-#: The best seed of each 2026-10-06 PhysX run (generic prior, 24576 envs, 7.47e8 steps), picked by
-#: held folds on the VBD cloth summed over 4/1.5 cm x pinned/rand (docs/reports/4_physx/physx_generic_prior_runs.md);
-#: label = its cloth score at 4 cm, pinned / randomised.
+#: Display name -> (checkpoint, default SAPG coef). Paths are relative to the repo root. Only the
+#: generic prior is built in: trained runs live in this checkout's outputs/, so list them in a JSON menu
+#: ($LIVE_VISER_POLICIES, below) rather than here.
 POLICIES = {
-    "Flexiv + Wuji Play prior (human-like limits; untrained on folds)": ("pretrained_policy/flexiv_wuji.pth", 0.0),
-    "run 2: flat pool (s3; cloth 78/66%)": ("outputs/2026-10-06/14-53-54/0_pxpool_one_flat_s3_158376/nn/0_pxpool_one_flat_s3_158376.pth", 0.0),
-    "run 1: pool + folded starts (s1; cloth 56/50%)": ("outputs/2026-10-06/14-33-35/0_pxpool_one_initfold_s1_158375/nn/0_pxpool_one_initfold_s1_158375.pth", 0.0),
-    "run 3: box3-mid (s3; cloth 61/64%)": ("outputs/2026-10-06/13-32-04/0_pxchain_box3_s3_158324/nn/0_pxchain_box3_s3_158324.pth", 0.0),
-    "previous best: PhysX stage 1 -> 2 (157622 s1; cloth 88/63%)": ("outputs/2026-10-05/23-51-55/0_pxpool_pxs1_arm1e3_e6144_s1_157622/nn/0_pxpool_pxs1_arm1e3_e6144_s1_157622.pth", 0.0),
+    "generic tool-use prior (untrained on folds)": ("pretrained_policy/model.pth", 50.0),
 }
 
 #: No network: every action 0 -- the arm holds its pose (velocity-delta actions), the hand goes to the
@@ -93,13 +88,6 @@ def policies_for(task_name: str) -> list[str]:
     """Menu entries usable with the task menu entry `task_name` (all of them if none is task-bound)."""
     return [k for k in POLICIES if k not in POLICY_TASKS or task_name in POLICY_TASKS[k]] or list(POLICIES)
 
-#: Not in the menu; add one back to POLICIES to show it.
-ARCHIVED_POLICIES = {
-    "stage-2 pool, box3-mid prior s3 (Newton)": ("outputs/2026-10-04/20-17-57/0_fp_box3_s3_156746/nn/0_fp_box3_s3_156746.pth", 0.0),
-    "stage-1 box3-mid chain (Newton rc2 fixdr s2)": ("outputs/2026-09-30/17-12-24/0_rc2_box3-mid_fixdr_s2_155349/nn/0_rc2_box3-mid_fixdr_s2_155349.pth", 0.0),
-    "cloth-trained reference (VBD)": ("outputs/2026-09-23/17-31-13/0_pretrained_s1_resume_150911/nn/0_pretrained_s1_resume_150911.pth", 0.0),
-    "generic tool-use prior (untrained on folds)": ("pretrained_policy/model.pth", 50.0),
-}
 
 #: Display name -> (gym task, extra hydra overrides). Newton (VBD cloth); PHYSX_TASKS for the PhysX viewer.
 TASKS = {

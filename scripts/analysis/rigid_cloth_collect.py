@@ -167,8 +167,8 @@ def _fmt(v, nd=4):
 def main() -> None:
     p = argparse.ArgumentParser(description="Collate the rigid-cloth comparison.")
     p.add_argument("--job", required=True, help="training array job id")
-    p.add_argument("--logs", default="slurm_logs")
-    p.add_argument("--results", default="docs/results")
+    p.add_argument("--logs", default="outputs/slurm")
+    p.add_argument("--results", default="outputs/results")
     p.add_argument(
         "--eval_prefix",
         default="rc_eval_",

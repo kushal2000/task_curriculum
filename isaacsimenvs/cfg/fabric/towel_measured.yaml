@@ -11,7 +11,7 @@ cloth:
   soft_contact_mu: 0.667
   self_contact_radius: 0.0037   # ~5x the others' thickness; kept at towel.yaml's 3.7 mm
   self_contact_margin: 0.0055
-plastic_yield_curvature: 60.0   # checkerboard mesh (docs/results/cloth_fold_lift/alt, job 28503469): released fold 4.0 mm high at the crease (flat 3.8; 100 left 5.5), no skew; cost: the free drape yields (28 deg set), cantilever droop 78.4 vs 72.8 at 100 (measured 75). Was 100 on the uniform mesh (job 28268743)
+plastic_yield_curvature: 60.0   # checkerboard mesh (outputs/results/cloth_fold_lift/alt, job 28503469): released fold 4.0 mm high at the crease (flat 3.8; 100 left 5.5), no skew; cost: the free drape yields (28 deg set), cantilever droop 78.4 vs 72.8 at 100 (measured 75). Was 100 on the uniform mesh (job 28268743)
 measured:
   mass_g: 7.3   # 15 x 15 cm swatch
   cantilever_deg: 75   # tip-line angle down from horizontal, 5.25 cm overhang

@@ -252,7 +252,7 @@ record:
   camera: false             # also record every camera frame (camera_frame) -> <file>.camera.mp4 (H.264)
   camera_codec: libx264     # libx264 (CPU, ~0.4 core at 640x480 60 fps) | h264_nvenc (GPU; this ffmpeg needs driver >= 610)
   camera_quality: 23        # x264 -crf / nvenc -cq: lower = better and bigger; 18 ~ visually lossless
-  dir: deploy/rigid2deform/recordings
+  dir: outputs/deploy/rigid2deform/recordings
   video_fps: 60             # playback.py's mp4 export
   video_height: 480         # px; the 3D view is 4:3, the camera image is scaled to the same height
 
