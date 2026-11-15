@@ -14,5 +14,5 @@ The viewer logs one env per pool shape (`interactive_viewer/<shape>`, 7 per capt
 
 | Run | Job | Run folder |
 |---|---|---|
-| prior | | |
-| scratch | | |
+| prior | 658160 (submitted 2026-11-15, commit fd2b779) | `debug_outputs/train_logs/nov/2026-11-15_rigid_cloth_prior_658160/` |
+| scratch | 658161 (submitted 2026-11-15, commit fd2b779) | `debug_outputs/train_logs/nov/2026-11-15_rigid_cloth_scratch_658161/` |
