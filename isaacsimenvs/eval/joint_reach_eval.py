@@ -30,7 +30,7 @@ import math
 import sys
 from pathlib import Path
 
-TASK = "Isaacsimenvs-JointReachFlexivWujiHumanLike-Direct-v0"
+TASK = "Isaacsimenvs-JointReachFlexivWujiRightHumanLike-Direct-v0"
 CONDITIONS = {
     "dr": dict(dr=True, gains=(0.0, 0.0, 0.0, 0.0)),
     "nodr": dict(dr=False, gains=(1.0, 1.0, 1.0, 1.0)),

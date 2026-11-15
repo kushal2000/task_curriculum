@@ -2,7 +2,7 @@
 # limits), vendor MJCF hand gains with per-episode gain DR, flat7DRABC's robot-side DR (A + B).
 # 12288 envs: 24576 Flexiv + Wuji envs need ~90 GB of host RAM, more than bos14's nodes have free.
 # Trained from scratch (no --checkpoint): the observation is not the Play prior's.
-task: Isaacsimenvs-JointReachFlexivWujiHumanLike-Direct-v0
+task: Isaacsimenvs-JointReachFlexivWujiRightHumanLike-Direct-v0
 
 env:
   scene:

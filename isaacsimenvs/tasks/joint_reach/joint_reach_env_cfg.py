@@ -16,7 +16,7 @@ from isaaclab.utils import configclass
 from ..play.play_env_cfg import (
     AssetsCfg,
     DomainRandomizationCfg,
-    PlayFlexivWujiHumanLikeEnvCfg,
+    PlayEnvCfg,
     TerminationCfg,
 )
 
@@ -119,11 +119,21 @@ class GainDRCfg:
 
 
 @configclass
-class JointReachEnvCfg(PlayFlexivWujiHumanLikeEnvCfg):
-    """``Isaacsimenvs-JointReachFlexivWujiHumanLike-Direct-v0``."""
+class JointReachEnvCfg(PlayEnvCfg):
+    """``Isaacsimenvs-JointReachFlexivWujiRightHumanLike-Direct-v0``.
 
+    The Flexiv Rizon 4s + RIGHT Wuji Hand 2 with human-like joint limits, placed against the table as
+    the real robot is (``cfg/robot/flexiv_wuji_right_human_like.yaml``). Until 2026-11-14 this task ran
+    on the left hand (``...JointReachFlexivWujiRightHumanLike...``); its checkpoints and the exported
+    ``deploy/joint_reach/spec_flexiv_wuji_hl.json`` belong to that robot.
+    """
+
+    robot: str = "flexiv_wuji_right_human_like"
+    robot_self_collision: bool = True
+    robot_root_pos: tuple[float, float, float] = (0.0, 0.51, 0.20)
+    action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
     assets: AssetsCfg = AssetsCfg(
-        robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf",
+        robot_urdf="assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
         table_urdf="assets/urdf/table_fold_pool.urdf",
         # One small object, parked out of reach; Play's scene needs one.
         handle_head_types=("eraser",),
