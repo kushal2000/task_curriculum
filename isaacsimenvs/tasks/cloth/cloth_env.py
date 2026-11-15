@@ -36,6 +36,16 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
     cfg: ClothEnvCfg
 
     def __init__(self, cfg: ClothEnvCfg, render_mode: str | None = None, **kwargs):
+        # One rigid-tool variant in every env. The tool is inert here (neutralised once the scene
+        # is built), but its shapes stay in the model, and the pool's two hammers (cuboid handle:
+        # box + box; cylinder handle: box + capsule) alternate across envs, which SolverMuJoCo
+        # rejects: "requires homogeneous worlds. Shape types mismatch". The Newton launchers used to
+        # pass --single_variant for this; the task now does it itself. meshify (every tool collider
+        # a convex mesh) makes the full pool homogeneous, so it is left alone there.
+        if not cfg.meshify:
+            from isaacsimenvs.eval.protocol import use_single_object_variant
+
+            use_single_object_variant()
         kappa = float(cfg.cloth.plastic_yield_curvature)
         self._plastic_set_curvature = float(cfg.cloth.plastic_set_curvature)
         self._plasticity = None
