@@ -20,7 +20,7 @@ environment on the robot PC (needs its GPU), from the repo root:
 
   Follows upstream's live_tracking.py (github.com/kushal2000/FoundationPose, RealSense, UDP), with
   ZMQ instead of UDP. Frames: FoundationPose gives T_cam_obj (cam =
-  the color optical frame, as calibrate_compare.py calibrates it); T_base_obj = T_base_cam @ T_cam_obj.
+  the color optical frame, as the extrinsics in deployment/extrinsics/ give it); T_base_obj = T_base_cam @ T_cam_obj.
 
 perception.source=fake: a fixed pose (perception.fake_pose_base), no camera, to test without one:
 
@@ -63,7 +63,7 @@ def publish_fake(cfg, pub) -> None:
 
 def track_camera(cfg, pub) -> None:
     """RealSense -> FoundationPose, until Ctrl-C."""
-    from deployment.calibration.realsense import RealSense
+    from deployment.utils.realsense import RealSense
 
     p = cfg.perception
     if p.foundationpose_dir is None or p.extrinsics is None:

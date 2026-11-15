@@ -43,11 +43,6 @@ debug_outputs/
 /evals/
 /runs/
 
-# Deploy-time state on the robot PC: camera calibration captures and the fitted extrinsics.
-deployment/calibration/captures/
-deployment/calibration/compare/
-deployment/calibration/extrinsics/
-
 # Play priors, one folder per robot: pretrained_policy/{kuka_sharpa,flexiv_wuji}/{model.pth,config.yaml}
 # (model.pth is ~400 MB, over GitHub's file limit).
 /pretrained_policy

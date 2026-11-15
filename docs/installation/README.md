@@ -4,7 +4,7 @@ Two venvs on one source tree, both editable-installing it:
 
 | venv | stack | runs | built by |
 |---|---|---|---|
-| `.venv/isaacsim` | Python 3.11, Isaac Sim 5.1 / Isaac Lab 2.3 | Play, rigid fold, joint_reach (PhysX) | `install_isaacsim.sh` |
+| `.venv/isaacsim` | Python 3.11, Isaac Sim 5.1 / Isaac Lab 2.3 | Play, rigid fold (PhysX) | `install_isaacsim.sh` |
 | `.venv/isaaclab3` | Python 3.12, Isaac Lab 3.0 + Newton (kit-less) | VBD fold | `install_isaaclab3.sh` |
 
 From the repo root:

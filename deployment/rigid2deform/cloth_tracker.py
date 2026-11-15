@@ -279,7 +279,7 @@ class Tracker:
 # --- the node -------------------------------------------------------------------------------------
 class Node:
     def __init__(self, cfg):
-        from deployment.calibration.realsense import RealSense
+        from deployment.utils.realsense import RealSense
 
         self.cfg, p, c = cfg, cfg.perception, cfg.perception.cotracker
         self.mode = str(c.mode)

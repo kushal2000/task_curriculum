@@ -123,7 +123,7 @@ perception:
 
   # camera (runs in the FoundationPose environment on the robot PC)
   foundationpose_dir: ~/FoundationPose   # the kushal2000/FoundationPose checkout (estimater.py, generate_mask.py, weights/)
-  extrinsics: deployment/calibration/extrinsics/left_camera_nov7.json   # T_base_cam from calibrate_compare.py (D415 821312062243)
+  extrinsics: deployment/extrinsics/left_camera_nov7.json   # T_base_cam (fitted with the since-removed calibrate_compare.py) (D415 821312062243)
   camera_serial: null       # null = the extrinsics file's camera_serial; perception.py refuses any other camera
   camera_width: 640         # FoundationPose crops around the object, so a small image is enough
   camera_height: 480        #   (upstream: 960 x 540 from a ZED)

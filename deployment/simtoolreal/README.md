@@ -62,7 +62,7 @@ The spec json (`spec/`) is not a setting: it is copied from the training env. Ne
 - The checkpoint at `pretrained_policy/flexiv_wuji/model.pth` (gitignored).
 - The robot meshes for the viewer: `scripts/flexiv_wuji/fetch_assets.sh` (the right hand is gitignored).
 - In `config.yaml`: `perception.foundationpose_dir` (the checkout) and `perception.extrinsics` (the
-  camera pose from `deployment/calibration/calibrate_compare.py`; now `left_camera_nov7.json`, D415
+  camera pose, committed as `deployment/extrinsics/left_camera_nov7.json`, D415
   821312062243). perception.py opens the camera named in the extrinsics file and refuses another;
   after moving the camera, calibrate again and point `perception.extrinsics` at the new file.
 - The hand and its mount must be set up as the Flexiv tool payload. Flexiv compensates gravity

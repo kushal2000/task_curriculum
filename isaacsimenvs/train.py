@@ -56,7 +56,6 @@ _POSE_VIEWERS = {
     "Cloth": "isaacsimenvs.tasks.cloth.pose_viewer:ClothPoseViewerWrapper",  # Cloth*, RigidClothPhysx*
     "FoldPool": "isaacsimenvs.tasks.cloth.pose_viewer:ClothPoseViewerWrapper",  # FoldPoolPhysx*
     "Play": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",
-    "JointReach": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",  # a PlayEnv subclass
 }
 
 

@@ -31,7 +31,7 @@ from deployment.utils.spec import base_to_env, load_spec    # noqa: E402
 
 MESH = HERE.parent / "objects" / "flat_eraser" / "flat_eraser.obj"
 MESH_DIR = REPO / "assets" / "urdf" / "flexiv_wuji"
-CAMERA = REPO / "deployment" / "calibration" / "extrinsics" / "left_camera_nov7.json"
+CAMERA = REPO / "deployment" / "extrinsics" / "left_camera_nov7.json"
 STREAM_WH = (640, 480)        # perception's stream: the 4:3 centre of the calibrated 16:9 image
 
 

@@ -19,9 +19,6 @@ the real joint limits) and `FlexivWujiRightHLRL` (the human-like spec on the rea
 `Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0`. The robot is a YAML overlay
 (`isaacsimenvs/cfg/robot/`) on the task's own YAML; the specs are in `isaacsimenvs/tasks/play/robots.py`.
 
-`Isaacsimenvs-JointReachFlexivWujiRightHumanLike-Direct-v0` is a deploy test, not a learning task:
-reach commanded joint configurations through the Play action pipeline.
-
 The rigid and VBD fold envs share one task definition (`tasks/cloth/cloth_task.py`: fold targets,
 reward, success, the observation), so a policy moves between them unchanged. Tests diff their YAMLs:
 `RigidClothPhysx.yaml` is `Cloth.yaml` with the manipuland and solver swapped, and `FoldPoolPhysx.yaml`
@@ -34,12 +31,11 @@ isaacsimenvs/
   train.py              the one training entry point
   tasks/play/           PlayEnv, robots.py (robot specs), play utils
   tasks/cloth/          shared fold task; physx_envs.py (rigid fold), cloth_env.py + newton_base_env.py (VBD)
-  tasks/joint_reach/    the deploy test task
   cfg/task|robot|experiment|train|fabric/
   eval/                 episodes.py (evals), live_viser.py (live viewer), player.py (loads a checkpoint)
   newton/               Newton backend patches and the URDF->USD cache
   curriculum/           difficulty curricula (the cloth unfold task's start-angle curriculum)
-deployment/             the real robot: simtoolreal, rigid2deform, joint_reach, calibration, shared nodes/utils
+deployment/             the real robot: simtoolreal, rigid2deform, shared nodes/utils, camera extrinsics
 assets/                 urdf/ (robots: kuka_sharpa_description/, flexiv_wuji/; tables), fabric textures
 scripts/slurm/          submit.sh + train/eval/viser job scripts
 scripts/flexiv_wuji/    fetch the robot assets, compose the arm + hand URDFs
@@ -59,7 +55,7 @@ Two venvs on one source tree (both editable-install it):
 
 | venv | stack | runs |
 |---|---|---|
-| `.venv/isaacsim` | Python 3.11, Isaac Sim 5.1 / Isaac Lab 2.3 | Play, rigid fold, joint_reach (PhysX) |
+| `.venv/isaacsim` | Python 3.11, Isaac Sim 5.1 / Isaac Lab 2.3 | Play, rigid fold (PhysX) |
 | `.venv/isaaclab3` | Python 3.12, Isaac Lab 3.0 + Newton (kit-less) | VBD fold |
 
 Install scripts and instructions are in [`docs/installation/`](docs/installation/README.md):
@@ -112,8 +108,9 @@ Everything a run produces is under `debug_outputs/` (`isaacsimenvs/utils/paths.p
 
 ## Deploy
 
-`deployment/` runs a trained policy on the robot: `deployment/simtoolreal/` (Play), `deployment/rigid2deform/`
-(folding) and `deployment/joint_reach/`, as ZMQ nodes (`deployment/nodes/`). The drivers aioflexiv and aiowuji
+`deployment/` runs a trained policy on the robot: `deployment/simtoolreal/` (Play) and
+`deployment/rigid2deform/` (folding), as ZMQ nodes (`deployment/nodes/`). The camera pose both use is
+committed in `deployment/extrinsics/`. The drivers aioflexiv and aiowuji
 are vendored in `third_party/` (below). See `deployment/simtoolreal/README.md`.
 
 ## Third-party code
