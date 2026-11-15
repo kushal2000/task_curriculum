@@ -61,10 +61,6 @@ def disable_randomization(cfg) -> None:
 _SINGLE_VARIANT_REQUESTED = False
 
 
-def single_variant_requested() -> bool:
-    return _SINGLE_VARIANT_REQUESTED
-
-
 def reapply_single_variant_if_requested() -> None:
     """Re-wrap ``build_rigid_object_cfg`` after a backend has installed its own patches.
 

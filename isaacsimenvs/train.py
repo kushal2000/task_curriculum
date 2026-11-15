@@ -65,38 +65,7 @@ def _pose_viewer_target(task_id: str) -> str | None:
     return None
 
 
-def _arm_hang_watchdog() -> None:
-    """Dump every thread's Python stack if the process stops making progress.
-
-    rl_games' distributed path builds its own gloo group with a TWO HOUR timeout
-    (`a2c_common.py:110`), so any failure in that region presents as a silent freeze carrying no
-    information about its cause -- which is why the 4-GPU hang resisted several rounds of inference
-    from the symptom alone. Set CLOTH_HANG_WATCHDOG=<seconds> to turn the freeze into a traceback.
-
-    **DEBUGGING ONLY -- do not set it on a real run.** `dump_traceback_later(repeat=True)` walks
-    every thread's stack from a timer thread, and doing that while a thread is executing inside
-    Warp's C extension appears to be unsafe: the one run with it enabled died at
-    `exitcode: -11` (SIGSEGV) around epoch 43 of 60, with the crashing thread inside
-    `newton/_src/solvers/coupled/model_view.py`, while an otherwise identical 4-GPU run without it
-    ran clean for longer. One crash is not proof of causation, but the tool exists to diagnose a
-    hang and there is no reason to carry that risk through a 24-hour job.
-    """
-    import faulthandler
-
-    secs = os.getenv("CLOTH_HANG_WATCHDOG")
-    if not secs:
-        return
-    faulthandler.enable()
-    faulthandler.dump_traceback_later(float(secs), repeat=True, exit=False)
-    print(
-        f"[train] hang watchdog armed: stacks every {secs}s "
-        f"-- DEBUGGING ONLY, unsafe alongside Warp (see _arm_hang_watchdog)",
-        flush=True,
-    )
-
-
 def main() -> None:
-    _arm_hang_watchdog()
 
     from isaaclab.app import AppLauncher
 

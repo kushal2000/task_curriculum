@@ -198,10 +198,6 @@ def object_urdf_for_env(env, env_id: int) -> tuple[str, Path]:
     return urdf_path.read_text(encoding="utf-8"), urdf_path
 
 
-def object_urdf_text_for_env(env, env_id: int) -> str:
-    return object_urdf_for_env(env, env_id)[0]
-
-
 def table_urdf_for_env(env, env_id: int) -> tuple[str, Path]:
     """Return the table URDF text assigned to one env: its scaled variant if the task made them,
     else the task's own ``assets.table_urdf`` (the Flexiv tasks' is not Play's)."""
@@ -217,10 +213,6 @@ def table_urdf_for_env(env, env_id: int) -> tuple[str, Path]:
         if not urdf_path.is_absolute():
             urdf_path = REPO_ROOT / urdf_path
     return urdf_path.read_text(encoding="utf-8"), urdf_path
-
-
-def table_urdf_text_for_env(env, env_id: int) -> str:
-    return table_urdf_for_env(env, env_id)[0]
 
 
 def hole_urdf_for_env(env, env_id: int) -> tuple[str, Path] | tuple[None, None]:

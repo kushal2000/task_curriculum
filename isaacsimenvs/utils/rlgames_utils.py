@@ -305,29 +305,3 @@ def register_rlgames_env(
     )
     return wrapped
 
-
-def teacher_env_info(wrapped) -> dict:
-    """Build the teacher's rl_games env_info from the central wrapper's own
-    clipped spaces.
-
-    Source of truth: the agent yaml drives ``clip_observations`` /
-    ``clip_actions`` → those flow into ``RlGamesVecEnvWrapper.{observation_space,
-    state_space,action_space}`` and our ``teacher_obs_space`` extension here.
-    Reading from the wrapper means there's exactly one place that defines
-    bounds + shapes; the teacher loader doesn't reinvent them.
-
-    Crucially, the action_space comes from ``wrapped.action_space`` (already
-    ``Box(-clip_actions, +clip_actions, ...)``) rather than from
-    ``unwrapped.single_action_space`` (``Box(-inf, +inf, ...)``). The latter
-    silently NaNs the teacher's actions via ``rescale_actions`` in
-    ``PpoPlayerContinuous.get_action``.
-    """
-    teacher_view = wrapped.teacher_obs_space if hasattr(wrapped, "teacher_obs_space") else wrapped.observation_space
-    state_view = wrapped.state_space if wrapped.state_space is not None else teacher_view
-    return {
-        "observation_space": teacher_view,
-        "state_space": state_view,
-        "action_space": wrapped.action_space,
-        "agents": 1,
-        "value_size": 1,
-    }
