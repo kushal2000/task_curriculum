@@ -1,0 +1,14 @@
+# jointreachSmooth: jointreach with 10x the action-rate and joint-speed penalties, against oscillation
+# under latency. The deployed test policy (2026-10-26) is jointreach for 3000 epochs (runs v4 229485 ->
+# v4c 229726), then resumed under this recipe to 4500 epochs (v6 229814).
+base: jointreach
+
+env:
+  reach_reward:
+    action_rate_scale: 0.2
+    joint_vel_scale: 5.0e-3
+
+agent:
+  params:
+    config:
+      max_epochs: 4500

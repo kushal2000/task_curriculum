@@ -1,0 +1,883 @@
+{
+ "task": "Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHLRL-Direct-v0",
+ "source_ref": "origin/yiboc_wuji",
+ "source_commit": "2b82faf1c73f5782068f67eac9cd6085aa1e27e7",
+ "robot": "flexiv_wuji_right_human_like",
+ "robot_urdf": "rizon4s_right_wuji_real_limits.urdf",
+ "robot_urdf_in_source": "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+ "joint_names": [
+  "joint1",
+  "joint2",
+  "joint3",
+  "joint4",
+  "joint5",
+  "joint6",
+  "joint7",
+  "r_thumb_cmc_flex",
+  "r_thumb_cmc_abd",
+  "r_thumb_mcp",
+  "r_thumb_ip",
+  "r_index_finger_mcp_flex",
+  "r_index_finger_mcp_abd",
+  "r_index_finger_pip",
+  "r_index_finger_dip",
+  "r_middle_finger_mcp_flex",
+  "r_middle_finger_mcp_abd",
+  "r_middle_finger_pip",
+  "r_middle_finger_dip",
+  "r_ring_finger_mcp_flex",
+  "r_ring_finger_mcp_abd",
+  "r_ring_finger_pip",
+  "r_ring_finger_dip",
+  "r_pinky_mcp_flex",
+  "r_pinky_mcp_abd",
+  "r_pinky_pip",
+  "r_pinky_dip"
+ ],
+ "num_arm_joints": 7,
+ "joint_lower": [
+  -2.7925,
+  -2.2689,
+  -2.9671,
+  -1.8675,
+  -2.9671,
+  -1.3963,
+  -2.9671,
+  -0.3491,
+  -1.484,
+  -0.1745,
+  -0.2618,
+  -0.3491,
+  -0.0349,
+  0.0,
+  -0.1745,
+  -0.3491,
+  -0.0349,
+  0.0,
+  -0.1745,
+  -0.3491,
+  -0.0349,
+  0.0,
+  -0.1745,
+  -0.3491,
+  -0.0349,
+  0.0,
+  -0.1745
+ ],
+ "joint_upper": [
+  2.7925,
+  2.2689,
+  2.9671,
+  2.6878,
+  2.9671,
+  4.5379,
+  2.9671,
+  1.291,
+  0.698,
+  1.57,
+  1.57,
+  1.57,
+  0.0349,
+  1.7453,
+  1.57,
+  1.57,
+  0.0349,
+  1.7453,
+  1.57,
+  1.57,
+  0.0349,
+  1.7453,
+  1.57,
+  1.57,
+  0.0349,
+  1.7453,
+  1.57
+ ],
+ "default_q": [
+  -2.0944,
+  0.0,
+  0.5236,
+  1.7453,
+  2.618,
+  1.3963,
+  2.0944,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "default_q_deg": [
+  -120.0,
+  0.0,
+  30.0,
+  99.998,
+  150.0,
+  80.002,
+  120.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "stiffness": [
+  246.0,
+  246.0,
+  128.0,
+  128.0,
+  78.0,
+  78.0,
+  78.0,
+  1.354985,
+  2.198821,
+  0.886467,
+  0.654026,
+  1.345207,
+  0.88946,
+  0.779361,
+  0.656424,
+  1.299313,
+  0.942641,
+  0.73725,
+  0.710314,
+  1.276892,
+  1.013334,
+  0.859159,
+  0.648064,
+  1.102915,
+  0.910201,
+  0.861968,
+  0.656704
+ ],
+ "damping": [
+  17.305740827829364,
+  17.305740827829364,
+  12.483248807902532,
+  12.483248807902532,
+  6.090458110848477,
+  5.712766335147973,
+  5.712766335147973,
+  0.04769,
+  0.062838,
+  0.027982,
+  0.020457,
+  0.047402,
+  0.027239,
+  0.024489,
+  0.020508,
+  0.045699,
+  0.027846,
+  0.023408,
+  0.022366,
+  0.046209,
+  0.028704,
+  0.027436,
+  0.020448,
+  0.043816,
+  0.026593,
+  0.027476,
+  0.020611
+ ],
+ "effort_limit": [
+  123.0,
+  123.0,
+  64.0,
+  64.0,
+  39.0,
+  39.0,
+  39.0,
+  1.02,
+  0.83,
+  0.35,
+  0.21,
+  1.05,
+  0.38,
+  0.31,
+  0.3,
+  1.06,
+  0.39,
+  0.32,
+  0.29,
+  1.02,
+  0.41,
+  0.28,
+  0.3,
+  0.87,
+  0.36,
+  0.28,
+  0.3
+ ],
+ "hand_armature": [
+  0.0005,
+  0.0005,
+  0.0002,
+  0.0002,
+  0.0005,
+  0.0002,
+  0.0002,
+  0.0002,
+  0.0005,
+  0.0002,
+  0.0002,
+  0.0002,
+  0.0005,
+  0.0002,
+  0.0002,
+  0.0002,
+  0.0005,
+  0.0002,
+  0.0002,
+  0.0002
+ ],
+ "hand_velocity_limit": 100.0,
+ "hand_friction": 0.0,
+ "robot_gravity": "off in sim (the real arm's controller compensates it)",
+ "robot_root_pos_env": [
+  0.0,
+  0.8,
+  0.0
+ ],
+ "robot_root_quat_wxyz": [
+  1.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "palm_body": "link7",
+ "palm_center_offset": [
+  0.0018,
+  -0.0149,
+  0.1948
+ ],
+ "fingertip_links": [
+  "r_index_finger_distal",
+  "r_middle_finger_distal",
+  "r_pinky_distal",
+  "r_ring_finger_distal",
+  "r_thumb_distal"
+ ],
+ "fingertip_offsets": [
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.0229
+  ]
+ ],
+ "policy_dt": 0.01666666666,
+ "sim_dt": 0.00833333333,
+ "decimation": 2,
+ "dof_speed_scale": 1.5,
+ "arm_moving_average": 0.1,
+ "hand_moving_average": 0.1,
+ "obs_list": [
+  "joint_pos",
+  "joint_vel",
+  "prev_action_targets",
+  "palm_pos",
+  "palm_rot",
+  "object_rot",
+  "fingertip_pos_rel_palm",
+  "keypoints_rel_palm",
+  "keypoints_rel_goal",
+  "object_scales"
+ ],
+ "obs_clip": 10.0,
+ "quat_convention_obs": "xyzw",
+ "keypoint_corners": [
+  [
+   1,
+   1,
+   1
+  ],
+  [
+   1,
+   1,
+   -1
+  ],
+  [
+   -1,
+   -1,
+   1
+  ],
+  [
+   -1,
+   -1,
+   -1
+  ]
+ ],
+ "object_base_size": 0.04,
+ "keypoint_scale": 1.5,
+ "keypoint_offsets_formula": "corner * object_scales * object_base_size * keypoint_scale / 2, in the object frame",
+ "table_size": [
+  0.6,
+  0.4,
+  0.3
+ ],
+ "table_pos_env": [
+  0.0,
+  0.29000000000000004,
+  0.18
+ ],
+ "table_top_z_env": 0.32999999999999996,
+ "table_reset_z_range": 0.01,
+ "goal_sampling_type": "delta",
+ "delta_goal_distance": 0.1,
+ "delta_rotation_degrees": 90.0,
+ "target_volume_mins": [
+  -0.35,
+  -0.2,
+  0.6
+ ],
+ "target_volume_maxs": [
+  0.35,
+  0.2,
+  0.95
+ ],
+ "target_volume_region_scale": 1.0,
+ "use_goal_table_clearance": null,
+ "goal_table_clearance_m": null,
+ "success_tolerance_start": 0.04,
+ "success_tolerance_final": 0.04,
+ "success_steps": 1,
+ "episode_length_steps": 600,
+ "fixed_size": [
+  0.141,
+  0.03025,
+  0.0271
+ ],
+ "fixed_size_keypoint_reward": true,
+ "dr": {
+  "use_obs_delay": false,
+  "obs_delay_max": 3,
+  "use_action_delay": false,
+  "action_delay_max": 3,
+  "point_dr_mode": "off",
+  "point_base_delay_range": [
+   0,
+   0
+  ],
+  "point_hold_choices": [
+   1
+  ],
+  "point_noise_std": 0.0,
+  "point_bias_xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "point_common_bias_xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "joint_pos_obs_noise_std": 0.0,
+  "joint_velocity_obs_noise_std": 0.0,
+  "robot_stiffness_scale_range": [
+   1.0,
+   1.0
+  ],
+  "robot_damping_scale_range": [
+   1.0,
+   1.0
+  ],
+  "hand_friction_scale_range": [
+   1.0,
+   1.0
+  ],
+  "hand_effort_limit_scale_range": [
+   1.0,
+   1.0
+  ],
+  "action_noise_std": 0.0
+ },
+ "experiment": "flat7RW_base",
+ "robot_overlay": "flexiv_wuji_right_hl_reallimits",
+ "robot_root_pos_train_env": [
+  0.0,
+  0.51,
+  0.2
+ ],
+ "fingertip_obs_bodies": [
+  "r_index_finger_distal",
+  "r_middle_finger_distal",
+  "r_pinky_distal",
+  "r_ring_finger_distal",
+  "r_thumb_distal"
+ ],
+ "fingertip_obs_offsets": [
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.0229
+  ]
+ ],
+ "fingertip_obs_source": "robots.py fingertip_link_names (PhysX body order)",
+ "fold": {
+  "shape": "box2-mid",
+  "training_shapes": [
+   "box2-mid",
+   "box2diag4-mid",
+   "box2x8-mid",
+   "cross4-mid",
+   "corners8-mid",
+   "box4-mid",
+   "star8-mid"
+  ],
+  "sheet_size_nominal": 0.1,
+  "size_range": [
+   0.1,
+   0.2
+  ],
+  "resolution": 7,
+  "fold_axis": "x",
+  "grid_rest": [
+   [
+    -0.05,
+    -0.05,
+    0.0
+   ],
+   [
+    -0.05,
+    -0.03333333333333334,
+    0.0
+   ],
+   [
+    -0.05,
+    -0.01666666666666667,
+    0.0
+   ],
+   [
+    -0.05,
+    0.0,
+    0.0
+   ],
+   [
+    -0.05,
+    0.016666666666666663,
+    0.0
+   ],
+   [
+    -0.05,
+    0.033333333333333326,
+    0.0
+   ],
+   [
+    -0.05,
+    0.05,
+    0.0
+   ],
+   [
+    -0.03333333333333334,
+    -0.05,
+    0.0
+   ],
+   [
+    -0.03333333333333334,
+    -0.03333333333333334,
+    0.0
+   ],
+   [
+    -0.03333333333333334,
+    -0.01666666666666667,
+    0.0
+   ],
+   [
+    -0.03333333333333334,
+    0.0,
+    0.0
+   ],
+   [
+    -0.03333333333333334,
+    0.016666666666666663,
+    0.0
+   ],
+   [
+    -0.03333333333333334,
+    0.033333333333333326,
+    0.0
+   ],
+   [
+    -0.03333333333333334,
+    0.05,
+    0.0
+   ],
+   [
+    -0.01666666666666667,
+    -0.05,
+    0.0
+   ],
+   [
+    -0.01666666666666667,
+    -0.03333333333333334,
+    0.0
+   ],
+   [
+    -0.01666666666666667,
+    -0.01666666666666667,
+    0.0
+   ],
+   [
+    -0.01666666666666667,
+    0.0,
+    0.0
+   ],
+   [
+    -0.01666666666666667,
+    0.016666666666666663,
+    0.0
+   ],
+   [
+    -0.01666666666666667,
+    0.033333333333333326,
+    0.0
+   ],
+   [
+    -0.01666666666666667,
+    0.05,
+    0.0
+   ],
+   [
+    0.0,
+    -0.05,
+    0.0
+   ],
+   [
+    0.0,
+    -0.03333333333333334,
+    0.0
+   ],
+   [
+    0.0,
+    -0.01666666666666667,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.016666666666666663,
+    0.0
+   ],
+   [
+    0.0,
+    0.033333333333333326,
+    0.0
+   ],
+   [
+    0.0,
+    0.05,
+    0.0
+   ],
+   [
+    0.016666666666666663,
+    -0.05,
+    0.0
+   ],
+   [
+    0.016666666666666663,
+    -0.03333333333333334,
+    0.0
+   ],
+   [
+    0.016666666666666663,
+    -0.01666666666666667,
+    0.0
+   ],
+   [
+    0.016666666666666663,
+    0.0,
+    0.0
+   ],
+   [
+    0.016666666666666663,
+    0.016666666666666663,
+    0.0
+   ],
+   [
+    0.016666666666666663,
+    0.033333333333333326,
+    0.0
+   ],
+   [
+    0.016666666666666663,
+    0.05,
+    0.0
+   ],
+   [
+    0.033333333333333326,
+    -0.05,
+    0.0
+   ],
+   [
+    0.033333333333333326,
+    -0.03333333333333334,
+    0.0
+   ],
+   [
+    0.033333333333333326,
+    -0.01666666666666667,
+    0.0
+   ],
+   [
+    0.033333333333333326,
+    0.0,
+    0.0
+   ],
+   [
+    0.033333333333333326,
+    0.016666666666666663,
+    0.0
+   ],
+   [
+    0.033333333333333326,
+    0.033333333333333326,
+    0.0
+   ],
+   [
+    0.033333333333333326,
+    0.05,
+    0.0
+   ],
+   [
+    0.05,
+    -0.05,
+    0.0
+   ],
+   [
+    0.05,
+    -0.03333333333333334,
+    0.0
+   ],
+   [
+    0.05,
+    -0.01666666666666667,
+    0.0
+   ],
+   [
+    0.05,
+    0.0,
+    0.0
+   ],
+   [
+    0.05,
+    0.016666666666666663,
+    0.0
+   ],
+   [
+    0.05,
+    0.033333333333333326,
+    0.0
+   ],
+   [
+    0.05,
+    0.05,
+    0.0
+   ]
+  ],
+  "grid_plate": [
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "left",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right",
+   "right"
+  ],
+  "moving_plate": "right",
+  "stationary_plate": "left",
+  "moving_idx": [
+   28,
+   29,
+   30,
+   31,
+   32,
+   33,
+   34,
+   35,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47,
+   48
+  ],
+  "stationary_idx": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20
+  ],
+  "corner_idx": [
+   28,
+   34,
+   42,
+   48
+  ],
+  "goal_lift": 0.0,
+  "goal_quat_relabel": [
+   1,
+   2,
+   3,
+   0
+  ],
+  "object_scale_z_m": 0.016,
+  "keypoint_tolerance": 0.015,
+  "max_folded_footprint": 0.65,
+  "slab_m": 0.002,
+  "contact_margin_m": -1.0,
+  "start_height": 0.2,
+  "sheet_centre_env": [
+   0.0,
+   0.29000000000000004,
+   0.33
+  ],
+  "sheet_centre_noise_xy": [
+   0.1,
+   0.1
+  ],
+  "reach_shift": [
+   0.0,
+   1.0
+  ]
+ }
+}
