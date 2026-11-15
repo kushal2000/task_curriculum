@@ -1,4 +1,4 @@
-"""PlayNewtonEnvCfg — the Play task on Isaac Lab 3.0 + Newton/MJWarp.
+"""PlayNewtonEnvCfg — the Play task on Isaac Lab 3.0 + Newton/MJWarp: the base of ``ClothEnvCfg``.
 
 Subclasses :class:`PlayEnvCfg` and changes only *construction*: the physics config, the cloning
 settings Newton requires, and the solver knobs. Everything defining the task -- observation and

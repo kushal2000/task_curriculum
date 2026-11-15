@@ -11,7 +11,6 @@ cloth fold envs and the VBD cloth fold env (both in ``cloth``), plus
 
 from . import cloth              # gym.register("Isaacsimenvs-Cloth-Direct-v0", ...)
 from . import joint_reach        # gym.register("Isaacsimenvs-JointReachFlexivWujiRightHumanLike-Direct-v0", ...)
-from . import play               # gym.register("Isaacsimenvs-Play-Direct-v0" / "-PlayFlexivWuji-" / "-PlaySelfCollision-", ...)
-from . import play_newton        # gym.register("Isaacsimenvs-PlayNewton-Direct-v0", ...)
+from . import play               # gym.register("Isaacsimenvs-Play-Direct-v0", ...)
 
-__all__ = ["cloth", "joint_reach", "play", "play_newton"]
+__all__ = ["cloth", "joint_reach", "play"]

@@ -1,10 +1,11 @@
 # Cloth — the Play goal-reaching task with a deformable cloth as the manipuland.
 #
-# GENERATED FROM PlayNewton.yaml (which is itself generated from Play.yaml). The loader does a
-# flat `yaml.safe_load` with no inheritance, so this is a full copy; `tests/test_cable_overlay.py`
-# asserts it does not drift from PlayNewton on the shared task settings.
+# GENERATED FROM Play.yaml. The loader does a flat `yaml.safe_load` with no inheritance, so this is
+# a full copy; `tests/test_cloth_yaml_matches_play.py` asserts it does not drift from Play on the
+# shared task settings.
 #
-# Intentional addition: the `cloth:` block. Spawn height lives in `ClothCfg.start_height`.
+# Intentional additions: the Newton solver blocks (`newton`, `use_gravcomp`, `meshify`) and the
+# `cloth:` block. Spawn height lives in `ClothCfg.start_height`.
 #
 # Note `assets.*` still describes the rigid tool pool. Those URDFs are still generated and baked
 # — the cloth replaces the spawned object *after* the scene is built, so the pool is inert here

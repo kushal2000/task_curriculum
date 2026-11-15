@@ -26,7 +26,7 @@ from __future__ import annotations
 # IMPORT ORDER IS LOAD-BEARING, as in `cable_env_cfg`: importing `isaaclab_physx` binds
 # `isaaclab.utils.configclass` to the same-named *submodule*, shadowing the decorator. Importing
 # PlayNewtonEnvCfg first runs the compat shim that re-asserts it.
-from isaacsimenvs.tasks.play_newton.play_newton_env_cfg import PlayNewtonEnvCfg  # isort: skip
+from isaacsimenvs.tasks.cloth.newton_base_env_cfg import PlayNewtonEnvCfg  # isort: skip
 
 from isaaclab.utils import configclass  # noqa: E402
 

@@ -1,4 +1,6 @@
-"""PlayNewtonEnv — the Play task constructed on Newton/MJWarp.
+"""PlayNewtonEnv — the Play task constructed on Newton/MJWarp: the base of the VBD cloth env.
+
+Not a task of its own (there is no rigid Play on Newton); ``ClothEnv`` subclasses it.
 
 Subclasses :class:`PlayEnv` and overrides nothing that defines the task. ``_pre_physics_step``,
 ``_apply_action``, ``_get_dones``, ``_get_rewards`` and ``_get_observations`` are all inherited,
@@ -22,7 +24,7 @@ from isaacsimenvs.newton import compat, patches, physx_schema_shim, usd_cache
 from isaacsimenvs.tasks.play.play_env import PlayEnv
 from isaacsimenvs.tasks.play.robots import get_robot_spec
 
-from .play_newton_env_cfg import PlayNewtonEnvCfg
+from .newton_base_env_cfg import PlayNewtonEnvCfg
 
 __all__ = ["PlayNewtonEnv", "PlayNewtonEnvCfg"]
 

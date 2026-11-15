@@ -567,7 +567,7 @@ def _colorize(model, args) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render the policy on Newton to a video.")
-    parser.add_argument("--task", default="Isaacsimenvs-PlayNewton-Direct-v0")
+    parser.add_argument("--task", default="Isaacsimenvs-Cloth-Direct-v0")
     parser.add_argument("--num_envs", type=int, default=4)
     parser.add_argument("--steps", type=int, default=900)
     parser.add_argument("--stride", type=int, default=2, help="capture every Nth policy step")

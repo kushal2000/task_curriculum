@@ -12,6 +12,6 @@ observation and action code and a difference between them is attributable to phy
 Vendored rather than depended on: that repository is an investigation log with a moving HEAD and
 a history of retractions, so pinning a copy is safer than tracking it. Its four-backend
 ``Backend`` abstraction is not carried over -- here the registered task id
-(``Isaacsimenvs-PlayNewton-Direct-v0``) *is* the backend switch, and construction lives in the
-env class rather than in a separate builder.
+(``Isaacsimenvs-Cloth*`` is the Newton/VBD family) *is* the backend switch, and construction lives
+in the env class (``tasks/cloth/newton_base_env.py``) rather than in a separate builder.
 """

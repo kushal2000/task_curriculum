@@ -1,40 +1,30 @@
-# Isaacsimenvs-FoldPoolPhysx-Direct-v0: FoldPool.yaml on PhysX (Isaac Sim 5.1 / Isaac Lab 2.3, .venv_isaacsim).
-# Generated from FoldPool.yaml: identical task blocks, the Newton solver block (newton, use_gravcomp,
-# meshify) dropped, the Play task's PhysX solver block added under sim, and physx_chain.
-# Keep the task blocks in step with FoldPool.yaml -- tests/test_physx_cloth_cfg.py diffs them.
-# FoldPool — stage 2: the half-fold task on a shape drawn per episode from the fold-shape pool.
+# Isaacsimenvs-FoldPoolPhysx-Direct-v0 — stage 2: the half-fold task on a shape drawn per episode
+# from the fold-shape pool, on PhysX (Isaac Sim 5.1 / Isaac Lab 2.3, .venv_isaacsim).
 #
-# A flat copy of RigidCloth.yaml (the loader has no inheritance) plus the `fold_pool:` block at the
-# bottom. Every env carries all pool shapes and uses one per episode; see fold_pool_env.py.
+# A flat copy of RigidClothPhysx.yaml (the loader has no inheritance) plus the `fold_pool:` block at
+# the bottom; tests/test_physx_cloth_conventions.py diffs the two. Every env carries all pool shapes
+# and uses one per episode; see fold_pool_task.py.
 # `rigid_cloth.variant` is inert here; every other `rigid_cloth:` field applies to the pool's plates.
 #
-# Three sanctioned differences from RigidCloth.yaml outside `fold_pool:`, all stage-2 task choices:
+# Three sanctioned differences from RigidClothPhysx.yaml outside `fold_pool:`, all stage-2 task choices:
 #   * assets.table_urdf -> table_fold_pool.urdf (0.6 x 0.4 m: wider in x only -- extending it toward
 #     the robot pins the arm's elbow; see the URDF).
 #     A new URDF must be baked: scripts/cluster/bos14_fold_pool_bake_table.sh.
 #   * cloth.keypoint_tolerance 0.015 (the ClothCfg default is 0.04): a fixed 1.5 cm at every size.
 #   * rigid_cloth.randomization: on, contact shell only (see the block).
 #
-# RigidCloth — the cloth-folding task with a chain of hinged rigid slats as the manipuland.
-#
-# GENERATED FROM Cloth.yaml, kept a full flat copy for the same reason Cloth.yaml is a full copy of
-# PlayNewton.yaml: the loader does a plain `yaml.safe_load` with no inheritance, and keeping the two
-# diffable is what makes "only the manipuland changed" checkable rather than asserted.
-#
-# Intentional addition: the `rigid_cloth:` block at the bottom.
-#
 # THE `cloth:` BLOCK STAYS, and most of it is INERT here. It is kept because it is where the *task*
 # is defined -- `size`, `resolution` and `fold_axis` fix the particle grid the fold is scored on, and
-# `start_height` / `table_half_thickness` fix where the sheet spawns; `RigidClothEnv` reconstructs
+# `start_height` / `table_half_thickness` fix where the sheet spawns; the rigid-cloth task reconstructs
 # that same grid from the slats' body poses so the reward, goal and success criterion are the VBD
 # env's own code. Everything from `proxy_mode` down -- substeps, vbd_iterations, the material
 # stiffnesses, the contact and self-contact parameters, the AVBD ramping -- describes a solver that
-# does not run in this task: `RigidClothEnv.build_physics_cfg` returns a plain MJWarp scene, because a
-# chain of boxes is rigid and needs no coupling. Those values are left in place, not deleted, so
+# does not run in this task: PhysX simulates the plates as articulations, because a chain of boxes is
+# rigid and needs no coupling. Those values are left in place, not deleted, so
 # `ClothCfg`'s calibration notes remain the reference for what is being approximated.
 #
 # `self_contact_radius` is the one exception -- it is READ, as the height the folded plies come to
-# rest at, and `RigidClothEnv._init_fold_targets` overwrites it with the chain's own ply gap unless
+# rest at, and `RigidClothTaskMixin._init_fold_targets` overwrites it with the chain's own ply gap unless
 # `rigid_cloth.fold_lift_from_ply_gap` is false.
 
 # -----------------------------------------------------------------------------

@@ -25,7 +25,7 @@ from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
     corner_indices,
     grid_mesh,
 )
-from isaacsimenvs.tasks.play_newton.play_newton_env import PlayNewtonEnv
+from isaacsimenvs.tasks.cloth.newton_base_env import PlayNewtonEnv
 
 __all__ = ["ClothEnv"]
 
