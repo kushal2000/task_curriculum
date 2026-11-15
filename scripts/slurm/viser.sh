@@ -2,7 +2,7 @@
 # Live policy viewer in the browser: scripts/slurm/submit.sh [sbatch options] scripts/slurm/viser.sh \
 #     --task <id> [--port 8080] [live_viser.py args]
 #
-# The job log prints the ssh tunnel. viser needs websockets >= 13.1; scripts/install_isaacsim.sh
+# The job log prints the ssh tunnel. viser needs websockets >= 13.1; docs/installation/install_isaacsim.sh
 # installs it into .venv/isaacsim over Isaac Sim's 12.0 pin.
 #
 #SBATCH --job-name=viser

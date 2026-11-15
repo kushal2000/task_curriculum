@@ -13,7 +13,7 @@
 # WITH_ISAACSIM=1 to add it (needed only for Kit-hosted backends or rendering).
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VENV="${ROOT}/${VENV_DIR:-.venv/isaaclab3}"
 PY="${VENV}/bin/python"
 LAB="${ROOT}/third_party/IsaacLab"

@@ -30,7 +30,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="${ROOT}/.venv/isaaclab3/bin/python"
 SYS_LIBSTDCXX="${SYS_LIBSTDCXX:-/usr/lib/x86_64-linux-gnu/libstdc++.so.6}"
 
-[[ -x "${PY}" ]] || { echo "missing ${PY} (run scripts/install_isaaclab3.sh)" >&2; exit 1; }
+[[ -x "${PY}" ]] || { echo "missing ${PY} (run docs/installation/install_isaaclab3.sh)" >&2; exit 1; }
 
 if [[ -f "${SYS_LIBSTDCXX}" ]]; then
   export LD_PRELOAD="${SYS_LIBSTDCXX}${LD_PRELOAD:+:${LD_PRELOAD}}"

@@ -1,12 +1,12 @@
 #!/bin/bash
 # Engaging: finish .venv/isaaclab3 enough for the kit-less VBD cloth probes (scripts/analysis) and
-# tests. scripts/install_isaaclab3.sh stops in `isaaclab.sh -i` here: the core submodule isaaclab_ov
+# tests. docs/installation/install_isaaclab3.sh stops in `isaaclab.sh -i` here: the core submodule isaaclab_ov
 # needs ovstage, whose only Linux wheels are manylinux_2_35 (Engaging nodes are older), and the
 # installer has no way to skip a core submodule. The probes only need Newton + warp, so install
 # Isaac Lab's own pins for those (pyproject [tool.uv].override-dependencies / [tool.isaaclab.versions]).
 # newton[importers] is left out: its open3d dependency is also manylinux_2_35-only, and the probes build
 # their sheets with ModelBuilder.add_cloth_mesh (no USD / mesh importers).
-#   scripts/slurm/submit.sh scripts/slurm/engaging/probe_deps.sh   (from the repo root, after the venv exists)
+#   scripts/slurm/submit.sh docs/installation/engaging/probe_deps.sh   (from the repo root, after the venv exists)
 #SBATCH --job-name=probe_deps
 #SBATCH --partition=mit_preemptable
 #SBATCH --nodes=1

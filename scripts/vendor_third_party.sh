@@ -7,7 +7,7 @@
 #   scripts/vendor_third_party.sh            # every dep
 #   scripts/vendor_third_party.sh aiowuji    # just one
 #
-# Then reinstall whatever venv uses the dep: scripts/install_isaaclab3.sh for IsaacLab, or
+# Then reinstall whatever venv uses the dep: docs/installation/install_isaaclab3.sh for IsaacLab, or
 #   uv pip install --python .venv_deploy/bin/python -e third_party/aioflexiv -e third_party/aiowuji
 set -euo pipefail
 
@@ -16,7 +16,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # name  url  commit  what uses it
 DEPS=(
   # The Isaac Lab 3.0 tree the Newton backend's compat patches (isaacsimenvs/newton/) are written
-  # against; .venv/isaaclab3 editable-installs it (scripts/install_isaaclab3.sh).
+  # against; .venv/isaaclab3 editable-installs it (docs/installation/install_isaaclab3.sh).
   "IsaacLab  https://github.com/isaac-sim/IsaacLab.git     a27ec0beb2345cb4618e31b8e42bc09c557ee193  .venv/isaaclab3 (Newton / VBD)"
   # The real-robot drivers deploy/ talks to (the SHAs origin/deployment pinned as submodules).
   "aioflexiv https://github.com/younghyopark/aioflexiv   adce58442f945ec74c684b78f228c6aa1d4cb8f8  deploy/ (Flexiv arm)"

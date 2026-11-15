@@ -1,10 +1,10 @@
 #!/bin/bash
-# Create .venv/isaacsim exactly as docs/isaacsim_installation.md prescribes.
+# Create .venv/isaacsim exactly as docs/installation/README.md prescribes.
 # Order matters: torch before isaaclab, typing_extensions after it, repo last with
 # --no-deps so it does not re-resolve the Isaac stack.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 VENV="${VENV:-.venv/isaacsim}"   # Engaging builds .venv/isaacsim_ct inside a container
 PY="$VENV/bin/python"

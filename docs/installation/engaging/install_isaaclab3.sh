@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build .venv/isaaclab3 (scripts/install_isaaclab3.sh) on an Engaging CPU node, off the login node.
-#   scripts/slurm/submit.sh scripts/slurm/engaging/install_isaaclab3.sh   (submit from the repo root)
+# Build .venv/isaaclab3 (docs/installation/install_isaaclab3.sh) on an Engaging CPU node, off the login node.
+#   scripts/slurm/submit.sh docs/installation/engaging/install_isaaclab3.sh   (submit from the repo root)
 #SBATCH --job-name=install_il3
 #SBATCH --partition=mit_normal
 #SBATCH --nodes=1
@@ -16,4 +16,4 @@ module load cmake/3.27.9
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/orcd/scratch/orcd/011/hglin/.uv_cache}"
 export PATH="$HOME/.local/bin:$PATH"
 echo "[install_il3] node $(hostname -s)"
-bash scripts/install_isaaclab3.sh
+bash docs/installation/install_isaaclab3.sh

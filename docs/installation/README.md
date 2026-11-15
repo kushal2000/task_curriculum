@@ -1,15 +1,45 @@
-# Isaac Sim (Isaac Lab) installation
+# Installation
 
-`task_curriculum` runs in Isaac Sim via Isaac Lab. It requires **Python 3.11** (Isaac Sim 5.x / Isaac Lab 2.3.x requirement) and lives in a dedicated venv at `.venv/isaacsim/`.
+Two venvs on one source tree, both editable-installing it:
 
-## Prerequisites
+| venv | stack | runs | built by |
+|---|---|---|---|
+| `.venv/isaacsim` | Python 3.11, Isaac Sim 5.1 / Isaac Lab 2.3 | Play, rigid fold, joint_reach (PhysX) | `install_isaacsim.sh` |
+| `.venv/isaaclab3` | Python 3.12, Isaac Lab 3.0 + Newton (kit-less) | VBD fold | `install_isaaclab3.sh` |
+
+From the repo root:
+
+```bash
+docs/installation/install_isaacsim.sh
+docs/installation/install_isaaclab3.sh     # Isaac Lab from the vendored third_party/IsaacLab
+# The URDF -> USD cache the Newton envs read (.cache/usd/), baked with Isaac Sim:
+OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.newton.usd_cache --populate \
+    --num_assets_per_type 1 'env.assets.handle_head_types=[hammer]'
+```
+
+Newton needs every robot URDF it loads in `.cache/usd/`; for the right Wuji, run the populate step again
+with `--task Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 env.assets.table_urdf=assets/urdf/table_narrow.urdf`.
+Run Newton code through `scripts/newton_py`, which fixes the venv's libstdc++.
+
+The robot models (`assets/urdf/`) and third-party source (`third_party/`) are committed, so there is
+nothing else to fetch. The Play priors (`pretrained_policy/`) are not: see the main README.
+
+**Engaging cluster:** the host glibc is too old for Isaac Sim's wheels, so `engaging/` builds the same
+venvs inside an Apptainer container (`.venv/isaacsim_ct`, run through `scripts/isaacsim_py`). Submit each
+from the repo root, e.g. `scripts/slurm/submit.sh docs/installation/engaging/install_isaacsim.sh`.
+
+## The Isaac Sim venv by hand
+
+What `install_isaacsim.sh` does, step by step.
+
+### Prerequisites
 
 - Python 3.11
 - NVIDIA GPU with driver >= 525.60
 - CUDA 12+
 - `uv` for package management ([install instructions](https://docs.astral.sh/uv/getting-started/installation/))
 
-## Install
+### Install
 
 ```bash
 uv venv .venv/isaacsim --python 3.11
@@ -32,6 +62,10 @@ uv pip install --python .venv/isaacsim/bin/python \
 # typing_extensions fix: install AFTER isaaclab so it wins the resolution
 # (tyro CLIs need NoExtraItems from typing_extensions>=4.13; isaaclab pulls 4.12.2).
 uv pip install --python .venv/isaacsim/bin/python "typing_extensions>=4.13"
+
+# websockets for viser (the live viewer needs >=13.1; isaacsim-kernel pins 12.0, which nothing a
+# training run loads uses). --no-deps so the resolver does not reject Isaac's pin.
+uv pip install --python .venv/isaacsim/bin/python --no-deps "websockets==16.0"
 
 # Register the repo-local package (isaacsimenvs)
 uv pip install --python .venv/isaacsim/bin/python -e . --no-deps

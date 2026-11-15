@@ -132,4 +132,4 @@ checkpoints, then continue training ft-flat and ft-initfold, with a learning-rat
 
 `docs/phase1_baseline.md`, `docs/phase3_newton_transfer.md` and `docs/phase4_cable_env.md` cover the
 phases before cloth folding (Play task baseline, transfer to Newton, the cable task).
-`docs/isaacsim_installation.md` covers environment setup.
+`docs/installation/README.md` covers environment setup.

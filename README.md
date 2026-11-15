@@ -39,13 +39,15 @@ isaacsimenvs/
   eval/                 episodes.py (evals), live_viser.py (live viewer), player.py (loads a checkpoint)
   newton/               Newton backend patches and the URDF->USD cache
   curriculum/           difficulty curricula (the cloth unfold task's start-angle curriculum)
-deployment/                 the real robot: simtoolreal, rigid2deform, joint_reach, calibration, shared nodes/utils
-assets/                 robots (urdf/, flexiv_wuji/), tables, fabric textures
-scripts/slurm/          submit.sh + train/eval/viser job scripts; engaging/ environment installers
+deployment/             the real robot: simtoolreal, rigid2deform, joint_reach, calibration, shared nodes/utils
+assets/                 urdf/ (robots: kuka_sharpa_description/, flexiv_wuji/; tables), fabric textures
+scripts/slurm/          submit.sh + train/eval/viser job scripts
 scripts/flexiv_wuji/    fetch the robot assets, compose the arm + hand URDFs
 scripts/analysis/       probes and summary tools
+scripts/newton_py       launch Python in .venv/isaaclab3 (isaacsim_py: the Engaging container)
 rl_games/               vendored rl_games fork
 third_party/            vendored upstream source at pinned commits: IsaacLab, aioflexiv, aiowuji
+docs/installation/      venv install scripts (+ engaging/ for the Engaging cluster) and instructions
 docs/reports/           write-ups
 debug_outputs/          (gitignored) EVERY run artifact: train_logs/, videos/, deployment/
 .cache/                 (gitignored) tool caches: usd/ (URDF->USD for Newton), pytest/, ruff/
@@ -61,17 +63,9 @@ Two venvs on one source tree (both editable-install it):
 | `.venv/isaacsim` | Python 3.11, Isaac Sim 5.1 / Isaac Lab 2.3 | Play, rigid fold, joint_reach (PhysX) |
 | `.venv/isaaclab3` | Python 3.12, Isaac Lab 3.0 + Newton (kit-less) | VBD fold |
 
-```bash
-scripts/install_isaacsim.sh
-scripts/install_isaaclab3.sh                      # Isaac Lab from the vendored third_party/IsaacLab
-scripts/flexiv_wuji/fetch_assets.sh               # robot meshes (the right hand's vendor files stay local)
-OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.newton.usd_cache --populate \
-    --num_assets_per_type 1 'env.assets.handle_head_types=[hammer]'   # USD cache the Newton envs read
-```
-
-Newton needs every robot URDF it loads in `.cache/usd/`; for the right Wuji add
-`--task Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 env.assets.table_urdf=assets/urdf/table_narrow.urdf`.
-Run Newton code through `scripts/newton_py`, which fixes the venv's libstdc++.
+Install scripts and instructions are in [`docs/installation/`](docs/installation/README.md):
+`docs/installation/install_isaacsim.sh`, `docs/installation/install_isaaclab3.sh`, then bake the Newton
+USD cache.
 
 The Play priors are in `pretrained_policy/` (gitignored, or set `$PRETRAINED_POLICY_DIR`), one folder per
 robot, each with `model.pth` and `config.yaml`: `kuka_sharpa/` (the generic SimToolReal prior; on portal

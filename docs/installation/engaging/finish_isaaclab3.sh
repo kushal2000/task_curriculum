@@ -1,6 +1,6 @@
 #!/bin/bash
 # Finish .venv/isaaclab3 on Engaging after `isaaclab.sh -i` stops at isaaclab_ov.
-#   scripts/slurm/submit.sh scripts/slurm/engaging/finish_isaaclab3.sh   (submit from the repo root)
+#   scripts/slurm/submit.sh docs/installation/engaging/finish_isaaclab3.sh   (submit from the repo root)
 #
 # isaaclab_ov needs `ovstage`, which ships only manylinux_2_35 wheels; every Engaging node is
 # Rocky 8 (glibc 2.28), so it can never install here. Nothing on the kit-less Newton path needs it
@@ -35,7 +35,7 @@ echo "==> keeping:"; cat "$PIN"
 # isaaclab_ov failure skipped it (lazy_loader, gymnasium, usd-core, ...). The list is that one minus
 # the workspace members and the two entries with glibc >= 2.35 wheels only (see the file).
 echo "==> Isaac Lab root dependencies"
-uv pip install --python "$PY" -c "$PIN" -r scripts/slurm/engaging/isaaclab3_deps.txt
+uv pip install --python "$PY" -c "$PIN" -r docs/installation/engaging/isaaclab3_deps.txt
 
 echo "==> Isaac Lab parts after isaaclab_ov (skipped: no glibc 2.28 wheels)"
 uv pip install --python "$PY" -c "$PIN" -e "$SRC/isaaclab_physx" -e "$SRC/isaaclab_tasks" -e "$SRC/isaaclab_rl"

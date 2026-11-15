@@ -1,5 +1,5 @@
 # Isaac Lab 3 root dependencies (third_party/IsaacLab/pyproject.toml), minus the workspace
-# members, which are installed editable. Generated for scripts/slurm/engaging/finish_isaaclab3.sh.
+# members, which are installed editable. Generated for docs/installation/engaging/finish_isaaclab3.sh.
 numpy>=2
 torch>=2.11
 torchvision>=0.26.0
