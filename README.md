@@ -43,7 +43,6 @@ deployment/             the real robot: simtoolreal, rigid2deform, joint_reach, 
 assets/                 urdf/ (robots: kuka_sharpa_description/, flexiv_wuji/; tables), fabric textures
 scripts/slurm/          submit.sh + train/eval/viser job scripts
 scripts/flexiv_wuji/    fetch the robot assets, compose the arm + hand URDFs
-scripts/analysis/       probes and summary tools
 scripts/newton_py       launch Python in .venv/isaaclab3 (isaacsim_py: the Engaging container)
 rl_games/               vendored rl_games fork
 third_party/            vendored upstream source at pinned commits: IsaacLab, aioflexiv, aiowuji
