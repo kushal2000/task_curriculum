@@ -5,6 +5,10 @@
 # --wandb_*, hydra overrides). In an array job, task i gets agent.params.seed=i+1 unless the args
 # set a seed. The run itself lands in outputs/<date>/<time>/ (Hydra) and wandb in outputs/wandb/.
 #
+# The interactive pose viewer is on by default (--capture_viewer, every 6000 steps, logged to wandb
+# and written to the run dir's interactive_viewer/); the browser fetches the robot meshes from raw
+# GitHub at this branch, so push the branch before submitting. VIEWER=0 turns it off.
+#
 #SBATCH --job-name=train
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -20,6 +24,14 @@ if [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]] && ! printf '%s\n' "$@" | grep -q '^agent
     ARGS+=("agent.params.seed=$(( SLURM_ARRAY_TASK_ID + 1 ))")
 fi
 [[ " ${ARGS[*]} " == *" --agent "* || " ${ARGS[*]} " == *" --agent="* ]] || ARGS=(--agent rl_games_sapg_cfg_entry_point "${ARGS[@]}")
+if [[ "${VIEWER:-1}" != 0 && " ${ARGS[*]} " != *" --capture_viewer "* ]]; then
+    ARGS=(--capture_viewer --capture_viewer_url_check warn "${ARGS[@]}")
+    BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+    git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1 \
+        || echo "[slurm] WARNING: branch $BRANCH is not on origin -- the viewer's meshes will 404" >&2
+    [[ -z "$(git log "origin/$BRANCH..HEAD" --oneline 2>/dev/null)" ]] \
+        || echo "[slurm] WARNING: HEAD has commits not pushed to origin/$BRANCH -- viewer assets may be stale" >&2
+fi
 
 gpu_log_start
 START=$(date +%s)

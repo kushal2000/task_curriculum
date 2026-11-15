@@ -114,7 +114,11 @@ def test_deformables_survive_the_opt_out():
 # wrapper method, which is the wiring that actually shipped.
 # --------------------------------------------------------------------------------------------
 
-def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10) -> str:
+KUKA_URDF = "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
+RIGHT_WUJI_URDF = "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
+
+
+def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10, robot_urdf: str = KUKA_URDF) -> str:
     import types
 
     from isaacsimenvs.tasks.cloth.pose_viewer import ClothPoseViewerWrapper
@@ -140,7 +144,8 @@ def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10) -> str:
 
     inner = types.SimpleNamespace(
         cfg=types.SimpleNamespace(
-            cloth=types.SimpleNamespace(size=size, resolution=resolution, fold_axis="x")
+            cloth=types.SimpleNamespace(size=size, resolution=resolution, fold_axis="x"),
+            assets=types.SimpleNamespace(robot_urdf=robot_urdf),
         )
     )
     # `object.__new__` skips gym.Wrapper.__init__, which would need a real env. `_build_html`
@@ -174,6 +179,15 @@ def test_real_cloth_wrapper_still_emits_the_three_cloth_channels():
     # Robot and table must survive, or the opt-out dropped more than the two tool glyphs.
     assert '"name":"table"' in compact
     assert '"name":"robot"' in compact
+
+
+def test_real_cloth_wrapper_draws_the_tasks_own_robot():
+    """The cloth viewer used to hardcode the Kuka + Sharpa, so every Flexiv + Wuji fold run's viewer
+    drew the wrong robot (FoldPoolPhysx / RigidClothPhysx / Cloth on a robot overlay)."""
+    html = _cloth_wrapper_html(robot_urdf=RIGHT_WUJI_URDF)
+    assert RIGHT_WUJI_URDF in html
+    assert KUKA_URDF not in html
+    assert KUKA_URDF in _cloth_wrapper_html(), "the default robot must still be the Kuka"
 
 
 def test_the_hammer_strings_are_a_discriminating_check():

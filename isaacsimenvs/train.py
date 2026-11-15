@@ -53,8 +53,10 @@ _POSE_VIEWERS = {
     # Cloth before Play: the cloth viewer adds the sheet and its fold target as deformable
     # channels, which a rigid-pose viewer cannot represent. Substring matching is first-wins, and
     # the cloth task id does not contain "Play", but keep it above for clarity.
-    "Cloth": "isaacsimenvs.tasks.cloth.pose_viewer:ClothPoseViewerWrapper",
+    "Cloth": "isaacsimenvs.tasks.cloth.pose_viewer:ClothPoseViewerWrapper",  # Cloth*, RigidClothPhysx*
+    "FoldPool": "isaacsimenvs.tasks.cloth.pose_viewer:ClothPoseViewerWrapper",  # FoldPoolPhysx*
     "Play": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",
+    "JointReach": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",  # a PlayEnv subclass
 }
 
 

@@ -98,6 +98,8 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
             hole_urdf_path=self._hole_urdf_path,
             github_raw_base=self.github_raw_base,
             url_check=self.url_check,
+            # The task's own robot (the robot overlay sets it); the default is the Kuka + Sharpa.
+            robot_urdf_relative_path=inner.cfg.assets.robot_urdf,
             # The sheet is the manipuland, not the spawned rigid tool -- see the note in
             # `build_pose_viewer_html`. Without this the viewer draws a hammer at `object_pose`
             # and a green hammer at `goal_pose`, on top of the three cloth channels below.
