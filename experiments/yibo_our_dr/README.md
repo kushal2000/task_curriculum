@@ -37,3 +37,25 @@ The inherited default is 24,576 environments on one GPU with six SAPG blocks of
 4,096 environments. Changing the number of environments requires changing
 `agent.params.config.expl_coef_block_size` to retain six blocks for the checkpoint.
 Submitting these commands launches training; creating the recipes does not submit jobs.
+
+## Controlled rigid-cloth evaluation
+
+```bash
+experiments/yibo_our_dr/submit_rigid_eval.sh
+```
+
+This reserves one GPU and evaluates 64 first episodes per case in separate simulator
+processes. Starting from `yibo_our_dr`, the cases restore one factor group at a time:
+sensor/action delay and noise off, 16 mm observed thickness, density 2 kg/m², historical
+hinge gains/armature, smaller dimensions, or historical contacts. The final `yibo`
+case is a reference with several differences restored together. Contact-only evaluation
+retains the hybrid's density and gain DR; it does not accidentally freeze those draws.
+
+Results are written to `debug_outputs/yibo_our_dr_analysis/rigid_<job>/`, including
+resolved configs, initial states, physical pre-reset fold/release outcomes, motion
+diagnostics, PhysX readbacks and incrementally updated `summary.md`/`summary.json`.
+The runner explicitly resets the requested seed after loading the policy, so these
+controlled baselines supersede earlier diagnostics whose loader reseeded to 42.
+Use `ABLATION_CASES='hybrid delays_off noise_off'` or `ABLATION_SEED=1` before the
+submission command for additional cases or a repeat. Single-seed outcomes remain
+preliminary; the script reports paired rescues/losses alongside the headline rates.

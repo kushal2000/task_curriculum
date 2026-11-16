@@ -53,6 +53,10 @@ def build_config(args, material):
     cfg.from_dict(yaml.safe_load((CONFIG_DIR/'task/Cloth.yaml').read_text()))
     saved = read_policy_cfg(args.policy_config, args.device)['env']
     cfg.scene.num_envs, cfg.sim.device, cfg.seed = args.num_envs, args.device, args.seed
+    # MuJoCo capacities are global. Reserve enough constraints/contacts for all hands.
+    # The default 8192 constraints overflowed at 32 envs; these only size buffers.
+    cfg.newton.njmax = max(cfg.newton.njmax, args.num_envs * 1024)
+    cfg.newton.nconmax = max(cfg.newton.nconmax, args.num_envs * 256)
     cfg.robot_preset = 'yibo'
     cfg.robot_root_pos = (0., .51, .20)
     cfg.assets.robot_urdf = 'assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf'
@@ -156,6 +160,8 @@ def evaluate(args):
                   policy_config=str(args.policy_config.resolve()),
                   commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
                   slurm_job_id=os.environ.get('SLURM_JOB_ID'), seed=args.seed,
+                  hostname=os.uname().nodename, gpu_name=torch.cuda.get_device_name(args.device),
+                  gpu_total_memory_bytes=torch.cuda.get_device_properties(args.device).total_memory,
                   num_envs=args.num_envs, max_policy_steps=args.steps, deterministic=True,
                   sapg_expl_coef=args.expl_coef, actor_encoding='yibo', robot_preset='yibo',
                   release_evaluated=False,
