@@ -49,4 +49,5 @@ the pool, the next thing to cut), sheet authoring 3.2 s, simulator start / PhysX
 ## Overnight runs (2 GPUs x 12288 envs each)
 
 `submit_prior_2gpu.sh` (Play prior, weights) and `submit_scratch_2gpu.sh`; wandb
-`flexiv_wuji_cleanup` / `nov15_rigid2deform`. Jobs: (to fill in)
+`flexiv_wuji_cleanup` / `nov15_rigid2deform`. Submitted 2026-11-15 ~22:00 from aa78615: 675228
+(`rigid_body_prior_2gpu`), 675229 (`rigid_body_scratch_2gpu`).
