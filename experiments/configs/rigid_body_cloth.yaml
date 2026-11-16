@@ -23,11 +23,13 @@ env:
   scene:
     num_envs: 24576
 
-  # Contact frictions measured 2026-11-10: plates 1.0 (sheet.friction), robot 0.5, table 1.0.
+  # Contact frictions: plates 1.0 (sheet.friction), robot 0.5, table 0.5 -- the table what the
+  # pre-rewrite env actually applied (Play's material pass gave it robot_friction) and what the
+  # measured fabric presets were fit against (Cloth.yaml table_friction 0.5).
   assets:
     robot_friction: 0.5
     finger_tip_friction: 0.5
-    table_friction: 1.0
+    table_friction: 0.5
 
   reset:
     table_reset_z_range: 0.015
