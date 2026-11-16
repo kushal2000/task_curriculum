@@ -1,6 +1,7 @@
 """Per-sheet material draws mapped to each topology's physical joints and contacts.
 
 Bending rigidity/viscosity multiply each hinge's geometric edge/span factor.
+Explicit historical-policy overrides instead fix a gain on every hinge.
 Density scales mass and all inertia entries. Material draws follow global reset-ID
 order, independent of sparse articulation grouping. Contact friction is an absolute
 cloth/table or cloth/hand pair coefficient, using authored multiply-combine materials.
@@ -16,9 +17,20 @@ from .bending import hinge_geometry_factors
 from .inertia import hinge_inertias
 from .scene import pair_materials
 
-
 _MATERIAL_FIELDS = ("bending_rigidity", "bending_viscosity", "density",
                     "table_static_friction", "hand_static_friction", "dynamic_friction_ratio")
+
+
+def _joint_gain(env, name, selected, factors):
+    """Select a fixed per-hinge override or the geometry-scaled sheet material."""
+    material = "bending_rigidity" if name == "stiffness" else "bending_viscosity"
+    override = getattr(env.cfg.rigid_cloth, f"hinge_{name}_override", None)
+    if override is None or override == -1.0:
+        return getattr(env, f"_dr_{material}")[selected].to(factors.device)[:, None] * factors
+    value = float(override)
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"rigid_cloth.hinge_{name}_override must be finite and nonnegative")
+    return torch.full_like(factors, value)
 
 
 def rigid_init(env) -> None:
@@ -52,9 +64,15 @@ def rigid_init(env) -> None:
     env._dr_armature_scale = torch.zeros(env.num_envs, device=env.device)
     ids = torch.arange(env.num_envs, device=env.device)
     _apply(env, ids)
+    rd = cfg.randomization
+    if getattr(rd, "profile", "material") == "yibo":
+        rigid_check(env, ids[:min(64, env.num_envs)])
+        from . import yibo_randomization
+
+        yibo_randomization.initialize(env)
+        return
     rigid_randomize(env, ids)
     rigid_check(env, ids[:min(64, env.num_envs)])
-    rd = cfg.randomization
     print(f"[rigid_body] material DR {'on' if rd.enabled else 'OFF'}: "
           f"B logU{list(rd.bending_rigidity)} N m, C logU{list(rd.bending_viscosity)} N m s; "
           f"density logU{list(rd.density)} kg/m²; effective table/hand static friction "
@@ -66,6 +84,11 @@ def rigid_randomize(env, ids: torch.Tensor) -> None:
     """Draw one set of material parameters per selected global environment."""
     rd, count = env.cfg.rigid_cloth.randomization, len(ids)
     if count == 0 or not rd.enabled:
+        return
+    if getattr(rd, "profile", "material") == "yibo":
+        from . import yibo_randomization
+
+        yibo_randomization.reset(env, ids)
         return
     for name in ("bending_rigidity", "bending_viscosity", "density"):
         low, high = (math.log(float(value)) for value in getattr(rd, name))
@@ -85,8 +108,8 @@ def _apply(env, ids):
             continue
         selected, cpu = ids[rows], local_ids.cpu()
         asset, factors = group.articulation, group.hinge_geometry[local_ids]
-        asset.write_joint_stiffness_to_sim(env._dr_bending_rigidity[selected, None] * factors, env_ids=local_ids)
-        asset.write_joint_damping_to_sim(env._dr_bending_viscosity[selected, None] * factors, env_ids=local_ids)
+        asset.write_joint_stiffness_to_sim(_joint_gain(env, "stiffness", selected, factors), env_ids=local_ids)
+        asset.write_joint_damping_to_sim(_joint_gain(env, "damping", selected, factors), env_ids=local_ids)
         ratio = env._dr_density[selected] / float(env.cfg.rigid_cloth.density)
         armature = float(env.cfg.rigid_cloth.hinge_armature) + group.hinge_inertia[local_ids] * (
             ratio * env._dr_armature_scale[selected]
@@ -108,7 +131,12 @@ def _apply(env, ids):
 
 
 def rigid_check(env, ids: torch.Tensor) -> None:
-    """Read back geometry-scaled gains, masses, inertias and effective pair materials."""
+    """Read back selected hinge gains, masses, inertias and effective pair materials."""
+    if getattr(env, "_yibo_initialized", False):
+        from . import yibo_randomization
+
+        yibo_randomization.check(env, ids)
+        return
     for group in env.groups:
         rows, local_ids = group.select(ids)
         if not rows.numel():
@@ -120,8 +148,8 @@ def rigid_check(env, ids: torch.Tensor) -> None:
             ratio * env._dr_armature_scale[selected].cpu()
         )[:, None]
         for label, got, expected in (
-            ("stiffness", view.get_dof_stiffnesses()[cpu], factors * env._dr_bending_rigidity[selected].cpu()[:, None]),
-            ("damping", view.get_dof_dampings()[cpu], factors * env._dr_bending_viscosity[selected].cpu()[:, None]),
+            ("stiffness", view.get_dof_stiffnesses()[cpu], _joint_gain(env, "stiffness", selected, factors)),
+            ("damping", view.get_dof_dampings()[cpu], _joint_gain(env, "damping", selected, factors)),
             ("mass", view.get_masses()[cpu], group.mass_base[cpu] * ratio[:, None]),
             ("inertia", view.get_inertias()[cpu], group.inertia_base[cpu] * ratio[:, None, None]),
             ("armature", view.get_dof_armatures()[cpu], armature),

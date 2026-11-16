@@ -7,6 +7,7 @@ Simulator imports stay inside construction so profile checks work without Kit.
 from __future__ import annotations
 
 from dataclasses import fields, replace
+import copy
 import gc
 import math
 
@@ -14,7 +15,7 @@ import numpy as np
 import torch
 
 from isaacsimenvs import REPO_ROOT
-from isaacsimenvs.tasks.cloth.backends.robot import ROBOT, RobotSpec
+from isaacsimenvs.tasks.cloth.backends.robot import ROBOT, YIBO_ROBOT, RobotSpec
 from isaacsimenvs.scripts.visualization.rigid_cloth.reset import load_training_env_config, sample_reset_pose, validate_reset_settings
 
 
@@ -26,11 +27,16 @@ POLICY_FIELDS = (
 
 def robot_profile(profile: str):
     """Return the complete robot spec, URDF, table URDF and root position."""
-    if profile == "training":
+    if profile in ("training", "yibo"):
         from isaacsimenvs.tasks.play.robots import FLEXIV_WUJI_RIGHT_HUMAN_LIKE
 
         source = FLEXIV_WUJI_RIGHT_HUMAN_LIKE
         spec = RobotSpec(**{field.name: getattr(source, field.name) for field in fields(RobotSpec)})
+        if profile == "yibo":
+            return (
+                YIBO_ROBOT, "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+                "assets/urdf/table_fold_pool.urdf", (0.0, 0.51, 0.20),
+            )
         return (
             spec, "assets/urdf/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
             "assets/urdf/table_narrow_flexiv.urdf", (0.0, 0.8, 0.0),
@@ -40,7 +46,7 @@ def robot_profile(profile: str):
             ROBOT, "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
             "assets/urdf/table_fold_pool.urdf", (0.0, 0.51, 0.20),
         )
-    raise ValueError(f"Unknown policy robot profile {profile!r}; expected training or real")
+    raise ValueError(f"Unknown policy robot profile {profile!r}; expected training, real or yibo")
 
 
 def table_position(profile: str, saved_env: dict) -> tuple[float, float, float]:
@@ -48,7 +54,7 @@ def table_position(profile: str, saved_env: dict) -> tuple[float, float, float]:
     if profile == "training":
         reset = saved_env["reset"]
         return (*map(float, reset["table_reset_xy"]), float(reset["table_reset_z"]))
-    if profile == "real":
+    if profile in ("real", "yibo"):
         return (0.0, 0.0, 0.38)
     raise ValueError(f"Unknown robot/table setup {profile!r}")
 
@@ -87,6 +93,7 @@ def build_policy_env_cfg(settings, saved: dict, profile: str, device: str, train
     cfg.robot_self_collision = bool(source.get("robot_self_collision", True))
     cfg.action.from_dict(source["action"])
     cfg.obs.from_dict(source["obs"])
+    cfg.obs.keypoint_mode = settings.keypoint_mode
     cfg.obs.keypoint_scale = float(source["reward"]["keypoint_scale"])
     cfg.reward.object_base_size = float(source["reward"]["object_base_size"])
     cfg.task.mode = "fold"
@@ -102,6 +109,10 @@ def build_policy_env_cfg(settings, saved: dict, profile: str, device: str, train
     cloth.bending_rigidity = float(settings.bending_rigidity)
     cloth.bending_viscosity = float(settings.bending_viscosity)
     cloth.hinge_armature = float(settings.armature)
+    cloth.hinge_stiffness_override = settings.hinge_stiffness_override
+    cloth.hinge_damping_override = settings.hinge_damping_override
+    cloth.rest_offset = settings.rest_offset
+    cloth.contact_offset = settings.contact_offset
     cloth.table_static_friction = float(settings.table_static_friction)
     cloth.hand_static_friction = float(settings.hand_static_friction)
     cloth.dynamic_friction_ratio = float(settings.dynamic_friction_ratio)
@@ -111,7 +122,11 @@ def build_policy_env_cfg(settings, saved: dict, profile: str, device: str, train
     table_size = urdf_box_size(str(REPO_ROOT / table_urdf))
     cloth.place_x = [-table_size[0] / 2 + .005, table_size[0] / 2 - .005]
     cloth.place_y = [-table_size[1] / 2 + .005, table_size[1] / 2 - .005]
+    sensor_dr = copy.deepcopy(cfg.domain_randomization)
     disable_randomization(cfg)
+    if settings.sample_sensor:
+        cfg.domain_randomization = sensor_dr
+    cfg.rigid_cloth.randomization.enabled = settings.sample_material
     return cfg, spec
 
 
@@ -196,11 +211,17 @@ class PolicyPhysics:
         from isaacsimenvs.tasks.cloth.backends.rigid.inertia import hinge_inertias
         from isaacsimenvs.tasks.cloth.backends.rigid.scene import pair_materials
         cfg = self.env.cfg.rigid_cloth
+        if getattr(getattr(cfg, 'randomization', None), 'enabled', False):
+            # The backend owns sampled materials. In particular Yibo friction is
+            # a startup draw, so a manual reset must not replace it with sliders.
+            return
         factors = hinge_geometry_factors(self.spec)
         for parameter, method in (("bending_rigidity", "stiffness"), ("bending_viscosity", "damping")):
             value = float(getattr(settings, parameter))
             setattr(cfg, parameter, value)
-            values = torch.as_tensor(value * factors, dtype=torch.float32, device=self.cloth.device)[None]
+            override = getattr(cfg, f"hinge_{method}_override", None)
+            values = torch.as_tensor(value * factors if override is None else np.full_like(factors, override),
+                                     dtype=torch.float32, device=self.cloth.device)[None]
             getattr(self.cloth, f"write_joint_{method}_to_sim")(values, joint_ids=self.joint_ids)
         cfg.hinge_armature = float(settings.armature)
         armature = cfg.hinge_armature + float(settings.armature_scale) * hinge_inertias(self.spec, settings.density)

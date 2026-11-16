@@ -10,6 +10,42 @@ The [rigid cloth viewer](../viser_rigidCloth_viewer.py) can run the bundled
 ```
 
 `--policy` enables inference; without it the viewer remains a cloth physics inspector.
+
+### Yibo presets
+
+```bash
+python isaacsimenvs/scripts/visualization/viser_rigidCloth_viewer.py --preset yibo
+python isaacsimenvs/scripts/visualization/viser_rigidCloth_viewer.py --preset yibo_our_dr
+```
+
+Both presets enable policy control and select
+`pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth`, historical
+HAND2_DRIVE dynamics with the real-limit URDF, and the table at **33 cm above the
+robot base**. Table height stays fixed. They restore Yibo's inset planar marker
+order, centroid and quaternion fitting, full-sheet scale features, and historical
+goal-quaternion conversion. The latter deliberately reproduces a training bug:
+at some sheet headings, the observed goal is vertical. Physical scoring always
+uses the actual fold target.
+
+| Preset | Cloth physics and DR | Observed thickness | Policy delay/noise DR |
+| --- | --- | --- | --- |
+| `yibo` | Historical gains, density, contact shells and friction | Historical 16 mm felt | Off |
+| `yibo_our_dr` | Our 10–30 cm sizes, 2 mm plates, density/B/C/friction DR, zero armature | Actual geometry (2 mm) | On |
+
+The recipes are [yibo.yaml](../../configs/runs/yibo.yaml) and
+[yibo_our_dr.yaml](../../configs/runs/yibo_our_dr.yaml); the latter inherits
+our canonical rigid-cloth recipe. Geometry sliders start at each range's midpoint.
+**Sample cloth DR on reset** and **Policy delay and noise DR** are enabled according
+to the preset; changing either requires **Apply geometry and restart**. With cloth
+sampling enabled, each reset replaces fixed slider values with a new material draw.
+Yibo friction is sampled at startup, while its contact shells are redrawn on reset.
+Yibo's fixed per-hinge gains disable the B/C sliders.
+
+These presets run our current design catalog and fold/release objective. They do
+not recreate Yibo's old seven-design simulator, reset distribution or hinge layout.
+The two training variants live under
+[experiments/yibo_our_dr](../../../../experiments/yibo_our_dr/README.md).
+
 Policy mode starts paused with a flat cloth; click **Run simulation** or **Single step**.
 The default DR recipe is `scripts/configs/runs/rigid_body_cloth.yaml`; override it with
 `--training_config PATH`. Geometry, density, hinge and friction controls take their
@@ -96,7 +132,7 @@ that changed interface and dynamics; it is not a reproduction of the training en
 
 Every cloth policy observes the moving half as one object: its fitted center,
 orientation and velocity, its dimensions `[length/2,width,thickness]`, and four
-ordered 3D virtual keypoints. The same definition is used during training and
+ordered keypoints selected by `obs.keypoint_mode`. The same definition is used during training and
 inference, across rigid and deformable cloth.
 
 The local keypoint pattern is `(+++),(++−),(−−+),(−−−)`: two diagonal XY
@@ -107,13 +143,23 @@ The folded goal includes a physical half turn, with the normal pointing down.
 For a single rigid hinge the fitted pose is exact; for bending or deformable
 halves, one frame is a least-squares approximation.
 
-`obs.keypoint_scale` defaults to 1.5 for all policies. It expands virtual offsets
+In `play` mode, `obs.keypoint_scale` defaults to 1.5. It expands virtual offsets
 without changing physical geometry or object-size observations. The pretrained
 viewer reads the value from its checkpoint. `reward.object_base_size=0.04` gives
 `object_scales = [length/2,width,thickness]/0.04`. For a full `[0.2,0.2,0.004]` m
 sheet, the policy sees `[2.5,5,0.1]`.
 
-The viewer's **Keypoint display** selector offers **Policy (Play)** and
+Choose policy inputs with `--keypoint_mode play` (default) or
+`--keypoint_mode planar`. The **Robot → Policy keypoints** dropdown also changes
+this setting; click **Apply geometry and restart** to apply it. Planar mode sends
+the four actual moving-half landmarks in near-left, near-right, far-left,
+far-right order, with physical fold/unfold targets and no keypoint expansion.
+Rigid landmarks include the crease endpoints; VBD uses its existing grid
+landmarks. The object pose and moving-half size observations stay the same.
+This option alone does not reproduce Yibo's historical full-sheet scales,
+inset grid landmarks, or quaternion relabelling bug.
+
+The viewer's **Keypoint display** selector offers **Policy input** and
 **Physical corners**. Coral is current, green is target; yellow lines link pairs.
 Policy markers are the exact pre-noise features supplied to the network. Physical
 corners remain the fold-scoring landmarks. Rigid physical corners attach directly

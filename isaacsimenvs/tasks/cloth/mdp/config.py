@@ -44,9 +44,17 @@ class ObsCfg:
         "joint_pos", "joint_vel", "prev_action_targets", "palm_pos", "palm_rot", "object_rot",
         "fingertip_pos_rel_palm", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales",
     )
+    keypoint_mode: str = "play"
+    """play: cuboid markers; planar: physical moving-half landmarks;
+    yibo: the historical finetuned checkpoint's inset planar markers and pose contract."""
+    yibo_contact_thickness: float | None = 0.016
+    """Historical observed full-sheet thickness [m], including nominal contact shells.
+    None reports each cloth's actual geometric thickness. Only affects yibo
+    object_scales; it does not change physical collision geometry."""
+    yibo_goal_lift: float = 0.0
+    """Historical observation-only fold-target lift [m]; physical task scoring is unchanged."""
     keypoint_scale: float = 1.5
-    """Scale the moving-half cuboid's ordered 3D markers for every policy.
-    Physical task errors still use the original cloth samples."""
+    """Expand virtual cuboid offsets in ``play`` mode; unused in ``planar`` and ``yibo`` modes."""
     clamp_abs_observations: float = 10.0
 
 

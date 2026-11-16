@@ -42,6 +42,9 @@ class ClothCfg(DirectRLEnvCfg):
     """Scene adapter: rigid plates or vbd particle cloth."""
 
     robot_root_pos: tuple[float, float, float] = flexiv_wuji.ROOT_POS
+    robot_preset: str = "real"
+    """``real``: identified hand; ``yibo``: historical HAND2_DRIVE dynamics.
+    Joint limits and table geometry are specified by the asset/reset settings."""
     robot_self_collision: bool = True
     decimation: int = 2
     episode_length_s: float = 10.0

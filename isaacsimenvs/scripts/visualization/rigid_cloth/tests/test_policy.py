@@ -33,6 +33,22 @@ def test_profiles_preserve_complete_dynamics_and_scene_geometry():
     assert urdf_box_size(str(REPO_ROOT / table)) == (0.6, 0.4, 0.3)
 
 
+def test_yibo_profile_has_historical_dynamics_with_real_limits_and_table_height():
+    from isaacsimenvs.tasks.cloth.backends.robot import YIBO_ROBOT, get_robot_spec
+    spec, urdf, table, root = robot_profile('yibo')
+    assert spec is YIBO_ROBOT is get_robot_spec('yibo')
+    for field in fields(RobotSpec):
+        current, historical = getattr(spec, field.name), getattr(FLEXIV_WUJI_RIGHT_HUMAN_LIKE, field.name)
+        if field.name == 'self_collision_filter':
+            current = {name: set(others) for name, others in current.items()}
+            historical = {name: set(others) for name, others in historical.items()}
+        assert current == historical, field.name
+    assert urdf.endswith('real_limits.urdf')
+    from isaacsimenvs.scripts.visualization.rigid_cloth.policy import table_position
+    height = table_position('yibo', {})[2] + urdf_box_size(str(REPO_ROOT / table))[2] / 2 - root[2]
+    assert height == pytest.approx(.33)
+
+
 def test_config_rejects_same_width_reordered_observations_and_other_robots():
     saved = {"env": {"robot": "flexiv_wuji_right_human_like", "obs": {"obs_list": POLICY_FIELDS}}}
     validate_policy_config(saved)
@@ -102,7 +118,8 @@ def test_manual_reset_uses_returned_observation_and_retains_player():
 
 
 
-def test_training_recipe_is_applied_before_viewer_and_checkpoint_overrides(monkeypatch, tmp_path):
+@pytest.mark.parametrize('sample_dr', [False, True])
+def test_training_recipe_is_applied_before_viewer_and_checkpoint_overrides(monkeypatch, tmp_path, sample_dr):
     import sys
     import types
     import yaml
@@ -130,18 +147,38 @@ def test_training_recipe_is_applied_before_viewer_and_checkpoint_overrides(monke
         "scene": {"num_envs": 999},
         "assets": {"robot_friction": .2, "finger_tip_friction": .6},
         "task": {"keypoint_tolerance": .012}, "obs": {"keypoint_scale": .7},
+        "domain_randomization": {"use_obs_delay": True, "use_action_delay": True,
+                                 "use_object_state_delay_noise": True},
     }}))
     saved = yaml.safe_load((REPO_ROOT / 'pretrained_policy/flexiv_wuji/config.yaml').read_text())
-    cfg, spec = build_policy_env_cfg(Settings(), saved, 'training', 'cpu', recipe)
+    cfg, spec = build_policy_env_cfg(Settings(keypoint_mode='planar', sample_material=sample_dr,
+                                             sample_sensor=sample_dr), saved, 'training', 'cpu', recipe)
     assert cfg.scene.num_envs == 1 and cfg.sim.device == 'cpu'
     assert cfg.assets.robot_friction == .2 and cfg.assets.finger_tip_friction == .6
     assert cfg.task.keypoint_tolerance == .012
     assert cfg.obs.keypoint_scale == saved['env']['reward']['keypoint_scale']
+    assert cfg.obs.keypoint_mode == 'planar'
     assert cfg.assets.robot_urdf.endswith('rizon4s_right_wuji_human_like_joint_limits.urdf')
     assert cfg.robot_root_pos == (0., .8, 0.)
     assert cfg.reset.table_reset_xy == (0., .29)
-    assert cfg.rigid_cloth.randomization.enabled is False
-    assert cfg.domain_randomization.use_obs_delay is False
+    assert cfg.rigid_cloth.randomization.enabled is sample_dr
+    assert cfg.domain_randomization.use_obs_delay is sample_dr
+    assert cfg.domain_randomization.use_action_delay is sample_dr
+    assert cfg.domain_randomization.use_object_state_delay_noise is sample_dr
+
+
+def test_yibo_our_dr_retains_our_cloth_recipe_but_fixes_table_and_uses_actual_thickness():
+    from isaacsimenvs import CONFIG_DIR
+    from isaacsimenvs.scripts.visualization.rigid_cloth.reset import load_training_env_config
+    base = load_training_env_config()
+    hybrid = load_training_env_config(CONFIG_DIR / 'runs/yibo_our_dr.yaml')
+    assert hybrid['rigid_cloth'] == base['rigid_cloth']
+    assert hybrid['robot_preset'] == 'yibo'
+    assert hybrid['reset']['table_reset_z'] == .38
+    assert hybrid['reset']['table_reset_z_range'] == 0.
+    assert hybrid['obs']['yibo_contact_thickness'] is None
+    assert all(hybrid['domain_randomization'][name] for name in (
+        'use_obs_delay', 'use_action_delay', 'use_object_state_delay_noise'))
 
 
 def test_live_materials_apply_effective_static_dynamic_friction_and_geometry_gains():
@@ -166,3 +203,14 @@ def test_live_materials_apply_effective_static_dynamic_friction_and_geometry_gai
                                   torch.tensor([[2 * settings.bending_rigidity]]))
         torch.testing.assert_close(physics.cloth.write_joint_damping_to_sim.call_args.args[0],
                                   torch.tensor([[2 * settings.bending_viscosity]]))
+
+
+def test_sampled_materials_survive_viewer_reset_material_hook():
+    physics = PolicyPhysics.__new__(PolicyPhysics)
+    physics.env = SimpleNamespace(cfg=SimpleNamespace(rigid_cloth=SimpleNamespace(
+        randomization=SimpleNamespace(enabled=True))))
+    physics.cloth = Mock()
+    # Called by every viewer reset. Yibo's startup friction draw must survive;
+    # material-mode draws are likewise owned by backend randomization.
+    physics.update_material(Settings(sample_material=True))
+    assert physics.cloth.mock_calls == []

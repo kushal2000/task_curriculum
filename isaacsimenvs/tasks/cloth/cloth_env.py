@@ -9,7 +9,7 @@ from __future__ import annotations
 import torch
 from isaaclab.envs import DirectRLEnv
 
-from .backends.robot import ROBOT
+from .backends.robot import get_robot_spec
 from .mdp.actions import JointController
 from .mdp.geometry import fold, grid
 from .mdp.observations import ObservationBuilder, obs_dim
@@ -17,12 +17,12 @@ from .mdp.task import ClothTask
 
 
 class ClothEnv(DirectRLEnv):
-    def __init__(self, cfg, render_mode=None, *, robot_spec=ROBOT, **kwargs):
+    def __init__(self, cfg, render_mode=None, *, robot_spec=None, **kwargs):
+        if robot_spec is None:
+            robot_spec = get_robot_spec(cfg.robot_preset)
         cfg.task.check()
         if cfg.task.release.enabled and cfg.task.release.touch == "robot_clearance" and cfg.backend != "rigid":
             raise ValueError("whole-robot collision clearance currently requires the rigid cloth backend")
-        if cfg.backend == "vbd" and robot_spec is not ROBOT:
-            raise ValueError("robot_spec overrides are supported only by the rigid cloth backend")
         self.robot_spec = robot_spec
         cfg.action_space = robot_spec.num_joints
         cfg.observation_space = obs_dim(cfg.obs.obs_list, robot_spec.num_joints)
@@ -34,7 +34,7 @@ class ClothEnv(DirectRLEnv):
         elif cfg.backend == "vbd":
             from .backends.vbd.backend import VbdBackend
 
-            self.backend = VbdBackend(cfg)
+            self.backend = VbdBackend(cfg, robot_spec=robot_spec)
         else:
             raise ValueError(f"unknown cloth backend {cfg.backend!r}; expected rigid or vbd")
 

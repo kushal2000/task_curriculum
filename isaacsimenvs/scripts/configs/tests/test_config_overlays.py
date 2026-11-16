@@ -12,6 +12,7 @@ importing a configclass pulls in `isaaclab.utils`, which needs a booted Kit.
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 
 import pytest
 
@@ -172,18 +173,18 @@ EXPERIMENT_TASKS = {
 
 
 
+def _experiment_loader(directory=EXPERIMENT_DIR):
+    """Execute the real pure recipe functions without importing Kit-backed decorators."""
+    source = REPO_ROOT / "isaacsimenvs/scripts/configs/loader.py"
+    functions = [node for node in ast.parse(source.read_text()).body
+                 if isinstance(node, ast.FunctionDef) and node.name in ("_deep_merge", "load_experiment")]
+    namespace = {"EXPERIMENT_DIR": directory, "REPO_ROOT": REPO_ROOT, "Path": Path, "yaml": yaml}
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
+    return namespace["load_experiment"]
+
+
 def _load_experiment(name: str) -> dict:
-    """As `configs.loader.load_experiment`, which needs a booted Kit to import."""
-    exp = yaml.safe_load((EXPERIMENT_DIR / f"{name}.yaml").read_text()) or {}
-    base = exp.pop("base", None)
-    if not base:
-        return exp
-
-    def merge(a, b):
-        return {**a, **{k: merge(a[k], v) if isinstance(v, dict) and isinstance(a.get(k), dict) else v
-                        for k, v in b.items()}}
-
-    return merge(_load_experiment(base), exp)
+    return _experiment_loader()(name)
 
 
 def _env_problems(overlay: dict, classes: dict, cls: str, path: str) -> list[str]:
@@ -216,7 +217,8 @@ def _agent_problems(overlay: dict, ref: dict, path: str) -> list[str]:
     return problems
 
 
-@pytest.mark.parametrize("name", sorted(p.stem for p in EXPERIMENT_DIR.glob("*.yaml")))
+@pytest.mark.parametrize("name", sorted(p.relative_to(EXPERIMENT_DIR).with_suffix("").as_posix()
+                                        for p in EXPERIMENT_DIR.rglob("*.yaml")))
 def test_every_experiment_key_maps_to_a_config_field(name):
     exp = _load_experiment(name)
     assert set(exp) <= {"task", "env", "agent"}, f"{name}: unknown top-level keys {set(exp)}"
@@ -225,3 +227,29 @@ def test_every_experiment_key_maps_to_a_config_field(name):
     problems = _env_problems(exp.get("env") or {}, _collect_classes(modules), root_cls, "")
     problems += _agent_problems(exp.get("agent") or {}, yaml.safe_load((REPO_ROOT / agent_yaml).read_text()), "")
     assert not problems, f"{name}:\n  " + "\n  ".join(problems)
+
+
+def test_nested_yibo_runs_share_environment_and_select_distinct_initialization():
+    finetune = _load_experiment("experiments/yibo_our_dr/finetune.yaml")
+    scratch = _load_experiment("experiments/yibo_our_dr/scratch.yaml")
+    assert finetune == _load_experiment(str(REPO_ROOT / "experiments/yibo_our_dr/finetune.yaml"))
+    assert finetune["env"] == scratch["env"] == _load_experiment("yibo_our_dr")["env"]
+    assert finetune["env"]["obs"]["keypoint_mode"] == "yibo"
+    assert finetune["env"]["robot_preset"] == "yibo"
+    init, fresh = finetune["agent"]["params"], scratch["agent"]["params"]
+    assert init["load_checkpoint"] is True and init["checkpoint_load_mode"] == "weights"
+    assert init["load_path"] == "pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth"
+    assert fresh["load_checkpoint"] is False and fresh["load_path"] == ""
+    assert init["config"]["name"] != fresh["config"]["name"]
+    assert finetune["env"]["scene"]["num_envs"] // init["config"]["expl_coef_block_size"] == 6
+
+
+def test_nested_recipe_bases_are_relative_to_their_source_and_reject_cycles(tmp_path):
+    (tmp_path / "experiments").mkdir()
+    (tmp_path / "base.yaml").write_text("env: {reset: {random_yaw: true}}\n")
+    (tmp_path / "experiments" / "child.yaml").write_text("base: ../base.yaml\nenv: {seed: 7}\n")
+    load = _experiment_loader(tmp_path)
+    assert load("experiments/child") == {"env": {"reset": {"random_yaw": True}, "seed": 7}}
+    (tmp_path / "base.yaml").write_text("base: experiments/child\n")
+    with pytest.raises(ValueError, match="inheritance cycle"):
+        load("experiments/child.yaml")

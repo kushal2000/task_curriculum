@@ -66,18 +66,21 @@ def test_injected_body_names_control_readout_selection(robot_spec):
     assert backend._hand_body_ids == [4, 3, 2, 1, 0, 5]
 
 
-def test_vbd_rejects_custom_robot_before_simulation_start(robot_spec):
-    from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
+def test_vbd_configures_solver_with_injected_spec(monkeypatch, robot_spec):
+    from isaacsimenvs.tasks.cloth.backends.vbd import backend as vbd
 
-    cfg = NS(task=NS(check=lambda: None, release=NS(enabled=False, touch="origin")), backend="vbd")
-    env = ClothEnv.__new__(ClothEnv)
-    env._is_closed = True  # No simulator exists when constructor validation fails.
-    with pytest.raises(ValueError, match="only by the rigid"):
-        env.__init__(cfg, robot_spec=robot_spec)
+    captured = {}
+    monkeypatch.setattr(vbd.solver, "configure", lambda cfg, **kwargs: captured.update(kwargs))
+    cfg = NS(deformable_cloth=NS(check_thickness=lambda: None), task=NS(mode="fold"))
+    backend = vbd.VbdBackend(cfg, robot_spec=robot_spec)
+    assert backend.robot_spec is robot_spec
+    assert captured["robot_spec"] is robot_spec
 
 
-def test_environment_passes_profile_and_sizes_spaces_before_scene_start(monkeypatch, robot_spec):
-    from isaacsimenvs.tasks.cloth.backends.rigid import backend as rigid
+@pytest.mark.parametrize("backend_name", ["rigid", "vbd"])
+def test_environment_passes_profile_and_sizes_spaces_before_scene_start(monkeypatch, robot_spec, backend_name):
+    from importlib import import_module
+    backend_module = import_module(f"isaacsimenvs.tasks.cloth.backends.{backend_name}.backend")
     from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
 
     class StopBeforeSimulation(Exception):
@@ -86,21 +89,21 @@ def test_environment_passes_profile_and_sizes_spaces_before_scene_start(monkeypa
     captured = {}
 
     class Backend:
-        def __init__(self, cfg, designs, *, robot_spec):
+        def __init__(self, cfg, designs=None, *, robot_spec):
             captured.update(cfg=cfg, designs=designs, robot_spec=robot_spec)
 
         def startup(self):
             raise StopBeforeSimulation
 
-    monkeypatch.setattr(rigid, "RigidBackend", Backend)
+    monkeypatch.setattr(backend_module, "RigidBackend" if backend_name == "rigid" else "VbdBackend", Backend)
     # Smaller profile makes hard-coded default joint dimensions detectable.
     robot_spec = replace(robot_spec, joint_names_canonical=("a", "b"))
-    cfg = NS(task=NS(check=lambda: None, release=NS(enabled=False, touch="origin")), backend="rigid", rigid_cloth=NS(designs=["single_hinge.yaml"]),
+    cfg = NS(task=NS(check=lambda: None, release=NS(enabled=False, touch="origin")), backend=backend_name, rigid_cloth=NS(designs=["single_hinge.yaml"]),
              obs=NS(obs_list=["joint_pos", "palm_pos"], state_list=["joint_vel"]))
     env = ClothEnv.__new__(ClothEnv)
     env._is_closed = True
     with pytest.raises(StopBeforeSimulation):
         env.__init__(cfg, robot_spec=robot_spec)
     assert captured["robot_spec"] is robot_spec
-    assert captured["designs"] == cfg.rigid_cloth.designs
+    assert captured["designs"] == (cfg.rigid_cloth.designs if backend_name == "rigid" else None)
     assert (cfg.action_space, cfg.observation_space, cfg.state_space) == (2, 5, 2)

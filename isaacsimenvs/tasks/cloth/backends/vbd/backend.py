@@ -14,19 +14,19 @@ from . import scene as deformable_scene
 class VbdBackend(ClothBackend):
     quaternion_order = "xyzw"
 
-    def __init__(self, cfg):
-        super().__init__(cfg)
+    def __init__(self, cfg, *, robot_spec=ROBOT):
+        super().__init__(cfg, robot_spec=robot_spec)
         cfg.deformable_cloth.check_thickness()
         if cfg.task.mode == "mixed":
             raise NotImplementedError("task.mode=mixed: the VBD cloth runs fold or unfold")
-        solver.configure(cfg)
+        solver.configure(cfg, robot_spec=robot_spec)
         self._touch_cache = None
 
     def startup(self):
-        return solver.startup(self, self.cfg)
+        return solver.startup(self, self.cfg, robot_spec=self.robot_spec)
 
     def finish_setup(self):
-        solver.finish_setup(self, self.cfg)
+        solver.finish_setup(self, self.cfg, robot_spec=self.robot_spec)
         cloth = self.cfg.deformable_cloth
         print(f"[cloth] VBD {cloth.resolution}x{cloth.resolution}, {cloth.size:.3f} m", flush=True)
 
@@ -42,7 +42,7 @@ class VbdBackend(ClothBackend):
         dims = torch.tensor([[cloth.size, cloth.size, 2.0 * cloth.particle_radius]], device=self.device)
         self._dims = dims.expand(self.num_envs, 3).clone()
         rest = grid.grid_points(cloth.size, cloth.size, cloth.resolution)
-        deformable_scene.build(self, ROBOT, rest, grid.grid_triangles(cloth.resolution))
+        deformable_scene.build(self, self.robot_spec, rest, grid.grid_triangles(cloth.resolution))
 
     def _point_resolution(self) -> int:
         return int(self.cfg.deformable_cloth.resolution)

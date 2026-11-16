@@ -26,7 +26,6 @@ from ..assets import (
 )
 from . import designs
 
-
 FRICTION_COMBINE_MODE = "multiply"
 
 
@@ -43,8 +42,18 @@ def pair_materials(table_s, hand_s, ratio):
             "robot": (hand_s, hand_s * ratio, 0.0)}
 
 
-def bind_physics_material(stage, root_path, coefficients):
-    """Author multiply-combine material and bind every collider beneath this root."""
+def material_combine(cfg, asset):
+    """Select the authored material rule; runtime coefficient writes preserve it."""
+    profile = getattr(cfg.randomization, "profile", "material")
+    if profile == "material":
+        return FRICTION_COMBINE_MODE
+    if profile == "yibo":
+        return "min" if asset == "cloth" else "average"
+    raise ValueError("rigid_cloth.randomization.profile must be 'material' or 'yibo'")
+
+
+def bind_physics_material(stage, root_path, coefficients, *, combine=FRICTION_COMBINE_MODE):
+    """Author a material and bind every collider beneath this root."""
     from pxr import Sdf, Usd, UsdPhysics, UsdShade
 
     root = stage.GetPrimAtPath(root_path)
@@ -54,7 +63,7 @@ def bind_physics_material(stage, root_path, coefficients):
     api.CreateDynamicFrictionAttr(float(coefficients[1]))
     api.CreateRestitutionAttr(float(coefficients[2]))
     _apply_physx_api(material.GetPrim(), "PhysxMaterialAPI", {
-        "physxMaterial:frictionCombineMode": (Sdf.ValueTypeNames.Token, FRICTION_COMBINE_MODE),
+        "physxMaterial:frictionCombineMode": (Sdf.ValueTypeNames.Token, combine),
         "physxMaterial:restitutionCombineMode": (Sdf.ValueTypeNames.Token, "multiply"),
     })
     for prim in Usd.PrimRange(root):
@@ -65,12 +74,12 @@ def bind_physics_material(stage, root_path, coefficients):
     return material
 
 
-def _bake_contact_material(path, coefficients):
+def _bake_contact_material(path, coefficients, *, combine=FRICTION_COMBINE_MODE):
     from pxr import Usd
 
     stage = Usd.Stage.Open(path)
     root = stage.GetDefaultPrim() or next(iter(stage.GetPseudoRoot().GetChildren()))
-    bind_physics_material(stage, root.GetPath(), coefficients)
+    bind_physics_material(stage, root.GetPath(), coefficients, combine=combine)
     stage.GetRootLayer().Save()
 
 
@@ -117,8 +126,8 @@ def build_robot_and_table(env, spec) -> None:
     cloth_cfg = env.cfg.rigid_cloth
     materials = pair_materials(cloth_cfg.table_static_friction, cloth_cfg.hand_static_friction,
                                cloth_cfg.dynamic_friction_ratio)
-    _bake_contact_material(robot_usd, materials["robot"])
-    _bake_contact_material(table_usd, materials["table"])
+    _bake_contact_material(robot_usd, materials["robot"], combine=material_combine(cloth_cfg, "robot"))
+    _bake_contact_material(table_usd, materials["table"], combine=material_combine(cloth_cfg, "table"))
     env._robot_urdf_path, env._table_urdf_path = a.robot_urdf, a.table_urdf
     env._table_size = urdf_box_size(a.table_urdf)
     env._table_half_height = 0.5 * env._table_size[2]
@@ -269,7 +278,8 @@ def author_rigid_cloths(env_ids, dims, cloth_cfg, spawn_z, design, root_name) ->
         drive.CreateTypeAttr("force")
         drive.CreateStiffnessAttr(0.0)
         drive.CreateDampingAttr(0.0)
-    bind_physics_material(stage, template, pair_materials(0., 0., 1.)["cloth"])
+    bind_physics_material(stage, template, pair_materials(0., 0., 1.)["cloth"],
+                          combine=material_combine(cfg, "cloth"))
     source = stage.GetRootLayer()
 
     def put(path, value):

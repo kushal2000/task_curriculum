@@ -81,6 +81,7 @@ params:
 
   load_checkpoint: False
   load_path: ''
+  checkpoint_load_mode: weights  # Recipe initialization; CLI --checkpoint still defaults to resume.
 
   config:
     # Must start with `<int>_` — our vendored rl_games parses policy_idx from the prefix.

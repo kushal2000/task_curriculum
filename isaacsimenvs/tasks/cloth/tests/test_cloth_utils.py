@@ -385,6 +385,38 @@ def test_policy_keypoint_scale_matches_input_fields_without_scaling_translation_
     torch.testing.assert_close(perfect_current, perfect_targets, atol=1e-6, rtol=0)
 
 
+@pytest.mark.parametrize('explicit', [False, True])
+def test_planar_policy_points_follow_actual_landmarks_in_order_without_expansion(explicit):
+    env, state, observer = _obs_env(2, False)
+    observer.keypoint_mode = 'planar'
+    state.points_w = env._cloth_grid.rest + torch.tensor([.03, -.02, .5])
+    if explicit:
+        # Exact rigid landmarks include crease endpoints; a bent corner must not
+        # be replaced by its fitted rigid proxy in the actor's point fields.
+        unit = torch.tensor([[0., -.5, 0.], [0., .5, 0.], [.5, -.5, 0.], [.5, .5, 0.]])
+        env._cloth_grid.keypoint_rest = unit[None] * env._cloth_grid.dims[:, None]
+        state.keypoints_w = env._cloth_grid.keypoint_rest + torch.tensor([.03, -.02, .5])
+        state.keypoints_w[0, 3, 2] += .025
+    view = env.derive(state)
+    for scale in (1., 1.5, 3.):
+        observer.keypoint_scale = scale
+        current, targets = observer.keypoints_w(view, state)
+        torch.testing.assert_close(current, view.corners_w)
+        torch.testing.assert_close(targets, view.targets_w)
+        obs = observer.build(state, view, env.episode_length_buf)['policy']
+        torch.testing.assert_close(obs[:, 107:119].reshape(2, 4, 3),
+                                   current - observer.palm_center_w(state)[:, None])
+        torch.testing.assert_close(obs[:, 119:131].reshape(2, 4, 3), current - targets)
+        assert obs.shape == (2, 134)
+
+
+def test_observation_builder_rejects_unknown_keypoint_mode():
+    env, _, observer = _obs_env(1, False)
+    env.cfg.obs.keypoint_mode = 'unknown'
+    with pytest.raises(ValueError, match='keypoint_mode'):
+        observations.ObservationBuilder(env.cfg, observer.controller, env)
+
+
 def test_reset_yaw_uses_the_configured_training_range_and_pinned_zero():
     task = ClothTask.__new__(ClothTask)
     task.device = 'cpu'

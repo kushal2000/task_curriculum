@@ -183,6 +183,8 @@ def _build_deformables(deformables: dict, *, num_frames: int) -> dict:
         }
         if spec.get("color") is not None:
             entry["color"] = [float(c) for c in spec["color"]]
+        if spec.get("flat_shading") is not None:
+            entry["flat_shading"] = bool(spec["flat_shading"])
         if spec.get("opacity") is not None:
             entry["opacity"] = float(spec["opacity"])
         out[name] = entry

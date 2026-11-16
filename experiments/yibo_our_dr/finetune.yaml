@@ -1,0 +1,10 @@
+# Start a fresh training run from Yibo's actor/normalization weights. This does
+# not resume the old optimizer, epoch/frame counters, rollout or environment.
+base: ../../isaacsimenvs/scripts/configs/runs/yibo_our_dr.yaml
+agent:
+  params:
+    load_checkpoint: true
+    load_path: pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth
+    checkpoint_load_mode: weights
+    config:
+      name: 0_yibo_our_dr_finetune

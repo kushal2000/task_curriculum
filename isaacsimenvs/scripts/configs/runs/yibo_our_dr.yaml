@@ -1,0 +1,17 @@
+# Yibo checkpoint interface and robot/table setup with our current cloth physics
+# and DR. Keep the inherited rigid-body parameters in one canonical recipe.
+base: rigid_body_cloth
+env:
+  robot_preset: yibo
+  obs:
+    keypoint_mode: yibo
+    yibo_contact_thickness: null  # Report our actual 2 mm geometry, not Yibo's 16 mm felt.
+    yibo_goal_lift: 0.0
+  domain_randomization:
+    use_obs_delay: true
+    use_action_delay: true
+    use_object_state_delay_noise: true
+  reset:
+    table_reset_xy: [0.0, 0.0]
+    table_reset_z: 0.38
+    table_reset_z_range: 0.0  # Keep Yibo's 33 cm tabletop height fixed.

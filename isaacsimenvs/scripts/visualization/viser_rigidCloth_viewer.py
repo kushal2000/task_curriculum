@@ -29,6 +29,9 @@ TABLE_POSITION = (0.0, 0.29, 0.26)
 @dataclass(frozen=True)
 class Settings:
     design: str = "single_hinge"
+    keypoint_mode: str = "play"
+    sample_material: bool = False
+    sample_sensor: bool = False
     length: float = 0.2
     width: float = 0.2
     thickness: float = 0.002
@@ -37,6 +40,10 @@ class Settings:
     bending_viscosity: float = 5e-5
     armature: float = 0.0
     armature_scale: float = 0.0
+    hinge_stiffness_override: float | None = None
+    hinge_damping_override: float | None = None
+    rest_offset: float = 0.0
+    contact_offset: float = 0.002
     table_static_friction: float = 0.4
     hand_static_friction: float = 0.8
     dynamic_friction_ratio: float = 0.8
@@ -96,6 +103,7 @@ class Physics:
 
         self.sim = self.cloth = None
         self.dt, self.time = dt, 0.0
+        self.rest_offset, self.contact_offset = settings.rest_offset, settings.contact_offset
         self.table_size = np.asarray(table_size, dtype=float)
         self.table_position = np.asarray(table_position, dtype=float)
         self.table_top = self.table_position[2] + self.table_size[2] / 2
@@ -165,8 +173,8 @@ class Physics:
 
         UsdPhysics.CollisionAPI.Apply(prim)
         collision = PhysxSchema.PhysxCollisionAPI.Apply(prim)
-        collision.CreateContactOffsetAttr(0.001)
-        collision.CreateRestOffsetAttr(0.0)
+        collision.CreateContactOffsetAttr(self.contact_offset if material == "cloth" else 0.001)
+        collision.CreateRestOffsetAttr(self.rest_offset if material == "cloth" else 0.0)
         UsdShade.MaterialBindingAPI.Apply(prim).Bind(
             self.materials[material][0], UsdShade.Tokens.weakerThanDescendants, "physics"
         )
@@ -253,7 +261,8 @@ class Physics:
         from isaacsimenvs.tasks.cloth.backends.rigid.scene import pair_materials
         factors = hinge_geometry_factors(self.spec)
         for parameter, method in (("bending_rigidity", "stiffness"), ("bending_viscosity", "damping")):
-            values = torch.as_tensor(getattr(settings, parameter) * factors,
+            override = getattr(settings, f"hinge_{method}_override")
+            values = torch.as_tensor(getattr(settings, parameter) * factors if override is None else np.full_like(factors, override),
                                      device=self.cloth.device, dtype=torch.float32)[None]
             getattr(self.cloth, f"write_joint_{method}_to_sim")(values, joint_ids=self.joint_ids)
         armature = settings.armature + settings.armature_scale * hinge_inertias(self.spec, settings.density)
@@ -310,14 +319,28 @@ def main() -> None:
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--design", default="single_hinge", help="Catalog YAML name or path to a design YAML.")
     parser.add_argument("--policy", action="store_true", help="Start with the pretrained Flexiv–Wuji policy enabled.")
-    parser.add_argument("--robot_setup", choices=("training", "real"), default="training")
-    parser.add_argument("--checkpoint", default=str(REPO_ROOT / "pretrained_policy/flexiv_wuji/model.pth"))
+    parser.add_argument("--preset", choices=("default", "yibo", "yibo_our_dr"), default="default",
+                        help="Yibo interface/setup with historical nominal cloth physics (yibo) or our cloth recipe (yibo_our_dr).")
+    parser.add_argument("--robot_setup", choices=("training", "real", "yibo"))
+    parser.add_argument("--checkpoint")
     parser.add_argument("--policy_config", default=str(REPO_ROOT / "pretrained_policy/flexiv_wuji/config.yaml"))
-    parser.add_argument("--training_config", type=Path, default=CONFIG_DIR / "runs/rigid_body_cloth.yaml",
+    parser.add_argument("--keypoint_mode", choices=("play", "planar", "yibo"),
+                        help="Policy input points: Play markers, physical planar landmarks, or Yibo's historical encoding.")
+    parser.add_argument("--training_config", type=Path,
                         help="Training recipe supplying geometry, physics and reset ranges.")
     parser.add_argument("--sapg_expl_coef", type=float, default=0.0, help="SAPG branch coefficient, 0–50.")
     parser.add_argument("--steps", type=int, default=0, help="Exit after N preview physics steps or policy control steps; 0 runs interactively.")
     args = parser.parse_args()
+    yibo_setup = args.preset in ("yibo", "yibo_our_dr")
+    if yibo_setup:
+        args.policy = True
+    args.robot_setup = args.robot_setup or ("yibo" if yibo_setup else "training")
+    args.keypoint_mode = args.keypoint_mode or ("yibo" if yibo_setup else "play")
+    args.checkpoint = args.checkpoint or str(REPO_ROOT / (
+        "pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth" if yibo_setup
+        else "pretrained_policy/flexiv_wuji/model.pth"))
+    args.training_config = args.training_config or CONFIG_DIR / "runs" / (
+        f"{args.preset}.yaml" if yibo_setup else "rigid_body_cloth.yaml")
     if args.sapg_expl_coef not in (0, 10, 20, 30, 40, 50):
         parser.error("--sapg_expl_coef must be one of 0, 10, 20, 30, 40, 50")
     if args.steps < 0:
@@ -367,11 +390,20 @@ def main() -> None:
 
         controls = {}
         commands = queue.SimpleQueue()
-        active = Settings(design=str(initial_path), bend_deg=0.0 if args.policy else 90.0,
-                          drop_height=0.002 if args.policy else 0.06,
+        active = Settings(design=str(initial_path), keypoint_mode=args.keypoint_mode,
+                          sample_material=yibo_setup,
+                          sample_sensor=args.preset == 'yibo_our_dr',
+                          bend_deg=0.0 if args.policy else 90.0,
+                          drop_height=float(training_physics.spawn_clearance) if args.preset == 'yibo' else (0.002 if args.policy else 0.06),
                           bending_rigidity=float(training_physics.bending_rigidity),
                           bending_viscosity=float(training_physics.bending_viscosity),
                           armature=float(training_physics.hinge_armature),
+                          hinge_stiffness_override=(None if training_physics.hinge_stiffness_override == -1
+                                                    else training_physics.hinge_stiffness_override),
+                          hinge_damping_override=(None if training_physics.hinge_damping_override == -1
+                                                  else training_physics.hinge_damping_override),
+                          rest_offset=float(training_physics.rest_offset),
+                          contact_offset=float(training_physics.contact_offset),
                           density=float(np.clip(training_physics.density, *dr.density)),
                           length=float(np.mean(training_physics.length_range)),
                           width=float(np.mean(training_physics.width_range)),
@@ -384,23 +416,35 @@ def main() -> None:
                           y_range=tuple(map(float, training_physics.place_y)),
                           yaw_range_deg=tuple(map(float, training_cfg.reset.yaw_range_deg)))
         server.gui.add_markdown("## Rigid cloth\nPreview geometry or evaluate the pretrained Flexiv–Wuji policy.")
-        setup_labels = {"Training setup": "training", "Real hand / cloth setup": "real"}
+        setup_labels = {"Training setup": "training", "Real hand / cloth setup": "real", "Yibo training setup": "yibo"}
         with server.gui.add_folder("Robot — apply to rebuild"):
             robot_mode = server.gui.add_dropdown("Robot control", ("Static robot", "Pretrained policy"),
                                                 initial_value="Pretrained policy" if args.policy else "Static robot")
             robot_setup = server.gui.add_dropdown("Robot and table setup", tuple(setup_labels),
                                                  initial_value=next(k for k, v in setup_labels.items() if v == args.robot_setup))
+            controls["keypoint_mode"] = server.gui.add_dropdown(
+                "Policy keypoints", ("play", "planar", "yibo"), initial_value=active.keypoint_mode,
+            )
+            controls["sample_material"] = server.gui.add_checkbox(
+                "Sample cloth DR on reset", initial_value=active.sample_material,
+                disabled=not args.policy,
+            )
+            controls["sample_sensor"] = server.gui.add_checkbox(
+                "Policy delay and noise DR", initial_value=active.sample_sensor,
+                disabled=not args.policy,
+            )
             setup_description = server.gui.add_markdown("")
         with server.gui.add_folder("Policy — updates live"):
             coefficient = server.gui.add_dropdown("SAPG coefficient", ("0", "10", "20", "30", "40", "50"),
                                                   initial_value=f"{args.sapg_expl_coef:g}")
             deterministic = server.gui.add_checkbox("Deterministic actions", initial_value=True)
-            keypoint_display = server.gui.add_dropdown("Keypoint display", ("Policy (Play)", "Physical corners"),
-                                                       initial_value="Policy (Play)")
-            server.gui.add_markdown("Play prior: evaluating transfer to folding. No fold training in this checkpoint.")
+            keypoint_display = server.gui.add_dropdown("Keypoint display", ("Policy input", "Physical corners"),
+                                                       initial_value="Policy input")
             server.gui.add_markdown("**Coral:** current keypoints · **Green:** target keypoints. "
                                     "Yellow lines connect each current point to its target. "
-                                    "Policy view uses Play's diagonal top/bottom pairs; Physical corners shows fold landmarks.")
+                                    "Policy input shows the selected points sent to the actor. "
+                                    "Planar points use physical fold targets and no 1.5 expansion. "
+                                    "Yibo restores inset landmarks, full-sheet scales and the historical goal conversion.")
         coefficient.on_update(lambda _: commands.put("policy"))
         deterministic.on_update(lambda _: commands.put("policy"))
         keypoint_display.on_update(lambda _: commands.put("display"))
@@ -435,11 +479,20 @@ def main() -> None:
                     label, min=low, max=high, step=step,
                     initial_value=float(np.clip(getattr(active, name), low, high)),
                 )
+                if name in ("bending_rigidity", "bending_viscosity"):
+                    method = 'stiffness' if name == 'bending_rigidity' else 'damping'
+                    handle.disabled = getattr(active, f'hinge_{method}_override') is not None
+                handle.disabled = handle.disabled or active.sample_material
                 handle.on_update(lambda _: commands.put("material"))
             controls["armature_scale"] = server.gui.add_number("Armature fraction (disabled)", initial_value=0.0, disabled=True)
             server.gui.add_markdown(f"Bounds: `{args.training_config.name}`. "
-                                    "One sheet material; hinge gains scale with crease geometry. "
+                                    + (f"Fixed historical hinge gains: k={active.hinge_stiffness_override}, "
+                                       f"c={active.hinge_damping_override}; armature={active.armature} kg m². "
+                                       if active.hinge_damping_override is not None else
+                                       "One sheet material; hinge gains scale with crease geometry. ") +
                                     "Friction controls show actual contact coefficients.")
+            server.gui.add_markdown("With cloth DR sampling enabled, the backend owns physics draws. "
+                                    "Disable **Sample cloth DR on reset** and Apply to use fixed physics sliders.")
         reset_fields = ("x", "y", "yaw_deg", "drop_height", "bend_deg", "sample_reset",
                         "x_range", "y_range", "yaw_range_deg")
         with server.gui.add_folder("Initial state — press reset"):
@@ -469,6 +522,11 @@ def main() -> None:
 
         def robot_mode_changed(_):
             controls["sample_reset"].value = ("Sample training ranges" if robot_mode.value == "Pretrained policy" else "Manual")
+            controls["sample_material"].disabled = robot_mode.value == "Static robot"
+            controls["sample_sensor"].disabled = robot_mode.value == "Static robot"
+            if robot_mode.value == "Static robot":
+                controls["sample_material"].value = False
+                controls["sample_sensor"].value = False
             commands.put("geometry")
 
         robot_mode.on_update(robot_mode_changed)
@@ -479,7 +537,7 @@ def main() -> None:
         rebuild.on_click(lambda _: commands.put("rebuild"))
         reset.on_click(lambda _: commands.put("reset"))
         step_button.on_click(lambda _: commands.put("step"))
-        geometry_fields = ("design", "length", "width", "thickness", "density")
+        geometry_fields = ("design", "length", "width", "thickness", "density", "keypoint_mode", "sample_material", "sample_sensor")
         for name in geometry_fields:
             controls[name].on_update(lambda _: commands.put("geometry"))
 
@@ -487,7 +545,11 @@ def main() -> None:
             values = {}
             for name in controls if fields is None else fields:
                 value = controls[name].value
-                if name == "design":
+                if name == "keypoint_mode":
+                    values[name] = value
+                elif name in ("sample_material", "sample_sensor"):
+                    values[name] = bool(value)
+                elif name == "design":
                     values[name] = catalog[value]
                 elif name == "sample_reset":
                     values[name] = value == "Sample training ranges"
@@ -582,20 +644,31 @@ def main() -> None:
                                                         colors=(255, 220, 110), line_width=2,
                                                         visible=policy_active)
             coefficient.disabled = deterministic.disabled = keypoint_display.disabled = not policy_active
+            controls['density'].disabled = active.sample_material
+            for name in live_fields:
+                if name == 'armature_scale':
+                    continue
+                fixed_gain = (name == 'bending_rigidity' and active.hinge_stiffness_override is not None
+                              or name == 'bending_viscosity' and active.hinge_damping_override is not None)
+                controls[name].disabled = active.sample_material or fixed_gain
             top = float(physics.table_position[2] + physics.table_size[2] / 2)
             if policy_active:
                 setup_description.content = (
                     f"**{next(k for k, v in setup_labels.items() if v == active_profile)}** · `{Path(physics.robot_urdf).name}`  \n"
-                    "Policy object: moving-half pose, Play keypoint order.  \n"
-                    f"Keypoint scale: {physics.env.cfg.obs.keypoint_scale:g} · "
+                    f"Policy keypoints: **{physics.env.cfg.obs.keypoint_mode}**.  \n"
+                    f"Keypoint scale: {physics.env.cfg.obs.keypoint_scale if physics.env.cfg.obs.keypoint_mode == 'play' else '1 (no expansion)'} · "
                     f"Object base size: {physics.env.cfg.reward.object_base_size:g} m  \n"
-                    f"Moving-half size / base: {tuple(round(float(v), 3) for v in physics.env.task._object_scales[0])}  \n"
+                    f"Observed object scales: {tuple(round(float(v), 3) for v in physics.env.observations.object_scales[0])}  \n"
+                    f"Cloth DR: {'sampled on every reset' if active.sample_material else 'fixed slider values'}.  \n"
+                    f"Policy delays/noise: {'on' if active.sample_sensor else 'off'}.  \n"
                     f"Table: `{Path(physics.env.cfg.assets.table_urdf).name}`  \n"
                     f"Size: {tuple(round(float(v), 3) for v in physics.table_size)} m  \n"
                     f"Table center: {tuple(round(float(v), 3) for v in physics.table_position)} m  \n"
                     f"Tabletop: {top:.3f} m world / {top - root[2]:.3f} m above robot base.  \n"
                     + ("Training limits, joint dynamics and nominal table placement. Friction follows recipe controls."
                        if active_profile == "training" else
+                       "Yibo's real limits, HAND2_DRIVE dynamics and 33 cm tabletop height."
+                       if active_profile == "yibo" else
                        "Real limits and identified dynamics; this differs from the policy's training setup.")
                 )
             else:
@@ -676,7 +749,7 @@ def main() -> None:
                         mesh.position, mesh.wxyz = position, orientation
                     if hasattr(physics, "player"):
                         robot_view.update_cfg(physics.robot_joint_positions(robot_view.get_actuated_joint_names()))
-                        current, targets = physics.keypoints(scaled=keypoint_display.value == "Policy (Play)")
+                        current, targets = physics.keypoints(scaled=keypoint_display.value == "Policy input")
                         keypoints_view.points = current
                         targets_view.points = targets
                         errors_view.points = np.stack((current, targets), axis=1)

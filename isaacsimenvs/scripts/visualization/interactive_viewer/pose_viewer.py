@@ -565,28 +565,11 @@ class PlayPoseViewerWrapper(gym.Wrapper):
 # The cloth tasks' viewer -- Interactive HTML capture for cloth-folding training, logged to wandb.
 #
 #
-# Extends the Play pose viewer with the one thing a rigid-pose viewer cannot show: the cloth. A cloth
-# has no root transform -- its vertex positions *are* its state -- so it travels as a deformable
-# channel (static triangle indices plus a per-frame vertex trajectory) rather than as a (T, 7) pose.
-#
-# **Nothing is uploaded to wandb as an asset.** The cloth is a procedural grid, so its geometry is
-# plain numbers in the payload: 81 vertices x 3 floats per frame, order 1 KB. The robot's ~41 MB of
-# STLs are fetched by the browser from the public repo via `--capture_viewer_github_raw_base`, exactly
-# as the Play viewer already does.
-#
-# Three things are drawn that the Play viewer has no notion of:
-#
-# * the moving half, in the colour the renders use for it
-# * the stationary half, likewise
-# * the fold target as a translucent ghost -- the same `folded_half_w()` the reward and the success
-#   criterion are computed from, so what is on screen is what is being optimised
-#
-# and two things are deliberately NOT drawn. The Play viewer renders the spawned rigid tool at
-# `object_pose` and a green copy of it at `goal_pose`. For cloth the tool pool is still built
-# (`Cloth.yaml` pins `handle_head_types: ["hammer"]`) but the cloth replaces the spawned object, so
-# both are hammers: one inert, one a green hammer sitting at a `goal_viz` marker that
-# `ClothEnv._drive_goal_marker` overwrites every step. `draw_rigid_object=False` suppresses them.
-# This is the same confusion the offscreen renderer had before `_hide_goal_viz`.
+# Records cloth geometry alongside robot/table poses. Rigid backends provide closed
+# plate prisms in their actual body-link poses; VBD backends provide a particle grid.
+# Both travel as vertex trajectories, embedded directly in the HTML. The fold goal
+# remains a translucent surface. Robot STL meshes are fetched from the configured
+# repository URL. No rigid tool/goal URDF is drawn for cloth tasks.
 # ==================================================================================================
 
 #: Matches the offscreen renderer (`isaacsimenvs/scripts/visualization/policies/render_newton.py`) so a wandb clip and an mp4 of the same
@@ -625,7 +608,7 @@ def capture_cloth_viewer_frame(env, env_id: int) -> dict[str, Any]:
 
 
 class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
-    """Robot + table, plus the cloth cloth and its fold target (no rigid manipuland)."""
+    """Robot + table, physical cloth geometry and its fold target."""
 
     def _object_urdf(self, inner):
         return "", None
@@ -645,10 +628,17 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
 
         cloth = np.asarray([f["cloth_vertices"] for f in frames], dtype=float)
         ghost = np.asarray([f["goal_vertices"] for f in frames], dtype=float)
-        # Rigid-cloth pool: the plates themselves, when every frame shows the same shape (a capture
-        # spanning a reset onto another shape falls back to the particle grid).
+        # Each current rigid environment retains its design and dimensions across resets.
+        # Never silently replace rigid panels with the observation grid: that erases
+        # thickness and stretches triangles across independently rotating bodies.
         plates = None
-        if all("plate_vertices" in f for f in frames) and len({f["plate_shape"] for f in frames}) == 1:
+        if any("plate_vertices" in f for f in frames):
+            if not all("plate_vertices" in f for f in frames) or len({f["plate_shape"] for f in frames}) != 1:
+                raise ValueError("Rigid cloth capture must keep one environment/design per HTML recording")
+            reference = frames[0]
+            if any(f["plate_tris"] != reference["plate_tris"] or
+                   f["plate_moving"] != reference["plate_moving"] for f in frames):
+                raise ValueError("Rigid cloth capture topology changed within one recording")
             plates = (
                 np.asarray([f["plate_vertices"] for f in frames], dtype=float),
                 np.asarray(frames[0]["plate_tris"], dtype=int).reshape(-1, 3),
@@ -683,11 +673,13 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
                     "indices": (plates[1][plates[2]] if plates else tri[in_moving]).reshape(-1).tolist(),
                     "vertices": plates[0] if plates else cloth,
                     "color": MOVING_COLOR,
+                    "flat_shading": plates is not None,
                 },
                 "cloth_stationary": {
                     "indices": (plates[1][~plates[2]] if plates else tri[~in_moving]).reshape(-1).tolist(),
                     "vertices": plates[0] if plates else cloth,
                     "color": STATIONARY_COLOR,
+                    "flat_shading": plates is not None,
                 },
                 "fold_goal": {
                     "indices": ghost_tris,

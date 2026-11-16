@@ -2,8 +2,9 @@
 
 The robot fields retain Play's joint order, normalization, xyzw quaternions and
 palm reference frame. Object pose and velocity describe the moving half; four
-ordered 3D cuboid markers describe its current and goal poses. Dimensions are
-[length/2, width, thickness] divided by reward.object_base_size.
+ordered cuboid markers or physical planar landmarks describe its current and goal poses.
+The yibo preset instead preserves the historical inset-marker and full-sheet
+scale contract. Physical cloth scoring is independent of these representations.
 
 Object-state DR delays this pose and its local markers together, then applies
 pose noise and reconstructs the markers. Physical rewards and success continue
@@ -12,8 +13,8 @@ to use the task's cloth geometry, independently of these policy markers.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 import torch
 
@@ -79,8 +80,24 @@ class ObservationBuilder:
             PLAY_ROBOT_ROOT_POS, device=self.device
         )
         self.keypoint_scale = float(getattr(cfg.obs, "keypoint_scale", 1.5))
+        self.keypoint_mode = getattr(cfg.obs, "keypoint_mode", "play")
+        if self.keypoint_mode not in ("play", "planar", "yibo"):
+            raise ValueError("obs.keypoint_mode must be 'play', 'planar' or 'yibo'")
         if not math.isfinite(self.keypoint_scale) or self.keypoint_scale <= 0:
             raise ValueError("obs.keypoint_scale must be finite and positive")
+        self._yibo_object_scales = None
+        if self.keypoint_mode == "yibo":
+            thickness = cfg.obs.yibo_contact_thickness
+            lift = float(cfg.obs.yibo_goal_lift)
+            if not math.isfinite(lift):
+                raise ValueError("yibo_goal_lift must be finite")
+            dimensions = task._cloth_grid.dims.clone()
+            if thickness is not None:
+                thickness = float(thickness)
+                if not math.isfinite(thickness) or thickness <= 0:
+                    raise ValueError("yibo_contact_thickness must be finite and positive, or None")
+                dimensions[:, 2] = thickness
+            self._yibo_object_scales = dimensions / float(cfg.reward.object_base_size)
         dr = cfg.domain_randomization
         self._obs_queue = torch.zeros(
             self.num_envs, max(1, int(dr.obs_delay_max)), int(cfg.observation_space), device=self.device
@@ -91,6 +108,11 @@ class ObservationBuilder:
         self._object_quat_previous = torch.zeros(self.num_envs, 4, device=self.device)
         self._object_quat_valid = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
+    @property
+    def object_scales(self):
+        """Selected policy dimensions normalized by reward.object_base_size."""
+        return self._yibo_object_scales if self.keypoint_mode == "yibo" else self.task._object_scales
+
     def reset(self, ids):
         self._obs_queue[ids] = 0.0
         self._object_state_queue[ids] = 0.0
@@ -100,7 +122,11 @@ class ObservationBuilder:
         return state.palm_pos_w + rotations.apply(state.palm_quat_w, self._palm_offset.expand_as(state.palm_pos_w))
 
     def object_features(self, state: SimState, view: TaskView) -> ObjectFeatures:
-        """Fit the moving half and construct its ordered cuboid current/goal markers."""
+        """Fit the object pose and read the selected current/goal landmarks."""
+        if self.keypoint_mode == "yibo":
+            from .geometry.yibo import yibo_object_features
+
+            return ObjectFeatures(*yibo_object_features(self.task._cloth_grid, state, self.cfg.obs.yibo_goal_lift))
         from .geometry.moving_half import moving_half_pose
 
         pose = moving_half_pose(self.task._cloth_grid, state, view, self.task._unfold_env)
@@ -116,6 +142,11 @@ class ObservationBuilder:
         # clean pose are idempotent. Observation noise never enters this history.
         self._object_quat_previous.copy_(quat.detach())
         self._object_quat_valid.fill_(True)
+        if self.keypoint_mode == "planar":
+            # Use measured landmarks directly, including bending across several
+            # plates. No cuboid reconstruction, thickness offset or 1.5 expansion.
+            return ObjectFeatures(pose.pos_w, quat, pose.lin_vel_w, pose.ang_vel_w,
+                                  view.corners_w, view.targets_w)
         dims = self.task._object_scales * float(self.cfg.reward.object_base_size)
         corners = torch.tensor(PLAY_KEYPOINT_CORNERS, dtype=dims.dtype, device=dims.device)
         offsets = corners[None] * dims[:, None] * (self.keypoint_scale / 2.0)
@@ -181,7 +212,7 @@ class ObservationBuilder:
             "fingertip_pos_rel_palm": fingertip_rel_palm,
             "keypoints_rel_palm": kp - palm.unsqueeze(1),
             "keypoints_rel_goal": kp - targets,
-            "object_scales": self.task._object_scales,
+            "object_scales": self.object_scales,
             "closest_keypoint_max_dist": self.task._closest_fold_err.unsqueeze(-1),
             "closest_fingertip_dist": self.task._closest_fingertip_dist,
             "lifted_object": torch.zeros(n, 1, device=self.device),

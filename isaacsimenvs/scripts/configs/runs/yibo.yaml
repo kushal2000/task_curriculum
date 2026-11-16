@@ -1,0 +1,47 @@
+# Compatibility defaults for flat7RW_fricition.pth, yiboc_wuji commit 2b82faf.
+# Historical cloth gains, contact shell and friction DR on our current designs.
+# The current design catalog and physical fold/release objective remain active.
+base: rigid_body_cloth
+env:
+  robot_preset: yibo
+  obs:
+    keypoint_mode: yibo
+    yibo_contact_thickness: 0.016
+    yibo_goal_lift: 0.0
+  domain_randomization:
+    use_obs_delay: false
+    use_action_delay: false
+    use_object_state_delay_noise: false
+    joint_velocity_obs_noise_std: 0.0
+    joint_pos_obs_noise_std: 0.0
+    action_noise_std: 0.0
+  rigid_cloth:
+    length_range: [0.10, 0.20]
+    width_range: [0.10, 0.20]
+    thickness_range: [0.002, 0.002]
+    point_resolution: 7
+    density: 2.0
+    hinge_stiffness_override: 0.0
+    hinge_damping_override: 0.05
+    hinge_armature: 0.001
+    rest_offset: 0.007
+    contact_offset: 0.012
+    table_static_friction: 1.0
+    hand_static_friction: 0.5
+    dynamic_friction_ratio: 1.0
+    spawn_clearance: 0.049  # 2 mm slab mid-plane starts 5 cm above tabletop.
+    randomization:
+      enabled: true
+      profile: yibo
+      yibo_cloth_friction: [0.7, 1.5]
+      yibo_robot_friction: [0.35, 0.65]
+      yibo_table_friction: [0.7, 1.3]
+      yibo_rest_offset: [0.004, 0.010]
+      yibo_friction_seed: 0
+      density: [0.5, 3.0]  # Viewer bounds; historical density is fixed at 2 kg/m².
+      table_static_friction: [0.1, 1.5]
+      hand_static_friction: [0.1, 1.5]
+  reset:
+    table_reset_xy: [0.0, 0.0]
+    table_reset_z: 0.38
+    table_reset_z_range: 0.0

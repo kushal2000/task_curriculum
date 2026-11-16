@@ -20,9 +20,9 @@ if TYPE_CHECKING:
     from isaacsimenvs.tasks.cloth.backends.vbd.config import DeformableClothEnvCfg
 
 
-def configure(cfg: DeformableClothEnvCfg) -> None:
+def configure(cfg: DeformableClothEnvCfg, *, robot_spec=ROBOT) -> None:
     """Build coupled physics and install the shared Isaac Lab 3 compatibility fixes."""
-    cfg.sim.physics = cfg.deformable_cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), ROBOT)
+    cfg.sim.physics = cfg.deformable_cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), robot_spec)
     cfg.sim.use_newton_actuators = True
     patches.install_actuator_broadcast()
     patches.install_armature_writeback()
@@ -30,11 +30,11 @@ def configure(cfg: DeformableClothEnvCfg) -> None:
     if not cfg.use_gravcomp:
         raise ValueError("use_gravcomp=false needs the old object-gravity wrench path, which is gone")
     patches.install_newton_gravcomp()
-    patches.install_newton_condim(int(cfg.newton.condim), tuple(ROBOT.fingertip_link_names))
+    patches.install_newton_condim(int(cfg.newton.condim), tuple(robot_spec.fingertip_link_names))
 
 
 @contextmanager
-def startup(env, cfg: DeformableClothEnvCfg):
+def startup(env, cfg: DeformableClothEnvCfg, *, robot_spec=ROBOT):
     """Install construction hooks and restore manager methods even if setup fails."""
     cloth = cfg.deformable_cloth
     env._plasticity = None
@@ -43,17 +43,17 @@ def startup(env, cfg: DeformableClothEnvCfg):
         if cloth.plastic_yield_curvature > 0.0:
             cleanup.callback(install_plasticity_at_capture(env, float(cloth.plastic_yield_curvature)))
         if cloth.full_surface_contact:
-            cleanup.callback(install_full_surface_sdf(cfg))
+            cleanup.callback(install_full_surface_sdf(cfg, robot_spec=robot_spec))
         if cloth.self_contact_mu > 0.0 or cloth.table_contact_mu > 0.0:
             cleanup.callback(install_cloth_friction(cfg))
         yield
 
 
-def finish_setup(env, cfg: DeformableClothEnvCfg) -> None:
+def finish_setup(env, cfg: DeformableClothEnvCfg, *, robot_spec=ROBOT) -> None:
     """Restore robot materials, refresh solver views, and finish uncaptured plasticity setup."""
     # Newton floors the massless placeholder links' inertia during finalization.
     patches.restore_placeholder_inertia(env)
-    scene.set_base_materials(env, ROBOT)
+    scene.set_base_materials(env, robot_spec)
     patches.notify_solver(env)
     cloth = cfg.deformable_cloth
     if cloth.self_contact_mu > 0.0 or cloth.table_contact_mu > 0.0:
@@ -147,7 +147,7 @@ def install_cloth_friction(cfg: DeformableClothEnvCfg):
     return undo
 
 
-def install_full_surface_sdf(cfg: DeformableClothEnvCfg):
+def install_full_surface_sdf(cfg: DeformableClothEnvCfg, *, robot_spec=ROBOT):
     """Provision SDFs before model finalization; return the manager-hook undo.
 
     Full-surface contact needs SDFs on proxy meshes and particle-colliding static
@@ -158,7 +158,7 @@ def install_full_surface_sdf(cfg: DeformableClothEnvCfg):
     from isaaclab_newton.physics import NewtonManager
 
     c = cfg.deformable_cloth
-    pats = [re.compile(p) for p in c.proxy_body_patterns(ROBOT)]
+    pats = [re.compile(p) for p in c.proxy_body_patterns(robot_spec)]
     mesh_types = (int(newton.GeoType.MESH), int(newton.GeoType.CONVEX_MESH))
     collide_particles = int(newton.ShapeFlags.COLLIDE_PARTICLES)
     res = int(c.full_surface_sdf_resolution) or None

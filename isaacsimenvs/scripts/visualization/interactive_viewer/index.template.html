@@ -283,6 +283,8 @@
           side: THREE.DoubleSide,
           transparent: spec.opacity !== undefined && spec.opacity < 1.0,
           opacity: spec.opacity ?? 1.0,
+          // Prism faces need sharp normals at their true top/bottom/side edges.
+          flatShading: spec.flat_shading ?? false,
           roughness: 0.9,
           metalness: 0.0,
         });

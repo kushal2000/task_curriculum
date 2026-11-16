@@ -211,7 +211,7 @@ class RigidBackend(ClothBackend):
             randomization.rigid_randomize(self, ids)
 
     def viewer_plates(self, env_id: int) -> tuple[int, np.ndarray, np.ndarray, np.ndarray]:
-        """Actual polygon surfaces, transformed by their bodies, for one global environment."""
+        """Closed physical plate prisms, transformed by body LINK poses, for one environment."""
         group = self.groups[int(self._env_group[env_id])]
         local = int(self._env_local[env_id])
         spec = group.design.resolve(*(float(value) for value in self._dimensions_cpu[env_id]))
@@ -219,7 +219,7 @@ class RigidBackend(ClothBackend):
         vertices, triangles, moving = [], [], []
         offset = 0
         for plate, body in zip(spec.plates, group.body_ids):
-            rest, faces = designs.surface_mesh(plate)
+            rest, faces = designs.extrusion_mesh(plate)
             rest = torch.as_tensor(rest, dtype=data.body_link_pos_w.dtype, device=self.device)
             vertices.append(
                 data.body_link_pos_w[local, body]

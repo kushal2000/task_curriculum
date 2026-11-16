@@ -10,7 +10,7 @@ prior was trained on; ``tests/test_cloth_utils.py`` pins both.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 #: Play's robot base position; ``palm_pos`` is observed as if the base were here.
 PLAY_ROBOT_ROOT_POS = (0.0, 0.8, 0.0)
@@ -194,3 +194,27 @@ FLEXIV_WUJI_RIGHT_REAL = RobotSpec(
 )
 
 ROBOT = FLEXIV_WUJI_RIGHT_REAL
+
+# The flat7RW fine-tunes used HAND2_DRIVE, with real limits supplied by the URDF.
+# Keep this checkpoint profile independent of the current identified hand.
+YIBO_ROBOT = replace(
+    ROBOT,
+    name="flexiv_wuji_right_human_like",
+    hand_armature={j: (0.0005 if i in (0, 1, 4, 8, 12, 16) else 0.0002)
+                   for i, j in enumerate(HAND_JOINTS)},
+    hand_effort_limit=dict(zip(HAND_JOINTS, (
+        1.02, .83, .35, .21, 1.05, .38, .31, .30, 1.06, .39,
+        .32, .29, 1.02, .41, .28, .30, .87, .36, .28, .30,
+    ))),
+    hand_friction=0.0, hand_dynamic_friction=None, hand_viscous_friction=None,
+    hand_spring_stiffness={}, hand_spring_ref={},
+)
+
+
+def get_robot_spec(preset: str) -> RobotSpec:
+    """Select the identified hand or the historical checkpoint's hand dynamics."""
+    if preset == "real":
+        return ROBOT
+    if preset == "yibo":
+        return YIBO_ROBOT
+    raise ValueError(f"unknown robot_preset {preset!r}; expected real or yibo")

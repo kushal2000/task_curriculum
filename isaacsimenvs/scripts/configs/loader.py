@@ -24,6 +24,7 @@ from __future__ import annotations
 import functools
 import sys
 from collections.abc import Callable
+from pathlib import Path
 
 import gymnasium as gym
 import hydra
@@ -37,7 +38,7 @@ from isaaclab.utils import replace_slices_with_strings, replace_strings_with_sli
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 from omegaconf import DictConfig, OmegaConf
 
-from isaacsimenvs import CONFIG_DIR
+from isaacsimenvs import CONFIG_DIR, REPO_ROOT
 
 EXPERIMENT_DIR = CONFIG_DIR / "runs"
 
@@ -51,11 +52,25 @@ def _deep_merge(base: dict, over: dict) -> dict:
 
 
 def load_experiment(name: str) -> dict:
-    """``isaacsimenvs/scripts/configs/runs/<name>.yaml`` with its ``base:`` chain merged underneath it."""
-    with open(EXPERIMENT_DIR / f"{name}.yaml") as f:
-        exp = yaml.safe_load(f) or {}
-    base = exp.pop("base", None)
-    return _deep_merge(load_experiment(base), exp) if base else exp
+    """Load a named run or repository/absolute YAML path, with relative base paths."""
+    def read(path: Path, ancestors: set[Path]) -> dict:
+        path = path.with_suffix(".yaml") if not path.suffix else path
+        path = path.resolve()
+        if path in ancestors:
+            raise ValueError(f"Run recipe inheritance cycle at {path}")
+        with path.open() as source:
+            exp = yaml.safe_load(source) or {}
+        if not isinstance(exp, dict):
+            raise ValueError(f"Run recipe {path} must contain a mapping")
+        base = exp.pop("base", None)
+        return _deep_merge(read(path.parent / base, ancestors | {path}), exp) if base else exp
+
+    path = Path(name).expanduser()
+    path = path.with_suffix(".yaml") if not path.suffix else path
+    if not path.is_absolute():
+        repository_path = REPO_ROOT / path
+        path = repository_path if repository_path.is_file() else EXPERIMENT_DIR / path
+    return read(path, set())
 
 
 def hydra_task_config_with_yaml(
@@ -76,7 +91,7 @@ def hydra_task_config_with_yaml(
         yaml_entry_point: Key in the task's gym kwargs pointing to the task YAML
             overlay. If absent from the registered kwargs, no overlay is applied
             and behavior matches Isaac Lab's stock decorator.
-        experiment: Name of a ``isaacsimenvs/scripts/configs/runs/`` YAML layered over the task YAML, or ``None``.
+        experiment: Run recipe name or repository/absolute YAML path, or ``None``.
     """
 
     def decorator(func):
@@ -117,7 +132,7 @@ def hydra_task_config_with_yaml(
                         agent_cfg = _deep_merge(agent_cfg, exp["agent"])
                     else:
                         agent_cfg.from_dict(exp["agent"])
-                print(f"[hydra] experiment {experiment}: {EXPERIMENT_DIR / experiment}.yaml", flush=True)
+                print(f"[hydra] experiment {experiment}", flush=True)
 
             env_cfg = replace_env_cfg_spaces_with_strings(env_cfg)
             env_cfg_dict = env_cfg.to_dict()

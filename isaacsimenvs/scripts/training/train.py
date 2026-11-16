@@ -64,6 +64,43 @@ def _pose_viewer_target(task_id: str) -> str | None:
     return None
 
 
+def _pose_viewer_samples(env, env_id: int, per_design: bool) -> list[tuple[str, int]]:
+    """Choose one actual environment per rigid design for separate viewer captures."""
+    groups = getattr(getattr(env.unwrapped, 'backend', None), 'groups', ())
+    if per_design and groups:
+        return [(group.design.name, int(group.env_ids[0])) for group in groups if len(group.env_ids)]
+    return [('', env_id)]
+
+
+def _checkpoint_options(args, agent_cfg: dict) -> dict:
+    """CLI restores take precedence; recipe weight initialization starts fresh training."""
+    from pathlib import Path
+
+    from isaacsimenvs import REPO_ROOT
+
+    params = agent_cfg["params"]
+    from_recipe = args.checkpoint is None
+    checkpoint = args.checkpoint
+    if from_recipe and params.get("load_checkpoint", False):
+        checkpoint = params.get("load_path")
+        if not checkpoint:
+            raise ValueError("agent.params.load_checkpoint=true requires a nonempty load_path")
+    mode = args.checkpoint_load_mode or (params.get("checkpoint_load_mode", "weights") if from_recipe else "resume")
+    if mode not in ("resume", "weights"):
+        raise ValueError(f"checkpoint_load_mode must be resume or weights, got {mode!r}")
+    if checkpoint:
+        path = Path(checkpoint).expanduser()
+        path = REPO_ROOT / path if from_recipe and not path.is_absolute() else path
+        path = path.resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"Checkpoint does not exist: {path}")
+        checkpoint = str(path)
+    # Player.restore only loads its network; it has no training optimizer to resume.
+    if getattr(args, "test", False):
+        mode = "resume"
+    return {"checkpoint": checkpoint or None, "checkpoint_load_mode": mode}
+
+
 def main() -> None:
     # `kill -USR1 <pid>` dumps every thread's Python stack to stderr (the slurm log). Only a signal
     # handler, no timer thread, so it is safe to leave on: Kit swallows tracebacks and the cluster
@@ -87,8 +124,8 @@ def main() -> None:
     parser.add_argument(
         "--experiment",
         default=None,
-        help="A run recipe in isaacsimenvs/scripts/configs/runs/<name>.yaml, layered between the task YAML "
-        "and the Hydra CLI overrides, e.g. rigid_body_cloth.",
+        help="A run recipe name (e.g. rigid_body_cloth) or YAML path (e.g. "
+        "experiments/yibo_our_dr/finetune.yaml), layered before Hydra CLI overrides.",
     )
     # --- Runtime toggles ---
     parser.add_argument("--test", action="store_true", help="Run inference (player) instead of training")
@@ -96,8 +133,9 @@ def main() -> None:
     parser.add_argument(
         "--checkpoint_load_mode",
         choices=("resume", "weights"),
-        default="resume",
-        help="resume restores optimizer/rollout/env state; weights starts fresh from model weights.",
+        default=None,
+        help="resume restores optimizer/rollout/env state; weights starts fresh from model weights. "
+        "Defaults to resume for --checkpoint, or the run recipe's initialization mode.",
     )
     parser.add_argument(
         "--single_variant",
@@ -134,6 +172,8 @@ def main() -> None:
     parser.add_argument("--capture_viewer_len", type=int, default=600)
     parser.add_argument("--capture_viewer_interval", type=int, default=6000)
     parser.add_argument("--capture_viewer_env_id", type=int, default=0)
+    parser.add_argument("--capture_viewer_per_design", action="store_true",
+                        help="Capture one representative environment per rigid-cloth design.")
     parser.add_argument("--capture_viewer_wandb_key", default="interactive_viewer")
     parser.add_argument(
         "--capture_viewer_github_raw_base",
@@ -195,6 +235,10 @@ def main() -> None:
     @hydra_task_config_with_yaml(args_cli.task, args_cli.agent, experiment=args_cli.experiment)
     def run(env_cfg, agent_cfg: dict) -> None:
         hydra_run_dir = HydraConfig.get().runtime.output_dir
+        checkpoint_options = _checkpoint_options(args_cli, agent_cfg)
+        if checkpoint_options["checkpoint"]:
+            print(f"[train] {checkpoint_options['checkpoint_load_mode']} checkpoint "
+                  f"{checkpoint_options['checkpoint']}", flush=True)
 
         # Move this job's Slurm log into the run folder first thing, before the scene is built: a
         # large pool takes most of an hour to build, and a job that dies during setup should still
@@ -331,7 +375,14 @@ def main() -> None:
                     viewer_kwargs["github_raw_base"] = args_cli.capture_viewer_github_raw_base
                 if "url_check" in accepted:
                     viewer_kwargs["url_check"] = args_cli.capture_viewer_url_check
-                env = viewer_cls(env, **viewer_kwargs)
+                for label, env_id in _pose_viewer_samples(
+                    env, args_cli.capture_viewer_env_id, args_cli.capture_viewer_per_design
+                ):
+                    sample_kwargs = dict(viewer_kwargs, env_id=env_id)
+                    if label:
+                        sample_kwargs['output_dir'] = Path(viewer_kwargs['output_dir']) / label
+                        sample_kwargs['wandb_key'] = f"{viewer_kwargs['wandb_key']}/{label}"
+                    env = viewer_cls(env, **sample_kwargs)
 
         # Clip bounds live in the rl_games YAML (params.env.*). Default to
         # +inf if absent so a task without clip YAML just runs unbounded —
@@ -383,8 +434,7 @@ def main() -> None:
             {
                 "train": not args_cli.test,
                 "play": args_cli.test,
-                "checkpoint": args_cli.checkpoint,
-                "checkpoint_load_mode": args_cli.checkpoint_load_mode,
+                **checkpoint_options,
             }
         )
 

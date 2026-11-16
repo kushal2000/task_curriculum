@@ -210,8 +210,8 @@ def test_viewer_uses_polygon_faces_and_the_selected_global_row():
         group = backend.groups[int(backend._env_group[env_id])]
         spec = group.design.resolve(*backend._dimensions_cpu[env_id])
         _, vertices, triangles, moving = backend.viewer_plates(env_id)
-        assert len(vertices) == sum(len(plate.vertices) for plate in spec.plates)
-        assert len(triangles) == sum(len(plate.vertices) - 2 for plate in spec.plates)
+        assert len(vertices) == sum(2 * len(plate.vertices) for plate in spec.plates)
+        assert len(triangles) == sum(4 * len(plate.vertices) - 4 for plate in spec.plates)
         assert triangles.min() >= 0 and triangles.max() < len(vertices)
         assert moving.dtype == np.bool_ and len(moving) == len(triangles)
         assert vertices[:, 0].min() > env_id * 10 - .5
@@ -429,6 +429,44 @@ def test_nominal_material_gains_and_friction_apply_when_randomization_is_disable
                                torch.tensor([.8, .64, 0.]).expand_as(backend._robot_mats))
     torch.testing.assert_close(backend.table.root_physx_view.materials,
                                torch.tensor([.4, .32, 0.]).expand_as(backend._table_mats))
+
+
+@pytest.mark.parametrize("randomized", [False, True])
+def test_fixed_historical_hinge_gains_ignore_material_draws_and_topology(randomized):
+    backend = _backend(ALL_DESIGNS)
+    cfg = backend.cfg.rigid_cloth
+    cfg.randomization.enabled = randomized
+    cfg.hinge_stiffness_override, cfg.hinge_damping_override = 0., .05
+    randomization.rigid_init(backend)
+    randomization.rigid_randomize(backend, torch.tensor([5, 0, 2]))
+    randomization.rigid_check(backend, torch.arange(backend.num_envs))
+    for group in backend.groups:
+        view = group.articulation.root_physx_view
+        torch.testing.assert_close(view.stiffness, torch.zeros_like(view.stiffness))
+        torch.testing.assert_close(view.damping, torch.full_like(view.damping, .05))
+    # The checker must still catch a real physics write/read mismatch.
+    backend.groups[0].articulation.root_physx_view.damping[0, 0] = .06
+    with pytest.raises(RuntimeError, match="damping read-back mismatch"):
+        randomization.rigid_check(backend, torch.arange(backend.num_envs))
+
+
+def test_one_fixed_gain_preserves_the_other_material_gain():
+    backend = _backend(ALL_DESIGNS)
+    backend.cfg.rigid_cloth.hinge_damping_override = .05
+    randomization.rigid_init(backend)
+    for group in backend.groups:
+        view = group.articulation.root_physx_view
+        expected = group.hinge_geometry * backend._dr_bending_rigidity[group.env_ids, None]
+        torch.testing.assert_close(view.stiffness, expected)
+        torch.testing.assert_close(view.damping, torch.full_like(view.damping, .05))
+
+
+@pytest.mark.parametrize("name,value", [("stiffness", -.1), ("damping", float('nan'))])
+def test_invalid_historical_gain_override_is_rejected(name, value):
+    backend = _backend()
+    setattr(backend.cfg.rigid_cloth, f"hinge_{name}_override", value)
+    with pytest.raises(ValueError, match=f"hinge_{name}_override must be finite and nonnegative"):
+        randomization.rigid_init(backend)
 
 
 def test_material_binding_authors_multiply_and_survives_per_env_template_copy():

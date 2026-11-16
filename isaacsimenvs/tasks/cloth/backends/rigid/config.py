@@ -16,6 +16,16 @@ class RigidClothRandomizationCfg:
     """Material differences, re-drawn per env at EVERY reset (``randomization.py``)."""
 
     enabled: bool = True
+    profile: str = "material"
+    """material: per-reset sheet material draws; yibo: historical startup friction
+    buckets and per-reset contact shells, retaining configured nominal masses/gains."""
+    yibo_cloth_friction: list[float] = [0.7, 1.5]
+    yibo_robot_friction: list[float] = [0.35, 0.65]
+    yibo_table_friction: list[float] = [0.7, 1.3]
+    """Absolute startup friction bucket bounds; static equals dynamic in yibo."""
+    yibo_rest_offset: list[float] = [0.004, 0.010]
+    """Cloth collision shell [m], uniform each reset in yibo; contact_offset stays fixed."""
+    yibo_friction_seed: int = 0
     density: list[float] = [0.02, 0.5]
     """Log-uniform absolute areal density [kg/m²], or 20–500 g/m², per cloth reset."""
     hinge_armature_scale: list[float] = [0.0, 0.0]
@@ -82,6 +92,14 @@ class RigidClothCfg:
     bending_viscosity: float = 5.0e-5
     """Sheet bending viscosity C [N m s]; hinge damping is C × length / span.
     Nominal value is provisional and requires calibration to the chosen fabric."""
+    hinge_stiffness_override: float = -1.0
+    """Optional fixed stiffness [N m/rad] on every hinge, bypassing material B and geometry.
+    Used to replay historical policies; -1 retains the sheet material model.
+    A numeric sentinel permits Isaac Lab's strict YAML scalar type checking."""
+    hinge_damping_override: float = -1.0
+    """Optional fixed damping [N m s/rad] on every hinge, bypassing material C and geometry.
+    -1 retains the sheet material model. Fixed overrides also remain fixed
+    when other material properties are randomized."""
     hinge_armature: float = 0.0
     """Nominal added joint inertia [kg m²], used when randomization is disabled.
     Physical cloth has no joint rotor; the optional randomization fraction is also
