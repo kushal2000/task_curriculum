@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 
-sd = pytest.importorskip("isaacsimenvs.tasks.cloth.fold_task")
+from isaacsimenvs.tasks.cloth.utils import sheet_designs as sd
 
 
 def test_the_grid_is_4096_distinct_designs_spanning_the_ranges():
