@@ -391,11 +391,17 @@ class _PhysxClothMixin:
     # ------------------------------------------------------------------ construction
 
     def _setup_scene(self) -> None:
+        from isaacsimenvs.utils.setup_timer import stamp
+
+        stamp("scene: start")
         super()._setup_scene()
+        stamp("scene: base (robot, table, object) done")
         # Newton runs this inside setup_scene too (`pre_clone_scene_hook`); here there is no cloning
         # step to beat -- every env prim already exists -- only the simulator start, which follows.
         self._install_cloth()
+        stamp("scene: cloth pool installed")
         self._bind_contact_materials()
+        stamp("scene: contact materials bound")
         _reorder_object_pose_writes(self.object)
 
     def _bind_contact_materials(self) -> None:
@@ -902,10 +908,21 @@ class FoldPoolPhysxEnv(FoldPoolTaskMixin, RigidClothPhysxEnv):
             ) != 1:
                 raise RuntimeError(f"[fold_pool] {path} does not have exactly one articulation root")
             usd_of[(size, slab)] = str(path)
+        from isaacsimenvs.utils.setup_timer import stamp
 
+        stamp(f"pool {shape.name}: {len(keys)} sheet-size USDs written")
         stage = get_current_stage()
         pos = Gf.Vec3d(*[float(v) for v in park_local])
-        with bulk_edit_layer(stage, f"pool{s}") as layer:
+        # Straight into the ROOT layer inside one Sdf.ChangeBlock: the stage composes the new prims
+        # once, on exit. Not usd_bulk.bulk_edit_layer's anonymous sublayer, whose insertion makes USD
+        # recompose the whole stage -- ~25 ms per env, ~10 min at 24576 envs (gen_mechanics'
+        # assembly.py authors this way; experiments/nov15_setup_time: 185 -> 133 s at 2048 envs).
+        # usd_bulk's O(N^2) root-layer cost was measured on edits to EXISTING prims (material
+        # bindings), not on new ones.
+        # Verified equivalent: the composed pool prims (types, schemas, attribute values, joint
+        # targets) of the first 64 envs hash identically on both paths.
+        layer = stage.GetRootLayer()
+        with Sdf.ChangeBlock():
             for i in envs:
                 key = (round(float(self._env_size_np[i]), 6), round(float(self._env_slab_np[i]), 6))
                 spec = Sdf.CreatePrimInLayer(layer, f"/World/envs/env_{i}/FoldPool{s}")
@@ -916,6 +933,8 @@ class FoldPoolPhysxEnv(FoldPoolTaskMixin, RigidClothPhysxEnv):
                 t.default = pos
                 o = Sdf.AttributeSpec(spec, "xformOpOrder", Sdf.ValueTypeNames.TokenArray)
                 o.default = ["xformOp:translate"]
+            stamp(f"pool {shape.name}: {len(envs)} per-env prim specs authored")
+        stamp(f"pool {shape.name}: layer inserted into the stage")
         print(
             f"[fold_pool] {shape.name}: in {len(envs)} envs, {len(keys)} sheet sizes, one USD each",
             flush=True,

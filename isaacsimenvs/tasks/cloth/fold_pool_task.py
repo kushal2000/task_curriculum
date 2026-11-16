@@ -613,6 +613,41 @@ class FoldPoolTaskMixin:
         local = folded_rest - self._st_rest_centroid.unsqueeze(1)
         return torch.einsum("nij,nmj->nmi", r, local) + centroid.unsqueeze(1)
 
+    def viewer_plates(self, env_id: int) -> tuple[int, np.ndarray, np.ndarray, np.ndarray]:
+        """The pose viewer's drawing of env ``env_id``'s ACTIVE shape, as its rigid plates.
+
+        Returns ``(shape index, vertices (V, 3) world, triangles (T, 3), moving (T,) bool)``. Each
+        plate is its own convex polygon (``fold_shapes.Plate.polygon``, fan-triangulated) at the env's
+        sheet size, placed by its body pose -- the same lookup and scale the observed grid uses
+        (``fold_pool_adapter.shape_positions``), so plate corners land on the grid points that plate
+        carries. ``moving``: the plate is on the half fold's travelling (+x) side.
+        """
+        from isaacsimenvs.tasks.cloth.utils.fold_pool_adapter import _quat_apply
+
+        pool = self._cloth
+        s = int(pool.active[env_id])
+        shape = self._pool[s]
+        art = pool._arts[s]
+        keep, rows = pool.local_rows(s, torch.tensor([env_id], device=self.device))
+        if keep is not None and not bool(keep.all()):
+            raise ValueError(f"env {env_id} does not carry its active shape {shape.name}")
+        names = list(art.body_names)
+        pos, quat = pool._pose(art)
+        row = int(rows[0])
+        scale = pool._scale3[env_id].reshape(1, 3)
+        verts, tris, moving = [], [], []
+        for plate in shape.plates:
+            b = names.index(pool._prefix + plate.name)
+            poly = torch.tensor([(x, y, 0.0) for x, y in plate.polygon], device=self.device, dtype=torch.float32)
+            world = pos[row, b].unsqueeze(0) + _quat_apply(quat[row, b].expand(len(poly), 4), poly * scale)
+            base = sum(len(v) for v in verts)
+            verts.append(world)
+            for k in range(1, len(poly) - 1):
+                tris.append((base, base + k, base + k + 1))
+                moving.append(float(np.mean([x for x, _ in plate.polygon])) > 1e-9)
+        v = torch.cat(verts).detach().cpu().numpy()
+        return s, v, np.asarray(tris, dtype=int), np.asarray(moving, dtype=bool)
+
     def _sync_observed_keypoints(self) -> None:
         self._keypoint_offsets[:] = self._corner_rest_offsets
         self._keypoint_offsets_fixed[:] = self._corner_rest_offsets

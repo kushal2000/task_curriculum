@@ -56,6 +56,14 @@ def capture_cloth_viewer_frame(env, env_id: int) -> dict[str, Any]:
     # drift from the criterion.
     ghost = env.folded_half_w()[env_id] - origin
     frame["goal_vertices"] = ghost.detach().cpu().numpy().tolist()
+    # The rigid-cloth pool: draw its actual plates, not the particle grid they carry (a grid drawn as
+    # one sheet stretches across every plate boundary as the plates rotate).
+    if hasattr(env, "viewer_plates"):
+        shape, verts, tris, moving = env.viewer_plates(env_id)
+        frame["plate_shape"] = int(shape)
+        frame["plate_vertices"] = (verts - origin.detach().cpu().numpy()).tolist()
+        frame["plate_tris"] = tris.tolist()
+        frame["plate_moving"] = moving.tolist()
     # Reported so the HTML caption can carry the same numbers as the mp4 HUD.
     frame["fold_err"] = float(env.fold_error()[env_id])
     frame["footprint"] = float(env.footprint_ratio()[env_id])
@@ -80,6 +88,15 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
 
         sheet = np.asarray([f["cloth_vertices"] for f in frames], dtype=float)
         ghost = np.asarray([f["goal_vertices"] for f in frames], dtype=float)
+        # Rigid-cloth pool: the plates themselves, when every frame shows the same shape (a capture
+        # spanning a reset onto another shape falls back to the particle grid).
+        plates = None
+        if all("plate_vertices" in f for f in frames) and len({f["plate_shape"] for f in frames}) == 1:
+            plates = (
+                np.asarray([f["plate_vertices"] for f in frames], dtype=float),
+                np.asarray(frames[0]["plate_tris"], dtype=int).reshape(-1, 3),
+                np.asarray(frames[0]["plate_moving"], dtype=bool),
+            )
 
         # Split the sheet by which half each triangle belongs to, by MAJORITY vertex. An
         # all-three test leaves every triangle touching the excluded hinge row unclassified --
@@ -106,13 +123,13 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
             draw_rigid_object=False,
             deformables={
                 "cloth_moving": {
-                    "indices": tri[in_moving].reshape(-1).tolist(),
-                    "vertices": sheet,
+                    "indices": (plates[1][plates[2]] if plates else tri[in_moving]).reshape(-1).tolist(),
+                    "vertices": plates[0] if plates else sheet,
                     "color": MOVING_COLOR,
                 },
                 "cloth_stationary": {
-                    "indices": tri[~in_moving].reshape(-1).tolist(),
-                    "vertices": sheet,
+                    "indices": (plates[1][~plates[2]] if plates else tri[~in_moving]).reshape(-1).tolist(),
+                    "vertices": plates[0] if plates else sheet,
                     "color": STATIONARY_COLOR,
                 },
                 "fold_goal": {

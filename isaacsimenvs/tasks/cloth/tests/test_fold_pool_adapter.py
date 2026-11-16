@@ -394,3 +394,47 @@ def test_per_env_size_scales_the_grid_and_reset_shifts_the_centre(pool_adapter):
     for e, s in enumerate([0, 3, 4]):
         pose, _ = arts[s].pose_writes[-1]
         torch.testing.assert_close(pose[e, :2], offset[e, :2])
+
+
+def test_the_viewer_draws_each_plate_on_the_grid_points_it_carries(pool_adapter):
+    """The pose viewer's plates (FoldPoolTaskMixin.viewer_plates) are the observed sheet's plates.
+
+    Every shape, half folded, at 1.5x size: each drawn plate corner that sits on a grid node carried
+    by that same plate must coincide with the grid point the observation reads (the adapter's own
+    ``_positions``), and the moving plates are exactly the +x ones.
+    """
+    from types import SimpleNamespace
+
+    fpt = pytest.importorskip("isaacsimenvs.tasks.cloth.fold_pool_task")
+    n = len(SHAPES)
+    angles = {s: {e: SHAPES[s].fold_angles(fs.HALF_FOLD) for e in range(n)} for s in range(n)}
+    arts = [_Art(sh, n, angles[s]) for s, sh in enumerate(SHAPES)]
+    scale = 1.5
+    mappings = [fs.grid_plate_map(sh, RES) for sh in SHAPES]
+    mesh = pool_adapter.PoolAsClothMesh(
+        arts, mappings=mappings, body_prefix="slat_", num_envs=n, device=torch.device("cpu"),
+        xy_scale=torch.full((n,), scale),
+    )
+    mesh.active[:] = torch.arange(n)
+    cloud = mesh._positions()
+    rest = _grid()
+    task = SimpleNamespace(_cloth=mesh, _pool=SHAPES, device=torch.device("cpu"))
+    for e in range(n):
+        s, verts, tris, moving = fpt.FoldPoolTaskMixin.viewer_plates(task, e)
+        assert s == e
+        assert tris.max() < len(verts) and len(moving) == len(tris)
+        base, checked = 0, 0
+        for plate in SHAPES[s].plates:
+            for k, (x, y) in enumerate(plate.polygon):
+                hit = [g for g, (owner, _) in enumerate(mappings[s])
+                       if owner == plate.name and abs(rest[g, 0] - x) < 1e-9 and abs(rest[g, 1] - y) < 1e-9]
+                for g in hit:
+                    torch.testing.assert_close(torch.as_tensor(verts[base + k], dtype=torch.float32),
+                                               cloud[e, g], atol=1e-6, rtol=0)
+                    checked += 1
+            base += len(plate.polygon)
+        assert checked > 0, f"{SHAPES[s].name}: no plate corner sits on a grid node it carries"
+        centroid_x = []
+        for plate in SHAPES[s].plates:
+            centroid_x += [float(np.mean([x for x, _ in plate.polygon])) > 1e-9] * (len(plate.polygon) - 2)
+        assert moving.tolist() == centroid_x

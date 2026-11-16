@@ -204,6 +204,9 @@ def main() -> None:
     @hydra_task_config_with_yaml(args_cli.task, args_cli.agent, experiment=args_cli.experiment)
     def run(env_cfg, agent_cfg: dict) -> None:
         hydra_run_dir = HydraConfig.get().runtime.output_dir
+        from isaacsimenvs.utils.setup_timer import stamp as _stamp
+
+        _stamp("train: run() start")
         # Move this job's Slurm log into the run folder first thing, before the scene is built: a
         # large pool takes most of an hour to build, and a job that dies during setup should still
         # leave its log in its folder. Rank 0 only (the others share the job's log).
@@ -285,6 +288,9 @@ def main() -> None:
             cfg=env_cfg,
             render_mode="rgb_array" if args_cli.capture_video else None,
         )
+        from isaacsimenvs.utils.setup_timer import stamp
+
+        stamp("gym.make done (scene + simulator start / PhysX parse)")
 
         if args_cli.capture_video:
             from pathlib import Path
