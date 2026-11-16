@@ -25,11 +25,10 @@ experiments/submit.sh --time=7-00:00:00 --cpus-per-task=4 --mem=80G experiments/
     --checkpoint pretrained_policy/flexiv_wuji/model.pth --checkpoint_load_mode weights \
     agent.params.config.name=0_play
 
-# 2. Rigid cloth: fold + unfold, from the Play prior
+# 2. Rigid-body cloth: the single-hinge sheet, 4096 size designs, fold only, from scratch
 experiments/submit.sh --time=7-00:00:00 experiments/train.sh \
-    --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --experiment rigid_cloth_flexiv_wuji_full_dr \
-    --checkpoint pretrained_policy/flexiv_wuji/model.pth --checkpoint_load_mode weights --single_variant \
-    agent.params.config.name=0_rigid_cloth
+    --task Isaacsimenvs-RigidBodyCloth-Direct-v0 --experiment rigid_body_cloth --single_variant \
+    agent.params.config.name=0_rigid_body_cloth
 
 # 3. Deformable cloth (VBD sheet), from a rigid-cloth checkpoint
 experiments/submit.sh --time=2-00:00:00 experiments/train.sh \

@@ -1,34 +1,417 @@
-"""ClothEnv — fold half a cloth sheet onto the other half.
+"""The fold task on a deformable VBD cloth sheet, on Newton (Isaac Lab 3, ``.venv/isaaclab3``).
 
-Subclasses :class:`PlayNewtonEnv`, so the robot, table, action space and coupled solver are the
-ones already measured on the cable task. Only the manipuland changes.
-
-The sheet is authored as a flat ``UsdGeom.Mesh`` grid before the environments are replicated --
-`DeformableObject` infers ``surface`` (cloth) from a ``UsdGeom.Mesh`` and ``volume`` from a
-``UsdGeom.TetMesh``, so the prim type *is* the switch.
-
-State is the position of a few keypoints on the moving half; the goal is their mirror image across
-the fold line. See ``utils/cloth_geometry.py`` for both, kept separate so the fold is testable
-without a simulator.
-
-The task -- fold targets, reward, success, the goal marker, the finite guard -- is
-``cloth_task.ClothTaskMixin``, shared with the PhysX envs. This class adds only the VBD sheet.
+Where rigid-body-trained policies are evaluated (or fine-tuned). Sections: ``PlayNewtonEnv`` (the
+Play task's env on Newton: MJWarp robot + the patches that swap Isaac Lab's PhysX scene onto Newton),
+``BendingPlasticity`` (optional fold memory for the VBD sheet), and ``ClothEnv`` (the sheet, on the
+shared ``fold_task.ClothTaskMixin``).
 """
 
 from __future__ import annotations
 
-from isaacsimenvs.newton import patches  # noqa: F401
-from isaacsimenvs.tasks.cloth.cloth_env_cfg import ClothEnvCfg
-from isaacsimenvs.tasks.cloth.cloth_task import ClothTaskMixin
-from isaacsimenvs.tasks.cloth.utils.cloth_adapter import ClothAsRigidObject
-from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
-    corner_indices,
-    grid_mesh,
-)
-from isaacsimenvs.tasks.cloth.newton_base_env import PlayNewtonEnv
+import math
 
-__all__ = ["ClothEnv"]
+import numpy as np
+import warp as wp
 
+from isaacsimenvs.newton import compat, patches, physx_schema_shim, usd_cache
+from isaacsimenvs.tasks.cloth.deformable_env_cfg import ClothEnvCfg, PlayNewtonEnvCfg
+from isaacsimenvs.tasks.cloth.fold_task import ClothAsRigidObject, ClothTaskMixin, corner_indices, grid_mesh
+from isaacsimenvs.tasks.play.play_env import PlayEnv
+from isaacsimenvs.tasks.play.robots import get_robot_spec
+
+__all__ = ['BendingPlasticity', 'ClothEnv', 'PlayNewtonEnv', 'PlayNewtonEnvCfg', 'dihedral_angles']
+
+
+# ==================================================================================================
+# Play on Newton -- PlayNewtonEnv — the Play task constructed on Newton/MJWarp: the base of the VBD cloth env.
+# (was newton_base_env.py)
+# ==================================================================================================
+
+class PlayNewtonEnv(PlayEnv):
+    cfg: PlayNewtonEnvCfg
+
+    def __init__(
+        self, cfg: PlayNewtonEnvCfg, render_mode: str | None = None, **kwargs
+    ) -> None:
+        _install_pre_construction_patches(
+            cfg,
+            physics_cfg=type(self).build_physics_cfg(cfg),
+            pre_clone_hook=type(self).pre_clone_scene_hook,
+        )
+        super().__init__(cfg, render_mode, **kwargs)
+        _install_post_construction_patches(self)
+
+    @staticmethod
+    def build_physics_cfg(cfg: PlayNewtonEnvCfg):
+        """The physics config this env constructs on. Override to change solver.
+
+        A hook rather than a hardcoded call because a subclass may need a *different solver
+        topology* -- the cable env replaces this single MJWarp solve with a coupled MJWarp+VBD
+        one. It is a staticmethod so it can run before ``super().__init__``, which is the only
+        point at which ``sim.physics`` can still be changed.
+        """
+        return cfg.newton.build(int(cfg.scene.num_envs))
+
+    #: Optional ``fn(env)`` run at the end of ``setup_scene``, *before* the environments are
+    #: replicated. Any asset a subclass adds must be created here rather than after
+    #: ``super()._setup_scene()``: replication is also when Newton imports the stage into its
+    #: model, so an asset added later exists as USD and is invisible to the solver.
+    pre_clone_scene_hook = None
+
+    def _setup_scene(self) -> None:
+        # scene_utils.setup_scene has been wrapped by `install_cloning`, which performs the
+        # explicit environment replication Isaac Lab 2.x did inside `clone_environments()` and
+        # 3.0 no longer does. Without it Newton builds a single world and reset indexing walks
+        # off the end of a one-element array with a CUDA illegal memory access.
+        super()._setup_scene()
+
+
+def _install_pre_construction_patches(cfg: PlayNewtonEnvCfg, *, physics_cfg, pre_clone_hook=None) -> None:
+    """Everything that must be in place before ``_setup_scene`` runs. Idempotent.
+
+    Order is not arbitrary and is easy to get subtly wrong:
+
+    1. the compat shim re-binds ``isaaclab.utils.configclass``, which importing ``isaaclab_physx``
+       shadows, so it has to be re-asserted after any Isaac import;
+    2. the USD cache replaces the Kit URDF converter, which the asset bake calls, so it must be
+       installed before any asset is built;
+    3. the multi-asset patch decides how variants are spawned, and cloning replicates them --
+       spawning prototypes only is correct exactly when something replicates them afterwards, so
+       the two are one decision.
+    """
+    compat.install_isaaclab3_compat()
+
+    # `scene_utils._bake_usd` authors PhysX-namespaced USD attributes through `pxr.PhysxSchema`,
+    # which ships with Isaac Sim rather than usd-core. Must precede any asset bake. No-ops when
+    # the genuine plugin is present, so it never shadows the real one.
+    physx_schema_shim.install()
+
+    # Swap PhysX out for Newton. `cfg.sim.physics` is 3.0's backend-neutral field (2.x called it
+    # `physx`); the inherited PhysxCfg from PlayEnvCfg is simply replaced, so no PhysX manager is
+    # ever constructed. Built by `build_physics_cfg`, which subclasses override -- the cable env
+    # substitutes a coupled MJWarp+VBD solver here.
+    cfg.sim.physics = physics_cfg
+
+    # The task authors zero-gain USD drives and supply real gains through ImplicitActuatorCfg.
+    # PhysX honours that runtime injection; Newton bakes actuation from USD when the solver is
+    # built, so Isaac Lab has to synthesise NewtonActuator prims from the Lab actuator configs.
+    cfg.sim.use_newton_actuators = True
+
+    # `scene.replicate_physics` is deliberately left at the task default (False). Under 2.x it
+    # meant "parse each environment independently because its contents differ"; in 3.0 it only
+    # tells `isaaclab.cloner.replicate` to drop physics contexts. `install_cloning` below drains
+    # its own queue with replicate_physics=True instead, so flipping the scene flag here would
+    # not help and would disable the very replication Newton needs for its world partitioning.
+
+    # Kit-less: conversion is impossible here, so this is a lookup that raises on a miss rather
+    # than falling back. A fallback would either crash confusingly or silently convert with a
+    # different importer, breaking the like-for-like comparison the cache exists to guarantee.
+    usd_cache.install_reader()
+
+    num_envs = int(cfg.scene.num_envs)
+    patches.install_multi_asset(num_envs, prototypes_only=True)
+    patches.install_quat_convention()
+    patches.install_quat_math()
+    patches.install_fingertip_order()
+    # Newton's USD importer needs CollisionAPI pushed down onto mesh prims (Isaac Sim's URDF
+    # importer puts it on Xform wrappers, which Newton skips -- silently dropping every robot
+    # collider), and its MuJoCo solver bakes actuation from USD at build time, so the drives must
+    # carry real gains. Both rewrite the stage and both are harmful under PhysX, which is why the
+    # reference gates them per backend rather than applying them unconditionally.
+    #
+    # `filter_inter_env_collisions` is correspondingly off: the collision-API push authors its own
+    # filtering, and doing both double-filters.
+    # Subclass assets go in here, between asset creation and replication.
+    if pre_clone_hook is not None:
+        _install_pre_clone_hook(pre_clone_hook)
+
+    patches.install_cloning(
+        push_collision_api=True,
+        write_drive_gains=True,
+        filter_inter_env_collisions=False,
+        request_full_stage=False,  # ovphysx-only; Newton ingests the authored stage as-is
+    )
+    patches.install_actuator_broadcast()
+    patches.install_armature_writeback()
+    patches.install_implicit_effort_fix()
+
+    if cfg.use_gravcomp:
+        patches.install_newton_gravcomp()
+    else:
+        patches.install_object_gravity()
+        patches.disable_global_gravity(cfg)
+
+    patches.install_newton_materials()
+    patches.install_newton_condim(
+        int(cfg.newton.condim), tuple(get_robot_spec(cfg.robot).fingertip_link_names)
+    )
+
+    if cfg.meshify:
+        scene_utils = compat.play_module("scene_utils")
+        patches.install_mesh_collisions(scene_utils)
+
+    # `install_multi_asset` above replaced `build_rigid_object_cfg`, discarding any single-variant
+    # wrapper the harness applied before construction. Re-apply on top of ours.
+    from isaacsimenvs.eval import protocol
+
+    protocol.reapply_single_variant_if_requested()
+
+    _rebind_play_env_globals()
+
+
+def _install_pre_clone_hook(hook) -> None:
+    """Run ``hook(env)`` at the end of ``setup_scene``, before ``install_cloning`` replicates.
+
+    Installed *before* `install_cloning` wraps the same function, so the resulting call order is
+    original setup -> hook -> replication. Getting that order wrong is silent: the asset appears
+    on the stage, and the solver simply never sees it.
+    """
+    scene_utils = compat.play_module("scene_utils")
+    if getattr(scene_utils, "_pre_clone_hook_installed", False):
+        return
+    original = scene_utils.setup_scene
+
+    def setup_scene_then_hook(env, _original=original):
+        _original(env)
+        hook(env)
+
+    scene_utils.setup_scene = setup_scene_then_hook
+    scene_utils._pre_clone_hook_installed = True
+
+
+def _rebind_play_env_globals() -> None:
+    """Re-point ``play_env``'s module-level names at the patched functions.
+
+    The patches above replace attributes on the ``play.utils.*`` modules, but ``play_env.py``
+    binds the names it uses at *its* import time::
+
+        from .utils.scene_utils import apply_physx_material_properties, setup_scene
+
+    and ``play_newton_env`` imports ``PlayEnv`` before any patch is installed. Without this,
+    ``PlayEnv.__init__`` and ``_setup_scene`` keep calling the *original* functions and every
+    scene-level patch is silently inert -- ``install_cloning`` never replicates the environments,
+    ``install_newton_materials`` never runs, and the first symptom is an unrelated-looking
+    ``AttributeError: 'Articulation' object has no attribute 'root_physx_view'`` from a function
+    that was supposed to have been replaced.
+
+    Rebinding here rather than editing ``play_env.py`` keeps the task code identical between the
+    two backends, which is the property the whole comparison rests on. It syncs every name
+    ``play_env`` took from a patched module, not just the two known ones, so a future patch does
+    not have to remember to come back here.
+    """
+    import importlib
+
+    play_env = importlib.import_module("isaacsimenvs.tasks.play.play_env")
+    for module_name in ("scene_utils", "reset_utils", "obs_utils", "action_utils",
+                        "reward_utils", "termination_utils", "logging_utils"):
+        module = compat.play_module(module_name)
+        for name, current in vars(play_env).items():
+            if not callable(current):
+                continue
+            patched = getattr(module, name, None)
+            if patched is not None and patched is not current:
+                setattr(play_env, name, patched)
+
+
+def _install_post_construction_patches(env: PlayNewtonEnv) -> None:
+    """Everything that needs live assets. Runs before the first ``reset()``."""
+    # Isaac Lab 3.0 asset data are warp-backed ProxyArrays; the task code indexes them as torch
+    # tensors throughout. This is the boundary that lets `play/utils/*` stay unmodified.
+    patches.wrap_env_assets(env)
+    # Mirror of the read-side conversion: the task code writes wxyz, 3.0 stores xyzw.
+    patches.install_pose_write_conversion(env)
+    # Newton floors degenerate inertia at finalisation, which lifts the hand's massless
+    # placeholder links above the inertia of real finger bones and makes the fingers sluggish.
+    # Must precede notify_solver so the corrected values are the ones picked up.
+    patches.restore_placeholder_inertia(env)
+    # SolverMuJoCo caches joint gains and shape materials in its own mjModel at construction, and
+    # Isaac Lab writes both after that point.
+    patches.notify_solver(env)
+
+
+# ==================================================================================================
+# Bending plasticity -- Bending plasticity for a VBD sheet: a fold that goes past the yield point stays partly folded.
+# (was utils/plasticity.py)
+# ==================================================================================================
+
+@wp.func
+def _dihedral(x0: wp.vec3, x1: wp.vec3, x2: wp.vec3, x3: wp.vec3) -> float:
+    """Signed dihedral angle of edge (x2, x3) with opposite vertices x0, x1, exactly as Newton's VBD
+    bending evaluates it (``evaluate_dihedral_angle_based_bending_force_hessian``)."""
+    n1 = wp.cross(x2 - x0, x3 - x0)
+    n2 = wp.cross(x3 - x1, x2 - x1)
+    e = x3 - x2
+    n1_norm = wp.length(n1)
+    n2_norm = wp.length(n2)
+    e_norm = wp.length(e)
+    if n1_norm < 1.0e-6 or n2_norm < 1.0e-6 or e_norm < 1.0e-6:
+        return 0.0
+    n1_hat = n1 / n1_norm
+    n2_hat = n2 / n2_norm
+    return wp.atan2(wp.dot(wp.cross(n1_hat, n2_hat), e / e_norm), wp.dot(n1_hat, n2_hat))
+
+
+@wp.kernel
+def _dihedral_kernel(
+    q: wp.array(dtype=wp.vec3), edge_indices: wp.array2d(dtype=wp.int32), out: wp.array(dtype=float)
+):
+    e = wp.tid()
+    if edge_indices[e, 0] == -1 or edge_indices[e, 1] == -1:
+        out[e] = 0.0
+        return
+    out[e] = _dihedral(q[edge_indices[e, 0]], q[edge_indices[e, 1]], q[edge_indices[e, 2]], q[edge_indices[e, 3]])
+
+
+@wp.kernel
+def _yield_kernel(
+    q: wp.array(dtype=wp.vec3),
+    edge_indices: wp.array2d(dtype=wp.int32),
+    yield_angle: wp.array(dtype=float),
+    set_angle: wp.array(dtype=float),
+    rest_angle: wp.array(dtype=float),
+):
+    e = wp.tid()
+    if edge_indices[e, 0] == -1 or edge_indices[e, 1] == -1:
+        return
+    theta = _dihedral(q[edge_indices[e, 0]], q[edge_indices[e, 1]], q[edge_indices[e, 2]], q[edge_indices[e, 3]])
+    d = theta - rest_angle[e]
+    # Newton's bending term does not wrap theta - rest; neither does this, so the two agree on what
+    # "elastic part" means even for a rest angle near +-pi.
+    y = yield_angle[e]
+    r = rest_angle[e]
+    cand = r
+    if d > y:
+        cand = theta - y
+    elif d < -y:
+        cand = theta + y
+    # Two-stage gate: growing set (|rest| increasing) needs a sharp bend, |theta| >= set angle;
+    # shrinking it (toward flat) is always allowed. set_angle 0 = single-stage, as before.
+    if wp.abs(cand) > wp.abs(r) and wp.abs(theta) < set_angle[e]:
+        return
+    rest_angle[e] = cand
+
+
+@wp.kernel
+def _restore_kernel(
+    edge_ids: wp.array(dtype=wp.int32), initial: wp.array(dtype=float), rest_angle: wp.array(dtype=float)
+):
+    e = edge_ids[wp.tid()]
+    rest_angle[e] = initial[e]
+
+
+def dihedral_angles(q, edge_indices) -> np.ndarray:
+    """Per-edge dihedral angle [rad] for positions ``q`` (warp vec3 array), 0 on boundary edges."""
+    out = wp.zeros(edge_indices.shape[0], dtype=float, device=q.device)
+    wp.launch(_dihedral_kernel, dim=edge_indices.shape[0], inputs=[q, edge_indices, out], device=q.device)
+    return out.numpy()
+
+
+class BendingPlasticity:
+    """Yield-curvature plasticity on ``model.edge_rest_angle``.
+
+    ``yield_curvature`` [1/m]: scalar, or one value per edge. ``inf`` disables yielding (the
+    elastic sheet, unchanged). Call :meth:`apply` after every solver step with the new state, and
+    :meth:`reset` (all edges, or the ids of some) when a sheet is put back flat.
+    """
+
+    def __init__(self, model, yield_curvature, rest_q=None, solver_rest_angle=None, set_curvature=0.0) -> None:
+        """``solver_rest_angle``: the ``edge_rest_angle`` array the cloth SOLVER reads, when that is
+        not ``model.edge_rest_angle`` -- under ``SolverCoupled`` the VBD entry runs on a ModelView
+        that owns a projected copy, so writing the model's array alone never reaches the solver.
+        The yield update then runs on the solver's array and is mirrored to the model's (which a
+        view refresh projects back over the copy).
+
+        ``set_curvature`` [1/m]: scalar or per edge; the two-stage gate (module docstring). 0 = off."""
+        self.model = model
+        self.edge_indices = model.edge_indices
+        self.num_edges = int(model.edge_count)
+        self.device = model.device
+        #: The array the yield update writes (what the solver bends against) and its mirror.
+        self.rest_angle = model.edge_rest_angle if solver_rest_angle is None else solver_rest_angle
+        self.mirror = None if self.rest_angle.ptr == model.edge_rest_angle.ptr else model.edge_rest_angle
+        if self.rest_angle.shape != model.edge_rest_angle.shape:
+            raise ValueError("solver edge_rest_angle has a different edge layout from the model's")
+        #: The build-time rest angles, restored by `reset`.
+        self.initial_rest = wp.clone(model.edge_rest_angle)
+        self.hinge_width = self._hinge_width(model.particle_q.numpy() if rest_q is None else np.asarray(rest_q))
+        self.yield_angle = wp.zeros(self.num_edges, dtype=float, device=self.device)
+        self.set_yield_curvature(yield_curvature)
+        self.set_angle = wp.zeros(self.num_edges, dtype=float, device=self.device)
+        self.set_set_curvature(set_curvature)
+
+    def _hinge_width(self, rest_q: np.ndarray) -> np.ndarray:
+        """``(A1 + A2) / edge_length`` per edge on the rest positions [m]; 0 on boundary edges."""
+        ei = self.edge_indices.numpy()
+        w = np.zeros(self.num_edges)
+        interior = (ei[:, 0] >= 0) & (ei[:, 1] >= 0)
+        x0, x1, x2, x3 = (rest_q[np.maximum(ei[:, k], 0)] for k in range(4))
+        a1 = 0.5 * np.linalg.norm(np.cross(x2 - x0, x3 - x0), axis=1)
+        a2 = 0.5 * np.linalg.norm(np.cross(x3 - x1, x2 - x1), axis=1)
+        length = np.linalg.norm(x3 - x2, axis=1)
+        w[interior] = (a1 + a2)[interior] / np.maximum(length[interior], 1e-12)
+        return w
+
+    def set_yield_curvature(self, yield_curvature) -> None:
+        kappa = np.broadcast_to(np.asarray(yield_curvature, dtype=np.float64), (self.num_edges,))
+        # inf * width stays inf (no yield); float32 inf compares correctly in the kernel.
+        with np.errstate(invalid="ignore"):
+            ang = np.where(np.isinf(kappa), np.inf, kappa * self.hinge_width)
+        self.yield_angle.assign(ang.astype(np.float32))
+
+    def set_set_curvature(self, set_curvature) -> None:
+        kappa = np.broadcast_to(np.asarray(set_curvature, dtype=np.float64), (self.num_edges,))
+        self.set_angle.assign((kappa * self.hinge_width).astype(np.float32))
+
+    def apply(self, state) -> None:
+        wp.launch(
+            _yield_kernel,
+            dim=self.num_edges,
+            inputs=[state.particle_q, self.edge_indices, self.yield_angle, self.set_angle, self.rest_angle],
+            device=self.device,
+        )
+        if self.mirror is not None:
+            wp.copy(self.mirror, self.rest_angle)
+
+    def reset(self, edge_ids=None) -> None:
+        """Restore the build-time rest angles of ``edge_ids`` (a warp int32 array or anything numpy
+        takes; ``None`` = every edge)."""
+        if edge_ids is None:
+            wp.copy(self.rest_angle, self.initial_rest)
+            if self.mirror is not None:
+                wp.copy(self.mirror, self.initial_rest)
+            return
+        if not isinstance(edge_ids, wp.array):
+            edge_ids = wp.array(np.asarray(edge_ids, dtype=np.int32).reshape(-1), dtype=wp.int32, device=self.device)
+        if edge_ids.shape[0] == 0:
+            return
+        for target in (self.rest_angle, self.mirror):
+            if target is not None:
+                wp.launch(_restore_kernel, dim=edge_ids.shape[0], inputs=[edge_ids, self.initial_rest, target],
+                          device=self.device)
+
+    def wrap_solver(self, solver) -> None:
+        """Run :meth:`apply` on the output state after every ``solver.step`` (each VBD substep).
+
+        Patches the instance's ``step``, so a coupled solver that calls the sub-solver's ``step``
+        picks it up; a CUDA graph captured after this call contains the update."""
+        step = solver.step
+
+        def step_with_plasticity(state_in, state_out, control, contacts, dt):
+            step(state_in, state_out, control, contacts, dt)
+            self.apply(state_out)
+
+        solver.step = step_with_plasticity
+
+    @staticmethod
+    def yield_angle_deg(yield_curvature: float, hinge_width: float) -> float:
+        """The hinge angle [deg] at which an edge of ``hinge_width`` yields."""
+        return math.degrees(yield_curvature * hinge_width)
+
+
+# ==================================================================================================
+# The deformable cloth env -- ClothEnv — fold half a cloth sheet onto the other half.
+# (was cloth_env.py)
+# ==================================================================================================
 
 class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
     """Play task with a VBD cloth sheet as the manipuland."""
@@ -243,7 +626,6 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         import torch
         from isaaclab_newton.physics import NewtonManager
 
-        from isaacsimenvs.tasks.cloth.utils.plasticity import BendingPlasticity
 
         model = NewtonManager._model
         cloth_solver = NewtonManager._solver.solver("cloth")

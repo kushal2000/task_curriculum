@@ -55,7 +55,7 @@ CASES = [
     ),
     pytest.param(
         "isaacsimenvs/cfg/task/RigidBodyCloth.yaml", "RigidBodyClothEnvCfg",
-        ["isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py", "isaacsimenvs/tasks/cloth/cloth_cfg.py", PLAY_CFG],
+        ["isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py", "isaacsimenvs/tasks/cloth/fold_task.py", PLAY_CFG],
         id="RigidBodyCloth",
     ),
 ]
@@ -140,24 +140,12 @@ def test_every_yaml_key_maps_to_a_config_field(yaml_rel, root_cls, modules):
 EXPERIMENT_DIR = REPO_ROOT / "experiments/configs"
 # Per task id: env root configclass, its modules, and the SAPG agent YAML.
 EXPERIMENT_TASKS = {
-    "Isaacsimenvs-FoldPoolPhysx-Direct-v0": (
-        "FoldPoolPhysxEnvCfg",
-        [
-            "isaacsimenvs/tasks/cloth/physx_env_cfg.py",
-            "isaacsimenvs/tasks/cloth/cloth_cfg.py",
-            "isaacsimenvs/tasks/cloth/fold_pool_cfg.py",
-            "isaacsimenvs/tasks/cloth/rigid_cloth_cfg.py",
-            PLAY_CFG,
-        ],
-        "isaacsimenvs/cfg/train/ClothSAPG.yaml",
-    ),
     # The deformable (VBD) sheet on Newton.
     "Isaacsimenvs-Cloth-Direct-v0": (
         "ClothEnvCfg",
         [
-            "isaacsimenvs/tasks/cloth/cloth_env_cfg.py",
-            "isaacsimenvs/tasks/cloth/newton_base_env_cfg.py",
-            "isaacsimenvs/tasks/cloth/cloth_cfg.py",
+            "isaacsimenvs/tasks/cloth/deformable_env_cfg.py",
+            "isaacsimenvs/tasks/cloth/fold_task.py",
             PLAY_CFG,
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
@@ -167,7 +155,7 @@ EXPERIMENT_TASKS = {
         "RigidBodyClothEnvCfg",
         [
             "isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py",
-            "isaacsimenvs/tasks/cloth/cloth_cfg.py",
+            "isaacsimenvs/tasks/cloth/fold_task.py",
             PLAY_CFG,
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
@@ -181,11 +169,7 @@ EXPERIMENT_TASKS = {
 }
 # The robot-swapped ids (tasks/cloth/__init__.py) share their base task's cfg and agent YAML.
 EXPERIMENT_TASKS["Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0"] = EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"]
-for _robot in ("FlexivWuji", "FlexivWujiHumanLike", "FlexivWujiHumanLikeS2R", "FlexivSharpa",
-               "FlexivWujiRightHumanLike", "FlexivWujiRightReal", "FlexivWujiRightHLRL"):
-    EXPERIMENT_TASKS[f"Isaacsimenvs-FoldPoolPhysx{_robot}-Direct-v0"] = EXPERIMENT_TASKS[
-        "Isaacsimenvs-FoldPoolPhysx-Direct-v0"
-    ]
+
 
 
 def _load_experiment(name: str) -> dict:

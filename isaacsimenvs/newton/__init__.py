@@ -13,5 +13,5 @@ Vendored rather than depended on: that repository is an investigation log with a
 a history of retractions, so pinning a copy is safer than tracking it. Its four-backend
 ``Backend`` abstraction is not carried over -- here the registered task id
 (``Isaacsimenvs-Cloth*`` is the Newton/VBD family) *is* the backend switch, and construction lives
-in the env class (``tasks/cloth/newton_base_env.py``) rather than in a separate builder.
+in the env class (``tasks/cloth/deformable_env.py``) rather than in a separate builder.
 """

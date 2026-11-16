@@ -1,13 +1,17 @@
-"""PlayNewtonEnvCfg — the Play task on Isaac Lab 3.0 + Newton/MJWarp: the base of ``ClothEnvCfg``.
+"""Config of the deformable (VBD) cloth env on Newton (``deformable_env.ClothEnv``), Isaac Lab 3.
 
-Subclasses :class:`PlayEnvCfg` and changes only *construction*: the physics config, the cloning
-settings Newton requires, and the solver knobs. Everything defining the task -- observation and
-state field lists, rewards, action pipeline, goal sampling, terminations -- is inherited
-untouched, which is what keeps the 140-dim observation byte-identical and the pretrained
-checkpoint loadable.
+Sections: the Newton solver block and ``PlayNewtonEnvCfg`` (the Play task's config on Newton:
+MJWarp for the robot, Newton's model/solver settings); ``ClothEnvCfg`` (that + the shared fold task
+block ``ClothCfg`` from ``fold_task``); and the real-fabric presets (``isaacsimenvs/cfg/fabric/``),
+which also run as a command that prints a preset's hydra overrides::
+
+    .venv/isaaclab3/bin/python -m isaacsimenvs.tasks.cloth.deformable_env_cfg cotton_measured [--plastic]
 """
 
 from __future__ import annotations
+
+import sys
+from pathlib import Path
 
 # IMPORT ORDER IS LOAD-BEARING. `play_env_cfg` calls `SimulationCfg(physx=...)` at class-definition
 # time, and Isaac Lab 3.0 renamed that keyword to `physics`, so importing it before the compat
@@ -17,11 +21,23 @@ from isaacsimenvs.newton import compat  # isort: skip
 
 compat.install_isaaclab3_compat()
 
+import yaml  # noqa: E402
 from isaaclab.utils import configclass  # noqa: E402
 
+from isaacsimenvs.tasks.cloth.fold_task import ClothCfg  # noqa: E402
 from isaacsimenvs.tasks.play.play_env_cfg import PlayEnvCfg  # noqa: E402
 
-__all__ = ["NewtonSolverCfg", "PlayNewtonEnvCfg"]
+__all__ = ['ClothCfg', 'ClothEnvCfg', 'NewtonSolverCfg', 'PlayNewtonEnvCfg']
+
+
+# ==================================================================================================
+# Play on Newton -- PlayNewtonEnvCfg — the Play task on Isaac Lab 3.0 + Newton/MJWarp: the base of ``ClothEnvCfg``.
+# (was newton_base_env_cfg.py)
+# ==================================================================================================
+
+
+
+
 
 
 @configclass
@@ -191,3 +207,72 @@ class PlayNewtonEnvCfg(PlayEnvCfg):
     Needed for per-env asset *variants* under Newton -- ``SolverMuJoCo`` requires homogeneous
     shape *types* across worlds, and the procedural tools mix boxes and capsules. Off by default
     because the single-object protocol does not need it."""
+
+
+# ==================================================================================================
+# The deformable cloth env -- ClothEnvCfg — fold half a cloth onto the other half.
+# (was cloth_env_cfg.py)
+# ==================================================================================================
+
+# IMPORT ORDER IS LOAD-BEARING, as in `cable_env_cfg`: importing `isaaclab_physx` binds
+# `isaaclab.utils.configclass` to the same-named *submodule*, shadowing the decorator. Importing
+# PlayNewtonEnvCfg first runs the compat shim that re-asserts it.
+
+
+
+
+
+@configclass
+class ClothEnvCfg(PlayNewtonEnvCfg):
+    """Play task with a folding cloth in place of the rigid tool."""
+
+    cloth: ClothCfg = ClothCfg()
+
+
+# ==================================================================================================
+# Real-fabric presets -- VBD cloth presets for real fabrics: ``isaacsimenvs/cfg/fabric/<name>.yaml``.
+# (was utils/fabrics.py)
+# ==================================================================================================
+
+FABRIC_DIR = Path(__file__).resolve().parents[2] / "cfg" / "fabric"
+
+#: Display order: the env default first, then roughly lightest to heaviest.
+ORDER = ("base", "chiffon", "silk", "cotton", "napkin", "towel", "denim")
+
+
+def names() -> list[str]:
+    """Every preset, ``ORDER`` first, then any other file alphabetically."""
+    found = {p.stem for p in FABRIC_DIR.glob("*.yaml")}
+    return [n for n in ORDER if n in found] + sorted(found - set(ORDER))
+
+
+def load(name: str) -> dict:
+    """The preset's whole file."""
+    path = FABRIC_DIR / f"{name}.yaml"
+    if not path.is_file():
+        raise ValueError(f"no fabric preset {name!r} in {FABRIC_DIR} (have {names()})")
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+
+def cloth_params(name: str, plastic: bool = False) -> dict[str, float]:
+    """``{ClothCfg field: value}``; with ``plastic`` also ``plastic_yield_curvature``."""
+    d = load(name)
+    out = {k: float(v) for k, v in d["cloth"].items()}
+    if plastic:
+        out["plastic_yield_curvature"] = float(d.get("plastic_yield_curvature", 0.0))
+        if float(d.get("plastic_set_curvature", 0.0)) > 0.0:  # two-stage presets only
+            out["plastic_set_curvature"] = float(d["plastic_set_curvature"])
+    return out
+
+
+def overrides(name: str, plastic: bool = False) -> list[str]:
+    """Hydra overrides ``env.cloth.<key>=<value>`` for the preset."""
+    return [f"env.cloth.{k}={v!r}" for k, v in cloth_params(name, plastic).items()]
+
+
+if __name__ == "__main__":
+    args = [a for a in sys.argv[1:] if a != "--plastic"]
+    if len(args) != 1:
+        sys.exit(f"usage: python -m isaacsimenvs.tasks.cloth.deformable_env_cfg NAME [--plastic]   (NAME in {names()})")
+    print(" ".join(overrides(args[0], plastic="--plastic" in sys.argv[1:])))

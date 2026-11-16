@@ -1,8 +1,8 @@
 """Test helper: load a repo source file by path, without importing its package.
 
-A module like ``isaacsimenvs/tasks/cloth/utils/rigid_cloth.py`` is Kit-free on its own, but importing
-it as ``isaacsimenvs.tasks.cloth.utils.rigid_cloth`` runs ``isaacsimenvs/tasks/cloth/__init__.py`` and
-the env modules it pulls in, which import Isaac Lab -- and Isaac Lab only resolves after
+A module like ``isaacsimenvs/tasks/play/utils/point_dr.py`` is Kit-free on its own, but importing
+it as ``isaacsimenvs.tasks.play.utils.point_dr`` runs ``isaacsimenvs/tasks/play/__init__.py`` and
+the modules it pulls in, which import Isaac Lab -- and Isaac Lab only resolves after
 ``AppLauncher`` has booted Kit (minutes, and a GPU). Loading the file straight off disk skips those
 ``__init__`` chains. If a test that uses this starts needing Kit, the module under test has grown a
 dependency it should not have.

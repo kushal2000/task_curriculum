@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from isaaclab.utils import configclass
 
-from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
+from isaacsimenvs.tasks.cloth.fold_task import ClothCfg
 from isaacsimenvs.tasks.play.play_env_cfg import PlayEnvCfg
 
 __all__ = ["RigidBodyClothEnvCfg", "SheetCfg", "SheetRandomizationCfg"]

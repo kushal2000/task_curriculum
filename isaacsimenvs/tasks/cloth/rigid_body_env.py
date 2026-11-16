@@ -40,16 +40,18 @@ import numpy as np
 import torch
 from isaaclab.utils.math import quat_from_matrix
 
-from isaacsimenvs.tasks.cloth.cloth_task import ClothTaskMixin
-from isaacsimenvs.tasks.cloth.rigid_body_env_cfg import RigidBodyClothEnvCfg
-from isaacsimenvs.tasks.cloth.utils.cloth_adapter import ClothAsRigidObject, task_yaw
-from isaacsimenvs.tasks.cloth.utils.cloth_geometry import corner_indices, grid_mesh
-from isaacsimenvs.tasks.cloth.utils.sheet_designs import (
+from isaacsimenvs.tasks.cloth.fold_task import (
+    ClothAsRigidObject,
+    ClothTaskMixin,
     box_mass_properties,
+    corner_indices,
     design_grid,
     design_of,
+    grid_mesh,
     single_hinge,
+    task_yaw,
 )
+from isaacsimenvs.tasks.cloth.rigid_body_env_cfg import RigidBodyClothEnvCfg
 from isaacsimenvs.tasks.play.play_env import PlayEnv
 
 __all__ = ["RigidBodyClothEnv"]

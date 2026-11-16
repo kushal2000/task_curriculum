@@ -16,7 +16,7 @@ import yaml
 # prompt during collection), so these run in the kit-less .venv/isaaclab3 only.
 pytest.importorskip("isaaclab_newton", reason="needs the kit-less Isaac Lab 3 stack (.venv/isaaclab3)")
 
-from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv  # noqa: E402
+from isaacsimenvs.tasks.cloth.deformable_env import ClothEnv  # noqa: E402
 
 LIMIT = ClothEnv.REWARD_SANITY_LIMIT
 

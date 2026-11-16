@@ -1,5 +1,5 @@
 # Cotton.
-# Where each value comes from: isaacsimenvs/tasks/cloth/utils/fabrics.py
+# Where each value comes from: isaacsimenvs/tasks/cloth/deformable_env_cfg.py (fabric presets)
 cloth:
   density: 0.1
   tri_ke: 56.0

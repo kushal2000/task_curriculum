@@ -4,8 +4,7 @@
 merge, no inheritance. So the cloth task YAML is a full copy of Play's, and a section dropped from
 it silently falls back to the configclass default rather than to Play's value. The task VALUES are
 the cloth task's own (rewards, terminations, DR); what is checked here is the shape: the same
-sections, the Newton-only additions allow-listed, and the one Newton cloning trap. RigidClothPhysx.yaml
-is in turn diffed against Cloth.yaml by test_physx_cloth_conventions.py.
+sections, the Newton-only additions allow-listed, and the one Newton cloning trap.
 
 Kit-free by construction -- it reads YAML and nothing else.
 """
@@ -34,7 +33,7 @@ ALLOWED_EXTRA = {
 #: `sim.physx` must be absent: Isaac Lab 3.0 renamed the field to `physics`, and the overlay goes
 #: through `configclass.from_dict`, which raises `KeyError: Key not found under namespace:
 #: /sim/physx` on an unknown key. (compat.py shims the *constructor* keyword, not dict overlays.)
-#: It would be inert anyway -- `tasks/cloth/newton_base_env.py` replaces `cfg.sim.physics` with a NewtonCfg.
+#: It would be inert anyway -- `tasks/cloth/deformable_env.py` replaces `cfg.sim.physics` with a NewtonCfg.
 ALLOWED_MISSING_PREFIXES = ("sim.physx",)
 
 

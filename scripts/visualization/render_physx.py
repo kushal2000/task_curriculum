@@ -1,8 +1,8 @@
-"""RGB video of a policy on a PhysX (Kit) task, filmed from one env -- the rigid-plate cloth pool.
+"""RGB video of a policy on a PhysX (Kit) task, filmed from one env -- e.g. the rigid-body cloth sheet.
 
     .venv/isaacsim/bin/python scripts/visualization/render_physx.py --headless \\
-        --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 \\
-        --checkpoint <run>/nn/<name>.pth --out clip.mp4 env.cloth.task=fold
+        --task Isaacsimenvs-RigidBodyCloth-Direct-v0 --experiment rigid_body_cloth \\
+        --checkpoint <run>/nn/<name>.pth --out clip.mp4
 
 Kit renders the env's viewport camera (``env_cfg.viewer``, placed relative to the filmed env's
 origin) via ``render_mode="rgb_array"``. The rollout matches ``scripts/evaluation/eval.py``: DR off

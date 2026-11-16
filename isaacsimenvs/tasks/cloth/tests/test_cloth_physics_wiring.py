@@ -39,7 +39,7 @@ def solver_kwargs():
     from isaaclab_newton.physics.newton_manager import NewtonManager
     from newton.solvers import SolverVBD
 
-    from isaacsimenvs.tasks.cloth.cloth_env_cfg import ClothEnvCfg
+    from isaacsimenvs.tasks.cloth.deformable_env_cfg import ClothEnvCfg
 
     cfg = ClothEnvCfg()
     cfg.from_dict(yaml.safe_load(_YAML.read_text()))

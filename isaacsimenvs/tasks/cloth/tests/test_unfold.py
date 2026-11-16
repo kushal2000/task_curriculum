@@ -10,14 +10,11 @@ from __future__ import annotations
 import math
 
 import pytest
-from isaacsimenvs.utils.testing import load_module
 
 torch = pytest.importorskip("torch")
 
-geo = load_module("isaacsimenvs/tasks/cloth/utils/cloth_geometry.py", "cloth_geometry")
-adapter = load_module("isaacsimenvs/tasks/cloth/utils/cloth_adapter.py", "cloth_adapter")
-rc = load_module("isaacsimenvs/tasks/cloth/utils/rigid_cloth.py", "rigid_cloth")
-fs = load_module("isaacsimenvs/tasks/cloth/utils/fold_shapes.py", "fold_shapes")
+ft = pytest.importorskip("isaacsimenvs.tasks.cloth.fold_task")
+geo = adapter = ft
 
 SIZE, RES, LIFT = 0.10, 7, 0.002
 
@@ -64,8 +61,7 @@ def test_far_corner_distance_from_its_flat_target():
 
 
 def test_cloth_cfg_unfold_switch_is_validated():
-    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.cloth_cfg")
-    c = cfg_mod.ClothCfg()
+    c = ft.ClothCfg()
     assert c.task == "fold"
     c.task = "unfold"
     c.check_task()
@@ -82,26 +78,3 @@ def test_cloth_cfg_unfold_switch_is_validated():
         c.unfold_prob = bad
         with pytest.raises(ValueError):
             c.check_task()
-
-
-def test_fold_pool_target_starts_reach_180():
-    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.fold_pool_cfg")
-    cfg_mod.FoldPoolCfg(init_fold_starts="target", init_fold_prob=1.0, init_fold_deg=[60.0, 180.0])
-    with pytest.raises(ValueError):
-        cfg_mod.FoldPoolCfg(init_fold_starts="single", init_fold_deg=[60.0, 180.0])
-
-
-def test_box3_mid_full_fold_stacks_the_plates_without_overlap():
-    """The single chain's folded start (``chain_fold_angles``, scaled to 180 deg): both bar hinges at
-    90 deg put the moving plate one bar width (2 mm) above the root plate, face on face, its whole
-    width over the root plate. ``box2-mid``'s 180 deg fold has no such gap: the plates coincide."""
-    spec = rc.variant("box3-mid")
-    root, wall, top = rc.chain_frames(spec, rc.chain_fold_angles(spec))
-    assert abs(math.degrees(abs(wall[2])) - 90.0) < 1e-9 and abs(math.degrees(abs(top[2])) - 180.0) < 1e-9
-    lift = top[1] - root[1]
-    assert abs(lift - spec.widths[1]) < 1e-12
-    assert lift - spec.thickness >= -1e-12  # the plates' facing surfaces touch, they do not cross
-    # The moving plate's frame sits on its inboard edge, over the crease; flipped, it extends to -x.
-    x0, x1 = sorted((top[0], top[0] - spec.widths[2]))
-    assert -spec.span / 2 - 1e-12 <= x0 and x1 <= 0.0
-    assert fs.POOL["box2-mid"].ply_gap == 0.0

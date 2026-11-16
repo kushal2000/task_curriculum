@@ -3,7 +3,7 @@
 # design per env (rigid_body_env.py). The robot is the Flexiv Rizon 4s + right Wuji Hand 2 with the
 # identified hand (cfg/robot/flexiv_wuji_right_real.yaml, applied at registration).
 #
-# Sections 1-8 (sim .. domain_randomization) are FoldPoolPhysx.yaml's, unchanged; `cloth:` keeps only
+# Sections 1-8 (sim .. domain_randomization) are the former FoldPoolPhysx.yaml's; `cloth:` keeps only
 # what the fold task reads (the nominal grid the keypoints and targets live on, the success test);
 # `sheet:` is the rigid sheets (rigid_body_env_cfg.SheetCfg).
 # -----------------------------------------------------------------------------

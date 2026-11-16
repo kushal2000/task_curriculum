@@ -121,7 +121,7 @@ RIGHT_WUJI_URDF = "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
 def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10, robot_urdf: str = KUKA_URDF) -> str:
     import types
 
-    from isaacsimenvs.tasks.cloth.pose_viewer import ClothPoseViewerWrapper
+    from isaacsimenvs.tasks.play.pose_viewer import ClothPoseViewerWrapper
 
     n_particles = resolution * resolution
     n_half = resolution * ((resolution + 1) // 2)
@@ -183,7 +183,7 @@ def test_real_cloth_wrapper_still_emits_the_three_cloth_channels():
 
 def test_real_cloth_wrapper_draws_the_tasks_own_robot():
     """The cloth viewer used to hardcode the Kuka + Sharpa, so every Flexiv + Wuji fold run's viewer
-    drew the wrong robot (FoldPoolPhysx / RigidClothPhysx / Cloth on a robot overlay)."""
+    drew the wrong robot (RigidBodyCloth / Cloth on a robot overlay)."""
     html = _cloth_wrapper_html(robot_urdf=RIGHT_WUJI_URDF)
     assert RIGHT_WUJI_URDF in html
     assert KUKA_URDF not in html
@@ -212,7 +212,7 @@ def test_the_hammer_strings_are_a_discriminating_check():
 @pytest.mark.parametrize(
     "module_name, class_name, expected",
     [
-        ("isaacsimenvs.tasks.cloth.pose_viewer", "ClothPoseViewerWrapper", True),
+        ("isaacsimenvs.tasks.play.pose_viewer", "ClothPoseViewerWrapper", True),
         ("isaacsimenvs.tasks.play.pose_viewer", "PlayPoseViewerWrapper", True),
     ],
 )
@@ -224,12 +224,6 @@ def test_network_kwargs_are_offered_by_signature_not_module_name(module_name, cl
     accepted = inspect.signature(viewer_cls.__init__).parameters
     assert ("github_raw_base" in accepted) is expected
     assert ("url_check" in accepted) is expected
-
-
-def test_cloth_viewer_module_name_defeats_the_old_substring_test():
-    """Pin the exact reason the old gate failed, so it cannot be reintroduced."""
-    module_name = "isaacsimenvs.tasks.cloth.pose_viewer"
-    assert "play.pose_viewer" not in module_name
 
 
 def test_viewer_draws_the_tasks_own_table():

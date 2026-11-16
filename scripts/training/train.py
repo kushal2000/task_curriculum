@@ -27,9 +27,8 @@ CLI shape:
 
     One of the standard configs (experiments/configs/) instead of the overrides:
     python scripts/training/train.py \
-        --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --agent rl_games_sapg_cfg_entry_point --headless \
-        --experiment rigid_cloth_flexiv_wuji_full_dr --checkpoint pretrained_policy/flexiv_wuji/model.pth \
-        --checkpoint_load_mode weights --single_variant agent.params.seed=1
+        --task Isaacsimenvs-RigidBodyCloth-Direct-v0 --agent rl_games_sapg_cfg_entry_point --headless \
+        --experiment rigid_body_cloth --single_variant agent.params.seed=1
 """
 
 from __future__ import annotations
@@ -53,8 +52,7 @@ _POSE_VIEWERS = {
     # Cloth before Play: the cloth viewer adds the sheet and its fold target as deformable
     # channels, which a rigid-pose viewer cannot represent. Substring matching is first-wins, and
     # the cloth task id does not contain "Play", but keep it above for clarity.
-    "Cloth": "isaacsimenvs.tasks.cloth.pose_viewer:ClothPoseViewerWrapper",  # Cloth*, RigidClothPhysx*
-    "FoldPool": "isaacsimenvs.tasks.cloth.pose_viewer:ClothPoseViewerWrapper",  # FoldPoolPhysx*
+    "Cloth": "isaacsimenvs.tasks.play.pose_viewer:ClothPoseViewerWrapper",  # Cloth*, RigidBodyCloth
     "Play": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",
 }
 
@@ -79,7 +77,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Train isaacsimenvs task via rl_games.")
     # --- Task/agent selection ---
-    parser.add_argument("--task", required=True, help="Gym task id, e.g. Isaacsimenvs-FoldPoolPhysx-Direct-v0")
+    parser.add_argument("--task", required=True, help="Gym task id, e.g. Isaacsimenvs-RigidBodyCloth-Direct-v0")
     parser.add_argument(
         "--agent",
         default="rl_games_cfg_entry_point",
@@ -90,7 +88,7 @@ def main() -> None:
         "--experiment",
         default=None,
         help="A run recipe in experiments/configs/<name>.yaml, layered between the task YAML "
-        "and the Hydra CLI overrides, e.g. rigid_cloth_flexiv_wuji_full_dr.",
+        "and the Hydra CLI overrides, e.g. rigid_body_cloth.",
     )
     # --- Runtime toggles ---
     parser.add_argument("--test", action="store_true", help="Run inference (player) instead of training")
@@ -136,13 +134,6 @@ def main() -> None:
     parser.add_argument("--capture_viewer_len", type=int, default=600)
     parser.add_argument("--capture_viewer_interval", type=int, default=6000)
     parser.add_argument("--capture_viewer_env_id", type=int, default=0)
-    parser.add_argument(
-        "--capture_viewer_per_shape",
-        action="store_true",
-        help="Fold pool only: one viewer per pool shape (the first env of each), logged to wandb as "
-        "<capture_viewer_wandb_key>/<shape> and written to interactive_viewer/<shape>/. "
-        "Overrides --capture_viewer_env_id.",
-    )
     parser.add_argument("--capture_viewer_wandb_key", default="interactive_viewer")
     parser.add_argument(
         "--capture_viewer_github_raw_base",
@@ -331,7 +322,7 @@ def main() -> None:
                 #
                 # Decided by INSPECTING THE SIGNATURE, not by matching the module name. The
                 # previous test was `"play.pose_viewer" in module_name`, which is false for
-                # `isaacsimenvs.tasks.cloth.pose_viewer` even though ClothPoseViewerWrapper
+                # the cloth viewer's module even though ClothPoseViewerWrapper
                 # subclasses PlayPoseViewerWrapper and needs both -- so cloth silently ran with
                 # `github_raw_base=None` and `url_check="skip"`. The first was masked, because
                 # `_derive_github_raw_base()` rebuilds the same URL from `git remote` + the
@@ -345,30 +336,7 @@ def main() -> None:
                     viewer_kwargs["github_raw_base"] = args_cli.capture_viewer_github_raw_base
                 if "url_check" in accepted:
                     viewer_kwargs["url_check"] = args_cli.capture_viewer_url_check
-                if args_cli.capture_viewer_per_shape:
-                    # One wrapper per shape, stacked: each captures its own env on every step and
-                    # logs its own wandb key, so the viewer itself needs no multi-env mode.
-                    inner = env.unwrapped
-                    shape_of = getattr(inner, "_env_shape_np", None)
-                    if shape_of is None:
-                        raise ValueError(
-                            "--capture_viewer_per_shape needs a fold pool with fold_pool.one_shape_per_env "
-                            f"(task {args_cli.task} has no per-env shape)"
-                        )
-                    import numpy as np
-
-                    base_dir, base_key = viewer_kwargs["output_dir"], viewer_kwargs["wandb_key"]
-                    for k, shape in enumerate(inner._pool):
-                        envs_k = np.flatnonzero(np.asarray(shape_of) == k)
-                        if envs_k.size == 0:
-                            print(f"[train] viewer: no env has shape {shape.name}; skipped", flush=True)
-                            continue
-                        env = viewer_cls(env, **{**viewer_kwargs, "env_id": int(envs_k[0]),
-                                                 "output_dir": base_dir / shape.name,
-                                                 "wandb_key": f"{base_key}/{shape.name}"})
-                        print(f"[train] viewer: {shape.name} -> env {int(envs_k[0])}", flush=True)
-                else:
-                    env = viewer_cls(env, **viewer_kwargs)
+                env = viewer_cls(env, **viewer_kwargs)
 
         # Clip bounds live in the rl_games YAML (params.env.*). Default to
         # +inf if absent so a task without clip YAML just runs unbounded —

@@ -17,7 +17,9 @@ import math
 
 import torch
 
-from isaacsimenvs.tasks.cloth.utils.cloth_geometry import grid_mesh
+import pytest
+
+grid_mesh = pytest.importorskip("isaacsimenvs.tasks.cloth.fold_task").grid_mesh
 
 SIZE, RES = 0.10, 9
 

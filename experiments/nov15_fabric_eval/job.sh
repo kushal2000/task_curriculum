@@ -26,7 +26,7 @@ FABRIC="${FABRICS[$((I % 7))]}"; CLOTH_TASK="${TASKS[$((I / 7))]:?index $I out o
 OUT=experiments/nov15_fabric_eval/results
 adopt_log "$OUT"
 [[ -f "$CKPT" ]] || { echo "[fabeval] no checkpoint $CKPT" >&2; exit 1; }
-read -r -a FAB_OV <<<"$("${PY[@]}" -I isaacsimenvs/tasks/cloth/utils/fabrics.py "${FABRIC}_measured" --plastic)"
+read -r -a FAB_OV <<<"$("${PY[@]}" -m isaacsimenvs.tasks.cloth.deformable_env_cfg "${FABRIC}_measured" --plastic)"
 [[ "${#FAB_OV[@]}" -gt 0 ]] || { echo "[fabeval] no overrides for ${FABRIC}_measured" >&2; exit 1; }
 echo "[fabeval] policy=$POLICY_TAG task=$CLOTH_TASK fabric=${FABRIC}_measured ckpt=$CKPT"
 

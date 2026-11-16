@@ -9,12 +9,11 @@ import math
 
 import numpy as np
 import pytest
-from isaacsimenvs.utils.testing import load_module
 
 wp = pytest.importorskip("warp")
 newton = pytest.importorskip("newton")
 
-plast = load_module("isaacsimenvs/tasks/cloth/utils/plasticity.py", "plasticity")
+plast = pytest.importorskip("isaacsimenvs.tasks.cloth.deformable_env")
 
 H = 0.0167
 

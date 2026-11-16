@@ -495,28 +495,9 @@ def _colorize(model, args) -> None:
     ]
     n_seg = (max(seg_ids) + 1) if seg_ids else 1
 
-    # The rigid-cloth chain's slats, `.../slat_<i>`. Coloured by index with the same hue sweep the
-    # cable uses, for the same reason: a hinged chain in one colour reads as a single blob, and the
-    # whole point of filming it is to see WHICH slats fold over which. Counted under "cable"
-    # because it is this scene's manipuland.
-    from isaacsimenvs.tasks.cloth.utils.rigid_cloth import SLAT_LINK_PREFIX
-
-    slat_re = re.compile(r"(?:^|/)" + re.escape(SLAT_LINK_PREFIX) + r"(\d+)$")
-    n_slat = max(
-        (int(m.group(1)) for lab in labels if (m := slat_re.search(lab))), default=-1
-    ) + 1
-
     counts = dict.fromkeys(SHAPE_COLORS, 0)
     for shape_idx, body_idx in enumerate(shape_body):
         label = labels[body_idx] if 0 <= body_idx < len(labels) else ""
-        if (m := slat_re.search(label)) and n_slat > 0:
-            colors[shape_idx] = (
-                SHAPE_COLORS["cable"]
-                if args.flat_cable or n_slat == 1
-                else _segment_color(int(m.group(1)), n_slat)
-            )
-            counts["cable"] += 1
-            continue
         if "/Rod" in label:
             # The rigid-rod control lives at its own prim path so the coupler's VBD entry cannot
             # claim it; it still wants the manipuland colour.

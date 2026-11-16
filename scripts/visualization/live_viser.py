@@ -28,10 +28,11 @@ is ~4.
 Geometry comes from Newton's own viewer pipeline (`ViewerBase.set_model` -> `log_geo`), captured
 by a null viewer, so what is drawn is exactly the collision geometry the solver sees.
 
-**PhysX tasks** (`*Physx*`, run in `.venv/isaacsim`): the
+**PhysX tasks** (the rigid-body sheet, run in `.venv/isaacsim`): the
 same viewer, with the geometry read from the USD stage (each rigid body's collision meshes and
-primitives, in its own frame) and the body poses from Isaac Lab's PhysX views every step. The friction
-sliders are hidden there: PhysX refuses friction DR (`physx_envs`). viser needs websockets >= 13,
+primitives, in its own frame) and the body poses from Isaac Lab's PhysX views every step. The fold-pool
+controls (shape / start-fold choice, hinge overlay, rigid_cloth physics sliders) stay inert for it:
+its sheet has no pool and its material DR is drawn per reset (`sheet.randomization`). viser needs websockets >= 13,
 newer than Isaac Sim's 12, so the launcher puts a copy first on PYTHONPATH (nothing Kit loads headless
 imports websockets).
 """
@@ -96,55 +97,9 @@ TASKS = {
     # cloth.task=unfold: the + half starts folded over (cloth.unfold_start_deg), the goal is flat.
     "UNFOLD: VBD cloth, folded start": ("Isaacsimenvs-Cloth-Direct-v0", ["env.cloth.task=unfold"]),
 }
-_POOL7 = "env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]"
-# RigidClothPhysx.yaml keeps friction DR ranges, which the PhysX env refuses at build (physx_envs.py).
-_PX_NO_FRIC_DR = ["env.rigid_cloth.randomization.slat_friction_scale=[1.0,1.0]",
-                  "env.rigid_cloth.randomization.fingertip_friction_scale=[1.0,1.0]"]
 PHYSX_TASKS = {
-    "fold pool 7 shapes flat (flat7), Flexiv + right Wuji human-like (real setup)": (
-        "Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHumanLike-Direct-v0",
-        ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
-         "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
-    ),
-    "fold pool (5 shapes, 10-20 cm)": ("Isaacsimenvs-FoldPoolPhysx-Direct-v0", []),
-    # Run 1's training setup: 80% of episodes start partly folded, hinge damping 0.02.
-    "fold pool + folded starts (run 1 setup)": (
-        "Isaacsimenvs-FoldPoolPhysx-Direct-v0",
-        ["env.fold_pool.init_fold_prob=0.8", "env.rigid_cloth.joint_damping=0.02"],
-    ),
-    "chain box3-mid": ("Isaacsimenvs-RigidClothPhysx-Direct-v0", ["env.rigid_cloth.variant=box3-mid", *_PX_NO_FRIC_DR]),
-    # cloth.task=unfold on box2-mid: every episode starts with the half fold turned up 120-180 deg. Lower
-    # starts are free successes: a 20 cm sheet dropped at 75 deg lands flat, at 100 deg nearly flat.
-    "UNFOLD: box2-mid, folded start": (
-        "Isaacsimenvs-FoldPoolPhysx-Direct-v0",
-        ["env.cloth.task=unfold", "env.fold_pool.shapes=[box2-mid]", "env.fold_pool.init_fold_starts=target",
-         "env.fold_pool.init_fold_prob=1.0", "env.fold_pool.init_fold_deg=[120.0,180.0]"],
-    ),
-    # cloth.task=unfold on the box3-mid chain: both bar hinges at 90 deg (cloth.unfold_start_deg, 180 =
-    # the tightest fold), so the plies lie 2 mm apart face to face -- no overlap, unlike box2-mid's 180.
-    "UNFOLD: box3-mid chain, folded start": (
-        "Isaacsimenvs-RigidClothPhysx-Direct-v0",
-        ["env.rigid_cloth.variant=box3-mid", "env.cloth.task=unfold", *_PX_NO_FRIC_DR],
-    ),
-    # The 7-shape pool of the 10-12 fine-tunes (E1/E2/ft7c; the eval matrix's physx_pool7 / pool7of).
-    "fold pool, 7 shapes (E1/E2 setup)": ("Isaacsimenvs-FoldPoolPhysx-Direct-v0", [_POOL7]),
-    "fold pool, 7 shapes, other folds pre-folded": (
-        "Isaacsimenvs-FoldPoolPhysx-Direct-v0",
-        [_POOL7, "env.fold_pool.init_fold_starts=other", "env.fold_pool.init_fold_prob=1.0",
-         "env.fold_pool.init_fold_deg=[15.0,180.0]"],
-    ),
-    # The 2026-10-12 hinge arms (docs/reports/4_physx/hinge_physics.md): damping / armature.
-    **{
-        f"fold pool, hinge {name} (d {d} / arm {a})": (
-            "Isaacsimenvs-FoldPoolPhysx-Direct-v0",
-            [f"env.rigid_cloth.joint_damping={d}", f"env.physx_chain.hinge_armature={a}"],
-        )
-        for name, d, a in (("halfway", "0.001", "1e-4"), ("cloth-like", "0.0", "1e-5"), ("most cloth-like", "0.0", "0.0"))
-    },
-    # Only the half fold's hinge keeps the training damping; every other hinge swings 5x more freely.
-    "fold pool, 7 shapes, other hinges x0.2 damping": (
-        "Isaacsimenvs-FoldPoolPhysx-Direct-v0", [_POOL7, "env.fold_pool.other_hinge_damping_scale=0.2"],
-    ),
+    # Rigid2Deform: the single-hinge rigid sheet, one of 4096 size designs per env.
+    "rigid body sheet (single hinge)": ("Isaacsimenvs-RigidBodyCloth-Direct-v0", []),
 }
 #: VBD cloth variant -> hydra overrides, applied on restart. Sizes are the large-cloth evals' settings
 #: (scripts/cluster/bos14_cloth_size_sweep.sh, bos14_vbd_param_sweep.sh): grid spacing closest to the
@@ -508,22 +463,7 @@ def main() -> None:
         reset_pin = {k: getattr(rs, k) for k in reset_rand}
         use_single_object_variant()
 
-        if args.even_sizes and hasattr(env_cfg, "fold_pool"):
-            # The per-env size draw is FoldPoolTaskMixin._draw_env_sizes (both engines).
-            from isaacsimenvs.tasks.cloth import fold_pool_task as fpe
-
-            class _Even:
-                def uniform(self, lo, hi, n):
-                    return np.linspace(lo, hi, n) if n > 1 else np.full(n, 0.5 * (lo + hi))
-
-            real_np = fpe.np
-            fpe.np = SimpleNamespace(**{k: getattr(real_np, k) for k in dir(real_np) if not k.startswith("__")})
-            fpe.np.random = SimpleNamespace(default_rng=lambda seed: _Even())
-        try:
-            env = gym.make(args.task, cfg=env_cfg)
-        finally:
-            if args.even_sizes and hasattr(env_cfg, "fold_pool"):
-                fpe.np = real_np
+        env = gym.make(args.task, cfg=env_cfg)
         inner = env.unwrapped
         n_env, device = inner.num_envs, inner.device
         if physx and rigid:
@@ -553,23 +493,6 @@ def main() -> None:
 
             def tail(label):
                 return label.split("/", 1)[-1]
-
-            # Per pool shape: (asset index, nominal size, [(child body, a, b, colour)]). Every plate's
-            # body frame is the sheet frame at rest (fold_shapes), so a hinge's two sheet-frame end
-            # points ARE its body-frame end points, at that env's size.
-            if pool:
-                from isaacsimenvs.tasks.cloth.utils import fold_shape_assets as fsa
-                from isaacsimenvs.tasks.cloth.utils import fold_shapes as fsh
-
-                names = [a[0] for a in px.assets]
-                for s_, sh in enumerate(inner._pool):
-                    k = names.index(f"fold_pool_{s_}")
-                    bodies = px.assets[k][4]
-                    fold = set(sh.folds[fsh.HALF_FOLD][0])
-                    segs = [(bodies.index(fsa.BODY_PREFIX + h.child), h.a, h.b,
-                             HINGE_FOLD_RGB if h.child in fold else HINGE_OTHER_RGB) for h in sh.hinges]
-                    segs += [(bodies.index(fsa.BODY_PREFIX + sm.plate1), sm.a, sm.b, SEAM_RGB) for sm in sh.seams]
-                    hinge_geo.append((k, float(sh.size), segs))
         else:
             import warp as wp
             from isaaclab_newton.physics.newton_manager import NewtonManager
@@ -615,13 +538,8 @@ def main() -> None:
                 in_mv = np.isin(t, list(mv)).sum(axis=1) >= 2
                 tri_by_world[w] = (pidx, t[in_mv], t[~in_mv])
 
-        # Fingers through the cloth (VBD only: particles are its sole contact with the hand).
+        # (The finger-through-cloth overlay went with the pierce detector, 2026-11-16.)
         pierce = None
-        if tri_by_world:
-            from isaacsimenvs.tasks.cloth.utils.pierce import PierceDetector
-
-            pierce = PierceDetector(model, n_env, device, robot_spec=getattr(inner, "robot_spec", None))
-            pierce_run = torch.zeros(n_env, len(pierce.names), dtype=torch.long, device=device)
         last_pierce: list = []
 
         # ------------------------------------------------------------------ shared state

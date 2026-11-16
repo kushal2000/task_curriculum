@@ -6,7 +6,7 @@ that 2.x did implicitly, and the physics properties 3.0 accepts and then ignores
 
 Each section keeps the finding that motivated it, because several of these look like arbitrary
 compatibility shims until you know what they cost to discover. Which patches a given backend
-applies is decided in :mod:`isaacsimenvs.tasks.cloth.newton_base_env_cfg` -- deliberately not here, so that a
+applies is decided in :mod:`isaacsimenvs.tasks.cloth.deformable_env_cfg` -- deliberately not here, so that a
 patch written for one solver cannot leak into another.
 
 Sections in application order:

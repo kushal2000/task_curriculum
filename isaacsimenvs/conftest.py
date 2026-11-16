@@ -57,33 +57,3 @@ def _skip_if_kit_blocked():
     exc = outcome.excinfo
     if exc is not None and issubclass(exc[0], ModuleNotFoundError) and _NO_KIT_MARK in str(exc[1]):
         outcome.force_exception(pytest.skip.Exception(str(exc[1]), _use_item_location=True))
-
-
-@pytest.fixture(scope="session")
-def rigid_cloth():
-    return load_module("isaacsimenvs/tasks/cloth/utils/rigid_cloth.py", "rigid_cloth")
-
-
-@pytest.fixture(scope="session")
-def fold_shapes():
-    return load_module("isaacsimenvs/tasks/cloth/utils/fold_shapes.py", "fold_shapes")
-
-
-@pytest.fixture(scope="session")
-def cloth_geometry():
-    return load_module("isaacsimenvs/tasks/cloth/utils/cloth_geometry.py", "cloth_geometry")
-
-
-@pytest.fixture(scope="session")
-def rigid_cloth_adapter():
-    """The articulation -> particle-grid bridge.
-
-    Imported as a real package member rather than loaded by path, unlike everything else here,
-    because it imports its own dependencies by package path -- which is the right thing for a module
-    the env uses, and which a path-load would leave unresolved. That works only because the module
-    is deliberately **kit-free**: pure torch, no ``isaaclab`` import, no Isaac Sim. If this fixture
-    ever starts needing ``AppLauncher``, the adapter has grown a dependency that puts the grid
-    mapping and the reset pose beyond the reach of a CPU test -- which is exactly where they must
-    not be, since both fail silently.
-    """
-    return pytest.importorskip("isaacsimenvs.tasks.cloth.utils.rigid_cloth_adapter")

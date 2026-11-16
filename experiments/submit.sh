@@ -6,8 +6,8 @@
 #   experiments/submit.sh [sbatch options] experiments/<train|eval>.sh [job args]
 #
 #   experiments/submit.sh \
-#       experiments/train.sh --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 \
-#       --experiment rigid_cloth_flexiv_wuji_full_dr --checkpoint pretrained_policy/flexiv_wuji/model.pth
+#       experiments/train.sh --task Isaacsimenvs-RigidBodyCloth-Direct-v0 \
+#       --experiment rigid_body_cloth
 #   experiments/submit.sh --array=0-2 experiments/train.sh ...   # seeds 1-3 (agent.params.seed)
 #
 # sbatch options must be written --opt=value (the first argument not starting with '-' is the job
