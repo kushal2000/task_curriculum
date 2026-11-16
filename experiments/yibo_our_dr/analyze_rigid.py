@@ -25,6 +25,31 @@ def summarize(directory):
             ('max_cloth_speed_mps', 'max_joint_speed_radps', 'max_palm_motion_m', 'max_cloth_xy_drift_m')}
         row['high_speed_episodes_gt_2mps'] = sum(value > 2 for value in per['max_cloth_speed_mps'])
         row['large_drift_episodes_gt_10cm'] = sum(value > .1 for value in per['max_cloth_xy_drift_m'])
+        at_fold = [error < data['fold_tolerance_m'] and footprint < data['max_folded_footprint']
+                   for error, footprint in zip(per['terminal_error'], per['terminal_footprint'])]
+        row['failure_classes'] = {
+            'never_entered_fold': sum(not value for value in per['folded']),
+            'fold_entered_then_lost_without_release': sum(folded and not released and not valid
+                for folded, released, valid in zip(per['folded'], per['released'], at_fold)),
+            'terminal_fold_valid_but_no_release': sum(folded and not released and valid
+                for folded, released, valid in zip(per['folded'], per['released'], at_fold)),
+        }
+
+        def cohort(indices):
+            return {'n': len(indices), 'fold_entries': sum(per['folded'][i] for i in indices),
+                    'full_releases': sum(per['released'][i] for i in indices),
+                    'median_best_error_m': statistics.median(per['best_error'][i] for i in indices) if indices else None,
+                    'median_max_speed_mps': statistics.median(per['max_cloth_speed_mps'][i] for i in indices) if indices else None}
+
+        sides = [max(dimensions[:2]) for dimensions in data['initial']['dimensions']]
+        density = data['initial']['density']
+        row['by_size'] = {label: cohort([i for i, value in enumerate(sides) if low < value <= high])
+                         for label, low, high in [('max_side_10_15cm', .09, .15),
+                            ('max_side_15_20cm', .15, .20), ('max_side_20_25cm', .20, .25),
+                            ('max_side_over_25cm', .25, float('inf'))]}
+        row['by_density'] = {label: cohort([i for i, value in enumerate(density) if low < value <= high])
+                            for label, low, high in [('up_to_100g_m2', 0., .1),
+                                ('100_to_500g_m2', .1, .5), ('over_500g_m2', .5, float('inf'))]}
         if baseline and data['seed'] == baseline['seed']:
             a, b = baseline['per_env']['folded'], per['folded']
             rescued = sum(not x and y for x, y in zip(a, b))
@@ -54,6 +79,16 @@ def summarize(directory):
                      f"{row['termination_reasons'].get('fall',0)} | {100*row['median_best_fold_error_m']:.2f} cm | "
                      f"{row.get('rescued_folds','—')} / {row.get('lost_folds','—')} |")
     lines.extend(['', *summary['limitations'], ''])
+    lines.extend(['', '## Motion and failure diagnostics', '',
+        '| Case | Median peak cloth speed | Median maximum XY drift | Never folded | Fold lost | Fold valid at end, no release |',
+        '|---|---:|---:|---:|---:|---:|'])
+    for row in report:
+        motion, failure = row['motion_medians'], row['failure_classes']
+        lines.append(f"| {row['case']} | {motion['max_cloth_speed_mps']:.2f} m/s | "
+                     f"{100*motion['max_cloth_xy_drift_m']:.1f} cm | {failure['never_entered_fold']} | "
+                     f"{failure['fold_entered_then_lost_without_release']} | {failure['terminal_fold_valid_but_no_release']} |")
+    lines.extend(['', 'Size/density cohorts and per-design results are in summary.json. '
+                  'These within-case cohorts are descriptive; the one-factor cases provide the controlled comparisons.', ''])
     (directory/'summary.md').write_text('\n'.join(lines))
     print('\n'.join(lines))
     return summary

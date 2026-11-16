@@ -35,6 +35,12 @@ CASES = {
     'sizes_small': {'rigid_cloth': {'length_range': [.1, .2], 'width_range': [.1, .2]}},
     'contacts_yibo': {'rigid_cloth': {'rest_offset': .007, 'contact_offset': .012,
         'randomization': {'profile': 'yibo'}}},
+    'contacts_thickness_16mm': {'obs': {'yibo_contact_thickness': .016},
+        'rigid_cloth': {'rest_offset': .007, 'contact_offset': .012,
+            'randomization': {'profile': 'yibo'}}},
+    'historical_physics': {'rigid_cloth': {'rest_offset': .007, 'contact_offset': .012,
+        'hinge_stiffness_override': 0., 'hinge_damping_override': .05, 'hinge_armature': .001,
+        'randomization': {'profile': 'yibo', 'density': [2., 2.]}}},
     'yibo': {},
 }
 
@@ -133,7 +139,7 @@ def main():
     preset = args.preset or ('yibo' if args.case == 'yibo' else 'yibo_our_dr')
     recipe = ROOT / f'isaacsimenvs/scripts/configs/runs/{preset}.yaml'
     cfg.from_dict(merge_config(load_training_env_config(recipe), case_overlay(args.case)))
-    if args.case == 'contacts_yibo':
+    if args.case in ('contacts_yibo', 'contacts_thickness_16mm', 'historical_physics'):
         install_contact_only_profile(args.seed)
     cfg.scene.num_envs = args.num_envs
     cfg.sim.device = args.device
