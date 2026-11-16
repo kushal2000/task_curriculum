@@ -1,9 +1,9 @@
 """The cloth as points: a ``resolution x resolution`` grid over its ``length x width`` rectangle.
 
-In the cloth's own rest frame: x in [-L/2, L/2] along the fold axis, y across, z = 0 the mid-plane.
+In the cloth's own rest frame: x in [-L/2, L/2] across the crease, y along it, z = 0 the mid-plane.
 The crease is the line x = 0; the ``+x`` half (``moving``) folds onto the ``-x`` half
 (``stationary``). The deformable cloth's particles ARE these points; the rigid cloth carries them on
-its two plates. Row-major indexing keeps the halves and corners simple index arithmetic.
+its articulated plates. Row-major indexing keeps the halves and corners simple index arithmetic.
 """
 
 from __future__ import annotations
@@ -93,6 +93,7 @@ class ClothGrid:
     corner_idx: torch.Tensor          # (4,) the tracked corners
     st_rest_centroid: torch.Tensor  # (N, 3)
     st_rest_centred: torch.Tensor   # (N, S, 3)
+    keypoint_rest: torch.Tensor | None = None  # (N, 4, 3) optional exact moving-half corners
 
     @property
     def num_points(self) -> int:

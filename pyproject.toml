@@ -63,7 +63,8 @@ include = [
 [tool.setuptools.package-data]
 "isaacsimenvs.scripts.visualization.interactive_viewer" = ["*.html"]
 "isaacsimenvs.scripts.configs" = [
-    "task/*.yaml", "robot/*.yaml", "fabric/*.yaml", "train/*.yaml", "runs/*.yaml",
+    "task/*.yaml", "robot/*.yaml", "deformable_cloth_designs/*.yaml", "train/*.yaml", "runs/*.yaml",
+    "rigid_cloth_designs/*.yaml", "rigid_cloth_designs/*.png", "rigid_cloth_designs/README.md",
 ]
 
 # Every tool cache lives under .cache/ (gitignored), one subfolder per tool.

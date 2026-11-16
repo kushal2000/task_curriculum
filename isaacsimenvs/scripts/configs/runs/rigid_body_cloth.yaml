@@ -1,11 +1,13 @@
-# Rigid2Deform: fold a rigid cloth (two plates, one hinge), Flexiv Rizon 4s + right Wuji Hand 2 (identified
-# hand), SimToolReal's DR, from scratch.
+# Default rigid-cloth transfer recipe: five symmetric approximations, shared sheet
+# material properties, effective contact friction, and fold-then-release bonuses.
 #
-# Every env carries one of 4096 rigid-cloth designs (16 lengths x 16 widths, 10-30 cm, x 16 thicknesses,
-# 2-20 mm): env i -> design i % 4096, so each of the 6 SAPG blocks of 4096 envs holds every design
-# once. The task is fold only (start flat, + half onto -); the uniform start yaw also covers
-# "vertical" folds. Material differences are re-drawn per env at EVERY reset: hinge damping and
-# stiffness, plate / robot / table friction (rigid_cloth.randomization, tasks/cloth/backends/rigid/config.py).
+# Default DR recipe for rigid cloth training and the Viser inspector.
+# A YAML design is assigned independently of the size grid. Physical material draws
+# occur per environment at reset, with one shared draw across each cloth's hinges.
+# Density scales all plate masses and inertias together. Armature is numerical
+# added inertia, expressed relative to each hinge's physical child-side inertia.
+# Sheet bending ranges remain provisional and require calibration experiments.
+# Hinge gains are geometry-scaled; effective friction uses multiply combine mode.
 #
 #   experiments/submit.sh --time=7-00:00:00 experiments/train.sh \
 #       --task Isaacsimenvs-RigidBodyCloth-Direct-v0 --experiment rigid_body_cloth \
@@ -23,16 +25,58 @@ env:
   scene:
     num_envs: 24576
 
-  # Contact frictions: plates 1.0 (rigid_cloth.friction), robot 0.5, table 0.5 -- the table what the
-  # pre-rewrite env actually applied (Play's material pass gave it robot_friction) and what the
-  # measured fabric presets were fit against (Cloth.yaml table_friction 0.5).
-  assets:
-    robot_friction: 0.5
-    finger_tip_friction: 0.5
-    table_friction: 0.5
+  # Active physical DR parameters. Viser reads defaults/bounds from this block.
+  rigid_cloth:
+    designs: [single_hinge.yaml, strip_4.yaml, strip_8.yaml, hinge_band.yaml, flexible_corners.yaml]
+    design_levels: 16
+    length_range: [0.10, 0.30]           # m, construction-time size grid
+    width_range: [0.10, 0.30]
+    thickness_range: [0.002, 0.002]      # fixed 2 mm collision approximation
+    density: 0.1                        # nominal kg/m²; 100 g/m²
+    bending_rigidity: 0.00005           # B [N m]; k_joint = B × hinge_length / span
+    bending_viscosity: 0.00005          # C [N m s]; c_joint = C × hinge_length / span
+    hinge_armature: 0.0                 # no artificial rotor inertia by default
+    table_static_friction: 0.4          # effective cloth/table contact coefficient
+    hand_static_friction: 0.8           # effective cloth/robot contact coefficient
+    dynamic_friction_ratio: 0.8         # dynamic/static, for both contact pairs
+    place_x: [-0.20, 0.20]              # whole-sheet placement region, table-relative m
+    place_y: [-0.17, 0.17]
+    randomization:
+      enabled: true
+      density: [0.02, 0.5]              # kg/m², log-uniform; 20–500 g/m²
+      bending_rigidity: [0.000001, 0.00025]   # B [N m], log-uniform; provisional
+      bending_viscosity: [0.000001, 0.00015]  # C [N m s], log-uniform; provisional
+      hinge_armature_scale: [0.0, 0.0]  # disabled; optional numerical override only
+      table_static_friction: [0.1, 0.8] # effective coefficient, uniform buckets
+      hand_static_friction: [0.3, 1.2]  # effective coefficient, uniform buckets
+      dynamic_friction_ratio: [0.6, 1.0]
+      friction_buckets: 16
 
+  # One-time bonuses: fold +1000, then +1000 when the fold is still valid and
+  # EVERY robot collider is at least 10 cm clear. No release hold timer.
+  task:
+    mode: fold
+    release:
+      enabled: true
+      touch: robot_clearance
+      clearance: 0.1
+      fold_entry_bonus: 1000.0
+      release_bonus: 1000.0
+      release_dist_rew_scale: 0.0
+      persist_rew_per_step: 0.0
+      persist_bonus: 0.0
+
+  # Active initial-state DR. XY bounds describe a placement region in the table's
+  # frame; valid cloth centers account for the sheet footprint at the sampled yaw.
   reset:
-    table_reset_z_range: 0.015
+    table_reset_z_range: 0.015           # m, uniform ± range
+    reset_dof_pos_random_interval_arm: 0.1
+    reset_dof_pos_random_interval_fingers: 0.1
+    reset_dof_vel_random_interval: 0.5
+    reset_position_noise_x: 0.1          # nonzero enables random rigid placement
+    reset_position_noise_y: 0.1
+    random_yaw: true
+    yaw_range_deg: [0.0, 360.0]          # uniform; shared by training and viewer
 
   domain_randomization:
     # SimToolReal's Play DR (Play.yaml's defaults): observation and action delay, object-state delay

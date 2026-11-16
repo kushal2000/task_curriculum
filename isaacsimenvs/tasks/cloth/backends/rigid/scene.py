@@ -4,25 +4,74 @@ Robot and table go URDF -> USD (Isaac Lab's converter) -> a baked copy with the 
 authored (Play's recipe: contact offset 2 mm / rest 0 on every collider; the robot gravity-free,
 8/0 solver iterations, self-collision on with the spec's filtered pairs). The cloths are authored
 straight into the stage: a template in a private in-memory stage, ``Sdf.CopySpec``-ed into every env
-inside one ``Sdf.ChangeBlock``, each env given its design's dimensions -- one articulation spans all
-envs (every env has the same prim structure).
+inside one ``Sdf.ChangeBlock``, each env given its own dimensions. Each design has its own
+batched articulation; the backend combines the groups into a common surface readout.
 """
 
 from __future__ import annotations
 
-import math
 import tempfile
 import time
 from pathlib import Path
 
 import torch
 
-from ..assets import apply_self_collision_filters, bake_usd, convert_urdf, position_drive, robot_cfg, urdf_box_size
+from ..assets import (
+    apply_self_collision_filters,
+    bake_usd,
+    convert_urdf,
+    position_drive,
+    robot_cfg,
+    urdf_box_size,
+)
 from . import designs
 
-RIGID_CLOTH = "RigidCloth"
-PLATES = ("minus", "plus")      # body names; "minus" is the articulation root
-HINGE = "hinge"
+
+FRICTION_COMBINE_MODE = "multiply"
+
+
+def pair_materials(table_s, hand_s, ratio):
+    """Material coefficients giving exact cloth/table and cloth/hand friction.
+
+    Both sides use multiply combine. Cloth static/dynamic coefficients are one,
+    so table and robot coefficients equal the requested effective contact values.
+    Non-neighbour cloth/cloth contacts remain enabled with effective friction one;
+    their interlayer friction is not calibrated by the table/hand parameters.
+    Scalars and per-environment tensors are both supported.
+    """
+    return {"cloth": (1.0, 1.0, 0.0), "table": (table_s, table_s * ratio, 0.0),
+            "robot": (hand_s, hand_s * ratio, 0.0)}
+
+
+def bind_physics_material(stage, root_path, coefficients):
+    """Author multiply-combine material and bind every collider beneath this root."""
+    from pxr import Sdf, Usd, UsdPhysics, UsdShade
+
+    root = stage.GetPrimAtPath(root_path)
+    material = UsdShade.Material.Define(stage, root.GetPath().AppendChild("ClothContactMaterial"))
+    api = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
+    api.CreateStaticFrictionAttr(float(coefficients[0]))
+    api.CreateDynamicFrictionAttr(float(coefficients[1]))
+    api.CreateRestitutionAttr(float(coefficients[2]))
+    _apply_physx_api(material.GetPrim(), "PhysxMaterialAPI", {
+        "physxMaterial:frictionCombineMode": (Sdf.ValueTypeNames.Token, FRICTION_COMBINE_MODE),
+        "physxMaterial:restitutionCombineMode": (Sdf.ValueTypeNames.Token, "multiply"),
+    })
+    for prim in Usd.PrimRange(root):
+        if prim.HasAPI(UsdPhysics.CollisionAPI):
+            UsdShade.MaterialBindingAPI.Apply(prim).Bind(
+                material, bindingStrength=UsdShade.Tokens.strongerThanDescendants, materialPurpose="physics"
+            )
+    return material
+
+
+def _bake_contact_material(path, coefficients):
+    from pxr import Usd
+
+    stage = Usd.Stage.Open(path)
+    root = stage.GetDefaultPrim() or next(iter(stage.GetPseudoRoot().GetChildren()))
+    bind_physics_material(stage, root.GetPath(), coefficients)
+    stage.GetRootLayer().Save()
 
 
 def _log(t0: float, msg: str) -> None:
@@ -35,7 +84,11 @@ def build_robot_and_table(env, spec) -> None:
     ``env._table_half_height`` and registers both with the scene."""
     import isaaclab.sim as sim_utils
     from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
-    from isaaclab.sim.spawners.from_files import GroundPlaneCfg, UsdFileCfg, spawn_ground_plane
+    from isaaclab.sim.spawners.from_files import (
+        GroundPlaneCfg,
+        UsdFileCfg,
+        spawn_ground_plane,
+    )
     from isaaclab.sim.utils import get_current_stage
 
     t0 = time.perf_counter()
@@ -61,8 +114,14 @@ def build_robot_and_table(env, spec) -> None:
         rigid_body={"physics:kinematicEnabled": True, "physxRigidBody:disableGravity": True},
         articulation={"physics:articulationEnabled": False},
     )
+    cloth_cfg = env.cfg.rigid_cloth
+    materials = pair_materials(cloth_cfg.table_static_friction, cloth_cfg.hand_static_friction,
+                               cloth_cfg.dynamic_friction_ratio)
+    _bake_contact_material(robot_usd, materials["robot"])
+    _bake_contact_material(table_usd, materials["table"])
     env._robot_urdf_path, env._table_urdf_path = a.robot_urdf, a.table_urdf
-    env._table_half_height = 0.5 * urdf_box_size(a.table_urdf)[2]
+    env._table_size = urdf_box_size(a.table_urdf)
+    env._table_half_height = 0.5 * env._table_size[2]
     _log(t0, "robot + table USDs baked")
 
     stage = get_current_stage()
@@ -89,22 +148,71 @@ def _apply_physx_api(prim, schema: str, attrs: dict) -> None:
         prim.CreateAttribute(name, vtype).Set(value)
 
 
-def author_rigid_cloths(num_envs: int, dims, cloth_cfg, spawn_z) -> None:
-    """Every env's two-plate, one-hinge cloth (``dims (N, 3)`` numpy; ``spawn_z(i)`` its root's
-    env-frame height). The ~60 schema edits of the template go into a private in-memory stage --
-    written into the scene's stage under Kit they took 78 s at 6144 envs."""
+class ArticulationGroup:
+    """Scene stepping for a cloth batch whose rows cover only some environments.
+
+    InteractiveScene passes global IDs to reset. The underlying Isaac articulation
+    uses group-local rows. Physics updates and command writes already span its rows.
+    Raw articulation state remains on ``asset``; backend readout scatters it globally.
+    """
+
+    def __init__(self, asset, global_ids, num_envs):
+        self.asset = asset
+        self.num_envs = num_envs
+        self.set_env_ids(global_ids)
+
+    def set_env_ids(self, global_ids):
+        self.env_ids = global_ids
+        self._local_ids = torch.full((self.num_envs,), -1, dtype=torch.long, device=global_ids.device)
+        self._local_ids[global_ids] = torch.arange(len(global_ids), device=global_ids.device)
+
+    @property
+    def is_initialized(self):
+        return self.asset.is_initialized
+
+    def reset(self, env_ids=None):
+        if env_ids is None:
+            self.asset.reset()
+            return
+        global_ids = torch.as_tensor(env_ids, dtype=torch.long, device=self.env_ids.device)
+        local = self._local_ids[global_ids]
+        local = local[local >= 0]
+        if local.numel():
+            self.asset.reset(local)
+
+    def write_data_to_sim(self):
+        self.asset.write_data_to_sim()
+
+    def update(self, dt):
+        self.asset.update(dt)
+
+
+def _is_rectangle(plate):
+    """Axis-aligned rectangles can retain the inexpensive native box collider."""
+    return (len(plate.vertices) == 4
+            and len({round(x, 12) for x, _ in plate.vertices}) == 2
+            and len({round(y, 12) for _, y in plate.vertices}) == 2)
+
+
+def author_rigid_cloths(env_ids, dims, cloth_cfg, spawn_z, design, root_name) -> None:
+    """Author one topology into the selected global environments, at their own sizes.
+
+    A private USD template is copied in one change block. Rectangles use boxes;
+    other convex panels use extruded polygon meshes. All body frames coincide at
+    the cloth rest origin, so the same surface offsets work for every panel.
+    """
     from isaaclab.sim.utils import get_current_stage
     from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, Vt
 
-    s = cloth_cfg
+    cfg = cloth_cfg
     layer = get_current_stage().GetRootLayer()
     stage = Usd.Stage.CreateInMemory()
-    tpl = f"/{RIGID_CLOTH}"
-    dbl = UsdGeom.XformOp.PrecisionDouble
-    UsdGeom.Xform.Define(stage, tpl).AddTranslateOp(precision=dbl)
-    colors = {"minus": (0.29, 0.56, 0.76), "plus": (0.95, 0.68, 0.22)}
-    for name in PLATES:
-        body = UsdGeom.Xform.Define(stage, f"{tpl}/{name}").GetPrim()
+    template = f"/{root_name}"
+    precision = UsdGeom.XformOp.PrecisionDouble
+    UsdGeom.Xform.Define(stage, template).AddTranslateOp(precision=precision)
+    for index, plate in enumerate(design.plates):
+        body_path = f"{template}/{plate.name}"
+        body = UsdGeom.Xform.Define(stage, body_path).GetPrim()
         UsdPhysics.RigidBodyAPI.Apply(body)
         mass = UsdPhysics.MassAPI.Apply(body)
         mass.CreateMassAttr(1.0)
@@ -112,113 +220,108 @@ def author_rigid_cloths(num_envs: int, dims, cloth_cfg, spawn_z) -> None:
         mass.CreateDiagonalInertiaAttr(Gf.Vec3f(1.0))
         mass.CreatePrincipalAxesAttr(Gf.Quatf(1.0))
         _apply_physx_api(body, "PhysxRigidBodyAPI", {
-            "physxRigidBody:maxDepenetrationVelocity": (Sdf.ValueTypeNames.Float, float(s.max_depenetration_velocity)),
+            "physxRigidBody:maxDepenetrationVelocity": (Sdf.ValueTypeNames.Float, float(cfg.max_depenetration_velocity)),
         })
-        if name == PLATES[0]:
+        if index == 0:
             UsdPhysics.ArticulationRootAPI.Apply(body)
             _apply_physx_api(body, "PhysxArticulationAPI", {
-                "physxArticulation:enabledSelfCollisions": (Sdf.ValueTypeNames.Bool, False),
-                "physxArticulation:solverPositionIterationCount": (Sdf.ValueTypeNames.Int, int(s.solver_position_iterations)),
-                "physxArticulation:solverVelocityIterationCount": (Sdf.ValueTypeNames.Int, int(s.solver_velocity_iterations)),
+                "physxArticulation:enabledSelfCollisions": (Sdf.ValueTypeNames.Bool, True),
+                "physxArticulation:solverPositionIterationCount": (Sdf.ValueTypeNames.Int, int(cfg.solver_position_iterations)),
+                "physxArticulation:solverVelocityIterationCount": (Sdf.ValueTypeNames.Int, int(cfg.solver_velocity_iterations)),
             })
-        cube = UsdGeom.Cube.Define(stage, f"{tpl}/{name}/collider")
-        cube.CreateSizeAttr(1.0)
-        cube.AddTranslateOp(precision=dbl)
-        cube.AddScaleOp(precision=dbl)
-        cube.CreateDisplayColorAttr(Vt.Vec3fArray([Gf.Vec3f(*colors[name])]))
-        UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
-        _apply_physx_api(cube.GetPrim(), "PhysxCollisionAPI", {
-            "physxCollision:contactOffset": (Sdf.ValueTypeNames.Float, float(s.contact_offset)),
-            "physxCollision:restOffset": (Sdf.ValueTypeNames.Float, float(s.rest_offset)),
+        collider_path = f"{body_path}/collider"
+        if _is_rectangle(plate):
+            collider = UsdGeom.Cube.Define(stage, collider_path)
+            collider.CreateSizeAttr(1.0)
+            collider.AddTranslateOp(precision=precision)
+            collider.AddScaleOp(precision=precision)
+        else:
+            vertices, faces = designs.extrusion_mesh(plate)
+            collider = UsdGeom.Mesh.Define(stage, collider_path)
+            collider.CreatePointsAttr(Vt.Vec3fArray.FromNumpy(vertices.astype("float32")))
+            collider.CreateFaceVertexCountsAttr(Vt.IntArray([3] * len(faces)))
+            collider.CreateFaceVertexIndicesAttr(Vt.IntArray.FromNumpy(faces.astype("int32").ravel()))
+            collider.CreateSubdivisionSchemeAttr("none")
+            UsdPhysics.MeshCollisionAPI.Apply(collider.GetPrim()).CreateApproximationAttr("convexHull")
+        color = (0.29, 0.56, 0.76) if plate.center[0] < 0.0 else (0.95, 0.68, 0.22)
+        collider.CreateDisplayColorAttr(Vt.Vec3fArray([Gf.Vec3f(*color)]))
+        UsdPhysics.CollisionAPI.Apply(collider.GetPrim())
+        _apply_physx_api(collider.GetPrim(), "PhysxCollisionAPI", {
+            "physxCollision:contactOffset": (Sdf.ValueTypeNames.Float, float(cfg.contact_offset)),
+            "physxCollision:restOffset": (Sdf.ValueTypeNames.Float, float(cfg.rest_offset)),
         })
-    joint = UsdPhysics.RevoluteJoint.Define(stage, f"{tpl}/{HINGE}")
-    joint.CreateBody0Rel().SetTargets([f"{tpl}/{PLATES[0]}"])
-    joint.CreateBody1Rel().SetTargets([f"{tpl}/{PLATES[1]}"])
-    # Joint x along the crease pointing -y: a positive angle turns the + plate up and over.
-    joint.CreateAxisAttr(UsdPhysics.Tokens.x)
-    rot = Gf.Quatf(math.cos(-math.pi / 4), Gf.Vec3f(0.0, 0.0, math.sin(-math.pi / 4)))
-    joint.CreateLocalRot0Attr(rot)
-    joint.CreateLocalRot1Attr(rot)
-    joint.CreateLocalPos0Attr(Gf.Vec3f(0.0))
-    joint.CreateLocalPos1Attr(Gf.Vec3f(0.0))
-    joint.CreateLowerLimitAttr(float(s.hinge_limits_deg[0]))
-    joint.CreateUpperLimitAttr(float(s.hinge_limits_deg[1]))
-    drive = UsdPhysics.DriveAPI.Apply(joint.GetPrim(), "angular")
-    drive.CreateTypeAttr("force")
-    drive.CreateStiffnessAttr(0.0)
-    drive.CreateDampingAttr(0.0)
-    src = stage.GetRootLayer()
 
-    def put(path: str, value) -> None:
-        spec = layer.GetAttributeAtPath(Sdf.Path(path))
-        if spec is None:
+    for index, (name, hinge) in enumerate(zip(design.joint_names, design.hinges)):
+        joint = UsdPhysics.RevoluteJoint.Define(stage, f"{template}/{name}")
+        joint.CreateBody0Rel().SetTargets([f"{template}/{hinge.parent}"])
+        joint.CreateBody1Rel().SetTargets([f"{template}/{hinge.child}"])
+        joint.CreateAxisAttr(UsdPhysics.Tokens.x)
+        joint.CreateLocalRot0Attr(Gf.Quatf(1.0))
+        joint.CreateLocalRot1Attr(Gf.Quatf(1.0))
+        joint.CreateLocalPos0Attr(Gf.Vec3f(0.0))
+        joint.CreateLocalPos1Attr(Gf.Vec3f(0.0))
+        limits = cfg.hinge_limits_deg if index == design.fold_hinge else hinge.limits_deg
+        joint.CreateLowerLimitAttr(float(limits[0]))
+        joint.CreateUpperLimitAttr(float(limits[1]))
+        # Neighbours share an edge; the remaining pairs retain self-contact.
+        joint.CreateCollisionEnabledAttr(False)
+        drive = UsdPhysics.DriveAPI.Apply(joint.GetPrim(), "angular")
+        drive.CreateTypeAttr("force")
+        drive.CreateStiffnessAttr(0.0)
+        drive.CreateDampingAttr(0.0)
+    bind_physics_material(stage, template, pair_materials(0., 0., 1.)["cloth"])
+    source = stage.GetRootLayer()
+
+    def put(path, value):
+        attribute = layer.GetAttributeAtPath(Sdf.Path(path))
+        if attribute is None:
             raise RuntimeError(f"no attribute spec at {path}")
-        spec.default = value
+        attribute.default = value
 
     with Sdf.ChangeBlock():
-        for i in range(num_envs):
-            root = f"/World/envs/env_{i}/{RIGID_CLOTH}"
-            Sdf.CreatePrimInLayer(layer, f"/World/envs/env_{i}")
-            if not Sdf.CopySpec(src, tpl, layer, root):
-                raise RuntimeError(f"Sdf.CopySpec {tpl} -> {root} failed")
-            spec = designs.single_hinge(*(float(v) for v in dims[i]))
-            put(f"{root}.xformOp:translate", Gf.Vec3d(0.0, 0.0, float(spawn_z(i))))
-            for box in spec.plates:
-                m, com, inertia = designs.box_mass_properties(box, float(s.density))
-                put(f"{root}/{box.name}.physics:mass", float(m))
-                put(f"{root}/{box.name}.physics:centerOfMass", Gf.Vec3f(*map(float, com)))
-                put(f"{root}/{box.name}.physics:diagonalInertia", Gf.Vec3f(*map(float, inertia)))
-                put(f"{root}/{box.name}/collider.xformOp:translate", Gf.Vec3d(*box.center))
-                put(f"{root}/{box.name}/collider.xformOp:scale", Gf.Vec3d(*(2.0 * h for h in box.half_extents)))
-            anchor = Gf.Vec3f(*map(float, spec.hinges[0].anchor))
-            put(f"{root}/{HINGE}.physics:localPos0", anchor)
-            put(f"{root}/{HINGE}.physics:localPos1", anchor)
+        for row, env_id in enumerate(env_ids):
+            env_id = int(env_id)
+            root = f"/World/envs/env_{env_id}/{root_name}"
+            Sdf.CreatePrimInLayer(layer, f"/World/envs/env_{env_id}")
+            if not Sdf.CopySpec(source, template, layer, root):
+                raise RuntimeError(f"Sdf.CopySpec {template} -> {root} failed")
+            spec = design.resolve(*(float(value) for value in dims[row]))
+            put(f"{root}.xformOp:translate", Gf.Vec3d(0.0, 0.0, float(spawn_z(env_id))))
+            for plate in spec.plates:
+                body = f"{root}/{plate.name}"
+                mass, center, inertia, principal = designs.polygon_mass_properties(plate, float(cfg.density))
+                put(f"{body}.physics:mass", float(mass))
+                put(f"{body}.physics:centerOfMass", Gf.Vec3f(*map(float, center)))
+                put(f"{body}.physics:diagonalInertia", Gf.Vec3f(*map(float, inertia)))
+                put(f"{body}.physics:principalAxes", Gf.Quatf(float(principal[0]), Gf.Vec3f(*map(float, principal[1:]))))
+                if _is_rectangle(plate):
+                    put(f"{body}/collider.xformOp:translate", Gf.Vec3d(*map(float, center)))
+                    put(f"{body}/collider.xformOp:scale", Gf.Vec3d(*(2.0 * h for h in plate.half_extents)))
+                else:
+                    vertices, _ = designs.extrusion_mesh(plate)
+                    put(f"{body}/collider.points", Vt.Vec3fArray.FromNumpy(vertices.astype("float32")))
+            for name, hinge in zip(spec.joint_names, spec.hinges):
+                anchor = Gf.Vec3f(*map(float, hinge.anchor))
+                rotation = Gf.Quatf(Gf.Rotation(Gf.Vec3d(1.0, 0.0, 0.0), Gf.Vec3d(*hinge.axis)).GetQuat())
+                for side in (0, 1):
+                    put(f"{root}/{name}.physics:localPos{side}", anchor)
+                    put(f"{root}/{name}.physics:localRot{side}", rotation)
 
 
-def rigid_cloth_articulation(cloth_cfg, spawn_z0: float):
+def rigid_cloth_articulation(cloth_cfg, spawn_z0, design, root_name):
+    """One batched Isaac articulation for the environments using this design."""
     from isaaclab.actuators import ImplicitActuatorCfg
     from isaaclab.assets import Articulation, ArticulationCfg
 
-    s, rd = cloth_cfg, cloth_cfg.randomization
-    stiffness = float(s.hinge_stiffness)
-    # The position gain must exist to be written per reset: a negligible one when DR draws it.
-    if rd.enabled and float(rd.hinge_stiffness[1]) > 0.0 and stiffness == 0.0:
-        stiffness = 1.0e-9
+    # Nonzero seed gains ensure PhysX creates a drive; rigid_init writes exact
+    # per-environment geometry-scaled material gains before the first step.
     return Articulation(ArticulationCfg(
-        prim_path=f"/World/envs/env_.*/{RIGID_CLOTH}",
+        prim_path=f"/World/envs/env_.*/{root_name}",
         spawn=None,
         init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.0, float(spawn_z0))),
-        actuators={HINGE: ImplicitActuatorCfg(
-            joint_names_expr=[HINGE], stiffness=stiffness, damping=float(s.hinge_damping),
-            armature=float(s.hinge_armature), effort_limit_sim=None,
+        actuators={"hinges": ImplicitActuatorCfg(
+            joint_names_expr=list(design.joint_names),
+            stiffness=1.0e-9, damping=1.0e-9,
+            armature=float(cloth_cfg.hinge_armature), effort_limit_sim=None,
         )},
     ))
-
-
-# ------------------------------------------------------------------ materials
-
-
-def set_base_materials(env, spec) -> None:
-    """Robot shapes ``assets.robot_friction``, fingertip shapes ``finger_tip_friction``, the table
-    ``table_friction`` (static = dynamic, restitution 0; PhysX averages the two sides of a contact)."""
-    a = env.cfg.assets
-    if not a.modify_asset_frictions:
-        return
-    ids = torch.arange(env.num_envs, dtype=torch.int64)
-    view = env.robot.root_physx_view
-    mats = view.get_material_properties()
-    mats[:] = torch.tensor([a.robot_friction, a.robot_friction, 0.0])
-    start = 0
-    tips = set(spec.fingertip_link_names)
-    for name, path in zip(view.shared_metatype.link_names, view.link_paths[0]):
-        n = env.robot._physics_sim_view.create_rigid_body_view(path).max_shapes
-        if name in tips:
-            mats[:, start:start + n] = torch.tensor([a.finger_tip_friction, a.finger_tip_friction, 0.0])
-        start += n
-    if start != view.max_shapes:
-        raise RuntimeError(f"robot shape count mismatch: walked {start}, view has {view.max_shapes}")
-    view.set_material_properties(mats, ids)
-    tview = env.table.root_physx_view
-    tm = tview.get_material_properties()
-    tm[:] = torch.tensor([a.table_friction, a.table_friction, 0.0])
-    tview.set_material_properties(tm, ids)

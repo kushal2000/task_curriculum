@@ -46,8 +46,12 @@ def carry(grid: ClothGrid, rest_pts: torch.Tensor, r: torch.Tensor, centroid: to
 
 def corner_targets(grid: ClothGrid, r: torch.Tensor, centroid: torch.Tensor, unfold: torch.Tensor) -> torch.Tensor:
     """``(N, 4, 3)``: the folded corners, or the flat ones where ``unfold``."""
-    folded = carry(grid, grid.folded_rest(grid.corner_idx), r, centroid)
-    flat = carry(grid, grid.rest[:, grid.corner_idx], r, centroid)
+    rest = grid.rest[:, grid.corner_idx] if grid.keypoint_rest is None else grid.keypoint_rest
+    folded_rest = rest.clone()
+    folded_rest[..., 0] = -folded_rest[..., 0]
+    folded_rest[..., 2] += grid.ply_gap.unsqueeze(1)
+    folded = carry(grid, folded_rest, r, centroid)
+    flat = carry(grid, rest, r, centroid)
     return torch.where(unfold.view(-1, 1, 1), flat, folded)
 
 

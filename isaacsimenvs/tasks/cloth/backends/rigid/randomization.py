@@ -1,81 +1,136 @@
-"""Per-reset physics DR of the cloth's material.
+"""Per-sheet material draws mapped to each topology's physical joints and contacts.
 
-Rigid cloth (PhysX, ``rigid_cloth.randomization``), re-drawn per env at EVERY reset: hinge damping
-(log-uniform multiplier) and stiffness (uniform) via the joint tensor writes, and the plate / robot /
-table frictions (multipliers quantised to ``friction_buckets`` levels -- PhysX caps a scene at 64K
-materials, and each distinct (static, dynamic, restitution) triple a tensor write creates is one).
+Bending rigidity/viscosity multiply each hinge's geometric edge/span factor.
+Density scales mass and all inertia entries. Material draws follow global reset-ID
+order, independent of sparse articulation grouping. Contact friction is an absolute
+cloth/table or cloth/hand pair coefficient, using authored multiply-combine materials.
 """
-
 from __future__ import annotations
 
 import math
 
+import numpy as np
 import torch
+
+from .bending import hinge_geometry_factors
+from .inertia import hinge_inertias
+from .scene import pair_materials
+
+
+_MATERIAL_FIELDS = ("bending_rigidity", "bending_viscosity", "density",
+                    "table_static_friction", "hand_static_friction", "dynamic_friction_ratio")
 
 
 def rigid_init(env) -> None:
-    """Base frictions (plates ``rigid_cloth.friction``; robot and table as ``rigid_scene.set_base_materials``
-    left them), the first draw for every env, and a read-back of what it wrote."""
-    s = env.cfg.rigid_cloth
-    view = env._rigid_cloth.root_physx_view
-    env._plate_mats = view.get_material_properties().clone()
-    env._plate_mats[..., 0:2] = float(s.friction)
-    env._plate_mats[..., 2] = 0.0
-    env._robot_mats_base = env.robot.root_physx_view.get_material_properties().clone()
-    env._table_mats_base = env.table.root_physx_view.get_material_properties().clone()
-    env._robot_mats = env._robot_mats_base.clone()
-    env._table_mats = env._table_mats_base.clone()
+    """Cache physical references; apply nominal material settings before optional DR."""
+    cfg = env.cfg.rigid_cloth
+    for group in env.groups:
+        view = group.articulation.root_physx_view
+        group.plate_mats = view.get_material_properties().clone()
+        group.plate_mats[:] = torch.tensor(pair_materials(0., 0., 1.)["cloth"])
+        view.set_material_properties(group.plate_mats, torch.arange(len(group.env_ids)))
+        group.mass_base = view.get_masses().cpu().clone()
+        group.inertia_base = view.get_inertias().cpu().clone()
+        references, inertias, factors = {}, [], []
+        for global_id in group.env_ids.cpu().tolist():
+            dimensions = tuple(float(value) for value in env._dimensions_cpu[global_id])
+            if dimensions not in references:
+                spec = group.design.resolve(*dimensions)
+                references[dimensions] = hinge_inertias(spec, float(cfg.density)), hinge_geometry_factors(spec)
+            inertia, factor = references[dimensions]
+            inertias.append(inertia)
+            factors.append(factor)
+        shape = (len(group.env_ids), group.articulation.num_joints)
+        group.hinge_inertia = torch.zeros(shape, dtype=torch.float32, device=env.device)
+        group.hinge_geometry = torch.zeros_like(group.hinge_inertia)
+        for destination, values in ((group.hinge_inertia, inertias), (group.hinge_geometry, factors)):
+            destination[:, group.joint_ids] = torch.as_tensor(np.stack(values), dtype=torch.float32, device=env.device)
+    env._robot_mats = env.robot.root_physx_view.get_material_properties().clone()
+    env._table_mats = env.table.root_physx_view.get_material_properties().clone()
+    for name in _MATERIAL_FIELDS:
+        setattr(env, f"_dr_{name}", torch.full((env.num_envs,), float(getattr(cfg, name)), device=env.device))
+    env._dr_armature_scale = torch.zeros(env.num_envs, device=env.device)
     ids = torch.arange(env.num_envs, device=env.device)
-    view.set_material_properties(env._plate_mats, ids.cpu())
+    _apply(env, ids)
     rigid_randomize(env, ids)
-    rigid_check(env, ids[: min(64, env.num_envs)])
-    rd = s.randomization
-    print(f"[rigid_body] DR every reset: {'on' if rd.enabled else 'OFF'}; hinge damping {s.hinge_damping:g} x "
-          f"logU{list(rd.hinge_damping_scale)}, stiffness U{list(rd.hinge_stiffness)}; friction "
-          f"x{list(rd.sheet_friction_scale)} plates ({s.friction:g}), x{list(rd.robot_friction_scale)} robot, "
-          f"x{list(rd.table_friction_scale)} table ({rd.friction_buckets} levels)", flush=True)
+    rigid_check(env, ids[:min(64, env.num_envs)])
+    rd = cfg.randomization
+    print(f"[rigid_body] material DR {'on' if rd.enabled else 'OFF'}: "
+          f"B logU{list(rd.bending_rigidity)} N m, C logU{list(rd.bending_viscosity)} N m s; "
+          f"density logU{list(rd.density)} kg/m²; effective table/hand static friction "
+          f"U{list(rd.table_static_friction)}/U{list(rd.hand_static_friction)}, "
+          f"dynamic ratio U{list(rd.dynamic_friction_ratio)}; multiply combine", flush=True)
 
 
 def rigid_randomize(env, ids: torch.Tensor) -> None:
-    s = env.cfg.rigid_cloth
-    rd = s.randomization
-    n = int(ids.numel())
-    if n == 0 or not rd.enabled:
+    """Draw one set of material parameters per selected global environment."""
+    rd, count = env.cfg.rigid_cloth.randomization, len(ids)
+    if count == 0 or not rd.enabled:
         return
-    lo, hi = (math.log(float(v)) for v in rd.hinge_damping_scale)
-    damping = float(s.hinge_damping) * torch.exp(torch.empty(n, device=env.device).uniform_(lo, hi))
-    stiffness = torch.empty(n, device=env.device).uniform_(*(float(v) for v in rd.hinge_stiffness))
-    env._rigid_cloth.write_joint_damping_to_sim(damping.view(-1, 1), env_ids=ids)
-    env._rigid_cloth.write_joint_stiffness_to_sim(stiffness.view(-1, 1), env_ids=ids)
+    for name in ("bending_rigidity", "bending_viscosity", "density"):
+        low, high = (math.log(float(value)) for value in getattr(rd, name))
+        getattr(env, f"_dr_{name}")[ids] = torch.empty(count, device=env.device).uniform_(low, high).exp_()
+    env._dr_armature_scale[ids] = torch.empty(count, device=env.device).uniform_(*rd.hinge_armature_scale)
+    for name in ("table_static_friction", "hand_static_friction", "dynamic_friction_ratio"):
+        levels = torch.linspace(*getattr(rd, name), int(rd.friction_buckets))
+        getattr(env, f"_dr_{name}")[ids] = levels[torch.randint(len(levels), (count,))].to(env.device)
+    _apply(env, ids)
 
+
+def _apply(env, ids):
+    """Apply nominal or drawn material parameters without compounding previous resets."""
+    for group in env.groups:
+        rows, local_ids = group.select(ids)
+        if not rows.numel():
+            continue
+        selected, cpu = ids[rows], local_ids.cpu()
+        asset, factors = group.articulation, group.hinge_geometry[local_ids]
+        asset.write_joint_stiffness_to_sim(env._dr_bending_rigidity[selected, None] * factors, env_ids=local_ids)
+        asset.write_joint_damping_to_sim(env._dr_bending_viscosity[selected, None] * factors, env_ids=local_ids)
+        ratio = env._dr_density[selected] / float(env.cfg.rigid_cloth.density)
+        armature = float(env.cfg.rigid_cloth.hinge_armature) + group.hinge_inertia[local_ids] * (
+            ratio * env._dr_armature_scale[selected]
+        )[:, None]
+        asset.write_joint_armature_to_sim(armature, env_ids=local_ids)
+        masses, inertias = asset.root_physx_view.get_masses(), asset.root_physx_view.get_inertias()
+        masses[cpu] = group.mass_base[cpu] * ratio.cpu()[:, None]
+        inertias[cpu] = group.inertia_base[cpu] * ratio.cpu()[:, None, None]
+        asset.root_physx_view.set_masses(masses, cpu)
+        asset.root_physx_view.set_inertias(inertias, cpu)
     cpu = ids.cpu()
-    b = int(rd.friction_buckets)
-
-    def bucket(scale) -> torch.Tensor:
-        levels = torch.linspace(float(scale[0]), float(scale[1]), b)
-        return levels[torch.randint(0, b, (n,))].view(-1, 1, 1)
-
-    env._plate_mats[cpu, :, 0:2] = float(s.friction) * bucket(rd.sheet_friction_scale)
-    env._robot_mats[cpu, :, 0:2] = env._robot_mats_base[cpu, :, 0:2] * bucket(rd.robot_friction_scale)
-    env._table_mats[cpu, :, 0:2] = env._table_mats_base[cpu, :, 0:2] * bucket(rd.table_friction_scale)
-    env._rigid_cloth.root_physx_view.set_material_properties(env._plate_mats, cpu)
-    env.robot.root_physx_view.set_material_properties(env._robot_mats, cpu)
-    env.table.root_physx_view.set_material_properties(env._table_mats, cpu)
-    env._dr_damping, env._dr_stiffness = damping, stiffness
+    materials = pair_materials(env._dr_table_static_friction[ids].cpu(),
+                               env._dr_hand_static_friction[ids].cpu(),
+                               env._dr_dynamic_friction_ratio[ids].cpu())
+    for name, asset, buffer in (("robot", env.robot, env._robot_mats), ("table", env.table, env._table_mats)):
+        static, dynamic, restitution = materials[name]
+        buffer[cpu, :, 0], buffer[cpu, :, 1], buffer[cpu, :, 2] = static[:, None], dynamic[:, None], restitution
+        asset.root_physx_view.set_material_properties(buffer, cpu)
 
 
 def rigid_check(env, ids: torch.Tensor) -> None:
-    """Read back what the last ``rigid_randomize(ids)`` wrote; refuse to run on a mismatch."""
-    if not env.cfg.rigid_cloth.randomization.enabled:
-        return
-    view = env._rigid_cloth.root_physx_view
-    k, cpu = int(ids.numel()), ids.cpu()
-    got_d = view.get_dof_dampings().reshape(env.num_envs, -1)[cpu, 0]
-    got_s = view.get_dof_stiffnesses().reshape(env.num_envs, -1)[cpu, 0]
-    for label, got, want in (("damping", got_d, env._dr_damping[:k].cpu()), ("stiffness", got_s, env._dr_stiffness[:k].cpu())):
-        if not torch.allclose(got.float(), want.float(), rtol=1e-4, atol=1e-9):
-            raise RuntimeError(f"hinge {label} read-back mismatch: wrote {want[:4].tolist()}, read {got[:4].tolist()}")
-    for label, v, want in (("cloth", view, env._plate_mats), ("robot", env.robot.root_physx_view, env._robot_mats),
-                           ("table", env.table.root_physx_view, env._table_mats)):
-        if not torch.allclose(v.get_material_properties()[cpu], want[cpu], atol=1e-6):
+    """Read back geometry-scaled gains, masses, inertias and effective pair materials."""
+    for group in env.groups:
+        rows, local_ids = group.select(ids)
+        if not rows.numel():
+            continue
+        view, selected, cpu = group.articulation.root_physx_view, ids[rows], local_ids.cpu()
+        ratio = (env._dr_density[selected] / float(env.cfg.rigid_cloth.density)).cpu()
+        factors = group.hinge_geometry[local_ids].cpu()
+        armature = float(env.cfg.rigid_cloth.hinge_armature) + group.hinge_inertia[local_ids].cpu() * (
+            ratio * env._dr_armature_scale[selected].cpu()
+        )[:, None]
+        for label, got, expected in (
+            ("stiffness", view.get_dof_stiffnesses()[cpu], factors * env._dr_bending_rigidity[selected].cpu()[:, None]),
+            ("damping", view.get_dof_dampings()[cpu], factors * env._dr_bending_viscosity[selected].cpu()[:, None]),
+            ("mass", view.get_masses()[cpu], group.mass_base[cpu] * ratio[:, None]),
+            ("inertia", view.get_inertias()[cpu], group.inertia_base[cpu] * ratio[:, None, None]),
+            ("armature", view.get_dof_armatures()[cpu], armature),
+        ):
+            if not torch.allclose(got.float(), expected.float(), rtol=1e-4, atol=1e-12):
+                raise RuntimeError(f"{group.design.name} {label} read-back mismatch")
+        if not torch.allclose(view.get_material_properties()[cpu], group.plate_mats[cpu], atol=1e-6):
+            raise RuntimeError(f"{group.design.name} cloth friction read-back mismatch")
+    cpu = ids.cpu()
+    for label, asset, expected in (("robot", env.robot, env._robot_mats), ("table", env.table, env._table_mats)):
+        if not torch.allclose(asset.root_physx_view.get_material_properties()[cpu], expected[cpu], atol=1e-6):
             raise RuntimeError(f"{label} friction read-back mismatch")

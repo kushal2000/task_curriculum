@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from isaacsimenvs.scripts.visualization.pose_viewer import build_pose_viewer_html  # noqa: E402
+from isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer import build_pose_viewer_html  # noqa: E402
 
 # A hammer, as `handle_head_primitives` emits it: cylinder handle + box head.
 HAMMER_URDF = """<?xml version="1.0"?>
@@ -117,7 +117,7 @@ RIGHT_WUJI_URDF = "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
 def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10, robot_urdf: str = KUKA_URDF) -> str:
     import types
 
-    from isaacsimenvs.scripts.visualization.pose_viewer import ClothPoseViewerWrapper
+    from isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer import ClothPoseViewerWrapper
 
     n_particles = resolution * resolution
     n_half = resolution * (resolution // 2)  # rows strictly past the crease
@@ -206,8 +206,8 @@ def test_the_hammer_strings_are_a_discriminating_check():
 @pytest.mark.parametrize(
     "module_name, class_name, expected",
     [
-        ("isaacsimenvs.scripts.visualization.pose_viewer", "ClothPoseViewerWrapper", True),
-        ("isaacsimenvs.scripts.visualization.pose_viewer", "PlayPoseViewerWrapper", True),
+        ("isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer", "ClothPoseViewerWrapper", True),
+        ("isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer", "PlayPoseViewerWrapper", True),
     ],
 )
 def test_network_kwargs_are_offered_by_signature_not_module_name(module_name, class_name, expected):
@@ -225,7 +225,7 @@ def test_viewer_draws_the_tasks_own_table():
     the Flexiv tasks' 4 cm slab drawn as Play's 30 cm box was a wrong viewer."""
     from types import SimpleNamespace
 
-    from isaacsimenvs.scripts.visualization.pose_viewer import table_urdf_for_env
+    from isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer import table_urdf_for_env
 
     flexiv = SimpleNamespace(cfg=SimpleNamespace(assets=SimpleNamespace(
         table_urdf="assets/urdf/table_narrow_flexiv.urdf")))

@@ -24,20 +24,23 @@ def ratchet(best: torch.Tensor, current: torch.Tensor, cap: float) -> tuple[torc
 
 
 class ClothTask:
-    def __init__(self, cfg, cloth_grid, origins, arm_ids, hand_ids):
+    def __init__(self, cfg, cloth_grid, origins, arm_ids, hand_ids, *, robot_spec=ROBOT):
         self.cfg, self._cloth_grid, self.origins = cfg, cloth_grid, origins
         self.device, self.num_envs = origins.device, origins.shape[0]
         self._arm_ids, self._hand_ids = arm_ids, hand_ids
-        self._fingertip_offsets = torch.tensor(ROBOT.fingertip_offsets, device=self.device)
-        self._object_scales = cloth_grid.dims / float(cfg.reward.object_base_size)
+        self._fingertip_offsets = torch.tensor(robot_spec.fingertip_offsets, device=self.device)
+        # Every policy sees the same moving-half object, for both rigid and VBD cloth.
+        object_dims = cloth_grid.dims * cloth_grid.dims.new_tensor([0.5, 1.0, 1.0])
+        self._object_scales = object_dims / float(cfg.reward.object_base_size)
         self.extras = {}
         self.reward_buf = torch.zeros(self.num_envs, device=self.device)
         self._allocate()
 
-    def evaluate(self, state, episode_length, max_episode_length, touching=None) -> TaskTransition:
+    def evaluate(self, state, episode_length, max_episode_length, touching=None, *, robot_clearance=None) -> TaskTransition:
         self.episode_length_buf = episode_length
         self.max_episode_length = max_episode_length
         self.hand_touching = touching
+        self.robot_clearance = robot_clearance
         view = self.derive(state)
         terminated, truncated = self.compute_terminations(state, view)
         self.reward_buf = self.compute_reward(state, view)
@@ -110,7 +113,7 @@ class ClothTask:
         cg = self._cloth_grid
         r, c = fold.stationary_frame(cg, state.points_w)
         pos, q, lin, ang = fold.cloth_frame(state.points_w, state.points_vel_w, r)
-        kp = state.points_w[:, cg.corner_idx]
+        kp = state.points_w[:, cg.corner_idx] if state.keypoints_w is None else state.keypoints_w
         targets = fold.corner_targets(cg, r, c, self._unfold_env)
         pads = state.fingertip_pos_w
         if self.cfg.reward.fingertip_distance_from_pad:
@@ -144,7 +147,10 @@ class ClothTask:
     def start_yaw(self, n: int) -> torch.Tensor:
         if not self.cfg.reset.random_yaw:
             return torch.zeros(n, device=self.device)
-        return torch.rand(n, device=self.device) * (2.0 * math.pi)
+        low, high = getattr(self.cfg.reset, "yaw_range_deg", (0.0, 360.0))
+        if not math.isfinite(low) or not math.isfinite(high) or low > high:
+            raise ValueError("reset.yaw_range_deg must contain finite ordered bounds")
+        return torch.empty(n, device=self.device).uniform_(math.radians(low), math.radians(high))
 
     def is_folded(self, state: SimState, view: TaskView) -> torch.Tensor:
         f = self.cfg.task
@@ -176,6 +182,23 @@ class ClothTask:
         c = self.cfg.task.release
         self._bonus_mask.copy_(entered & ~self._entry_paid)
         self._entry_paid |= entered
+
+        if c.touch == "robot_clearance":
+            distance = self.robot_clearance
+            if distance is None:
+                raise ValueError("robot_clearance release requires whole-robot collision geometry distances")
+            clear = torch.isfinite(distance) & (distance >= c.clearance)
+            newly = folded & self._entry_paid & clear & ~self._released
+            if c.fold_tolerance > 0:
+                newly &= view.fold_error < c.fold_tolerance
+            self._release_latch_mask.copy_(newly)
+            self._released |= newly
+            self._release_rew_step.zero_()
+            self._persist_step_mask.zero_()
+            self._persist_done.zero_()
+            self._persist_fail.zero_()
+            self.extras["robot_cloth_clearance_m"] = distance.detach().clone()
+            return newly
 
         d = self.hand_sheet_distance(state)
         if c.touch == "contact":
@@ -252,9 +275,13 @@ class ClothTask:
             reasons["released"] = self._released.clone()
             reasons["persist"] = self._persist_done.clone()
             reasons["persist_fail"] = self._persist_fail.clone()
-            end = self._persist_done | (
-                self._persist_fail if cfg.task.release.persist_fail_terminates else torch.zeros_like(fall)
-            )
+            if cfg.task.release.touch == "robot_clearance":
+                # No persistence/latch timer: the fold is still valid at release.
+                end = self._released
+            else:
+                end = self._persist_done | (
+                    self._persist_fail if cfg.task.release.persist_fail_terminates else torch.zeros_like(fall)
+                )
         self._termination_reasons = reasons
         return fall | hand_far | nonfinite | end, truncated
 

@@ -313,9 +313,9 @@ def test_observations_have_plays_shape_and_a_perfect_fold_reads_zero_goal_offset
     # critic is clean: keypoints_rel_goal (columns 27*3 + 3+4+6+4+6+15+12 = ...) is zero at a perfect fold
     start = 81 + 3 + 4 + 6 + 4 + 6 + 15 + 12
     assert float(obs["critic"][:, start:start + 12].abs().max()) < 1e-5
-    # object_rot (critic, after joints and palm pos/rot/vel) is the stationary frame = identity (xyzw)
+    # object_rot is the moving half: a physical 180-degree turn, including its downward normal.
     rot = obs["critic"][:, 81 + 13:81 + 17]
-    assert torch.allclose(rot.abs(), torch.tensor([0.0, 0.0, 0.0, 1.0]).expand(8, 4), atol=1e-5)
+    assert torch.allclose(rot.abs(), torch.tensor([0.0, 1.0, 0.0, 0.0]).expand(8, 4), atol=1e-5)
 
 
 def test_nonfinite_sheet_is_zeroed_and_flagged():
@@ -343,3 +343,59 @@ def test_cloth_cfg_rejects_bad_settings(bad):
     c.from_dict(bad)
     with pytest.raises(ValueError):
         c.check()
+
+
+def test_policy_keypoint_scale_matches_input_fields_without_scaling_translation_or_task_error():
+    from dataclasses import replace
+
+    env, state, observer = _obs_env(2, False)
+    state.points_w = env._cloth_grid.rest + torch.tensor([0.3, -0.2, 0.5])
+    view = env.derive(state)
+    physical = view.corners_w.clone()
+    physical_error = view.fold_error.clone()
+    observer.keypoint_scale = 1.0
+    unscaled_current, unscaled_targets = observer.keypoints_w(view, state)
+    original = observer.build(state, view, env.episode_length_buf)["policy"]
+    observer.keypoint_scale = 1.5
+    current, targets = observer.keypoints_w(view, state)
+    assert torch.allclose(current.mean(1), unscaled_current.mean(1))
+    assert torch.allclose(targets.mean(1), unscaled_targets.mean(1))
+    for scaled, unscaled in ((current, unscaled_current), (targets, unscaled_targets)):
+        assert torch.allclose(scaled - scaled.mean(1, keepdim=True),
+                              1.5 * (unscaled - unscaled.mean(1, keepdim=True)))
+    obs = observer.build(state, view, env.episode_length_buf)["policy"]
+    palm = observer.palm_center_w(state)
+    assert torch.allclose(obs[:, 107:119].reshape(2, 4, 3), current - palm.unsqueeze(1))
+    assert torch.allclose(obs[:, 119:131].reshape(2, 4, 3), current - targets)
+    assert torch.equal(obs[:, :107], original[:, :107])
+    assert torch.equal(obs[:, 131:], original[:, 131:])
+    half_dims = env._cloth_grid.dims * torch.tensor([.5, 1., 1.])
+    assert torch.allclose(obs[:, 131:], half_dims / .04)
+    assert torch.equal(view.corners_w, physical)
+    assert torch.equal(view.fold_error, physical_error)
+    # Translate the actual physical state; both object poses must follow it.
+    shift = torch.tensor([2., -3., 1.])
+    moved_state = replace(state, points_w=state.points_w + shift)
+    moved_view = env.derive(moved_state)
+    shifted_current, shifted_targets = observer.keypoints_w(moved_view, moved_state)
+    assert torch.allclose(shifted_current, current + shift)
+    assert torch.allclose(shifted_targets, targets + shift)
+    perfect_state = replace(state, points_w=grid.folded_start(env._cloth_grid, torch.full((2,), math.pi)))
+    perfect_current, perfect_targets = observer.keypoints_w(env.derive(perfect_state), perfect_state)
+    torch.testing.assert_close(perfect_current, perfect_targets, atol=1e-6, rtol=0)
+
+
+def test_reset_yaw_uses_the_configured_training_range_and_pinned_zero():
+    task = ClothTask.__new__(ClothTask)
+    task.device = 'cpu'
+    task.cfg = NS(reset=NS(random_yaw=True, yaw_range_deg=[30., 60.]))
+    samples = task.start_yaw(256)
+    assert torch.all(samples >= math.radians(30)) and torch.all(samples <= math.radians(60))
+    task.cfg.reset.yaw_range_deg = [45., 45.]
+    torch.testing.assert_close(task.start_yaw(3), torch.full((3,), math.pi / 4))
+    task.cfg.reset.random_yaw = False
+    assert torch.count_nonzero(task.start_yaw(3)) == 0
+    task.cfg.reset.random_yaw = True
+    task.cfg.reset.yaw_range_deg = [90., 30.]
+    with pytest.raises(ValueError, match='yaw_range_deg'):
+        task.start_yaw(3)

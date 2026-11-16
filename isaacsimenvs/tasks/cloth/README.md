@@ -122,6 +122,88 @@ Additional VBD approximations can generally be expressed as material/solver
 configuration. Add another adapter only when scene construction, state readout,
 or simulator writes actually differ. Adapters do not implement their own step loop.
 
+## Articulated folding designs
+
+The [design catalog](../../scripts/configs/rigid_cloth_designs/README.md) contains
+five runnable YAML designs and matching PNG diagrams. Each YAML describes crease
+segments in normalized sheet coordinates; the loader derives the rigid panels
+and their hinge connections.
+
+| YAML | Plates | Hinges |
+| --- | ---: | ---: |
+| `single_hinge.yaml` | 2 | 1 |
+| `strip_4.yaml` | 4 | 3 |
+| `strip_8.yaml` | 8 | 7 |
+| `flexible_corners.yaml` | 6 | 5 |
+| `hinge_band.yaml` | 4 | 3 |
+
+All designs use the same task: fold the positive-x half onto the negative-x half
+about the central y-axis crease. Extra hinges allow bending while attempting that
+fold. The supplied designs are symmetric across both sheet axes.
+
+Select a list before constructing the environment, after launching Isaac Sim:
+
+```python
+cfg = ClothCfg.for_backend("rigid")
+cfg.rigid_cloth.designs = ["single_hinge.yaml", "flexible_corners.yaml", "hinge_band.yaml"]
+cfg.scene.num_envs = 64
+cfg.task.mode = "fold"
+env = ClothEnv(cfg)
+```
+
+`ClothEnv` passes this list to `RigidBackend(cfg, design_paths)`. Names resolve
+under `scripts/configs/rigid_cloth_designs`; explicit YAML paths also work. Existing
+runners accept, for example:
+
+```sh
+'env.rigid_cloth.designs=[single_hinge.yaml,strip_4.yaml,flexible_corners.yaml]'
+```
+
+The backend cycles through the list across environments. Environments sharing a
+design form one articulation group with that design's native body/joint counts.
+Length, width and thickness vary independently through the size grid. State
+readout restores the original environment order and exposes the same surface
+samples and observation layout for every design.
+
+[designs.py](backends/rigid/designs.py) loads each YAML into a `ClothDesign`.
+`design.resolve(length, width, thickness)` produces a `SheetSpec` in meters:
+convex plate polygons, hinge anchors, axes, limits and the designated fold hinge.
+The scene builder extrudes these polygons and computes their mass and inertia.
+The loader currently supports rectangular sheets whose crease cuts form a tree,
+including one complete center crease at `x = 0`.
+
+All policies observe a common moving-half object representation: center,
+orientation and velocity, dimensions `[length/2,width,thickness]`, and four 3D
+keypoints in Play's diagonal top/bottom order. `obs.keypoint_scale` defaults to
+1.5 and expands local marker offsets; `reward.object_base_size` normalizes the
+size observation independently. Current and target markers use consistent object
+poses. The single-hinge moving frame is exact; additional hinges and deformable
+cloth use a fitted moving-half frame.
+
+Physical rigid fold landmarks remain the exact four moving-half corners attached
+to their owning plates. Their rest center is `(length/4,0,0)` regardless of grid
+resolution. These landmarks drive physical fold error and reward. The viewer
+switches between physical corners and the policy's 3D markers.
+
+Reset sets the designated center hinge angle and leaves other hinges straight.
+Passive hinge targets remain flat. A shared sheet rigidity and viscosity are
+converted to per-hinge stiffness/damping using crease length and neighboring panel
+spacing, so discretization changes do not silently change the material draw.
+
+The static-robot viewer discovers the catalog in its **Design YAML** dropdown.
+Select a design and press **Apply geometry and restart**; this reloads its YAML.
+
+```sh
+.venv/isaacsim/bin/python isaacsimenvs/scripts/visualization/viser_rigidCloth_viewer.py --design flexible_corners
+```
+
+Add `--policy` to evaluate the bundled Flexiv–Wuji Play prior. Policy mode uses the
+real `ClothEnv` observation/action path and animates the robot. The setup selector
+switches between the checkpoint's human-like hand and trained table placement,
+and the current real-limits hand with identified dynamics. See
+[policy viewer setup](../../scripts/visualization/rigid_cloth/README.md) for the
+training table dimensions, limits, and evaluation controls.
+
 Newton compatibility belongs to [backends/vbd/newton_support/](backends/vbd/newton_support/).
 Evaluation overflow reporting lives in `isaacsimenvs/scripts/evaluation/contact_guard.py`.
 Prepare the default VBD robot/table cache under Isaac Sim with:
@@ -136,10 +218,10 @@ Use the same robot/table paths and conversion options as the intended VBD run.
 
 Historical physics measurements are in
 [backends/vbd/physics_notes.md](backends/vbd/physics_notes.md). Fabric presets live
-in `isaacsimenvs/scripts/configs/fabric`; print their Hydra overrides with:
+in `isaacsimenvs/scripts/configs/deformable_cloth_designs`; print their Hydra overrides with:
 
 ```sh
-.venv/isaaclab3/bin/python -m isaacsimenvs.tasks.cloth.backends.vbd.fabrics cotton --plastic
+.venv/isaaclab3/bin/python -m isaacsimenvs.tasks.cloth.backends.vbd.fabrics cotton_measured --plastic
 ```
 
 The old rigid/deformable environment subclasses and `utils/mdp` modules have been replaced by
@@ -156,3 +238,13 @@ are preserved. `viewer_plates` returns `None` for VBD.
 Tests cover geometry, policy conventions, task progression, partial resets,
 backend state normalization, solver wiring, construction-hook cleanup, and contact
 semantics. GPU smoke runs additionally exercise real scene creation and stepping.
+
+The default rigid DR recipe is
+[`scripts/configs/runs/rigid_body_cloth.yaml`](../../scripts/configs/runs/rigid_body_cloth.yaml).
+It explicitly lists all five designs, fixed 2 mm thickness, density, sheet bending
+rigidity/viscosity, disabled armature, effective cloth/table and cloth/robot static
+friction, dynamic/static ratio, reset bounds/yaw and observation/action noise.
+Fold entry pays 1,000 once; a still-valid fold with the entire robot at least 10 cm
+clear pays another 1,000 and completes immediately, without a hold timer.
+The Viser inspector loads this same recipe with `--training_config`; its physics
+sliders set fixed values and its reset controls can sample the listed placement ranges.

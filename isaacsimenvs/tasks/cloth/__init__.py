@@ -21,7 +21,7 @@ gym.register(
 )
 
 
-# Rigid2Deform: the fold task on a rigid single-hinge sheet, one size design per env, on PhysX. One
+# Rigid2Deform: the fold task on a list of plate/hinge designs, one size per env, on PhysX. One
 # robot (Flexiv Rizon 4s + right Wuji Hand 2, identified hand: robot.py, built into the cfg).
 # Not `Cloth*`-prefixed: experiments/_common.sh sends `Isaacsimenvs-Cloth*` to Newton.
 gym.register(

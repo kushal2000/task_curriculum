@@ -44,6 +44,9 @@ class ObsCfg:
         "joint_pos", "joint_vel", "prev_action_targets", "palm_pos", "palm_rot", "object_rot",
         "fingertip_pos_rel_palm", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales",
     )
+    keypoint_scale: float = 1.5
+    """Scale the moving-half cuboid's ordered 3D markers for every policy.
+    Physical task errors still use the original cloth samples."""
     clamp_abs_observations: float = 10.0
 
 
@@ -60,7 +63,9 @@ class RewardCfg:
     """x the L1 arm joint velocity (Play's name; it is a velocity penalty)."""
     hand_actions_penalty_scale: float = 0.003
     object_base_size: float = 0.04
-    """``object_scales`` = cloth [length, width, thickness] / this."""
+    """Policy size normalization [m]: moving-half dimensions [length/2, width, thickness]
+    divided by this, on both rigid and VBD backends.
+    Independent of obs.keypoint_scale, which expands virtual point offsets."""
 
 
 @configclass
@@ -76,6 +81,8 @@ class ResetCfg:
     reset_position_noise_y: float = 0.1
     """Sheet centre noise U(+-noise) [m] around the table centre; the rigid env bounds it by the
     table instead (``rigid_cloth.place_x/y``) and centres the cloth when both are 0."""
+    yaw_range_deg: list[float] = [0.0, 360.0]
+    """Uniform cloth-heading range in degrees when random_yaw is enabled."""
     random_yaw: bool = True
     """Start heading U[0, 2 pi); False starts every cloth at yaw 0."""
 
@@ -111,17 +118,18 @@ class DomainRandomizationCfg:
 
 @configclass
 class ReleaseCfg:
-    """Fold, let go, and the fold must persist (off by default)."""
+    """Fold and release; robot_clearance completes immediately once all geometry is clear."""
 
     enabled: bool = False
     clearance: float = 0.03
-    """``touch=origin``: the hand counts as clear beyond this from every cloth point [m]."""
+    """Required surface separation [m] for robot_clearance, or hand-origin distance for origin."""
     latch_steps: int = 3
     fold_tolerance: float = 0.0
     """> 0: a release only latches with fold error under this [m]."""
     touch: str = "origin"
-    """``origin`` (nearest hand body origin to any cloth point) | ``contact`` (Newton only: the
-    cloth solver's own contacts)."""
+    """``robot_clearance``: every rigid robot collider must clear every cloth plate;
+    ``origin``: legacy hand-origin distance; ``contact``: Newton solver contacts.
+    Robot-clearance mode has no latch or persistence timer."""
     touch_gap: float = 0.002
     contact_bodies: str = ""
     """Regex of robot bodies for ``origin``; empty = fingertips + palm."""
@@ -166,8 +174,10 @@ class ClothTaskCfg:
             raise ValueError(f"task.nan_policy must be reset or raise, got {self.nan_policy!r}")
         if self.release.enabled and self.mode != "fold":
             raise ValueError("task.release is defined for mode=fold only")
-        if self.release.touch not in ("origin", "contact"):
-            raise ValueError(f"task.release.touch must be origin or contact, got {self.release.touch!r}")
+        if self.release.touch not in ("origin", "contact", "robot_clearance"):
+            raise ValueError(f"task.release.touch must be origin, contact or robot_clearance, got {self.release.touch!r}")
+        if self.release.touch == "robot_clearance" and not (0 < self.release.clearance < float("inf")):
+            raise ValueError("task.release.clearance must be finite and positive for whole-robot release")
         if self.mode == "mixed" and not 0.0 < float(self.unfold_prob) < 1.0:
             raise ValueError(f"task.unfold_prob must be in (0, 1) for task mixed, got {self.unfold_prob}")
         lo, hi = (float(v) for v in self.unfold_start_deg)

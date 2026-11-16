@@ -1,0 +1,16 @@
+title: Eight-panel strip
+purpose: Probe finer bending along the sheet length without changing the target half-fold.
+failure_modes:
+  - Local sag changes which part of the sheet a grasp lifts.
+  - Several small folds form instead of one fold at the center.
+  - Distal panels remain misaligned or unfold after the hand releases.
+shape: rectangle
+creases:
+  stationary_outer: [[-0.375, 0.5], [-0.375, -0.5]]
+  stationary_middle: [[-0.25, 0.5], [-0.25, -0.5]]
+  stationary_inner: [[-0.125, 0.5], [-0.125, -0.5]]
+  center: [[0.0, 0.5], [0.0, -0.5]]
+  moving_inner: [[0.125, 0.5], [0.125, -0.5]]
+  moving_middle: [[0.25, 0.5], [0.25, -0.5]]
+  moving_outer: [[0.375, 0.5], [0.375, -0.5]]
+image: strip_8.png

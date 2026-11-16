@@ -12,7 +12,7 @@ pool, fold + unfold mixed) evaluated on the deformable VBD sheet (Newton,
 Both runs are still training; `submit.sh` evaluates each run's newest `snap_*_ep_<N>.pth` at submit
 time (the epoch is in the job log and in each JSON's `checkpoint`).
 
-Matrix: 2 policies x {fold, unfold} x 7 fabrics (`isaacsimenvs/scripts/configs/fabric/<name>_measured.yaml`:
+Matrix: 2 policies x {fold, unfold} x 7 fabrics (`isaacsimenvs/scripts/configs/deformable_cloth_designs/<name>_measured.yaml`:
 big_napkin, chiffon, cotton, denim, napkin, silk, towel) = 28 array tasks, 14 per policy.
 
 Protocol (same as the 2026-11 measured-fabric eval, `engaging_fabric_eval.sh`):

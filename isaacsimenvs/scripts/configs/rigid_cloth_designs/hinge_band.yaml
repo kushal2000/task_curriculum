@@ -1,0 +1,12 @@
+title: Center hinge band
+purpose: Localize bending to a narrow band around the target crease while keeping the outer panels broad.
+failure_modes:
+  - The fold spreads over a band instead of closing at the target crease.
+  - Bending shifts to one side of the center and leaves the halves misaligned.
+  - A residual ridge or open fold remains after release.
+shape: rectangle
+creases:
+  stationary_band_edge: [[-0.1, 0.5], [-0.1, -0.5]]
+  center: [[0.0, 0.5], [0.0, -0.5]]
+  moving_band_edge: [[0.1, 0.5], [0.1, -0.5]]
+image: hinge_band.png

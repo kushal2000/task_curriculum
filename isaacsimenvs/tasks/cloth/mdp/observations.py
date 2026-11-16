@@ -1,20 +1,19 @@
-"""Observations in Play's layout, computed from the cloth.
+"""Every cloth policy observes a fitted moving-half object in Play's actor layout.
 
-The layout -- fields, order, sizes, joint order, normalisation, quaternion convention (xyzw), the
-env frame, the ``palm_pos`` base shift -- is Play's, so a Play-pretrained policy loads and its
-robot inputs mean what they meant. The object fields are the cloth's:
+The robot fields retain Play's joint order, normalization, xyzw quaternions and
+palm reference frame. Object pose and velocity describe the moving half; four
+ordered 3D cuboid markers describe its current and goal poses. Dimensions are
+[length/2, width, thickness] divided by reward.object_base_size.
 
-* ``object_rot``: the stationary half's orientation (its fitted rigid frame);
-* ``object_vel``: the cloth centre's linear velocity and the points' fitted angular velocity;
-* ``keypoints_rel_palm`` / ``keypoints_rel_goal``: the four tracked moving-half corners, minus the
-  palm centre / minus each corner's fold target;
-* ``object_scales``: [length, width, thickness] / ``reward.object_base_size``.
-
-Object-state DR (Play's): the cloth frame AND the corners expressed in it go through one delay
-queue; the delayed frame gets position and rotation noise and the corners are rebuilt from it.
+Object-state DR delays this pose and its local markers together, then applies
+pose noise and reconstructs the markers. Physical rewards and success continue
+to use the task's cloth geometry, independently of these policy markers.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
+import math
 
 import torch
 
@@ -26,6 +25,21 @@ from .state import SimState, TaskView
 
 NUM_FINGERTIPS = 5
 NUM_KEYPOINTS = 4
+# The pretrained Play actor's ordered cuboid markers, not planar cloth corners.
+PLAY_KEYPOINT_CORNERS = ((1, 1, 1), (1, 1, -1), (-1, -1, 1), (-1, -1, -1))
+
+
+@dataclass(frozen=True)
+class ObjectFeatures:
+    """Policy-only object pose and markers; the physical TaskView stays unchanged."""
+
+    pos_w: torch.Tensor
+    quat_w: torch.Tensor
+    lin_vel_w: torch.Tensor
+    ang_vel_w: torch.Tensor
+    keypoints_w: torch.Tensor
+    targets_w: torch.Tensor
+
 
 FIELD_SIZES: dict[str, int] = {
     "palm_pos": 3,
@@ -56,14 +70,17 @@ def stack(obs: dict[str, torch.Tensor], fields) -> torch.Tensor:
 
 
 class ObservationBuilder:
-    def __init__(self, cfg, controller, task):
+    def __init__(self, cfg, controller, task, *, robot_spec=ROBOT):
         self.cfg, self.controller, self.task = cfg, controller, task
         self.device, self.num_envs = task.device, task.num_envs
-        self._palm_offset = torch.tensor(ROBOT.palm_center_offset, device=self.device)
-        self._fingertip_offsets = torch.tensor(ROBOT.fingertip_offsets, device=self.device)
+        self._palm_offset = torch.tensor(robot_spec.palm_center_offset, device=self.device)
+        self._fingertip_offsets = torch.tensor(robot_spec.fingertip_offsets, device=self.device)
         self._palm_obs_shift = torch.tensor(cfg.robot_root_pos, device=self.device) - torch.tensor(
             PLAY_ROBOT_ROOT_POS, device=self.device
         )
+        self.keypoint_scale = float(getattr(cfg.obs, "keypoint_scale", 1.5))
+        if not math.isfinite(self.keypoint_scale) or self.keypoint_scale <= 0:
+            raise ValueError("obs.keypoint_scale must be finite and positive")
         dr = cfg.domain_randomization
         self._obs_queue = torch.zeros(
             self.num_envs, max(1, int(dr.obs_delay_max)), int(cfg.observation_space), device=self.device
@@ -71,13 +88,45 @@ class ObservationBuilder:
         self._object_state_queue = torch.zeros(
             self.num_envs, max(1, int(dr.object_state_delay_max)), 25, device=self.device
         )
+        self._object_quat_previous = torch.zeros(self.num_envs, 4, device=self.device)
+        self._object_quat_valid = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
     def reset(self, ids):
         self._obs_queue[ids] = 0.0
         self._object_state_queue[ids] = 0.0
+        self._object_quat_valid[ids] = False
 
     def palm_center_w(self, state: SimState) -> torch.Tensor:
         return state.palm_pos_w + rotations.apply(state.palm_quat_w, self._palm_offset.expand_as(state.palm_pos_w))
+
+    def object_features(self, state: SimState, view: TaskView) -> ObjectFeatures:
+        """Fit the moving half and construct its ordered cuboid current/goal markers."""
+        from .geometry.moving_half import moving_half_pose
+
+        pose = moving_half_pose(self.task._cloth_grid, state, view, self.task._unfold_env)
+        # A point fit determines q only up to sign. Keep the clean policy quaternion
+        # in the previous hemisphere: w>=0 alone flips its input near a 180° fold.
+        # On reset, the stationary frame followed by a -Y quarter turn selects the
+        # natural 0..180° fold branch, including an initially fully folded sheet.
+        quarter_turn = pose.quat_w.new_tensor([2**-.5, 0., -2**-.5, 0.]).expand_as(pose.quat_w)
+        initial = rotations.mul(rotations.from_matrix(view.frame_r), quarter_turn)
+        reference = torch.where(self._object_quat_valid[:, None], self._object_quat_previous, initial)
+        quat = torch.where((pose.quat_w * reference).sum(dim=-1, keepdim=True) < 0, -pose.quat_w, pose.quat_w)
+        # object_features is also queried by the viewer; repeated reads of the same
+        # clean pose are idempotent. Observation noise never enters this history.
+        self._object_quat_previous.copy_(quat.detach())
+        self._object_quat_valid.fill_(True)
+        dims = self.task._object_scales * float(self.cfg.reward.object_base_size)
+        corners = torch.tensor(PLAY_KEYPOINT_CORNERS, dtype=dims.dtype, device=dims.device)
+        offsets = corners[None] * dims[:, None] * (self.keypoint_scale / 2.0)
+        current = pose.pos_w[:, None] + rotations.apply(quat[:, None], offsets)
+        target = pose.goal_pos_w[:, None] + rotations.apply(pose.goal_quat_w[:, None], offsets)
+        return ObjectFeatures(pose.pos_w, quat, pose.lin_vel_w, pose.ang_vel_w, current, target)
+
+    def keypoints_w(self, view: TaskView, state: SimState) -> tuple[torch.Tensor, torch.Tensor]:
+        """World-space policy markers; physical cloth landmarks remain in TaskView."""
+        features = self.object_features(state, view)
+        return features.keypoints_w, features.targets_w
 
     def build(self, state: SimState, view: TaskView, episode_length: torch.Tensor) -> dict[str, torch.Tensor]:
         """``{"policy": (N, obs dim), "critic": (N, state dim)}``, both clamped."""
@@ -102,14 +151,14 @@ class ObservationBuilder:
         )
         fingertip_rel_palm = pads - origins.unsqueeze(1) - palm.unsqueeze(1)
 
-        pos = view.pos_w - origins
-        kp = view.corners_w - origins.unsqueeze(1)
-        targets = view.targets_w - origins.unsqueeze(1)
-        vel = torch.cat([view.lin_vel_w, view.ang_vel_w], dim=-1)
+        obj = self.object_features(state, view)
+        pos, quat = obj.pos_w - origins, obj.quat_w
+        kp, targets = obj.keypoints_w - origins.unsqueeze(1), obj.targets_w - origins.unsqueeze(1)
+        vel = torch.cat([obj.lin_vel_w, obj.ang_vel_w], dim=-1)
 
         if dr.use_object_state_delay_noise:
-            kp_local = rotations.apply(_conj(view.quat_w).unsqueeze(1), kp - pos.unsqueeze(1))  # (N, 4, 3)
-            packed = torch.cat([pos, view.quat_w, vel, kp_local.reshape(n, -1)], dim=-1)
+            kp_local = rotations.apply(_conj(quat).unsqueeze(1), kp - pos.unsqueeze(1))  # (N, 4, 3)
+            packed = torch.cat([pos, quat, vel, kp_local.reshape(n, -1)], dim=-1)
             self._object_state_queue, d = delayed(self._object_state_queue, packed, episode_length == 0)
             o_pos = d[:, 0:3] + torch.randn_like(d[:, 0:3]) * dr.object_state_xyz_noise_std
             o_rot = rotations.random_perturb(
@@ -118,7 +167,7 @@ class ObservationBuilder:
             o_vel = d[:, 7:13]
             o_kp = o_pos.unsqueeze(1) + rotations.apply(o_rot.unsqueeze(1), d[:, 13:25].reshape(n, 4, 3))
         else:
-            o_rot, o_vel, o_kp = view.quat_w, vel, kp
+            o_rot, o_vel, o_kp = quat, vel, kp
 
         clean = {
             "joint_pos": joint_pos,
@@ -127,7 +176,7 @@ class ObservationBuilder:
             "palm_pos": palm_obs,
             "palm_rot": rotations.to_xyzw(state.palm_quat_w),
             "palm_vel": state.palm_vel_w,
-            "object_rot": rotations.to_xyzw(view.quat_w),
+            "object_rot": rotations.to_xyzw(quat),
             "object_vel": vel,
             "fingertip_pos_rel_palm": fingertip_rel_palm,
             "keypoints_rel_palm": kp - palm.unsqueeze(1),

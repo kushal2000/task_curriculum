@@ -24,6 +24,7 @@ class SimState:
     points_w: torch.Tensor  # (N, P, 3) cloth points (VBD particles / rigid plate grid)
     points_vel_w: torch.Tensor  # (N, P, 3)
     table_top_z: torch.Tensor  # (N,) world z of the table's top surface
+    keypoints_w: torch.Tensor | None = None  # (N, 4, 3) optional exact moving-half corners
 
 
 @dataclass
@@ -37,7 +38,7 @@ class TaskView:
     quat_w: torch.Tensor  # (N, 4) wxyz, the stationary half's orientation
     lin_vel_w: torch.Tensor  # (N, 3)
     ang_vel_w: torch.Tensor  # (N, 3)
-    corners_w: torch.Tensor  # (N, 4, 3) the tracked moving-half corners
+    corners_w: torch.Tensor  # (N, 4, 3) explicit moving-half landmarks, or legacy grid corners
     targets_w: torch.Tensor  # (N, 4, 3) where they belong
     fold_error: torch.Tensor  # (N,)
     footprint: torch.Tensor  # (N,)

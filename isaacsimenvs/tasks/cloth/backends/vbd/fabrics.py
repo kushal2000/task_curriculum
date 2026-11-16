@@ -1,4 +1,4 @@
-"""VBD cloth presets for real fabrics: ``isaacsimenvs/scripts/configs/fabric/<name>.yaml``.
+"""VBD material presets: ``isaacsimenvs/scripts/configs/deformable_cloth_designs/<name>.yaml``.
 
     .venv/isaaclab3/bin/python -m isaacsimenvs.tasks.cloth.backends.vbd.fabrics cotton_measured [--plastic]
 
@@ -13,10 +13,13 @@ import yaml
 
 from isaacsimenvs import CONFIG_DIR
 
-FABRIC_DIR = CONFIG_DIR / "fabric"
+FABRIC_DIR = CONFIG_DIR / "deformable_cloth_designs"
 
-#: Display order: the env default first, then roughly lightest to heaviest.
-ORDER = ("base", "chiffon", "silk", "cotton", "napkin", "towel", "denim")
+#: Display order: the environment default, followed by the measured fabrics.
+ORDER = (
+    "base", "big_napkin_measured", "chiffon_measured", "cotton_measured",
+    "denim_measured", "napkin_measured", "silk_measured", "towel_measured",
+)
 
 
 def names() -> list[str]:

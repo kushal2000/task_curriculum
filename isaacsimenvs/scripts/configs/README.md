@@ -8,7 +8,8 @@ files select presets and override their defaults for a run.
 | --- | --- |
 | `task/` | Environment overlays selected by the registered Gym task |
 | `robot/` | Robot variants layered over the task settings |
-| `fabric/` | Cloth material presets |
+| `deformable_cloth_designs/` | Base material and seven measured fabric presets for VBD |
+| [`rigid_cloth_designs/`](rigid_cloth_designs/README.md) | Runtime YAML definitions for symmetric rigid cloth articulations, with PNG diagrams |
 | `train/` | Learner settings, including PPO and SAPG |
 | `runs/` | Named experiment recipes, optionally inheriting another recipe with `base:` |
 

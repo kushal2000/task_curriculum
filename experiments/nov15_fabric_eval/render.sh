@@ -27,16 +27,16 @@ run() {  # name, command...
     "$@" >"$OUT/$name.log" 2>&1 && echo "[render] $name ok" || echo "[render] $name FAILED (see $OUT/$name.log)"
 }
 for P in prior scratch; do
-    run "${P}__rigid__fold" .venv/isaacsim/bin/python isaacsimenvs/scripts/visualization/render_physx.py --headless \
+    run "${P}__rigid__fold" .venv/isaacsim/bin/python isaacsimenvs/scripts/visualization/policies/render_physx.py --headless \
         --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --experiment rigid_cloth_flexiv_wuji_full_dr \
         --checkpoint "${CK[$P]}" --single_variant --num_envs 8 "${COMMON[@]}" --out "$OUT/${P}__rigid__fold.mp4" \
         env.task.mode=fold env.fold_pool.init_fold_prob=0.0 "${EVAL_OV[@]}"
-    run "${P}__rigid__unfold" .venv/isaacsim/bin/python isaacsimenvs/scripts/visualization/render_physx.py --headless \
+    run "${P}__rigid__unfold" .venv/isaacsim/bin/python isaacsimenvs/scripts/visualization/policies/render_physx.py --headless \
         --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --experiment rigid_cloth_flexiv_wuji_full_dr \
         --checkpoint "${CK[$P]}" --single_variant --num_envs 8 "${COMMON[@]}" --out "$OUT/${P}__rigid__unfold.mp4" \
         env.task.mode=unfold "${EVAL_OV[@]}"
     for T in fold unfold; do
-        run "${P}__cotton__$T" xvfb-run -a .venv/isaaclab3/bin/python isaacsimenvs/scripts/visualization/render_newton.py \
+        run "${P}__cotton__$T" xvfb-run -a .venv/isaaclab3/bin/python isaacsimenvs/scripts/visualization/policies/render_newton.py \
             --task Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0 --checkpoint "${CK[$P]}" --num_envs 4 \
             "${COMMON[@]}" --out "$OUT/${P}__cotton__$T.mp4" env.task.mode=$T "${EVAL_OV[@]}" "${FAB[@]}"
     done

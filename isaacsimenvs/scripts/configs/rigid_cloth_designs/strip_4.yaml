@@ -1,0 +1,12 @@
+title: Four-panel strip
+purpose: Add one off-center hinge on each half while retaining the same center-fold target.
+failure_modes:
+  - A grasp bends a local panel instead of rotating the whole moving half.
+  - The supporting half bends or buckles during contact.
+  - The sheet settles into an extra fold away from the target crease.
+shape: rectangle
+creases:
+  stationary: [[-0.25, 0.5], [-0.25, -0.5]]
+  center: [[0.0, 0.5], [0.0, -0.5]]
+  moving: [[0.25, 0.5], [0.25, -0.5]]
+image: strip_4.png

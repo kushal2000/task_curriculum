@@ -1,0 +1,14 @@
+title: Four flexible corners
+purpose: Let all four outer corners bend independently, with matching flexibility on both halves.
+failure_modes:
+  - A corner curls independently during grasping or supporting contact.
+  - A corner tucks under the sheet or catches on the opposite half.
+  - Local corner motion fails to align and close the main panels into the target half-fold.
+shape: rectangle
+creases:
+  center: [[0.0, 0.5], [0.0, -0.5]]
+  positive_x_negative_y: [[0.25, -0.5], [0.5, -0.25]]
+  positive_x_positive_y: [[0.5, 0.25], [0.25, 0.5]]
+  negative_x_negative_y: [[-0.25, -0.5], [-0.5, -0.25]]
+  negative_x_positive_y: [[-0.5, 0.25], [-0.25, 0.5]]
+image: flexible_corners.png

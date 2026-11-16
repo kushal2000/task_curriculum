@@ -31,8 +31,9 @@ def place_in_region(
 class ClothBackend:
     quaternion_order = "wxyz"
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, *, robot_spec=ROBOT):
         self.cfg = cfg
+        self.robot_spec = robot_spec
 
     def startup(self):
         return nullcontext()
@@ -43,8 +44,8 @@ class ClothBackend:
         self._setup_scene()
 
     def initialize(self):
-        self._palm_id = self._body_ids([ROBOT.palm_body_name])[0]
-        self._fingertip_ids = self._body_ids(list(ROBOT.fingertip_link_names))
+        self._palm_id = self._body_ids([self.robot_spec.palm_body_name])[0]
+        self._fingertip_ids = self._body_ids(list(self.robot_spec.fingertip_link_names))
         pattern = self.cfg.task.release.contact_bodies
         if pattern:
             ids, _ = self.robot.find_bodies(pattern)
@@ -88,6 +89,7 @@ class ClothBackend:
             points_w=points,
             points_vel_w=velocities,
             table_top_z=self.scene.env_origins[:, 2] + self._table_z + self._table_half_height,
+            keypoints_w=self.cloth_keypoints(),
         )
 
     def apply_joint_commands(self, commands: JointCommands):
@@ -119,6 +121,10 @@ class ClothBackend:
 
     def _point_resolution(self):
         raise NotImplementedError
+
+    def cloth_keypoints(self):
+        """Exact moving-half corners when supplied by a backend; otherwise use grid samples."""
+        return None
 
     def cloth_points(self):
         raise NotImplementedError

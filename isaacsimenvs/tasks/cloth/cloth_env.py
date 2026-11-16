@@ -17,16 +17,20 @@ from .mdp.task import ClothTask
 
 
 class ClothEnv(DirectRLEnv):
-    def __init__(self, cfg, render_mode=None, **kwargs):
+    def __init__(self, cfg, render_mode=None, *, robot_spec=ROBOT, **kwargs):
         cfg.task.check()
-        self.robot_spec = ROBOT
-        cfg.action_space = ROBOT.num_joints
-        cfg.observation_space = obs_dim(cfg.obs.obs_list, ROBOT.num_joints)
-        cfg.state_space = obs_dim(cfg.obs.state_list, ROBOT.num_joints)
+        if cfg.task.release.enabled and cfg.task.release.touch == "robot_clearance" and cfg.backend != "rigid":
+            raise ValueError("whole-robot collision clearance currently requires the rigid cloth backend")
+        if cfg.backend == "vbd" and robot_spec is not ROBOT:
+            raise ValueError("robot_spec overrides are supported only by the rigid cloth backend")
+        self.robot_spec = robot_spec
+        cfg.action_space = robot_spec.num_joints
+        cfg.observation_space = obs_dim(cfg.obs.obs_list, robot_spec.num_joints)
+        cfg.state_space = obs_dim(cfg.obs.state_list, robot_spec.num_joints)
         if cfg.backend == "rigid":
             from .backends.rigid.backend import RigidBackend
 
-            self.backend = RigidBackend(cfg)
+            self.backend = RigidBackend(cfg, cfg.rigid_cloth.designs, robot_spec=robot_spec)
         elif cfg.backend == "vbd":
             from .backends.vbd.backend import VbdBackend
 
@@ -38,13 +42,20 @@ class ClothEnv(DirectRLEnv):
         with self.backend.startup():
             super().__init__(cfg, render_mode, **kwargs)
         self.backend.initialize()
-        self.controller = JointController(cfg, *self.backend.robot_defaults(), self.step_dt)
-        self.task = ClothTask(
-            cfg, self.backend.cloth_grid, self.scene.env_origins, self.controller._arm_ids, self.controller._hand_ids
+        self.controller = JointController(
+            cfg, *self.backend.robot_defaults(), self.step_dt, robot_spec=robot_spec
         )
-        self.observations = ObservationBuilder(cfg, self.controller, self.task)
+        self.task = ClothTask(
+            cfg, self.backend.cloth_grid, self.scene.env_origins, self.controller._arm_ids, self.controller._hand_ids,
+            robot_spec=robot_spec,
+        )
+        self.observations = ObservationBuilder(cfg, self.controller, self.task, robot_spec=robot_spec)
         self.reward_buf = self.task.reward_buf
         self.backend.finish_setup()
+        self._robot_cloth_clearance = None
+        if cfg.task.release.enabled and cfg.task.release.touch == "robot_clearance":
+            from .backends.rigid.clearance import RobotClothClearance
+            self._robot_cloth_clearance = RobotClothClearance(self.backend)
         print(
             f"[cloth] {cfg.backend}: {self.num_envs} envs, {cfg.task.mode}, "
             f"obs/state {cfg.observation_space}/{cfg.state_space}",
@@ -66,8 +77,12 @@ class ClothEnv(DirectRLEnv):
     def _get_dones(self):
         release = self.cfg.task.release
         touching = self.backend.hand_cloth_touching() if release.enabled and release.touch == "contact" else None
+        clearance = None
+        if release.enabled and release.touch == "robot_clearance":
+            clearance = self._robot_cloth_clearance.distance()
         self._transition = self.task.evaluate(
-            self.backend.read_state(), self.episode_length_buf, self.max_episode_length, touching
+            self.backend.read_state(), self.episode_length_buf, self.max_episode_length, touching,
+            robot_clearance=clearance,
         )
         return self._transition.terminated, self._transition.truncated
 

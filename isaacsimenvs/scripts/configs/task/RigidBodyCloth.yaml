@@ -1,6 +1,6 @@
-# Isaacsimenvs-RigidBodyCloth-Direct-v0 -- fold a rigid cloth -- two plates, one hinge (PhysX, Isaac Sim 5.1 /
-# Isaac Lab 2.3, .venv/isaacsim): two plates and one hinge at the horizontal fold line, one size
-# design per env (tasks/cloth/backends/rigid/backend.py). Robot: Flexiv Rizon 4s + right Wuji Hand 2 with the
+# Isaacsimenvs-RigidBodyCloth-Direct-v0 -- fold an articulated cloth (PhysX, Isaac Sim 5.1 /
+# Isaac Lab 2.3, .venv/isaacsim): rigid_cloth.designs lists YAML designs to mix across environments.
+# All use a central horizontal fold target; dimensions vary per env. Robot: Flexiv Rizon 4s + right Wuji Hand 2 with the
 # identified hand (tasks/cloth/backends/robot.py, part of the cfg).
 #
 # Only what differs from the configclass defaults (tasks/cloth/cloth_cfg.py, backends/rigid/config.py),
@@ -9,6 +9,9 @@
 
 scene:
   num_envs: 768                          # 6 x 128 SAPG blocks; see isaacsimenvs/scripts/configs/train/ClothSAPG.yaml
+
+rigid_cloth:
+  designs: [single_hinge.yaml]          # filenames in rigid_cloth_designs/ or explicit YAML paths
 
 domain_randomization:
   use_obs_delay: false

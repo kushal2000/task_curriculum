@@ -1,0 +1,10 @@
+title: Single center hinge
+purpose: Baseline half-fold with one rigid plate on either side of the target crease.
+failure_modes:
+  - Grasp misses or loses the moving half during the fold.
+  - The stationary half slides or lifts instead of supporting the fold.
+  - The moving half reaches the wrong angle or fails to stay folded after release.
+shape: rectangle
+creases:
+  center: [[0.0, 0.5], [0.0, -0.5]]
+image: single_hinge.png

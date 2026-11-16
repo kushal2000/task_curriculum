@@ -52,8 +52,8 @@ _POSE_VIEWERS = {
     # Cloth before Play: the cloth viewer adds the sheet and its fold target as deformable
     # channels, which a rigid-pose viewer cannot represent. Substring matching is first-wins, and
     # the cloth task id does not contain "Play", but keep it above for clarity.
-    "Cloth": "isaacsimenvs.scripts.visualization.pose_viewer:ClothPoseViewerWrapper",  # Cloth*, RigidBodyCloth
-    "Play": "isaacsimenvs.scripts.visualization.pose_viewer:PlayPoseViewerWrapper",
+    "Cloth": "isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer:ClothPoseViewerWrapper",  # Cloth*, RigidBodyCloth
+    "Play": "isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer:PlayPoseViewerWrapper",
 }
 
 

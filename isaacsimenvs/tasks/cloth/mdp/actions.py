@@ -45,13 +45,13 @@ def spring_constants(lab_names: list[str], spec, device) -> tuple[torch.Tensor, 
 
 
 class JointController:
-    def __init__(self, cfg, names, default_pos, limits, step_dt):
+    def __init__(self, cfg, names, default_pos, limits, step_dt, *, robot_spec=ROBOT):
         self.cfg = cfg
         self.device = default_pos.device
         self.num_envs = default_pos.shape[0]
         self.step_dt = step_dt
         self.default_pos, self.limits = default_pos, limits
-        maps = joint_maps(names, ROBOT)
+        maps = joint_maps(names, robot_spec)
         self._perm_canon_to_lab = torch.tensor(maps["canon_to_lab"], device=self.device)
         self._perm_lab_to_canon = torch.tensor(maps["lab_to_canon"], device=self.device)
         self._arm_ids, self._hand_ids = maps["arm"], maps["hand"]
@@ -59,7 +59,7 @@ class JointController:
         self._joint_upper_canon = limits[0, :, 1][self._perm_lab_to_canon]
         self._arm_lower, self._arm_upper = limits[:, self._arm_ids, 0], limits[:, self._arm_ids, 1]
         self._hand_lower, self._hand_upper = limits[:, self._hand_ids, 0], limits[:, self._hand_ids, 1]
-        self._spring_ks, self._spring_ref = spring_constants(names, ROBOT, self.device)
+        self._spring_ks, self._spring_ref = spring_constants(names, robot_spec, self.device)
         self._cur_targets = torch.zeros_like(default_pos)
         self._prev_targets = torch.zeros_like(default_pos)
         self._action_queue = torch.zeros(
