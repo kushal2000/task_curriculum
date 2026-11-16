@@ -121,30 +121,39 @@ def install_reader(cache_dir: Path = DEFAULT_CACHE_DIR) -> None:
         )
 
     def _lookup(asset_path, usd_work_dir, **kwargs):
-        key = cache_key(Path(asset_path).read_text(), kwargs)
-        entry = _entry_dir(cache_dir, key)
-        manifest_path = entry / _MANIFEST_NAME
-        if not manifest_path.is_file():
-            raise RuntimeError(
-                f"USD cache miss for {Path(asset_path).name} (key {key}).\n"
-                "The bake and this run disagree on URDF content or conversion options. "
-                "Re-populate with the same --num_assets_per_type and --handle_head_types: the "
-                "object pool is shuffled over its full length, so a different count is a "
-                "different set of objects, not a subset."
-            )
-        manifest = json.loads(manifest_path.read_text())
-
-        # Copy out of the cache into this run's work dir, so `_bake_usd` can write alongside it
-        # without mutating the shared cache.
-        dest_dir = Path(usd_work_dir) / Path(asset_path).stem
-        if dest_dir.exists():
-            shutil.rmtree(dest_dir)
-        shutil.copytree(entry, dest_dir)
-        (dest_dir / _MANIFEST_NAME).unlink(missing_ok=True)
-        return str(dest_dir / manifest["usd_name"])
+        return lookup(asset_path, usd_work_dir, cache_dir=cache_dir, **kwargs)
 
     scene_utils._convert_urdf_to_usd = _lookup
     scene_utils._usd_cache_reader_installed = True
+
+
+def lookup(asset_path, usd_work_dir, *, cache_dir: Path = DEFAULT_CACHE_DIR, **kwargs) -> str:
+    """The cached conversion of ``asset_path`` under ``kwargs`` (the converter options), copied into
+    ``usd_work_dir``; raises on a miss. The kit-less stand-in for converting the URDF."""
+    if not cache_dir.is_dir():
+        raise RuntimeError(f"USD cache missing at {cache_dir}; populate it under .venv/isaacsim "
+                           "(python -m isaacsimenvs.newton.usd_cache --populate)")
+    key = cache_key(Path(asset_path).read_text(), kwargs)
+    entry = _entry_dir(cache_dir, key)
+    manifest_path = entry / _MANIFEST_NAME
+    if not manifest_path.is_file():
+        raise RuntimeError(
+            f"USD cache miss for {Path(asset_path).name} (key {key}).\n"
+            "The bake and this run disagree on URDF content or conversion options. "
+            "Re-populate with the same --num_assets_per_type and --handle_head_types: the "
+            "object pool is shuffled over its full length, so a different count is a "
+            "different set of objects, not a subset."
+        )
+    manifest = json.loads(manifest_path.read_text())
+
+    # Copy out of the cache into this run's work dir, so `_bake_usd` can write alongside it
+    # without mutating the shared cache.
+    dest_dir = Path(usd_work_dir) / Path(asset_path).stem
+    if dest_dir.exists():
+        shutil.rmtree(dest_dir)
+    shutil.copytree(entry, dest_dir)
+    (dest_dir / _MANIFEST_NAME).unlink(missing_ok=True)
+    return str(dest_dir / manifest["usd_name"])
 
 
 def main() -> None:

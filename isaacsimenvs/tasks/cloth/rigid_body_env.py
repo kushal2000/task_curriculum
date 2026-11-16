@@ -93,11 +93,12 @@ class RigidBodyClothEnv(ClothTaskEnv):
         local = quat.apply(bq, self._sheet_geom.rest)
         points = sh.body_link_pos_w[:, idx] + local
         vel = sh.body_link_lin_vel_w[:, idx] + torch.cross(sh.body_link_ang_vel_w[:, idx], local, dim=-1)
-        body_pos, body_quat = r.body_link_pos_w, r.body_link_quat_w
+        bs = r.body_state_w          # link pose (wxyz), COM velocity: what Play observes
+        body_pos, body_quat = bs[..., 0:3], bs[..., 3:7]
         return ClothState(
             joint_pos=r.joint_pos, joint_vel=r.joint_vel,
             palm_pos_w=body_pos[:, self._palm_id], palm_quat_w=body_quat[:, self._palm_id],
-            palm_vel_w=torch.cat([r.body_link_lin_vel_w[:, self._palm_id], r.body_link_ang_vel_w[:, self._palm_id]], dim=-1),
+            palm_vel_w=bs[:, self._palm_id, 7:13],
             fingertip_pos_w=body_pos[:, self._fingertip_ids], fingertip_quat_w=body_quat[:, self._fingertip_ids],
             hand_pos_w=body_pos[:, self._hand_body_ids],
             points_w=points, points_vel_w=vel,

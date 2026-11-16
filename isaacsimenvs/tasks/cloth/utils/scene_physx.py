@@ -142,7 +142,9 @@ def bake_usd(raw_usd: str, bake_root: Path, subdir: str, *, rigid_body: dict, ar
     return str(baked)
 
 
-def robot_cfg(usd_path: str, spec, root_pos, arm_effort_limit):
+def robot_cfg(usd_path: str, spec, root_pos, arm_effort_limit, rot=(1.0, 0.0, 0.0, 0.0)):
+    """``rot``: the base orientation in the backend's convention (identity: wxyz on Isaac Lab 2.3,
+    ``(0, 0, 0, 1)`` xyzw on 3.0)."""
     from isaaclab.actuators import ImplicitActuatorCfg
     from isaaclab.assets import ArticulationCfg
     from isaaclab.sim.spawners.from_files import UsdFileCfg
@@ -156,7 +158,7 @@ def robot_cfg(usd_path: str, spec, root_pos, arm_effort_limit):
         prim_path="/World/envs/env_.*/Robot",
         spawn=UsdFileCfg(usd_path=usd_path),
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=tuple(float(v) for v in root_pos), rot=(1.0, 0.0, 0.0, 0.0),
+            pos=tuple(float(v) for v in root_pos), rot=tuple(rot),
             joint_pos={**spec.arm_default_joint_pos, **{n: 0.0 for n in spec.hand_joint_names}},
             joint_vel={".*": 0.0},
         ),

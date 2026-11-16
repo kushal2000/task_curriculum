@@ -145,8 +145,7 @@ EXPERIMENT_TASKS = {
         "ClothEnvCfg",
         [
             "isaacsimenvs/tasks/cloth/deformable_env_cfg.py",
-            "isaacsimenvs/tasks/cloth/fold_task.py",
-            PLAY_CFG,
+            "isaacsimenvs/tasks/cloth/utils/cfg.py",
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
     ),
@@ -166,8 +165,6 @@ EXPERIMENT_TASKS = {
         "isaacsimenvs/cfg/train/PlaySAPG.yaml",
     ),
 }
-# The robot-swapped ids (tasks/cloth/__init__.py) share their base task's cfg and agent YAML.
-EXPERIMENT_TASKS["Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0"] = EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"]
 
 
 
