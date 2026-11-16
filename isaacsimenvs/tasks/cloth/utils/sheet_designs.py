@@ -4,8 +4,9 @@ Pure numpy (no simulator), so the env, the VBD eval and the tests all read one d
 
 **Design grid.** ``n**3`` designs: ``n`` lengths x ``n`` widths x ``n`` thicknesses, evenly spaced over
 the ranges (default 16 each: 10-30 cm, 10-30 cm, 2-20 mm = 4096 designs). Env ``i`` gets design
-``i % n_designs``, so any run of ``n_designs`` consecutive envs -- one SAPG block at 24576 envs /
-6 blocks = 4096 -- holds every design exactly once.
+``perm[i % n_designs]`` (a fixed permutation, ``design_of``), so any run of ``n_designs`` consecutive
+envs -- one SAPG block at 24576 envs / 6 blocks = 4096 -- holds every design exactly once, and a
+small run still spans all three dimensions.
 
 **Frames.** Sheet frame = the flat sheet's mid-plane, centred on the sheet: ``x`` is the fold axis
 (the ``+x`` half folds over onto ``-x``), ``y`` runs along the crease, ``z`` up. ``length`` is the
@@ -61,9 +62,14 @@ def design_grid(
     return np.stack([levels[0][li], levels[1][wi], levels[2][ti]], axis=1)
 
 
-def design_of(env_ids, n_designs: int) -> np.ndarray:
-    """Design index of each env: ``env_id % n_designs``."""
-    return np.asarray(env_ids, dtype=np.int64) % int(n_designs)
+def design_of(env_ids, n_designs: int, seed: int = 0) -> np.ndarray:
+    """Design index of each env: a fixed permutation of ``env_id % n_designs``.
+
+    Every run of ``n_designs`` consecutive envs still holds each design exactly once; the
+    permutation only spreads a SMALL run (a smoke test, an eval of a few hundred envs) across all
+    three dimensions instead of the first lengths of the grid order."""
+    perm = np.random.default_rng(int(seed)).permutation(int(n_designs))
+    return perm[np.asarray(env_ids, dtype=np.int64) % int(n_designs)]
 
 
 @dataclass(frozen=True)

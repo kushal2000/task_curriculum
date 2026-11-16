@@ -109,3 +109,22 @@ for _task in ("Cloth", "RigidClothPhysx", "FoldPoolPhysx"):
             },
         )
 del _task, _base, _suffix, _robot
+
+
+# Rigid2Deform: the fold task on a rigid single-hinge sheet, one size design per env, on PhysX
+# (`rigid_body_env.py`). One robot only -- the Flexiv Rizon 4s + right Wuji Hand 2 with the identified
+# hand -- so its overlay is part of the id. Not `Cloth*`-prefixed: experiments/_common.sh sends
+# `Isaacsimenvs-Cloth*` to the Newton venv.
+gym.register(
+    id="Isaacsimenvs-RigidBodyCloth-Direct-v0",
+    entry_point="isaacsimenvs.tasks.cloth.rigid_body_env:RigidBodyClothEnv",
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.rigid_body_env_cfg:RigidBodyClothEnvCfg",
+        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "RigidBodyCloth.yaml"),
+        "env_cfg_robot_yaml_entry_point": str(_CFG_DIR / "robot" / "flexiv_wuji_right_real.yaml"),
+        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
+    },
+)

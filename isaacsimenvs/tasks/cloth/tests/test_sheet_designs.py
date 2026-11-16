@@ -27,6 +27,13 @@ def test_every_sapg_block_of_4096_envs_holds_each_design_once(start):
     assert sorted(d.tolist()) == list(range(4096))
 
 
+def test_a_small_run_spans_every_dimension():
+    """256 envs (a smoke test) must not all be one length: the env -> design map is permuted."""
+    g = sd.design_grid()[sd.design_of(np.arange(256), 4096)]
+    for col in range(3):
+        assert len(np.unique(np.round(g[:, col], 9))) == 16
+
+
 def test_a_half_block_holds_half_the_designs_once():
     """2 GPUs x 12288 envs: SAPG blocks of 2048 see 2048 distinct designs, not a repeat."""
     d = sd.design_of(np.arange(2048, 4096), 4096)

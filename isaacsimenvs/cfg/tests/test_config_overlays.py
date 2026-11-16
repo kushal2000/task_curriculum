@@ -53,6 +53,11 @@ CASES = [
         "isaacsimenvs/cfg/task/PlayFlexivWujiRightHumanLike.yaml", "PlayFlexivWujiRightHumanLikeEnvCfg",
         [PLAY_CFG], id="PlayFlexivWujiRightHumanLike",
     ),
+    pytest.param(
+        "isaacsimenvs/cfg/task/RigidBodyCloth.yaml", "RigidBodyClothEnvCfg",
+        ["isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py", "isaacsimenvs/tasks/cloth/cloth_cfg.py", PLAY_CFG],
+        id="RigidBodyCloth",
+    ),
 ]
 
 
@@ -152,6 +157,16 @@ EXPERIMENT_TASKS = {
         [
             "isaacsimenvs/tasks/cloth/cloth_env_cfg.py",
             "isaacsimenvs/tasks/cloth/newton_base_env_cfg.py",
+            "isaacsimenvs/tasks/cloth/cloth_cfg.py",
+            PLAY_CFG,
+        ],
+        "isaacsimenvs/cfg/train/ClothSAPG.yaml",
+    ),
+    # Rigid2Deform: the single-hinge rigid sheet on PhysX (tasks/cloth/rigid_body_env.py).
+    "Isaacsimenvs-RigidBodyCloth-Direct-v0": (
+        "RigidBodyClothEnvCfg",
+        [
+            "isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py",
             "isaacsimenvs/tasks/cloth/cloth_cfg.py",
             PLAY_CFG,
         ],
