@@ -12,7 +12,10 @@
 4. a perfect fold: the hinge at 180 deg puts every tracked corner on its target (fold_error ~ 0) and
    passes `is_folded` for every design; still so after 30 physics steps;
 5. per-reset DR: resetting envs 0-31 changes their hinge damping / stiffness and plate / robot /
-   table frictions and leaves envs 32+ untouched (the untouched ones are the negative control).
+   table frictions and leaves envs 32+ untouched (the untouched ones are the negative control);
+6. the table's base friction is ``assets.table_friction`` (Play gave it the robot's);
+7. with ``env.fold.task=unfold`` (pass it on the command line): every sheet starts folded (hinge
+   ~180 deg) and is NOT a success; laid flat, every one is.
 """
 
 from __future__ import annotations
@@ -77,27 +80,36 @@ def run(env_cfg, agent_cfg) -> None:
     near = torch.full((n,), 9.0, device=dev)
 
     def hand_gap() -> torch.Tensor:
-        ft = e.robot.data.body_pos_w[:, e._fingertip_body_ids]
+        ft = e.robot.data.body_pos_w[:, e._fingertip_ids]
         return torch.cdist(ft, e._particles_w()).amin(dim=(1, 2))
+
+    unfold = e.cfg.fold.task == "unfold"
+    if unfold:
+        q0 = e._sheet.data.joint_pos[:, 0]
+        check(float((q0 - math.pi).abs().max()) < math.radians(1), f"unfold: every sheet starts folded (hinge {math.degrees(float(q0.min())):.1f}-{math.degrees(float(q0.max())):.1f} deg)")
 
     for _ in range(60):
         env.step(zero)
         near = torch.minimum(near, hand_gap())
     free = near > 0.03
     print(f"[probe] {int((~free).sum())}/{n} envs had a fingertip within 3 cm of the sheet: skipped in 2-4", flush=True)
-    pos, _ = e._cloth.body_pose()
-    top = e.scene.env_origins[:, 2] + e._table_z_per_env + float(e.cfg.cloth.table_half_thickness)
-    # body frame = sheet frame (mid-plane); at rest it sits t/2 above the table top
-    dz = (pos[:, :, 2] - (top + 0.5 * dims[:, 2]).unsqueeze(1)).abs()
+    pos = e._sheet.data.body_link_pos_w
+    top = e.scene.env_origins[:, 2] + e._table_z + e._table_half_height
+    # body frame = sheet frame (mid-plane); at rest the - plate sits t/2 above the table top
+    dz = (pos[:, :1, 2] - (top + 0.5 * dims[:, 2]).unsqueeze(1)).abs() if unfold else \
+        (pos[:, :, 2] - (top + 0.5 * dims[:, 2]).unsqueeze(1)).abs()
     q = e._sheet.data.joint_pos[:, 0]
     dz, q = dz[free], q[free]
     check(float(dz.max()) < 2e-3, f"sheets rest on their tables: |z - (top + t/2)| max {float(dz.max()) * 1e3:.2f} mm")
-    check(float(q.abs().max()) < math.radians(3), f"hinges flat at rest: max |q| {math.degrees(float(q.abs().max())):.2f} deg")
-    check(not bool(e.is_folded()[free].any()), "no flat sheet counts as folded")
+    if unfold:
+        check(not bool(e.is_folded()[free].any()), "unfold: no folded start counts as unfolded")
+    else:
+        check(float(q.abs().max()) < math.radians(3), f"hinges flat at rest: max |q| {math.degrees(float(q.abs().max())):.2f} deg")
+        check(not bool(e.is_folded()[free].any()), "no flat sheet counts as folded")
     fe_flat = e.fold_error()
     print(f"[probe] flat fold_error {float(fe_flat.min()):.3f}-{float(fe_flat.max()):.3f} m", flush=True)
 
-    def set_hinge(angle: float) -> None:
+    def set_hinge(angle: float) -> None:  # noqa: E306
         a = torch.full((n, 1), angle, device=dev)
         e._sheet.write_joint_state_to_sim(a, torch.zeros_like(a))
         e._sheet.set_joint_position_target(a)
@@ -105,12 +117,25 @@ def run(env_cfg, agent_cfg) -> None:
         e.sim.step(render=False)
         e.scene.update(e.physics_dt)
 
+    if unfold:
+        set_hinge(0.0)
+        for _ in range(10):
+            e._sheet.set_joint_position_target(torch.zeros((n, 1), device=dev))
+            e.scene.write_data_to_sim()
+            e.sim.step(render=False)
+            e.scene.update(e.physics_dt)
+        ok = e.is_folded()[free]
+        check(bool(ok.all()), f"unfold: laid flat, {int(ok.sum())}/{int(free.sum())} sheets pass the unfold test")
+        print(f"[probe] {'ALL PASS' if not FAILS else f'{len(FAILS)} FAILED: {FAILS}'}", flush=True)
+        env.close()
+        return
+
     # 3. hinge sign: the + plate's far corners rise
     kp_before = e.cloth_keypoints_w()[:, 2:, 2].clone()   # far corners
     set_hinge(math.radians(90))
     rise = e.cloth_keypoints_w()[:, 2:, 2] - kp_before
     free = free & (hand_gap() > 0.03)
-    palm = e.robot.data.body_pos_w[:, e._palm_body_id] - e.scene.env_origins
+    palm = e.robot.data.body_pos_w[:, e._palm_id] - e.scene.env_origins
     for i in ((rise.amin(dim=1) < 0.25 * dims[:, 0]) & free).nonzero(as_tuple=True)[0][:6].tolist():
         root = e._sheet.data.root_pos_w[i] - e.scene.env_origins[i]
         print(f"[probe]   env {i}: dims {[round(float(v), 3) for v in dims[i]]} root {[round(float(v), 3) for v in root]} "
@@ -165,6 +190,11 @@ def run(env_cfg, agent_cfg) -> None:
         untouched = bool((a[32:] == b[32:]).all())
         check(float(changed) > 0.5 and untouched,
               f"DR {k}: {float(changed) * 100:.0f}% of reset envs changed, others untouched: {untouched}")
+
+    # 6. the table's base friction
+    tf = float(e.cfg.assets.table_friction)
+    base = e._table_mats_base[..., :2]
+    check(bool(torch.allclose(base, torch.full_like(base, tf))), f"table base friction = assets.table_friction {tf}")
 
     print(f"[probe] {'ALL PASS' if not FAILS else f'{len(FAILS)} FAILED: {FAILS}'}", flush=True)
     env.close()

@@ -225,7 +225,7 @@ def main() -> None:
             use_single_object_variant()
         if args_cli.pinned:
             disable_randomization(env_cfg)
-            print(f"[train] pinned: DR and reset noise off, start pose {env_cfg.reset.fixed_start_pose}", flush=True)
+            print(f"[train] pinned: DR and reset noise off, start pose {getattr(env_cfg.reset, 'fixed_start_pose', 'centred, yaw 0')}", flush=True)
 
         # Only rank 0 may own side-effecting, singleton outputs: wandb runs and viewer HTML.
         # Without this all four ranks create the SAME wandb run id and the server rejects the

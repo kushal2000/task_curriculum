@@ -16,8 +16,6 @@
 #
 # Variants are command-line overrides, not more files:
 #   no sheet DR:          env.sheet.randomization.enabled=false
-#   camera-like object lags: env.domain_randomization.point_dr_mode=realistic
-#                         env.domain_randomization.use_object_state_delay_noise=false
 #   no DR at all:         --pinned
 task: Isaacsimenvs-RigidBodyCloth-Direct-v0
 
@@ -46,12 +44,6 @@ env:
     object_state_xyz_noise_std: 0.01     # m
     object_state_rotation_noise_degrees: 5.0
     joint_velocity_obs_noise_std: 0.1
-    point_dr_mode: "off"
-    # Robot physics: not randomized (1.0 = the robot spec's value).
-    robot_stiffness_scale_range: [1.0, 1.0]
-    robot_damping_scale_range: [1.0, 1.0]
-    hand_friction_scale_range: [1.0, 1.0]
-    hand_effort_limit_scale_range: [1.0, 1.0]
 
 agent:
   params:

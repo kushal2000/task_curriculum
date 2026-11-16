@@ -17,6 +17,9 @@ def disable_randomization(cfg) -> None:
     random wrench impulses all inject variance that has nothing to do with the backend under
     test, which is the comparison this measurement exists to support.
     """
+    if hasattr(cfg, "fold"):  # the cloth envs (tasks/cloth/utils/cfg.py)
+        _disable_cloth_randomization(cfg)
+        return
     dr = cfg.domain_randomization
     dr.use_obs_delay = False
     dr.use_action_delay = False
@@ -54,6 +57,29 @@ def disable_randomization(cfg) -> None:
         0.0,
         0.0,
     )
+
+
+def _disable_cloth_randomization(cfg) -> None:
+    """The cloth envs' pinned protocol: observation / action DR off, the robot at its default pose,
+    the table at its nominal height, the sheet centred (rigid: on its placement region) at yaw 0,
+    and the rigid sheet's per-reset material DR off (its nominal hinge and frictions)."""
+    dr = cfg.domain_randomization
+    dr.use_obs_delay = False
+    dr.use_action_delay = False
+    dr.use_object_state_delay_noise = False
+    dr.joint_velocity_obs_noise_std = 0.0
+    dr.joint_pos_obs_noise_std = 0.0
+    dr.action_noise_std = 0.0
+    rs = cfg.reset
+    rs.reset_position_noise_x = 0.0
+    rs.reset_position_noise_y = 0.0
+    rs.reset_dof_pos_random_interval_arm = 0.0
+    rs.reset_dof_pos_random_interval_fingers = 0.0
+    rs.reset_dof_vel_random_interval = 0.0
+    rs.table_reset_z_range = 0.0
+    rs.random_yaw = False
+    if hasattr(cfg, "sheet"):
+        cfg.sheet.randomization.enabled = False
 
 
 #: Set when :func:`use_single_object_variant` has been requested, so a backend that patches

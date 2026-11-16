@@ -55,7 +55,7 @@ CASES = [
     ),
     pytest.param(
         "isaacsimenvs/cfg/task/RigidBodyCloth.yaml", "RigidBodyClothEnvCfg",
-        ["isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py", "isaacsimenvs/tasks/cloth/fold_task.py", PLAY_CFG],
+        ["isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py", "isaacsimenvs/tasks/cloth/utils/cfg.py"],
         id="RigidBodyCloth",
     ),
 ]
@@ -155,8 +155,7 @@ EXPERIMENT_TASKS = {
         "RigidBodyClothEnvCfg",
         [
             "isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py",
-            "isaacsimenvs/tasks/cloth/fold_task.py",
-            PLAY_CFG,
+            "isaacsimenvs/tasks/cloth/utils/cfg.py",
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
     ),

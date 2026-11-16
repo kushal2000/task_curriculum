@@ -242,8 +242,6 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
         joint_names = list(env.robot.data.joint_names)
 
     robot_root_pos = env.robot.data.root_pos_w[env_id] - origin
-    object_pos = env.object.data.root_pos_w[env_id] - origin
-    goal_pos = env.goal_viz.data.root_pos_w[env_id] - origin
     table_pos = env.table.data.root_pos_w[env_id] - origin
     hole = getattr(env, "hole", None)
 
@@ -252,10 +250,14 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
         "robot_joint_names": joint_names,
         "robot_joint_pos": _to_numpy(joint_pos),
         "robot_base_pose": _pose_xyzw(robot_root_pos, env.robot.data.root_quat_w[env_id]),
-        "object_pose": _pose_xyzw(object_pos, env.object.data.root_quat_w[env_id]),
-        "goal_pose": _pose_xyzw(goal_pos, env.goal_viz.data.root_quat_w[env_id]),
         "table_pose": _pose_xyzw(table_pos, env.table.data.root_quat_w[env_id]),
     }
+    # The cloth envs have no rigid manipuland or goal marker: the sheet is drawn as deformables.
+    if hasattr(env, "object") and hasattr(env, "goal_viz"):
+        object_pos = env.object.data.root_pos_w[env_id] - origin
+        goal_pos = env.goal_viz.data.root_pos_w[env_id] - origin
+        frame["object_pose"] = _pose_xyzw(object_pos, env.object.data.root_quat_w[env_id])
+        frame["goal_pose"] = _pose_xyzw(goal_pos, env.goal_viz.data.root_quat_w[env_id])
     if hole is not None:
         hole_pos = hole.data.root_pos_w[env_id] - origin
         frame["hole_pose"] = _pose_xyzw(hole_pos, hole.data.root_quat_w[env_id])
@@ -383,9 +385,7 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         self.wandb_key = wandb_key
         self.github_raw_base = github_raw_base
         self.url_check = url_check
-        self._object_urdf_text, self._object_urdf_path = object_urdf_for_env(
-            inner, self.env_id
-        )
+        self._object_urdf_text, self._object_urdf_path = self._object_urdf(inner)
         self._table_urdf_text, self._table_urdf_path = table_urdf_for_env(
             inner, self.env_id
         )
@@ -477,6 +477,10 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         if self._frames:
             self._finalize_capture(partial=True)
         return self.env.close()
+
+    def _object_urdf(self, inner):
+        """The manipuland's URDF ``(text, path)``; Play's procedural tool."""
+        return object_urdf_for_env(inner, self.env_id)
 
     def _capture_frame(self) -> dict:
         """One frame of viewer state. Subclasses extend this to add task-specific geometry."""
@@ -619,7 +623,10 @@ def capture_cloth_viewer_frame(env, env_id: int) -> dict[str, Any]:
 
 
 class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
-    """Play viewer plus the cloth sheet and its fold target."""
+    """Robot + table, plus the cloth sheet and its fold target (no rigid manipuland)."""
+
+    def _object_urdf(self, inner):
+        return "", None
 
     def _capture_frame(self):  # pragma: no cover - exercised in training
         return capture_cloth_viewer_frame(self.env.unwrapped, self.env_id)
@@ -627,12 +634,12 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
     def _build_html(self, frames: list[dict[str, Any]]) -> str:
         import numpy as np
 
-        from isaacsimenvs.tasks.cloth.fold_task import grid_mesh, half_indices, half_mesh
+        from isaacsimenvs.tasks.cloth.utils import geometry
 
         inner = self.env.unwrapped
-        c = inner.cfg.cloth
-        _, sheet_tris = grid_mesh(float(c.size), int(c.resolution))
-        _, ghost_tris = half_mesh(float(c.size), int(c.resolution), c.fold_axis)
+        res = int(inner._sheet_geom.resolution)
+        sheet_tris = geometry.grid_triangles(res)
+        ghost_tris = geometry.half_triangles(res, reflected=False)
 
         sheet = np.asarray([f["cloth_vertices"] for f in frames], dtype=float)
         ghost = np.asarray([f["goal_vertices"] for f in frames], dtype=float)
@@ -649,7 +656,7 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
         # Split the sheet by which half each triangle belongs to, by MAJORITY vertex. An
         # all-three test leaves every triangle touching the excluded hinge row unclassified --
         # a quarter of the sheet -- which reads as a third stripe rather than two halves.
-        moving = set(half_indices(int(c.resolution), c.fold_axis, positive=True))
+        moving = set(geometry.half_indices(res, positive=True))
         tri = np.asarray(sheet_tris, dtype=int).reshape(-1, 3)
         in_moving = np.isin(tri, list(moving)).sum(axis=1) >= 2
 

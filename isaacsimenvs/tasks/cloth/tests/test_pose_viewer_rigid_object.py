@@ -124,7 +124,7 @@ def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10, robot_urdf: str
     from isaacsimenvs.tasks.play.pose_viewer import ClothPoseViewerWrapper
 
     n_particles = resolution * resolution
-    n_half = resolution * ((resolution + 1) // 2)
+    n_half = resolution * (resolution // 2)  # rows strictly past the crease
     pose = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
     frames = [
         {
@@ -143,10 +143,8 @@ def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10, robot_urdf: str
     ]
 
     inner = types.SimpleNamespace(
-        cfg=types.SimpleNamespace(
-            cloth=types.SimpleNamespace(size=size, resolution=resolution, fold_axis="x"),
-            assets=types.SimpleNamespace(robot_urdf=robot_urdf),
-        )
+        cfg=types.SimpleNamespace(assets=types.SimpleNamespace(robot_urdf=robot_urdf)),
+        _sheet_geom=types.SimpleNamespace(resolution=resolution),
     )
     # `object.__new__` skips gym.Wrapper.__init__, which would need a real env. `_build_html`
     # touches only the attributes set below.
