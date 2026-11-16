@@ -311,10 +311,6 @@ rigid_cloth:
   joint_limit: null               # null => ChainSpec.joint_limit (the chain's own thickness)
   slat_friction: -1.0             # negative => sqrt(0.25 * table 0.5) = 0.354, the cloth's effective value
   fingertip_slat_friction: -1.0   # negative => sqrt(0.25 * fingertip 1.5) = 0.612, likewise
-  # MJWarp takes the higher-PRIORITY geom's friction and `max` only on a tie; without priority a
-  # slat felt max(0.354, 0.5) = 0.5 on the table and 1.5 under a fingertip. Costs fingertip-TABLE
-  # friction 1.5 -> 0.612 (the fingertip wins that contact too). false = the old max rule.
-  friction_priority: true
   # negative => cloth.thickness/2 - slat thickness/2 = 7 mm: the VBD sheet collides through 8 mm
   # particles, so it rests 8 mm up and is touched 8 mm above that; a bare 2 mm slat sat 14 mm lower.
   # Nonzero also removes slat-slat contact pairs (joint limits hold the plies). 0.0 = old behaviour.

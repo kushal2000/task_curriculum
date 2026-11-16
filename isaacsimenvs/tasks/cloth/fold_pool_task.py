@@ -377,8 +377,6 @@ class FoldPoolTaskMixin:
                 f"got {p.init_fold_starts!r} / {p.init_fold_prob}"
             )
         lo = math.radians(float(p.init_fold_deg[0]))
-        if getattr(self.cfg, "curriculum", None) is not None and self.cfg.curriculum.enabled:
-            lo = min(lo, math.radians(float(c.unfold_curriculum_deg[0])))
         worst = float(self._env_size.min()) * math.sin(0.5 * lo)
         if worst <= float(c.keypoint_tolerance):
             raise ValueError(
@@ -395,8 +393,6 @@ class FoldPoolTaskMixin:
             folded = self._unfold_envs()[env_ids].clone()
         lo, hi = (math.radians(float(v)) for v in p.init_fold_deg)
         ang = torch.empty((n, self._start_num_parts), device=self.device).uniform_(lo, hi)
-        if getattr(self, "_unfold_cur", False):  # the unfold curriculum's angle, one per env
-            ang[:] = torch.deg2rad(self._unfold_start_deg(env_ids)).unsqueeze(1)
         ang *= folded.unsqueeze(1)
         for s, (table, part) in enumerate(zip(self._start_tables, self._start_parts)):
             on = draw == s
@@ -541,7 +537,6 @@ class FoldPoolTaskMixin:
             env_ids = torch.arange(self.num_envs, device=self.device)
         ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long).reshape(-1)
         if getattr(self, "_pool_ready", False):
-            self._unfold_curriculum_reset(ids)
             self._draw_task(ids)
             self._draw(ids)
         super()._reset_idx(env_ids)

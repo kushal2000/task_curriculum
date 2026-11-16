@@ -181,10 +181,6 @@ class ClothCfg:
     fold_axis: str = "x"
     """Axis normal to the fold line, in cloth-local coordinates: the ``+`` half folds onto ``-``."""
 
-    num_keypoints: int = 4
-    """Tracked keypoints on the moving half. Four matches the task's existing keypoint machinery
-    and is the minimum that pins a folded flap's position *and* orientation."""
-
     max_folded_footprint: float = 0.65
     """Largest sheet extent along the fold axis, as a fraction of ``size``, that still counts as
     folded.
@@ -212,7 +208,7 @@ class ClothCfg:
 
     ``mixed`` (PhysX pool and chain only): every episode draws its own task, unfold with
     ``unfold_prob``, fold otherwise. Target, goal attitude, success test and start follow the
-    episode's task; the curriculum (if on) scores and opens the unfold episodes only."""
+    episode's task."""
 
     unfold_prob: float = 0.5
     """``task: mixed`` only: the share of episodes that are unfolds."""
@@ -243,13 +239,6 @@ class ClothCfg:
     the crease [deg], drawn uniformly per episode. 180 = folded flat onto the other half: one
     ``self_contact_radius`` above it (VBD), the chain's tightest fold (``chain_fold_angles``; on
     ``box3-mid`` both bar hinges at 90, plies 2 mm apart). The pool reads ``fold_pool.init_fold_deg``."""
-
-    unfold_curriculum_deg: list[float] = [120.0, 180.0]
-    """``task: unfold`` with ``curriculum.enabled`` (PhysX envs): the folded start's angle [deg] at
-    difficulty 0 and 1. Each episode starts at ``lo + d * (hi - lo)`` with ``d`` drawn by the shared
-    curriculum (``isaacsimenvs/curriculum``), in place of ``unfold_start_deg`` /
-    ``fold_pool.init_fold_deg``. At 180 the plies touch and there is no gap for a finger to get
-    under the top one; a more open start leaves one."""
 
     # --- release-and-persist (ClothTaskMixin, fold task) ----------------------------------
     release_persist: bool = False
@@ -650,9 +639,6 @@ class ClothCfg:
         lo, hi = (float(v) for v in self.unfold_start_deg)
         if not 0.0 < lo <= hi <= 180.0:
             raise ValueError(f"cloth.unfold_start_deg must be 0 < lo <= hi <= 180, got {[lo, hi]}")
-        lo, hi = (float(v) for v in self.unfold_curriculum_deg)
-        if not 0.0 < lo <= hi <= 180.0:
-            raise ValueError(f"cloth.unfold_curriculum_deg must be 0 < lo <= hi <= 180, got {[lo, hi]}")
         if not 0.5 < float(self.min_unfolded_footprint) <= 1.0:
             raise ValueError(
                 f"cloth.min_unfolded_footprint must be in (0.5, 1], got {self.min_unfolded_footprint}"

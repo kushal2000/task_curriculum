@@ -32,10 +32,9 @@ class RigidClothRandomizationCfg:
     slat_friction_scale: tuple[float, float] = (0.7, 1.4)
     """Multiplies ``slat_friction`` (slat vs table and non-fingertip links)."""
     fingertip_friction_scale: tuple[float, float] = (0.7, 1.4)
-    """Multiplies ``fingertip_slat_friction``. Written on the fingertips, so with
-    ``friction_priority`` it also moves that env's fingertip-table friction by the same factor.
-    Under PhysX ``physx_chain.friction_model: cloth_min`` it multiplies the WHOLE robot's friction
-    (``assets.finger_tip_friction``), drawn once per env at startup."""
+    """Multiplies ``fingertip_slat_friction``. Under PhysX ``physx_chain.friction_model: cloth_min``
+    it multiplies the WHOLE robot's friction (``assets.finger_tip_friction``), drawn once per env at
+    startup."""
     table_friction_scale: tuple[float, float] = (1.0, 1.0)
     """PhysX ``physx_chain.friction_model: cloth_min`` only: multiplies ``assets.table_friction``,
     drawn once per env at startup."""
@@ -138,30 +137,13 @@ class RigidClothCfg:
     computes it (a float sentinel, not ``None``: the config checker refuses a float override of a
     ``None`` default, so a recipe could not set it): :func:`rigid_cloth.cloth_effective_friction` against the table, i.e.
     ``sqrt(0.25 * 0.5) = 0.354`` -- Newton's VBD mixes a particle's ``soft_contact_mu`` with a
-    shape's by geometric mean (``_average_contact_material``), so that is what the sheet feels.
-
-    Only honoured with ``friction_priority``: under MJWarp's equal-priority rule a contact takes the
-    LARGER of its two coefficients, so a 0.354 slat on the 0.5 table used to feel 0.5, not 0.354."""
+    shape's by geometric mean (``_average_contact_material``), so that is what the sheet feels."""
 
     fingertip_slat_friction: float = -1.0
     """Friction a slat feels against a fingertip. Negative means the cloth's value against the
-    1.5 fingertip, ``sqrt(0.25 * 1.5) = 0.612``. Only honoured with ``friction_priority``.
+    1.5 fingertip, ``sqrt(0.25 * 1.5) = 0.612``.
     (A float sentinel, not ``None``: the config checker refuses a float override of a ``None``
     default, so ``None`` would make the field impossible to set from the command line.)"""
-
-    friction_priority: bool = True
-    """Resolve the chain's contact friction by MJWarp geom **priority** instead of by ``max``.
-
-    MJWarp (``contact_params``) takes the higher-priority geom's friction outright, and the larger of
-    the two only on a tie. So: slats at priority 1 carrying ``slat_friction``, fingertips at
-    priority 2 carrying ``fingertip_slat_friction``. That reproduces the cloth's slat-table (0.354),
-    slat-fingertip (0.612) and slat-link (0.354) contacts exactly, where the old ``max`` rule gave
-    0.5 / 1.5 / 0.5.
-
-    **The price is fingertip-TABLE friction**: the fingertip now wins against the table too, so that
-    contact drops from 1.5 to 0.612. No single-geom assignment can hit all four pairs (a slat's
-    friction appears in two pairs that need different values), and the fingertip-table pair is the
-    one that does not touch the manipuland. False restores the old behaviour."""
 
     contact_margin: float = -1.0
     """Outward collision offset [m] written onto every slat shape (Newton ``shape_margin``).

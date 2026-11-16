@@ -18,14 +18,6 @@ from __future__ import annotations
 import torch
 from isaaclab.utils.math import quat_from_matrix
 
-from isaacsimenvs.curriculum import (
-    allocate_curriculum_buffers,
-    log_curriculum,
-    record_episode_success,
-    sample_difficulty,
-    update_curriculum,
-)
-
 from isaacsimenvs.tasks.cloth.utils.usd_bulk import bulk_edit_layer
 from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
     folded_targets,
@@ -142,22 +134,6 @@ class ClothTaskMixin:
             if self._mixed:  # the worse of the two tasks' worst values
                 self._flat_fold_err = max(self._flat_fold_err, float(torch.as_tensor(self._task_span()).max()))
         self._drive_goal_marker()
-        # Unfold start curriculum (PhysX envs with `curriculum.enabled`): the folded start opens up to
-        # `cloth.unfold_curriculum_deg[0]` and closes toward `[1]` as the policy succeeds.
-        cur = getattr(cfg, "curriculum", None)
-        self._unfold_cur = bool(cur is not None and cur.enabled)
-        if self._unfold_cur:
-            if not (self._unfold or self._mixed):
-                raise ValueError("curriculum.enabled drives the unfold start angle: it needs cloth.task=unfold or mixed")
-            if int(cur.score_last_n_envs) > self.num_envs:
-                # `record_episode_success` would then score every env, explorers included.
-                raise ValueError(f"curriculum.score_last_n_envs {cur.score_last_n_envs} > num_envs {self.num_envs}: "
-                                 "set it to the SAPG block (num_envs / 6)")
-            allocate_curriculum_buffers(self)
-            lo, hi = (float(v) for v in cfg.cloth.unfold_curriculum_deg)
-            print(f"[cloth] unfold start curriculum: {lo:g} -> {hi:g} deg, {cur.difficulty_levels} levels, "
-                  f"advance at {cur.adapt_success_threshold:g} success, scoring the last "
-                  f"{cur.score_last_n_envs or self.num_envs} envs", flush=True)
 
     # ------------------------------------------------------------------ construction
 
@@ -318,7 +294,7 @@ class ClothTaskMixin:
 
     def _draw_task(self, env_ids: torch.Tensor) -> None:
         """``task: mixed``: draw the next episode's task for ``env_ids``. Before the reset writes the
-        start (which follows the task) and after the curriculum scored the ending episode."""
+        start (which follows the task)."""
         if self._mixed:
             self._unfold_envs()[env_ids] = torch.rand(env_ids.numel(), device=self.device) < float(self.cfg.cloth.unfold_prob)
 
@@ -859,9 +835,6 @@ class ClothTaskMixin:
         terms["total_reward"] = reward
         self.extras["fold_err_mean"] = float(fold_err.mean())
         self.extras["fold_rate"] = float(self._fold_bonus_mask.float().mean())
-        if self._unfold_cur:
-            log_curriculum(self)
-            self.extras["curriculum/start_deg_max"] = float(self._unfold_start_deg(slice(None)).max())
         log_step_metrics(self)
         return reward
 
@@ -1060,13 +1033,6 @@ class ClothTaskMixin:
         a reward keyed on `_successes` would have been farmable at 11.25 cm without ever folding.
         Snapshot and restore so the fold is the only writer.
         """
-        if getattr(self, "_unfold_cur", False):
-            hi = self._curr_hi
-            update_curriculum(self)
-            if self._curr_hi != hi:
-                lo_deg, hi_deg = (float(v) for v in self.cfg.cloth.unfold_curriculum_deg)
-                print(f"[cloth] unfold curriculum step {self._curr_frame}: success {self._curr_succ_rate:.2f} -> "
-                      f"starts up to {lo_deg + self._curr_hi * (hi_deg - lo_deg):.1f} deg", flush=True)
         successes_before = self._successes.clone()
         terminated, truncated = super()._get_dones()
         self._successes.copy_(successes_before)
@@ -1177,37 +1143,14 @@ class ClothTaskMixin:
         self.extras["hand_cloth_dist"] = float(d.mean())
         return self._persist_done
 
-    def _unfold_curriculum_reset(self, env_ids: torch.Tensor) -> None:
-        """Score the episodes ending at ``env_ids`` (success = the unfold entered, the episode's
-        ``fold`` end) and draw their next start difficulty. Before the reset writes the start: the
-        pool calls it ahead of its start draw, the chain here."""
-        if not getattr(self, "_unfold_cur", False):
-            return
-        reasons = getattr(self, "_termination_reasons", None)
-        if reasons is not None and "fold" in reasons:
-            ids = env_ids[self._unfold_envs()[env_ids]] if self._mixed else env_ids  # mixed: unfolds only
-            record_episode_success(self, ids, reasons["fold"][ids])
-        sample_difficulty(self, env_ids)
-
-    def _unfold_start_deg(self, env_ids) -> torch.Tensor:
-        """The curriculum's start angle [deg] for ``env_ids``."""
-        lo, hi = (float(v) for v in self.cfg.cloth.unfold_curriculum_deg)
-        return lo + self._difficulty[env_ids, 0] * (hi - lo)
-
     def _reset_idx(self, env_ids):
-        if (getattr(self, "_unfold_cur", False) or self._mixed) and not hasattr(self.cfg, "fold_pool") \
-                and hasattr(self.object, "set_start_deg"):
+        if self._mixed and not hasattr(self.cfg, "fold_pool") and hasattr(self.object, "set_start_deg"):
             ids = torch.arange(self.num_envs, device=self.device) if env_ids is None else \
                 torch.as_tensor(env_ids, device=self.device, dtype=torch.long).reshape(-1)
-            self._unfold_curriculum_reset(ids)
             self._draw_task(ids)
-            if getattr(self, "_unfold_cur", False):
-                deg = self._unfold_start_deg(ids)
-            else:
-                lo, hi = (float(v) for v in self.cfg.cloth.unfold_start_deg)
-                deg = torch.empty(ids.numel(), device=self.device).uniform_(lo, hi)
-            if self._mixed:  # the fold episodes start flat
-                deg = deg * self._unfold_envs()[ids]
+            lo, hi = (float(v) for v in self.cfg.cloth.unfold_start_deg)
+            deg = torch.empty(ids.numel(), device=self.device).uniform_(lo, hi)
+            deg = deg * self._unfold_envs()[ids]  # the fold episodes start flat
             self.object.set_start_deg(ids, deg)
         super()._reset_idx(env_ids)
         if hasattr(self, "_fold_hold"):

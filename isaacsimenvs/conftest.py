@@ -60,11 +60,6 @@ def _skip_if_kit_blocked():
 
 
 @pytest.fixture(scope="session")
-def schedulers():
-    return load_module("isaacsimenvs/curriculum/schedulers.py", "schedulers")
-
-
-@pytest.fixture(scope="session")
 def rigid_cloth():
     return load_module("isaacsimenvs/tasks/cloth/utils/rigid_cloth.py", "rigid_cloth")
 

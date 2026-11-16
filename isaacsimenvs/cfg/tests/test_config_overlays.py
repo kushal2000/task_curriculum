@@ -41,7 +41,6 @@ SCENE_FIELDS = {
     "lazy_sensor_update", "filter_collisions",
 }
 
-CURRICULUM_CFG = "isaacsimenvs/curriculum/cfg.py"
 PLAY_CFG = "isaacsimenvs/tasks/play/play_env_cfg.py"
 
 # (yaml, root configclass, modules). Modules are searched in order and the first
@@ -144,7 +143,6 @@ EXPERIMENT_TASKS = {
             "isaacsimenvs/tasks/cloth/fold_pool_cfg.py",
             "isaacsimenvs/tasks/cloth/rigid_cloth_cfg.py",
             PLAY_CFG,
-            CURRICULUM_CFG,
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
     ),
@@ -156,7 +154,6 @@ EXPERIMENT_TASKS = {
             "isaacsimenvs/tasks/cloth/newton_base_env_cfg.py",
             "isaacsimenvs/tasks/cloth/cloth_cfg.py",
             PLAY_CFG,
-            CURRICULUM_CFG,
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
     ),
