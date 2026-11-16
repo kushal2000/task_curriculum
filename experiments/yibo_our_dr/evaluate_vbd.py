@@ -129,6 +129,26 @@ def evaluate(args):
             self.eval_finite = all(bool(torch.isfinite(value).all()) for value in
                                    (state.points_w, state.points_vel_w, state.joint_pos, state.joint_vel,
                                     view.fold_error, view.footprint))
+            from isaacsimenvs.tasks.cloth.mdp.geometry.yibo import yibo_object_features
+            cg = self.backend.cloth_grid
+            points, velocities = state.points_w, state.points_vel_w
+            actual_corners = points[:, cg.corner_idx]
+            actor_corners = yibo_object_features(cg, state, self.cfg.obs.yibo_goal_lift)[4]
+            local = points-self.scene.env_origins[:, None]
+            relative_xy = local[..., :2]-local.new_tensor(self.cfg.reset.table_reset_xy)
+            edge_vectors = points[:, self.eval_edges[:, 1]]-points[:, self.eval_edges[:, 0]]
+            stretch = edge_vectors.norm(dim=-1)/self.eval_rest_edge_lengths
+            self.eval_metrics = {
+                'moving_height_above_table_m': (points[:, cg.moving_idx, 2]-state.table_top_z[:, None]).amax(1),
+                'centroid_height_above_table_m': points[..., 2].mean(1)-state.table_top_z,
+                'particle_speed_m_s': velocities.norm(dim=-1).amax(1),
+                'edge_stretch_ratio': stretch.amax(1),
+                'p95_edge_stretch_ratio': torch.quantile(stretch, .95, dim=1),
+                'actor_marker_fit_rms_m': ((actor_corners-actual_corners).square().sum(-1).mean(-1)).sqrt(),
+                'any_particle_outside_table_xy': (relative_xy.abs()>self.eval_table_half_xy).any(dim=(1, 2)),
+                'centroid_outside_table_xy': (relative_xy.mean(1).abs()>self.eval_table_half_xy).any(dim=1),
+                'any_particle_near_ground': (local[..., 2]<.1).any(dim=1),
+            }
             return result
 
     result = dict(status='running', material=args.material,
@@ -178,6 +198,13 @@ def evaluate(args):
                 result['analytic_perfect_fold_error_m'] = float(analytic_error.max())
                 result['initial_joint_positions'] = env.backend.read_joint_pos().cpu().tolist()
                 result['initial_cloth_centers_m'] = (env.backend.cloth_points()[0].mean(1)-env.scene.env_origins).cpu().tolist()
+                from isaacsimenvs.tasks.cloth.backends.assets import urdf_box_size
+                triangles = torch.tensor(grid.grid_triangles(cg.resolution), device=device).reshape(-1, 3)
+                edges = torch.cat((triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]))
+                env.eval_edges = torch.unique(torch.sort(edges, dim=1).values, dim=0)
+                env.eval_rest_edge_lengths = (cg.rest[:, env.eval_edges[:, 1]]-cg.rest[:, env.eval_edges[:, 0]]).norm(dim=-1)
+                env.eval_table_half_xy = torch.tensor(urdf_box_size(cfg.assets.table_urdf)[:2], device=device)/2
+                peaks, events, samples = {}, {}, []
                 result['startup_seconds'] = time.perf_counter()-started
                 rollout_started = time.perf_counter()
                 for step in range(args.steps):
@@ -191,6 +218,19 @@ def evaluate(args):
                     if not bool(torch.isfinite(reward).all()) or env.task._nonfinite_count or env.task._insane_count:
                         raise RuntimeError(f'Invalid reward/state counter at step {step}')
                     active = ~done_once
+                    for key, values in env.eval_metrics.items():
+                        if values.dtype == torch.bool:
+                            events.setdefault(key, torch.zeros(n, dtype=torch.bool, device=device))
+                            events[key] |= values & active
+                        else:
+                            if not bool(torch.isfinite(values).all()):
+                                raise RuntimeError(f'Nonfinite diagnostic {key} at step {step}')
+                            peaks.setdefault(key, torch.zeros(n, device=device))
+                            peaks[key] = torch.where(active, torch.maximum(peaks[key], values), peaks[key])
+                    if step % 20 == 0:
+                        samples.append(dict(step=step+1, active=active.cpu().tolist(),
+                                            fold_error_m=env.eval_fold_error.cpu().tolist(),
+                                            **{key:value.cpu().tolist() for key,value in env.eval_metrics.items()}))
                     best_error = torch.where(active, torch.minimum(best_error, env.eval_fold_error), best_error)
                     best_footprint = torch.where(active, torch.minimum(best_footprint, env.eval_footprint), best_footprint)
                     ended = terminated.bool() | truncated.bool()
@@ -227,7 +267,25 @@ def evaluate(args):
                               termination_reasons={key:int(value.sum()) for key,value in reasons.items()},
                               resolved_cloth=cfg.deformable_cloth.to_dict(), resolved_newton=cfg.newton.to_dict(),
                               peak_cuda_allocated_bytes=torch.cuda.max_memory_allocated(),
-                              plasticity_active=env.backend._plasticity is not None)
+                              plasticity_active=env.backend._plasticity is not None,
+                              per_env_peak_metrics={key:value.cpu().tolist() for key,value in peaks.items()},
+                              per_env_events={key:value.cpu().tolist() for key,value in events.items()},
+                              diagnostic_samples=samples)
+                classes = []
+                for index in range(n):
+                    if folded[index]:
+                        label = 'physical_fold'
+                    elif events['centroid_outside_table_xy'][index] or events['any_particle_near_ground'][index]:
+                        label = 'off_table_or_near_ground_without_fold'
+                    elif peaks['centroid_height_above_table_m'][index] > .08:
+                        label = 'height_excursion_without_fold'
+                    else:
+                        label = 'no_large_height_excursion_without_fold'
+                    classes.append(label)
+                result['diagnostic_classes'] = classes
+                result['diagnostic_class_definition'] = (
+                    'Descriptive only, not causal: height excursion means centroid >8cm above table; '
+                    'near ground means any particle <10cm above environment origin. No class asserts grasp/contact.')
             finally:
                 output = captured()
             raise_if_overflowed(output, args.num_envs, f'{args.material}, complete evaluation')
