@@ -1,9 +1,9 @@
-# Isaacsimenvs-RigidBodyCloth-Direct-v0 -- fold a rigid single-hinge sheet (PhysX, Isaac Sim 5.1 /
+# Isaacsimenvs-RigidBodyCloth-Direct-v0 -- fold a rigid cloth -- two plates, one hinge (PhysX, Isaac Sim 5.1 /
 # Isaac Lab 2.3, .venv/isaacsim): two plates and one hinge at the horizontal fold line, one size
-# design per env (tasks/cloth/rigid_body_env.py). Robot: Flexiv Rizon 4s + right Wuji Hand 2 with the
-# identified hand (tasks/cloth/utils/robot.py, part of the cfg).
+# design per env (tasks/cloth/rigid_cloth_env.py). Robot: Flexiv Rizon 4s + right Wuji Hand 2 with the
+# identified hand (tasks/cloth/utils/mdp/flexiv_wuji.py, part of the cfg).
 #
-# Only what differs from the configclass defaults (tasks/cloth/utils/cfg.py, rigid_body_env_cfg.py),
+# Only what differs from the configclass defaults (tasks/cloth/cloth_env_cfg.py, rigid_cloth_env_cfg.py),
 # which hold the documentation of every key. The task YAML is the pinned base: DR off here, an
 # experiment (experiments/configs/rigid_body_cloth.yaml) turns it on.
 
@@ -18,7 +18,7 @@ domain_randomization:
   object_state_rotation_noise_degrees: 0.0
   joint_velocity_obs_noise_std: 0.0
 
-fold:
+cloth:
   keypoint_tolerance: 0.015              # success: every tracked corner within 1.5 cm of its target
   max_folded_footprint: 0.65             # ... and the extent along the fold axis below 65% of the length
   nan_policy: reset

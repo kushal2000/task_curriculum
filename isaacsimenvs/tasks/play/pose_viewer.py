@@ -252,7 +252,7 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
         "robot_base_pose": _pose_xyzw(robot_root_pos, env.robot.data.root_quat_w[env_id]),
         "table_pose": _pose_xyzw(table_pos, env.table.data.root_quat_w[env_id]),
     }
-    # The cloth envs have no rigid manipuland or goal marker: the sheet is drawn as deformables.
+    # The cloth envs have no rigid manipuland or goal marker: the cloth is drawn as deformables.
     if hasattr(env, "object") and hasattr(env, "goal_viz"):
         object_pos = env.object.data.root_pos_w[env_id] - origin
         goal_pos = env.goal_viz.data.root_pos_w[env_id] - origin
@@ -320,12 +320,12 @@ def build_pose_viewer_html(
         "table": np.stack([frame["table_pose"] for frame in frames]),
     }
     # `draw_rigid_object=False` is for tasks whose manipuland is NOT the spawned rigid tool.
-    # Cloth is one: the sheet replaces the spawned object after the scene is built, but the tool
+    # Cloth is one: the cloth replaces the spawned object after the scene is built, but the tool
     # pool is still constructed, so `object_urdf_text` is a hammer. Drawn unconditionally, that
     # puts a hammer at `object_pose` and a GREEN hammer at `goal_pose` -- and the green is close
     # enough to the fold ghost's green to read as part of the goal. Both are meaningless for
     # cloth: the tool is inert, and `goal_viz` is a pure rendering artefact that
-    # `ClothEnv._drive_goal_marker` overwrites every step. The sheet supplies its own object and
+    # `ClothEnv._drive_goal_marker` overwrites every step. The cloth supplies its own object and
     # goal as deformable channels.
     if draw_rigid_object:
         robots.append(make_embedded_robot(name="object", urdf_text=object_urdf_text))
@@ -564,11 +564,11 @@ class PlayPoseViewerWrapper(gym.Wrapper):
 # The cloth tasks' viewer -- Interactive HTML capture for cloth-folding training, logged to wandb.
 #
 #
-# Extends the Play pose viewer with the one thing a rigid-pose viewer cannot show: the sheet. A cloth
+# Extends the Play pose viewer with the one thing a rigid-pose viewer cannot show: the cloth. A cloth
 # has no root transform -- its vertex positions *are* its state -- so it travels as a deformable
 # channel (static triangle indices plus a per-frame vertex trajectory) rather than as a (T, 7) pose.
 #
-# **Nothing is uploaded to wandb as an asset.** The sheet is a procedural grid, so its geometry is
+# **Nothing is uploaded to wandb as an asset.** The cloth is a procedural grid, so its geometry is
 # plain numbers in the payload: 81 vertices x 3 floats per frame, order 1 KB. The robot's ~41 MB of
 # STLs are fetched by the browser from the public repo via `--capture_viewer_github_raw_base`, exactly
 # as the Play viewer already does.
@@ -582,7 +582,7 @@ class PlayPoseViewerWrapper(gym.Wrapper):
 #
 # and two things are deliberately NOT drawn. The Play viewer renders the spawned rigid tool at
 # `object_pose` and a green copy of it at `goal_pose`. For cloth the tool pool is still built
-# (`Cloth.yaml` pins `handle_head_types: ["hammer"]`) but the sheet replaces the spawned object, so
+# (`Cloth.yaml` pins `handle_head_types: ["hammer"]`) but the cloth replaces the spawned object, so
 # both are hammers: one inert, one a green hammer sitting at a `goal_viz` marker that
 # `ClothEnv._drive_goal_marker` overwrites every step. `draw_rigid_object=False` suppresses them.
 # This is the same confusion the offscreen renderer had before `_hide_goal_viz`.
@@ -597,7 +597,7 @@ GOAL_OPACITY = 0.45
 
 
 def capture_cloth_viewer_frame(env, env_id: int) -> dict[str, Any]:
-    """One frame: everything the Play viewer captures, plus the sheet and its fold target."""
+    """One frame: everything the Play viewer captures, plus the cloth and its fold target."""
     frame = capture_pose_viewer_frame(env, env_id)
     origin = env.scene.env_origins[env_id]
 
@@ -609,7 +609,7 @@ def capture_cloth_viewer_frame(env, env_id: int) -> dict[str, Any]:
     ghost = env.folded_half_w()[env_id] - origin
     frame["goal_vertices"] = ghost.detach().cpu().numpy().tolist()
     # The rigid-cloth pool: draw its actual plates, not the particle grid they carry (a grid drawn as
-    # one sheet stretches across every plate boundary as the plates rotate).
+    # one cloth stretches across every plate boundary as the plates rotate).
     if hasattr(env, "viewer_plates"):
         shape, verts, tris, moving = env.viewer_plates(env_id)
         frame["plate_shape"] = int(shape)
@@ -623,7 +623,7 @@ def capture_cloth_viewer_frame(env, env_id: int) -> dict[str, Any]:
 
 
 class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
-    """Robot + table, plus the cloth sheet and its fold target (no rigid manipuland)."""
+    """Robot + table, plus the cloth cloth and its fold target (no rigid manipuland)."""
 
     def _object_urdf(self, inner):
         return "", None
@@ -634,14 +634,14 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
     def _build_html(self, frames: list[dict[str, Any]]) -> str:
         import numpy as np
 
-        from isaacsimenvs.tasks.cloth.utils import geometry
+        from isaacsimenvs.tasks.cloth.utils.geometry import grid
 
         inner = self.env.unwrapped
-        res = int(inner._sheet_geom.resolution)
-        sheet_tris = geometry.grid_triangles(res)
-        ghost_tris = geometry.half_triangles(res, reflected=False)
+        res = int(inner._cloth_grid.resolution)
+        sheet_tris = grid.grid_triangles(res)
+        ghost_tris = grid.half_triangles(res, reflected=False)
 
-        sheet = np.asarray([f["cloth_vertices"] for f in frames], dtype=float)
+        cloth = np.asarray([f["cloth_vertices"] for f in frames], dtype=float)
         ghost = np.asarray([f["goal_vertices"] for f in frames], dtype=float)
         # Rigid-cloth pool: the plates themselves, when every frame shows the same shape (a capture
         # spanning a reset onto another shape falls back to the particle grid).
@@ -653,10 +653,10 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
                 np.asarray(frames[0]["plate_moving"], dtype=bool),
             )
 
-        # Split the sheet by which half each triangle belongs to, by MAJORITY vertex. An
+        # Split the cloth by which half each triangle belongs to, by MAJORITY vertex. An
         # all-three test leaves every triangle touching the excluded hinge row unclassified --
-        # a quarter of the sheet -- which reads as a third stripe rather than two halves.
-        moving = set(geometry.half_indices(res, positive=True))
+        # a quarter of the cloth -- which reads as a third stripe rather than two halves.
+        moving = set(grid.half_indices(res, positive=True))
         tri = np.asarray(sheet_tris, dtype=int).reshape(-1, 3)
         in_moving = np.isin(tri, list(moving)).sum(axis=1) >= 2
 
@@ -672,19 +672,19 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
             url_check=self.url_check,
             # The task's own robot (the robot overlay sets it); the default is the Kuka + Sharpa.
             robot_urdf_relative_path=inner.cfg.assets.robot_urdf,
-            # The sheet is the manipuland, not the spawned rigid tool -- see the note in
+            # The cloth is the manipuland, not the spawned rigid tool -- see the note in
             # `build_pose_viewer_html`. Without this the viewer draws a hammer at `object_pose`
             # and a green hammer at `goal_pose`, on top of the three cloth channels below.
             draw_rigid_object=False,
             deformables={
                 "cloth_moving": {
                     "indices": (plates[1][plates[2]] if plates else tri[in_moving]).reshape(-1).tolist(),
-                    "vertices": plates[0] if plates else sheet,
+                    "vertices": plates[0] if plates else cloth,
                     "color": MOVING_COLOR,
                 },
                 "cloth_stationary": {
                     "indices": (plates[1][~plates[2]] if plates else tri[~in_moving]).reshape(-1).tolist(),
-                    "vertices": plates[0] if plates else sheet,
+                    "vertices": plates[0] if plates else cloth,
                     "color": STATIONARY_COLOR,
                 },
                 "fold_goal": {

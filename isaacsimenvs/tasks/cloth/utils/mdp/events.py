@@ -1,6 +1,6 @@
-"""Per-reset draws: robot start state, table height, the episode's task, the sheet's start pose.
+"""Per-reset draws: robot start state, table height, the episode's task, the cloth's start pose.
 
-Pure tensor functions; the env writes what they return to its simulator (``ClothTaskEnv._reset_idx``).
+Pure tensor functions; the env writes what they return to its simulator (``ClothEnv._reset_idx``).
 """
 
 from __future__ import annotations
@@ -34,9 +34,9 @@ def table_height(env, ids: torch.Tensor) -> torch.Tensor:
 
 
 def start_task(env, ids: torch.Tensor) -> torch.Tensor:
-    """Draw each episode's task (``fold.task=mixed``) and return the + half's start angle [rad]:
+    """Draw each episode's task (``cloth.task=mixed``) and return the + half's start angle [rad]:
     0 (flat) for a fold, U(``unfold_start_deg``) for an unfold."""
-    f = env.cfg.fold
+    f = env.cfg.cloth
     n = ids.numel()
     if f.task == "mixed":
         env._unfold_env[ids] = torch.rand(n, device=env.device) < f.unfold_prob
@@ -52,7 +52,7 @@ def start_yaw(env, n: int) -> torch.Tensor:
 
 
 def place_in_region(dims: torch.Tensor, yaw: torch.Tensor, lo: torch.Tensor, hi: torch.Tensor, pinned: bool) -> torch.Tensor:
-    """``(n, 2)`` sheet centre: uniform over every position that keeps the yawed ``length x width``
+    """``(n, 2)`` cloth centre: uniform over every position that keeps the yawed ``length x width``
     bounding box inside ``[lo, hi]``; centred where it does not fit, and everywhere when ``pinned``."""
     c, s = torch.cos(yaw).abs(), torch.sin(yaw).abs()
     half = torch.stack((0.5 * (dims[:, 0] * c + dims[:, 1] * s), 0.5 * (dims[:, 0] * s + dims[:, 1] * c)), dim=-1)

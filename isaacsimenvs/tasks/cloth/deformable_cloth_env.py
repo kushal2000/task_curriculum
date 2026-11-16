@@ -1,11 +1,11 @@
-"""The fold task on a deformable VBD cloth sheet, on Newton (Isaac Lab 3, ``.venv/isaaclab3``).
+"""The fold task on a deformable VBD cloth cloth, on Newton (Isaac Lab 3, ``.venv/isaaclab3``).
 
 Where rigid-body-trained policies are evaluated (or fine-tuned). The task -- hooks, obs, reward,
-success -- is ``utils/task_env.ClothTaskEnv``, shared with the rigid env; this file is the Newton
+success -- is ``utils/task_env.ClothEnv``, shared with the rigid env; this file is the Newton
 side: the Isaac Lab 3 / Newton fixes it needs (``newton/patches.py``), the scene
-(``utils/scene_newton.py``), reading a ``ClothState`` from it, the reset writes, and the cloth's
+(``utils/deformable_scene.py``), reading a ``SimState`` from it, the reset writes, and the cloth's
 own solver hooks (friction rescale, full-surface SDF, bending plasticity, the contact-based touch
-test for ``fold.release.touch=contact``).
+test for ``cloth.release.touch=contact``).
 
 **Quaternions**: Isaac Lab 3.0 stores them xyzw; ``_read_state`` converts once to the utils' wxyz
 and the writes pass xyzw.
@@ -20,14 +20,15 @@ compat.install_isaaclab3_compat()
 import torch  # noqa: E402
 
 from isaacsimenvs.newton import patches  # noqa: E402
-from isaacsimenvs.tasks.cloth.deformable_env_cfg import ClothEnvCfg  # noqa: E402
-from isaacsimenvs.tasks.cloth.utils import geometry, quat, reset_utils, scene_newton  # noqa: E402
-from isaacsimenvs.tasks.cloth.utils.plasticity import BendingPlasticity  # noqa: E402
-from isaacsimenvs.tasks.cloth.utils.robot import ROBOT  # noqa: E402
-from isaacsimenvs.tasks.cloth.utils.state import ClothState  # noqa: E402
-from isaacsimenvs.tasks.cloth.utils.task_env import ClothTaskEnv  # noqa: E402
+from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv  # noqa: E402
+from isaacsimenvs.tasks.cloth.deformable_cloth_env_cfg import DeformableClothEnvCfg  # noqa: E402
+from isaacsimenvs.tasks.cloth.utils.deformable import scene as deformable_scene  # noqa: E402
+from isaacsimenvs.tasks.cloth.utils.deformable.plasticity import BendingPlasticity  # noqa: E402
+from isaacsimenvs.tasks.cloth.utils.geometry import grid, rotations  # noqa: E402
+from isaacsimenvs.tasks.cloth.utils.mdp.flexiv_wuji import ROBOT  # noqa: E402
+from isaacsimenvs.tasks.cloth.utils.mdp.snapshot import SimState  # noqa: E402
 
-__all__ = ["ClothEnv"]
+__all__ = ["DeformableClothEnv"]
 
 
 def _t(x) -> torch.Tensor:
@@ -35,16 +36,16 @@ def _t(x) -> torch.Tensor:
     return x.torch if hasattr(x, "torch") else x
 
 
-def _install_newton_fixes(cfg: ClothEnvCfg) -> None:
+def _install_newton_fixes(cfg: DeformableClothEnvCfg) -> None:
     """The generic Isaac Lab 3 / Newton fixes, before ``_setup_scene``. Idempotent.
 
     Newton's solver is the coupled MJWarp (robot) + VBD (cloth) solve; Isaac Lab synthesises
     Newton actuators from the Lab actuator configs (the USD drives carry the gains, see
-    ``scene_newton``). The rest are ``newton/patches.py``'s: actuator gains broadcast to (N, J),
+    ``utils/deformable/scene.py``). The rest are ``newton/patches.py``'s: actuator gains broadcast to (N, J),
     armature / friction written as 2.3 wrote them, the implicit actuators' bookkeeping torque kept
     out of the sim, the robot's gravity as MuJoCo gravcomp, condim on the fingertips.
     """
-    cfg.sim.physics = cfg.cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), ROBOT)
+    cfg.sim.physics = cfg.deformable_cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), ROBOT)
     cfg.sim.use_newton_actuators = True
     patches.install_actuator_broadcast()
     patches.install_armature_writeback()
@@ -55,16 +56,16 @@ def _install_newton_fixes(cfg: ClothEnvCfg) -> None:
     patches.install_newton_condim(int(cfg.newton.condim), tuple(ROBOT.fingertip_link_names))
 
 
-class ClothEnv(ClothTaskEnv):
-    """Fold the ``+x`` half of a VBD cloth sheet onto the ``-x`` half."""
+class DeformableClothEnv(ClothEnv):
+    """Fold the ``+x`` half of a VBD cloth cloth onto the ``-x`` half."""
 
-    cfg: ClothEnvCfg
+    cfg: DeformableClothEnvCfg
 
-    def __init__(self, cfg: ClothEnvCfg, render_mode: str | None = None, **kwargs):
-        c = cfg.cloth
+    def __init__(self, cfg: DeformableClothEnvCfg, render_mode: str | None = None, **kwargs):
+        c = cfg.deformable_cloth
         c.check_thickness()
-        if cfg.fold.task == "mixed":
-            raise NotImplementedError("fold.task=mixed: the VBD sheet runs fold or unfold")
+        if cfg.cloth.task == "mixed":
+            raise NotImplementedError("cloth.task=mixed: the VBD cloth runs fold or unfold")
         _install_newton_fixes(cfg)
         kappa = float(c.plastic_yield_curvature)
         self._plastic_set_curvature = float(c.plastic_set_curvature)
@@ -83,7 +84,7 @@ class ClothEnv(ClothTaskEnv):
         # Newton floors degenerate inertia at finalisation, which makes the hand's massless
         # placeholder links heavier than finger bones; restore before the solver re-reads the model.
         patches.restore_placeholder_inertia(self)
-        scene_newton.set_base_materials(self, ROBOT)
+        deformable_scene.set_base_materials(self, ROBOT)
         patches.notify_solver(self)  # MuJoCo caches gains and shape materials at build
         if undo[2] is not None:
             from isaaclab_newton.physics import NewtonManager
@@ -92,7 +93,7 @@ class ClothEnv(ClothTaskEnv):
             SolverCoupled._cloth_friction_apply(NewtonManager._solver)
         if kappa > 0.0 and self._plasticity is None:  # nothing was captured, so nothing installed it
             self._install_plasticity(kappa)
-        print(f"[cloth] VBD sheet {c.resolution}x{c.resolution}, {c.size:.3f} m, particle radius "
+        print(f"[cloth] VBD cloth {c.resolution}x{c.resolution}, {c.size:.3f} m, particle radius "
               f"{c.particle_radius * 1e3:.1f} mm, self-contact radius {c.self_contact_radius * 1e3:.1f} mm", flush=True)
 
     # ------------------------------------------------------------------ scene
@@ -100,30 +101,30 @@ class ClothEnv(ClothTaskEnv):
     def _setup_scene(self) -> None:
         from isaacsimenvs.utils.setup_timer import stamp
 
-        c = self.cfg.cloth
+        c = self.cfg.deformable_cloth
         self._dims = torch.tensor([[c.size, c.size, 2.0 * c.particle_radius]], device=self.device).expand(self.num_envs, 3).clone()
         stamp("scene: start")
-        rest = geometry.grid_points(c.size, c.size, c.resolution)
-        scene_newton.build(self, ROBOT, rest, geometry.grid_triangles(c.resolution))
+        rest = grid.grid_points(c.size, c.size, c.resolution)
+        deformable_scene.build(self, ROBOT, rest, grid.grid_triangles(c.resolution))
         stamp("scene: built and replicated")
 
     def _point_resolution(self) -> int:
-        return int(self.cfg.cloth.resolution)
+        return int(self.cfg.deformable_cloth.resolution)
 
     def _ply_gap(self) -> torch.Tensor:
         """Two plies settle one SELF-contact radius apart (measured 2.5 mm at 2 mm); the particle
         radius is the cloth-RIGID offset and has no say in a fold."""
-        return torch.full((self.num_envs,), float(self.cfg.cloth.self_contact_radius), device=self.device)
+        return torch.full((self.num_envs,), float(self.cfg.deformable_cloth.self_contact_radius), device=self.device)
 
     # ------------------------------------------------------------------ reads
 
-    def _read_state(self) -> ClothState:
+    def _read_state(self) -> SimState:
         r = self.robot.data
         bs = _t(r.body_state_w)
-        body_pos, body_quat = bs[..., 0:3], quat.to_wxyz(bs[..., 3:7])
+        body_pos, body_quat = bs[..., 0:3], rotations.to_wxyz(bs[..., 3:7])
         pts = _t(self._cloth.data.nodal_pos_w).view(self.num_envs, -1, 3)
         vel = _t(self._cloth.data.nodal_vel_w).view(self.num_envs, -1, 3)
-        return ClothState(
+        return SimState(
             joint_pos=_t(r.joint_pos), joint_vel=_t(r.joint_vel),
             palm_pos_w=body_pos[:, self._palm_id], palm_quat_w=body_quat[:, self._palm_id],
             palm_vel_w=bs[:, self._palm_id, 7:13],
@@ -149,7 +150,7 @@ class ClothEnv(ClothTaskEnv):
     def _body_ids_regex(self, regex: str) -> list[int]:
         ids, _ = self.robot.find_bodies(regex)
         if not ids:
-            raise ValueError(f"fold.release.contact_bodies={regex!r} matched no robot body")
+            raise ValueError(f"cloth.release.contact_bodies={regex!r} matched no robot body")
         return list(ids)
 
     # ------------------------------------------------------------------ writes
@@ -169,20 +170,20 @@ class ClothEnv(ClothTaskEnv):
         pose[:, 6] = 1.0  # xyzw identity
         self.table.write_root_pose_to_sim(pose, env_ids=ids)
 
-    def _write_sheet(self, ids, xy, yaw, angle) -> None:
-        """The sheet flat (or the + half turned up by ``angle``), yawed, ``cloth.start_height`` above
+    def _write_cloth(self, ids, xy, yaw, angle) -> None:
+        """The cloth flat (or the + half turned up by ``angle``), yawed, ``deformable_cloth.start_height`` above
         this episode's table centre -- it drops onto the table -- every particle at rest."""
-        local = geometry.folded_start(self._sheet_geom, angle, ids)
-        world = quat.apply(quat.yaw(yaw).unsqueeze(1), local)
+        local = grid.folded_start(self._cloth_grid, angle, ids)
+        world = rotations.apply(rotations.yaw(yaw).unsqueeze(1), local)
         centre = torch.zeros(ids.numel(), 3, device=self.device)
         centre[:, :2] = xy + torch.tensor(self.cfg.reset.table_reset_xy, device=self.device, dtype=torch.float32)
-        centre[:, 2] = self._table_z[ids] + float(self.cfg.cloth.start_height)
+        centre[:, 2] = self._table_z[ids] + float(self.cfg.deformable_cloth.start_height)
         target = world + (centre + self.scene.env_origins[ids]).unsqueeze(1)
         self._cloth.write_nodal_pos_to_sim_index(target, ids)
         self._cloth.write_nodal_velocity_to_sim_index(torch.zeros_like(target), ids)
 
     def _randomize(self, ids) -> None:
-        """Per reset: the reset sheets' plastic set back to the build-time rest angles."""
+        """Per reset: the reset cloths' plastic set back to the build-time rest angles."""
         if getattr(self, "_plasticity", None) is None:
             return
         import warp as wp
@@ -193,8 +194,8 @@ class ClothEnv(ClothTaskEnv):
     # ------------------------------------------------------------------ the cloth's solver hooks
 
     @staticmethod
-    def _install_cloth_friction(cfg: ClothEnvCfg):
-        """Cloth-only shape frictions for ``cloth.self_contact_mu`` / ``cloth.table_contact_mu``.
+    def _install_cloth_friction(cfg: DeformableClothEnvCfg):
+        """Cloth-only shape frictions for ``deformable_cloth.self_contact_mu`` / ``deformable_cloth.table_contact_mu``.
 
         ``build_physics`` sets ``model.soft_contact_mu`` to the cloth-on-cloth value, which VBD's
         self-contact reads raw. Cloth-vs-shape contacts use ``sqrt(soft_contact_mu * shape_mu)``,
@@ -209,7 +210,7 @@ class ClothEnv(ClothTaskEnv):
         done once at construction. So: (1) ``NewtonVBDManager._create_solver`` is wrapped to make
         sure the view owns a copy before the solver (and any CUDA graph) exists; (2) the rescale is
         re-applied after every view refresh, IN PLACE so captured graphs keep the same pointer;
-        (3) ``ClothEnv.__init__`` applies it once more at the end. Returns the undo for (1)."""
+        (3) ``DeformableClothEnv.__init__`` applies it once more at the end. Returns the undo for (1)."""
         import re
 
         import numpy as np
@@ -218,7 +219,7 @@ class ClothEnv(ClothTaskEnv):
         from isaaclab_contrib.deformable.vbd_manager import NewtonVBDManager
         from newton._src.solvers.coupled.solver_coupled import SolverCoupled
 
-        c = cfg.cloth
+        c = cfg.deformable_cloth
         mu_cal = float(c.soft_contact_mu)
         mu_cc = float(c.self_contact_mu) if c.self_contact_mu > 0.0 else mu_cal
         table_t = float(c.table_contact_mu)
@@ -284,12 +285,12 @@ class ClothEnv(ClothTaskEnv):
         return undo
 
     @staticmethod
-    def _install_full_surface_sdf(cfg: ClothEnvCfg):
+    def _install_full_surface_sdf(cfg: DeformableClothEnvCfg):
         """Give every mesh shape the cloth can touch a volume SDF, before ``ModelBuilder.finalize``.
 
-        ``cloth.full_surface_contact`` makes the proxy pipeline sample each participating rigid
+        ``deformable_cloth.full_surface_contact`` makes the proxy pipeline sample each participating rigid
         mesh's SDF for edge/face contacts, and Newton raises on a mesh without one. Participating =
-        the proxy bodies (``ClothCfg.proxy_body_patterns``) plus static shapes that collide with
+        the proxy bodies (``DeformableClothCfg.proxy_body_patterns``) plus static shapes that collide with
         particles; the coupler clears collision flags on every other shape. Wraps
         ``NewtonManager._prepare_builder_for_finalize`` (the coupler manager reaches it via
         ``super()``); returns the undo."""
@@ -298,7 +299,7 @@ class ClothEnv(ClothTaskEnv):
         import newton
         from isaaclab_newton.physics import NewtonManager
 
-        c = cfg.cloth
+        c = cfg.deformable_cloth
         pats = [re.compile(p) for p in c.proxy_body_patterns(ROBOT)]
         mesh_types = (int(newton.GeoType.MESH), int(newton.GeoType.CONVEX_MESH))
         collide_particles = int(newton.ShapeFlags.COLLIDE_PARTICLES)
@@ -367,7 +368,7 @@ class ClothEnv(ClothTaskEnv):
         cloth_solver = NewtonManager._solver.solver("cloth")
         # SolverCoupled runs the VBD entry on a ModelView with its OWN projected edge_rest_angle:
         # the yield update must write that array (the model's alone never reaches the solver, which
-        # left every env sheet purely elastic), mirrored to the model's for refreshes and readers.
+        # left every env cloth purely elastic), mirrored to the model's for refreshes and readers.
         views = [e.view for e in getattr(NewtonManager._solver, "_entries", {}).values() if e.solver is cloth_solver]
         solver_rest = views[0].edge_rest_angle if views else None
         kappa_set = float(getattr(self, "_plastic_set_curvature", 0.0))
@@ -390,7 +391,7 @@ class ClothEnv(ClothTaskEnv):
         print(f"[cloth] plasticity: yield curvature {kappa:g} /m = {np.degrees(kappa * w.max()):.1f} deg per grid "
               f"cell, {np.degrees(kappa * w.min()):.1f} deg per diagonal, {int((world >= 0).sum())} hinges", flush=True)
 
-    # ------------------------------------------------------------------ fold.release.touch=contact
+    # ------------------------------------------------------------------ cloth.release.touch=contact
 
     def _cloth_contact_buffer(self):
         """``(contacts, entry)``: the hand-cloth contacts the cloth (VBD) entry steps on, and that
@@ -413,7 +414,7 @@ class ClothEnv(ClothTaskEnv):
 
     def hand_cloth_touching(self) -> torch.Tensor:
         """``(num_envs,)`` bool: any robot shape is in contact with the env's cloth this step
-        (``fold.release.touch=contact``). Reads the cloth solver's own contact records and evaluates
+        (``cloth.release.touch=contact``). Reads the cloth solver's own contact records and evaluates
         each one's gap as VBD's body-particle / edge / face contact does (``-penetration_depth``:
         ``n . (x - bx) - radius - shape_margin``, ``x`` the barycentric point over the record's
         particles, ``bx`` the body-side point at the current body pose); touching = gap <
@@ -436,9 +437,9 @@ class ClothEnv(ClothTaskEnv):
             sb = [int(l2g[b]) if (l2g is not None and b >= 0) else int(b) for b in sb_local]
             robot = [b >= 0 and re.search(r"/Robot/", str(labels[b])) is not None for b in sb]
             if not any(robot):
-                raise RuntimeError("fold.release.touch=contact: no robot shape found in the cloth view")
+                raise RuntimeError("cloth.release.touch=contact: no robot shape found in the cloth view")
             if int(view.particle_count) != int(model.particle_count):
-                raise RuntimeError("fold.release.touch=contact assumes the cloth view keeps the model's particle ids")
+                raise RuntimeError("cloth.release.touch=contact assumes the cloth view keeps the model's particle ids")
             margin = view.shape_margin
             margin = wp.to_torch(margin).float() if margin is not None and margin.shape[0] > 0 \
                 else torch.zeros(len(sb), device=dev)
@@ -450,7 +451,7 @@ class ClothEnv(ClothTaskEnv):
                 "radius": wp.to_torch(model.particle_radius).float(),
             }
             print(f"[cloth] release_touch=contact: {sum(robot)} robot shapes in the cloth view, gap < "
-                  f"{float(self.cfg.fold.release.touch_gap) * 1e3:.1f} mm counts as touching", flush=True)
+                  f"{float(self.cfg.cloth.release.touch_gap) * 1e3:.1f} mm counts as touching", flush=True)
         tc = self._touch_cache
         m = int(buf.soft_contact_max)
         count = wp.to_torch(buf.soft_contact_count).long()  # (1,), stays on device
@@ -478,7 +479,7 @@ class ClothEnv(ClothTaskEnv):
         gap = (normal * (x - bx)).sum(-1) - radius - tc["margin"][shape]
         self._touch_last_gap = gap  # diagnostics (cloth_touch_probe)
         self._touch_last_env = tc["world"][cc[:, 0]]
-        touch = ~(gap >= float(self.cfg.fold.release.touch_gap))  # NaN -> touching
+        touch = ~(gap >= float(self.cfg.cloth.release.touch_gap))  # NaN -> touching
         env = self._touch_last_env
         env = env[touch & (env >= 0) & (env < self.num_envs)]
         out[env] = True

@@ -1,4 +1,4 @@
-"""Config sections both cloth envs share; each backend's ``*_env_cfg.py`` adds sim + its sheet.
+"""Config sections both cloth envs share; each backend's ``*_env_cfg.py`` adds sim + its cloth.
 
 Section and key names follow Play's where the feature is the same (``action``, ``obs``, ``reward``,
 ``reset``, ``termination``, ``domain_randomization``, ``assets``), so an override means the same
@@ -11,17 +11,17 @@ from isaaclab.envs import DirectRLEnvCfg, ViewerCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils.configclass import configclass
 
-from . import robot as robot_spec
+from isaacsimenvs.tasks.cloth.utils.mdp import flexiv_wuji
 
 __all__ = [
-    "ActionCfg", "AssetsCfg", "ClothTaskEnvCfg", "DomainRandomizationCfg", "FoldCfg", "ObsCfg",
+    "ActionCfg", "AssetsCfg", "ClothEnvCfg", "DomainRandomizationCfg", "ClothCfg", "ObsCfg",
     "ReleaseCfg", "ResetCfg", "RewardCfg", "TerminationCfg",
 ]
 
 
 @configclass
 class AssetsCfg:
-    robot_urdf: str = robot_spec.URDF
+    robot_urdf: str = flexiv_wuji.URDF
     table_urdf: str = "assets/urdf/table_narrow.urdf"
     modify_asset_frictions: bool = True
     robot_friction: float = 0.5
@@ -43,7 +43,7 @@ class ActionCfg:
 
 @configclass
 class ObsCfg:
-    """Play's asymmetric layout (``obs_utils.FIELD_SIZES``): the actor sees ``obs_list``, the
+    """Play's asymmetric layout (``observations.FIELD_SIZES``): the actor sees ``obs_list``, the
     critic ``state_list``. Kept so Play-pretrained weights load."""
 
     state_list: tuple[str, ...] = (
@@ -66,13 +66,13 @@ class RewardCfg:
     reach_goal_bonus: float = 1000.0
     """Paid once, on the step the fold criterion is entered."""
     distance_delta_rew_scale: float = 50.0
-    """Fingertip approach: x the summed decrease of each pad's best distance to the sheet centre."""
+    """Fingertip approach: x the summed decrease of each pad's best distance to the cloth centre."""
     fingertip_distance_from_pad: bool = True
     kuka_actions_penalty_scale: float = 0.03
     """x the L1 arm joint velocity (Play's name; it is a velocity penalty)."""
     hand_actions_penalty_scale: float = 0.003
     object_base_size: float = 0.04
-    """``object_scales`` = sheet [length, width, thickness] / this."""
+    """``object_scales`` = cloth [length, width, thickness] / this."""
 
 
 @configclass
@@ -87,9 +87,9 @@ class ResetCfg:
     reset_position_noise_x: float = 0.1
     reset_position_noise_y: float = 0.1
     """Sheet centre noise U(+-noise) [m] around the table centre; the rigid env bounds it by the
-    table instead (``sheet.place_x/y``) and centres the sheet when both are 0."""
+    table instead (``rigid_cloth.place_x/y``) and centres the cloth when both are 0."""
     random_yaw: bool = True
-    """Start heading U[0, 2 pi); False starts every sheet at yaw 0."""
+    """Start heading U[0, 2 pi); False starts every cloth at yaw 0."""
 
 
 @configclass
@@ -99,9 +99,9 @@ class TerminationCfg:
     held_steps: int = 10
     """Steps it must hold for ``done_fold_held`` (reported, not rewarded)."""
     fall_height: float = 0.1
-    """The sheet centre below this [m above the env origin] = fell off the table."""
+    """The cloth centre below this [m above the env origin] = fell off the table."""
     hand_far_distance: float = 1.5
-    """Any fingertip farther than this from the sheet centre [m] ends the episode."""
+    """Any fingertip farther than this from the cloth centre [m] ends the episode."""
 
 
 @configclass
@@ -127,12 +127,12 @@ class ReleaseCfg:
 
     enabled: bool = False
     clearance: float = 0.03
-    """``touch=origin``: the hand counts as clear beyond this from every sheet point [m]."""
+    """``touch=origin``: the hand counts as clear beyond this from every cloth point [m]."""
     latch_steps: int = 3
     fold_tolerance: float = 0.0
     """> 0: a release only latches with fold error under this [m]."""
     touch: str = "origin"
-    """``origin`` (nearest hand body origin to any sheet point) | ``contact`` (Newton only: the
+    """``origin`` (nearest hand body origin to any cloth point) | ``contact`` (Newton only: the
     cloth solver's own contacts)."""
     touch_gap: float = 0.002
     contact_bodies: str = ""
@@ -149,8 +149,8 @@ class ReleaseCfg:
 
 
 @configclass
-class FoldCfg:
-    """The task: fold the +x half onto the -x half (crease along the sheet's y), or undo it."""
+class ClothCfg:
+    """The task: fold the +x half onto the -x half (crease along the cloth's y), or undo it."""
 
     task: str = "fold"
     """``fold`` | ``unfold`` (start folded, target flat) | ``mixed`` (each episode draws one)."""
@@ -164,7 +164,7 @@ class FoldCfg:
     unfold_start_deg: list[float] = [180.0, 180.0]
     """Unfold start: the + half turned up by U[lo, hi] deg."""
     unfold_on_table: bool = False
-    """Unfold success also needs the sheet flat on the table (``on_table_max_*``)."""
+    """Unfold success also needs the cloth flat on the table (``on_table_max_*``)."""
     on_table_max_spread: float = 0.015
     on_table_max_lift: float = 0.015
     nan_policy: str = "reset"
@@ -173,24 +173,33 @@ class FoldCfg:
 
     def check(self) -> None:
         if self.task not in ("fold", "unfold", "mixed"):
-            raise ValueError(f"fold.task must be fold, unfold or mixed, got {self.task!r}")
+            raise ValueError(f"cloth.task must be fold, unfold or mixed, got {self.task!r}")
         if self.nan_policy not in ("reset", "raise"):
-            raise ValueError(f"fold.nan_policy must be reset or raise, got {self.nan_policy!r}")
+            raise ValueError(f"cloth.nan_policy must be reset or raise, got {self.nan_policy!r}")
         if self.release.enabled and self.task != "fold":
-            raise ValueError("fold.release is defined for task=fold only")
+            raise ValueError("cloth.release is defined for task=fold only")
         if self.release.touch not in ("origin", "contact"):
-            raise ValueError(f"fold.release.touch must be origin or contact, got {self.release.touch!r}")
+            raise ValueError(f"cloth.release.touch must be origin or contact, got {self.release.touch!r}")
+        if self.task == "mixed" and not 0.0 < float(self.unfold_prob) < 1.0:
+            raise ValueError(f"cloth.unfold_prob must be in (0, 1) for task mixed, got {self.unfold_prob}")
+        lo, hi = (float(v) for v in self.unfold_start_deg)
+        if not 0.0 < lo <= hi <= 180.0:
+            raise ValueError(f"cloth.unfold_start_deg must be 0 < lo <= hi <= 180, got {[lo, hi]}")
+        if not 0.5 < float(self.min_unfolded_footprint) <= 1.0:
+            raise ValueError(f"cloth.min_unfolded_footprint must be in (0.5, 1], got {self.min_unfolded_footprint}")
+        if not (float(self.on_table_max_spread) > 0.0 and float(self.on_table_max_lift) > 0.0):
+            raise ValueError("cloth.on_table_max_spread / on_table_max_lift must be > 0")
 
 
 @configclass
-class ClothTaskEnvCfg(DirectRLEnvCfg):
+class ClothEnvCfg(DirectRLEnvCfg):
     """What both cloth envs share. Spaces are Play's for this robot (27 joints): 134 / 156."""
 
-    robot_root_pos: tuple[float, float, float] = robot_spec.ROOT_POS
+    robot_root_pos: tuple[float, float, float] = flexiv_wuji.ROOT_POS
     robot_self_collision: bool = True
     decimation: int = 2
     episode_length_s: float = 10.0
-    action_space: int = robot_spec.ROBOT.num_joints
+    action_space: int = flexiv_wuji.ROBOT.num_joints
     observation_space: int = 134
     state_space: int = 156
     viewer: ViewerCfg = ViewerCfg(eye=(0.5, -1.5, 1.2), lookat=(0.0, 0.4, 0.5), resolution=(640, 480))
@@ -204,4 +213,4 @@ class ClothTaskEnvCfg(DirectRLEnvCfg):
     reset: ResetCfg = ResetCfg()
     termination: TerminationCfg = TerminationCfg()
     domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg()
-    fold: FoldCfg = FoldCfg()
+    cloth: ClothCfg = ClothCfg()

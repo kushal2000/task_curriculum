@@ -144,7 +144,7 @@ def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10, robot_urdf: str
 
     inner = types.SimpleNamespace(
         cfg=types.SimpleNamespace(assets=types.SimpleNamespace(robot_urdf=robot_urdf)),
-        _sheet_geom=types.SimpleNamespace(resolution=resolution),
+        _cloth_grid=types.SimpleNamespace(resolution=resolution),
     )
     # `object.__new__` skips gym.Wrapper.__init__, which would need a real env. `_build_html`
     # touches only the attributes set below.

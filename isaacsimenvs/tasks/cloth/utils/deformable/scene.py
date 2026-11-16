@@ -1,10 +1,10 @@
-"""The Newton scene (Isaac Lab 3.0, kit-less): robot, table, ground, light, the VBD sheets, replication.
+"""The Newton scene (Isaac Lab 3.0, kit-less): robot, table, ground, light, the VBD cloths, replication.
 
 What the PhysX scene does, with four Newton specifics:
 
 * **no URDF converter** (it needs Kit): robot and table USDs are looked up in the content-addressed
   cache that a PhysX run filled (``newton/usd_cache.py``, same converter options, so the same
-  geometry on both backends), then baked as on PhysX (``scene_physx.bake_usd``);
+  geometry on both backends), then baked as on PhysX (``rigid_scene.bake_usd``);
 * **prototypes + the cloner**: robot and table are spawned into env 0 only and
   ``isaaclab.cloner.replicate`` builds every world from the plan -- Newton's importer ignores prims
   under ``/World/envs`` the plan does not name (``newton/patches.py``, "Multi-asset");
@@ -21,7 +21,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from . import scene_physx
+from isaacsimenvs.tasks.cloth.utils.rigid import scene as rigid_scene
 
 CLOTH = "Cloth"
 
@@ -32,7 +32,7 @@ def _log(t0: float, msg: str) -> None:
 
 def build(env, spec, rest_points: list, triangles: list[int]) -> None:
     """Spawn everything and replicate; sets ``env.robot``, ``env.table``, ``env._cloth``,
-    ``env._table_half_height``. ``rest_points``: the sheet's rest grid (local, z = 0)."""
+    ``env._table_half_height``. ``rest_points``: the cloth's rest grid (local, z = 0)."""
     import isaaclab.sim as sim_utils
     from isaaclab import cloner
     from isaaclab.assets import Articulation, DeformableObject, DeformableObjectCfg, RigidObject, RigidObjectCfg
@@ -53,30 +53,30 @@ def build(env, spec, rest_points: list, triangles: list[int]) -> None:
     # The cache keys on the converter options: exactly those the PhysX conversion used.
     sc = bool(env.cfg.robot_self_collision)
     robot_raw = usd_cache.lookup(a.robot_urdf, work, fix_base=True, self_collision=sc,
-                                 joint_drive=scene_physx.position_drive())
+                                 joint_drive=rigid_scene.position_drive())
     if sc:
-        scene_physx.apply_self_collision_filters(robot_raw, spec.self_collision_filter)
-    robot_usd = scene_physx.bake_usd(
+        rigid_scene.apply_self_collision_filters(robot_raw, spec.self_collision_filter)
+    robot_usd = rigid_scene.bake_usd(
         robot_raw, bake, "robot",
         rigid_body={"physxRigidBody:disableGravity": True, "physxRigidBody:maxDepenetrationVelocity": 1000.0},
         articulation={"physxArticulation:enabledSelfCollisions": sc,
                       "physxArticulation:solverPositionIterationCount": 8,
                       "physxArticulation:solverVelocityIterationCount": 0},
     )
-    table_usd = scene_physx.bake_usd(
+    table_usd = rigid_scene.bake_usd(
         usd_cache.lookup(a.table_urdf, work, fix_base=False), bake, "table",
         rigid_body={"physics:kinematicEnabled": True, "physxRigidBody:disableGravity": True},
         articulation={"physics:articulationEnabled": False},
     )
     env._robot_urdf_path, env._table_urdf_path = a.robot_urdf, a.table_urdf
-    env._table_half_height = 0.5 * scene_physx.urdf_box_size(a.table_urdf)[2]
+    env._table_half_height = 0.5 * rigid_scene.urdf_box_size(a.table_urdf)[2]
     _log(t0, "robot + table USDs from the cache, baked")
 
     stage = get_current_stage()
     for path in env.scene.env_prim_paths:
         if not stage.GetPrimAtPath(path).IsValid():
             stage.DefinePrim(path, "Xform")
-    robot_cfg = scene_physx.robot_cfg(robot_usd, spec, env.cfg.robot_root_pos, env.cfg.action.arm_effort_limit,
+    robot_cfg = rigid_scene.robot_cfg(robot_usd, spec, env.cfg.robot_root_pos, env.cfg.action.arm_effort_limit,
                                       rot=(0.0, 0.0, 0.0, 1.0))
     robot_cfg.spawn.spawn_path = "/World/envs/env_0/Robot"           # a prototype; the cloner replicates
     env.robot = Articulation(robot_cfg)
@@ -93,7 +93,7 @@ def build(env, spec, rest_points: list, triangles: list[int]) -> None:
         prim_path=f"/World/envs/env_.*/{CLOTH}", spawn=None,
         init_state=DeformableObjectCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0)),  # the height is in the points
     ))
-    _log(t0, f"robot, table and {n} sheets authored")
+    _log(t0, f"robot, table and {n} cloths authored")
 
     fixed, marked = patches.push_collision_api_to_meshes(stage)
     hulls = patches.author_convex_hull_approximation(stage)
@@ -121,10 +121,10 @@ def author_cloth(env, stage, rest_points: list, triangles: list[int]) -> None:
     """One ``UsdGeom.Mesh`` per env, bound to a physics material carrying the ``newton:*`` VBD
     parameters (``DeformableObject`` identifies it by ``newton:density``). The spawn height is baked
     into the POINTS: a transform on the prim composes with ``init_state.pos``, and ``init_state``
-    alone left the sheet on the ground."""
+    alone left the cloth on the ground."""
     from pxr import Sdf, UsdGeom, UsdShade
 
-    c = env.cfg.cloth
+    c = env.cfg.deformable_cloth
     z = float(env.cfg.reset.table_reset_z) + float(c.start_height)
     points = [(p[0], p[1], p[2] + z) for p in rest_points]
     params = (("newton:density", c.density), ("newton:particleRadius", c.particle_radius),
@@ -137,7 +137,7 @@ def author_cloth(env, stage, rest_points: list, triangles: list[int]) -> None:
         mesh.CreateFaceVertexIndicesAttr(list(triangles))
         mesh.CreateFaceVertexCountsAttr([3] * (len(triangles) // 3))
         mesh.CreateDisplayColorAttr([tuple(c.color)])
-        mesh.CreateDoubleSidedAttr(True)  # a folded sheet is seen from both sides
+        mesh.CreateDoubleSidedAttr(True)  # a folded cloth is seen from both sides
         mat_path = root.AppendChild("ClothMaterial")
         mat = UsdShade.Material.Define(stage, mat_path).GetPrim()
         for name, value in params:

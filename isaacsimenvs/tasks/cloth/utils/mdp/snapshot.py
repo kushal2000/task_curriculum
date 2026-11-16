@@ -1,6 +1,6 @@
 """The per-step snapshot the utils read, and the task's per-env buffers.
 
-``ClothState`` is the whole simulator-facing contract: each env's ``_read_state`` fills it (world
+``SimState`` is the whole simulator-facing contract: each env's ``_read_state`` fills it (world
 frame, quaternions wxyz, joints in Isaac Lab's order) and nothing in ``utils/`` reads the
 simulator otherwise. ``allocate`` puts the task buffers on the env; ``clear`` resets them per env.
 """
@@ -11,11 +11,11 @@ from dataclasses import dataclass
 
 import torch
 
-from . import geometry, quat
+from isaacsimenvs.tasks.cloth.utils.geometry import fold, rotations
 
 
 @dataclass
-class ClothState:
+class SimState:
     joint_pos: torch.Tensor          # (N, J) Lab order
     joint_vel: torch.Tensor          # (N, J)
     palm_pos_w: torch.Tensor         # (N, 3) palm BODY origin (the centre offset is the obs's)
@@ -24,43 +24,43 @@ class ClothState:
     fingertip_pos_w: torch.Tensor    # (N, 5, 3) fingertip BODY origins, policy order
     fingertip_quat_w: torch.Tensor   # (N, 5, 4) wxyz
     hand_pos_w: torch.Tensor         # (N, H, 3) origins of the release-test bodies
-    points_w: torch.Tensor           # (N, P, 3) sheet points (VBD particles / rigid plate grid)
+    points_w: torch.Tensor           # (N, P, 3) cloth points (VBD particles / rigid plate grid)
     points_vel_w: torch.Tensor       # (N, P, 3)
     table_top_z: torch.Tensor        # (N,) world z of the table's top surface
 
 
 @dataclass
 class TaskView:
-    """What the task derives from one ``ClothState``: computed once per hook, read by obs, reward
-    and termination alike (so they can never disagree about where the sheet is)."""
+    """What the task derives from one ``SimState``: computed once per hook, read by obs, reward
+    and termination alike (so they can never disagree about where the cloth is)."""
 
     frame_r: torch.Tensor        # (N, 3, 3) stationary half, rest -> current
     frame_c: torch.Tensor        # (N, 3) its centroid
-    pos_w: torch.Tensor          # (N, 3) sheet centre (all points)
+    pos_w: torch.Tensor          # (N, 3) cloth centre (all points)
     quat_w: torch.Tensor         # (N, 4) wxyz, the stationary half's orientation
     lin_vel_w: torch.Tensor      # (N, 3)
     ang_vel_w: torch.Tensor      # (N, 3)
-    keypoints_w: torch.Tensor    # (N, 4, 3) the tracked moving-half corners
+    corners_w: torch.Tensor    # (N, 4, 3) the tracked moving-half corners
     targets_w: torch.Tensor      # (N, 4, 3) where they belong
     fold_error: torch.Tensor     # (N,)
     footprint: torch.Tensor      # (N,)
     pads_w: torch.Tensor         # (N, 5, 3) fingertip pads (or body origins)
-    fingertip_dist: torch.Tensor  # (N, 5) pad -> sheet centre
+    fingertip_dist: torch.Tensor  # (N, 5) pad -> cloth centre
 
 
-def derive(env, s: ClothState) -> TaskView:
-    sheet = env._sheet_geom
-    r, c = geometry.stationary_frame(sheet, s.points_w)
-    pos, q, lin, ang = geometry.sheet_frame(s.points_w, s.points_vel_w, r)
-    kp = s.points_w[:, sheet.kp_idx]
-    targets = geometry.keypoint_targets(sheet, r, c, env._unfold_env)
+def derive(env, s: SimState) -> TaskView:
+    cg = env._cloth_grid
+    r, c = fold.stationary_frame(cg, s.points_w)
+    pos, q, lin, ang = fold.cloth_frame(s.points_w, s.points_vel_w, r)
+    kp = s.points_w[:, cg.corner_idx]
+    targets = fold.corner_targets(cg, r, c, env._unfold_env)
     pads = s.fingertip_pos_w
     if env.cfg.reward.fingertip_distance_from_pad:
-        pads = pads + quat.apply(s.fingertip_quat_w, env._fingertip_offsets.expand_as(pads))
+        pads = pads + rotations.apply(s.fingertip_quat_w, env._fingertip_offsets.expand_as(pads))
     return TaskView(
         frame_r=r, frame_c=c, pos_w=pos, quat_w=q, lin_vel_w=lin, ang_vel_w=ang,
-        keypoints_w=kp, targets_w=targets, fold_error=geometry.fold_error(kp, targets),
-        footprint=geometry.footprint_ratio(sheet, s.points_w, r),
+        corners_w=kp, targets_w=targets, fold_error=fold.fold_error(kp, targets),
+        footprint=fold.footprint_ratio(cg, s.points_w, r),
         pads_w=pads, fingertip_dist=(pads - pos.unsqueeze(1)).norm(dim=-1),
     )
 
@@ -76,7 +76,7 @@ def allocate(env) -> None:
     env._prev_targets = torch.zeros(n, j, **f32)
     env._action_queue = torch.zeros(n, max(1, int(dr.action_delay_max)), j, **f32)
     env._obs_queue = torch.zeros(n, max(1, int(dr.obs_delay_max)), int(cfg.observation_space), **f32)
-    # Sheet frame (pos 3, quat 4, lin 3, ang 3) + the 4 corners in that frame (12).
+    # Cloth frame (pos 3, quat 4, lin 3, ang 3) + the 4 corners in that frame (12).
     env._object_state_queue = torch.zeros(n, max(1, int(dr.object_state_delay_max)), 25, **f32)
 
     env._closest_fold_err = torch.full((n,), -1.0, **f32)       # -1 = not yet observed
@@ -88,10 +88,10 @@ def allocate(env) -> None:
     env._nonfinite_envs = torch.zeros(n, dtype=torch.bool, device=dev)
     env._nonfinite_count = 0
     env._insane_count = 0
-    env._unfold_env = torch.full((n,), cfg.fold.task == "unfold", dtype=torch.bool, device=dev)
+    env._unfold_env = torch.full((n,), cfg.cloth.task == "unfold", dtype=torch.bool, device=dev)
     env._table_z = torch.full((n,), float(cfg.reset.table_reset_z), **f32)
 
-    # fold.release (per episode)
+    # cloth.release (per episode)
     env._entry_paid = torch.zeros(n, dtype=torch.bool, device=dev)
     env._released = torch.zeros(n, dtype=torch.bool, device=dev)
     env._rel_streak = torch.zeros(n, dtype=torch.long, device=dev)

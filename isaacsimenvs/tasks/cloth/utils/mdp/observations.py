@@ -1,16 +1,16 @@
-"""Observations in Play's layout, computed from the sheet.
+"""Observations in Play's layout, computed from the cloth.
 
 The layout -- fields, order, sizes, joint order, normalisation, quaternion convention (xyzw), the
 env frame, the ``palm_pos`` base shift -- is Play's, so a Play-pretrained policy loads and its
-robot inputs mean what they meant. The object fields are the sheet's:
+robot inputs mean what they meant. The object fields are the cloth's:
 
 * ``object_rot``: the stationary half's orientation (its fitted rigid frame);
-* ``object_vel``: the sheet centre's linear velocity and the points' fitted angular velocity;
+* ``object_vel``: the cloth centre's linear velocity and the points' fitted angular velocity;
 * ``keypoints_rel_palm`` / ``keypoints_rel_goal``: the four tracked moving-half corners, minus the
   palm centre / minus each corner's fold target;
 * ``object_scales``: [length, width, thickness] / ``reward.object_base_size``.
 
-Object-state DR (Play's): the sheet frame AND the corners expressed in it go through one delay
+Object-state DR (Play's): the cloth frame AND the corners expressed in it go through one delay
 queue; the delayed frame gets position and rotation noise and the corners are rebuilt from it.
 """
 
@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import torch
 
-from . import quat
-from .action_utils import delayed
-from .state import ClothState, TaskView
+from isaacsimenvs.tasks.cloth.utils.geometry import rotations
+
+from .actions import delayed
+from .snapshot import SimState, TaskView
 
 NUM_FINGERTIPS = 5
 NUM_KEYPOINTS = 4
@@ -43,11 +44,11 @@ def stack(obs: dict[str, torch.Tensor], fields) -> torch.Tensor:
     return torch.cat([obs[f].reshape(obs[f].shape[0], -1) for f in fields], dim=-1)
 
 
-def palm_center_w(env, s: ClothState) -> torch.Tensor:
-    return s.palm_pos_w + quat.apply(s.palm_quat_w, env._palm_offset.expand_as(s.palm_pos_w))
+def palm_center_w(env, s: SimState) -> torch.Tensor:
+    return s.palm_pos_w + rotations.apply(s.palm_quat_w, env._palm_offset.expand_as(s.palm_pos_w))
 
 
-def build(env, s: ClothState, v: TaskView) -> dict[str, torch.Tensor]:
+def build(env, s: SimState, v: TaskView) -> dict[str, torch.Tensor]:
     """``{"policy": (N, obs dim), "critic": (N, state dim)}``, both clamped."""
     cfg, dr = env.cfg, env.cfg.domain_randomization
     n = env.num_envs
@@ -60,23 +61,23 @@ def build(env, s: ClothState, v: TaskView) -> dict[str, torch.Tensor]:
 
     palm = palm_center_w(env, s) - origins
     palm_obs = palm - env._palm_obs_shift  # as if the base were at Play's position
-    pads = s.fingertip_pos_w + quat.apply(s.fingertip_quat_w, env._fingertip_offsets.expand_as(s.fingertip_pos_w))
+    pads = s.fingertip_pos_w + rotations.apply(s.fingertip_quat_w, env._fingertip_offsets.expand_as(s.fingertip_pos_w))
     fingertip_rel_palm = pads - origins.unsqueeze(1) - palm.unsqueeze(1)
 
     pos = v.pos_w - origins
-    kp = v.keypoints_w - origins.unsqueeze(1)
+    kp = v.corners_w - origins.unsqueeze(1)
     targets = v.targets_w - origins.unsqueeze(1)
     vel = torch.cat([v.lin_vel_w, v.ang_vel_w], dim=-1)
 
     if dr.use_object_state_delay_noise:
-        kp_local = quat.apply(_conj(v.quat_w).unsqueeze(1), kp - pos.unsqueeze(1))  # (N, 4, 3)
+        kp_local = rotations.apply(_conj(v.quat_w).unsqueeze(1), kp - pos.unsqueeze(1))  # (N, 4, 3)
         packed = torch.cat([pos, v.quat_w, vel, kp_local.reshape(n, -1)], dim=-1)
         env._object_state_queue, d = delayed(env._object_state_queue, packed, env.episode_length_buf == 0)
         o_pos = d[:, 0:3] + torch.randn_like(d[:, 0:3]) * dr.object_state_xyz_noise_std
-        o_rot = quat.random_perturb(torch.nn.functional.normalize(d[:, 3:7], dim=-1),
+        o_rot = rotations.random_perturb(torch.nn.functional.normalize(d[:, 3:7], dim=-1),
                                     dr.object_state_rotation_noise_degrees)
         o_vel = d[:, 7:13]
-        o_kp = o_pos.unsqueeze(1) + quat.apply(o_rot.unsqueeze(1), d[:, 13:25].reshape(n, 4, 3))
+        o_kp = o_pos.unsqueeze(1) + rotations.apply(o_rot.unsqueeze(1), d[:, 13:25].reshape(n, 4, 3))
     else:
         o_rot, o_vel, o_kp = v.quat_w, vel, kp
 
@@ -85,9 +86,9 @@ def build(env, s: ClothState, v: TaskView) -> dict[str, torch.Tensor]:
         "joint_vel": joint_vel,
         "prev_action_targets": env._prev_targets[:, perm],
         "palm_pos": palm_obs,
-        "palm_rot": quat.to_xyzw(s.palm_quat_w),
+        "palm_rot": rotations.to_xyzw(s.palm_quat_w),
         "palm_vel": s.palm_vel_w,
-        "object_rot": quat.to_xyzw(v.quat_w),
+        "object_rot": rotations.to_xyzw(v.quat_w),
         "object_vel": vel,
         "fingertip_pos_rel_palm": fingertip_rel_palm,
         "keypoints_rel_palm": kp - palm.unsqueeze(1),
@@ -101,7 +102,7 @@ def build(env, s: ClothState, v: TaskView) -> dict[str, torch.Tensor]:
         "reward": (env.reward_buf * 0.01).unsqueeze(-1),
     }
     noisy = dict(clean)
-    noisy["object_rot"] = quat.to_xyzw(o_rot)
+    noisy["object_rot"] = rotations.to_xyzw(o_rot)
     noisy["object_vel"] = o_vel
     noisy["keypoints_rel_palm"] = o_kp - palm.unsqueeze(1)
     noisy["keypoints_rel_goal"] = o_kp - targets
@@ -123,10 +124,10 @@ def _conj(q: torch.Tensor) -> torch.Tensor:
     return q * torch.tensor([1.0, -1.0, -1.0, -1.0], device=q.device, dtype=q.dtype)
 
 
-def guard_finite(env, obs: dict[str, torch.Tensor], s: ClothState) -> None:
+def guard_finite(env, obs: dict[str, torch.Tensor], s: SimState) -> None:
     """Keep non-finite values out of the policy: name the most upstream bad quantity, zero the
     obs of those envs and flag them (``_get_dones`` terminates them next)."""
-    parts = {"sheet points": s.points_w, "joint_pos": s.joint_pos, "joint_vel": s.joint_vel,
+    parts = {"cloth points": s.points_w, "joint_pos": s.joint_pos, "joint_vel": s.joint_vel,
              "palm": s.palm_pos_w, "policy obs": obs["policy"], "critic obs": obs["critic"]}
     bad_any = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
     for name, t in parts.items():
@@ -136,7 +137,7 @@ def guard_finite(env, obs: dict[str, torch.Tensor], s: ClothState) -> None:
         ids = bad.nonzero(as_tuple=True)[0]
         msg = (f"cloth: non-finite {name} in envs {ids[:8].tolist()} ({ids.numel()}/{env.num_envs}) "
                f"at env-step {env.episode_length_buf[ids[:8]].tolist()}")
-        if env.cfg.fold.nan_policy == "raise":
+        if env.cfg.cloth.nan_policy == "raise":
             raise RuntimeError(msg)
         print(f"[cloth] {msg} -- resetting those envs", flush=True)
         bad_any |= bad

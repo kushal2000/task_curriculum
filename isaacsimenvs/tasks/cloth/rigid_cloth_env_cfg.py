@@ -1,7 +1,7 @@
-"""Config of the rigid-body cloth env (``rigid_body_env.RigidBodyClothEnv``), PhysX / Isaac Lab 2.3.
+"""Config of the rigid-body cloth env (``rigid_body_env.RigidClothEnv``), PhysX / Isaac Lab 2.3.
 
-The shared sections (``utils/cfg.ClothTaskEnvCfg``: robot, action, obs, reward, reset, termination,
-DR, the fold) + PhysX's ``sim`` + ``sheet``: the rigid sheets -- the design grid, plate / hinge
+The shared sections (``utils/cfg.ClothEnvCfg``: robot, action, obs, reward, reset, termination,
+DR, the fold) + PhysX's ``sim`` + ``cloth``: the rigid cloths -- the design grid, plate / hinge
 physics and their per-reset randomisation.
 """
 
@@ -10,20 +10,20 @@ from __future__ import annotations
 from isaaclab.sim import PhysxCfg, SimulationCfg
 from isaaclab.utils import configclass
 
-from isaacsimenvs.tasks.cloth.utils.cfg import AssetsCfg, ClothTaskEnvCfg
+from isaacsimenvs.tasks.cloth.cloth_env_cfg import AssetsCfg, ClothEnvCfg
 
-__all__ = ["RigidBodyClothEnvCfg", "SheetCfg", "SheetRandomizationCfg"]
+__all__ = ["RigidClothEnvCfg", "RigidClothCfg", "RigidClothRandomizationCfg"]
 
 
 @configclass
-class SheetRandomizationCfg:
-    """Material differences, re-drawn per env at EVERY reset (``utils/dr_utils.py``)."""
+class RigidClothRandomizationCfg:
+    """Material differences, re-drawn per env at EVERY reset (``utils/randomization.py``)."""
 
     enabled: bool = True
     hinge_damping_scale: list[float] = [0.5, 3.0]
-    """Log-uniform multiplier on ``sheet.hinge_damping``."""
+    """Log-uniform multiplier on ``rigid_cloth.hinge_damping``."""
     hinge_stiffness: list[float] = [0.0, 5.0e-4]
-    """Uniform hinge stiffness [N m / rad]: how strongly the sheet springs back toward flat."""
+    """Uniform hinge stiffness [N m / rad]: how strongly the cloth springs back toward flat."""
     sheet_friction_scale: list[float] = [0.7, 1.5]
     robot_friction_scale: list[float] = [0.7, 1.3]
     """On every robot shape's base friction (links and fingertips alike, so their ratio stays)."""
@@ -32,8 +32,8 @@ class SheetRandomizationCfg:
 
 
 @configclass
-class SheetCfg:
-    """The sheet designs and their rigid-body physics."""
+class RigidClothCfg:
+    """The cloth designs and their rigid-body physics."""
 
     design_levels: int = 16
     """Levels per dimension: ``design_levels**3`` designs, env ``i`` gets design ``perm[i % that]``.
@@ -47,7 +47,7 @@ class SheetCfg:
     point_resolution: int = 7
     """Grid of tracked points per side carried by the two plates (fold error, footprint, frame)."""
     density: float = 2.0
-    """Areal density [kg/m^2]: a sheet weighs ``density * area`` whatever its thickness."""
+    """Areal density [kg/m^2]: a cloth weighs ``density * area`` whatever its thickness."""
     friction: float = 1.0
     contact_offset: float = 0.002
     rest_offset: float = 0.0
@@ -64,10 +64,10 @@ class SheetCfg:
     """Plates' underside above the table at reset [m]."""
     place_x: list[float] = [-0.29, 0.29]
     place_y: list[float] = [-0.18, 0.19]
-    """Reset region (table frame) the yawed sheet's bounding box is kept inside, its centre uniform
+    """Reset region (table frame) the yawed cloth's bounding box is kept inside, its centre uniform
     over every position that allows; centred where it does not fit, and everywhere when both
     ``reset.reset_position_noise_x/y`` are 0 (the eval protocol)."""
-    randomization: SheetRandomizationCfg = SheetRandomizationCfg()
+    randomization: RigidClothRandomizationCfg = RigidClothRandomizationCfg()
 
 
 def _sim() -> SimulationCfg:
@@ -86,9 +86,9 @@ def _sim() -> SimulationCfg:
 
 
 @configclass
-class RigidBodyClothEnvCfg(ClothTaskEnvCfg):
-    """The fold task on a single-hinge rigid sheet, one design per env."""
+class RigidClothEnvCfg(ClothEnvCfg):
+    """The fold task on a single-hinge rigid cloth, one design per env."""
 
     sim: SimulationCfg = _sim()
     assets: AssetsCfg = AssetsCfg(table_urdf="assets/urdf/table_fold_pool.urdf")
-    sheet: SheetCfg = SheetCfg()
+    rigid_cloth: RigidClothCfg = RigidClothCfg()

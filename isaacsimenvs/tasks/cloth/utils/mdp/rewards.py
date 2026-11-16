@@ -1,12 +1,12 @@
 """The reward: fingertip approach + fold progress + the fold bonus + joint-velocity penalties.
 
-* ``fingertip_delta_rew``: each pad's best distance to the sheet centre so far this episode; pays
-  ``distance_delta_rew_scale`` x the summed improvement (clamped >= 0): find the sheet.
+* ``fingertip_delta_rew``: each pad's best distance to the cloth centre so far this episode; pays
+  ``distance_delta_rew_scale`` x the summed improvement (clamped >= 0): find the cloth.
 * ``keypoint_rew``: the same ratchet on the fold error (the success test's own quantity):
   ``keypoint_rew_scale`` x improvement on the best so far. Monotone and clamped, so oscillating
   cannot farm it and regressing costs nothing.
 * ``bonus_rew``: ``reach_goal_bonus`` on the step the fold is entered (``_bonus_mask``, set by
-  ``termination_utils.compute`` earlier in the same step); with ``fold.release`` the entry bonus,
+  ``terminations.compute`` earlier in the same step); with ``cloth.release`` the entry bonus,
   release and persist terms instead.
 * ``kuka_actions_penalty`` / ``hand_actions_penalty``: L1 joint velocity (Play's names).
 
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import torch
 
-from .state import ClothState, TaskView
+from .snapshot import SimState, TaskView
 
 #: The largest legitimate one-step reward is the bonus (1000) plus shaping of order 100.
 REWARD_SANITY_LIMIT = 1.0e4
@@ -44,8 +44,8 @@ def guard(env, reward: torch.Tensor) -> torch.Tensor:
     return torch.where(bad, torch.zeros_like(reward), reward)
 
 
-def compute(env, s: ClothState, v: TaskView) -> torch.Tensor:
-    rew, rel = env.cfg.reward, env.cfg.fold.release
+def compute(env, s: SimState, v: TaskView) -> torch.Tensor:
+    rew, rel = env.cfg.reward, env.cfg.cloth.release
 
     ft_gain, env._closest_fingertip_dist = ratchet(env._closest_fingertip_dist, v.fingertip_dist, 10.0)
     fingertip = rew.distance_delta_rew_scale * ft_gain.sum(dim=-1)

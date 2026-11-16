@@ -39,11 +39,11 @@ def solver_kwargs():
     from isaaclab_newton.physics.newton_manager import NewtonManager
     from newton.solvers import SolverVBD
 
-    from isaacsimenvs.tasks.cloth.deformable_env_cfg import ClothEnvCfg
+    from isaacsimenvs.tasks.cloth.deformable_cloth_env_cfg import DeformableClothEnvCfg
 
-    cfg = ClothEnvCfg()
+    cfg = DeformableClothEnvCfg()
     cfg.from_dict(yaml.safe_load(_YAML.read_text()))
-    physics = cfg.cloth.build_physics(cfg.newton, num_envs=32)
+    physics = cfg.deformable_cloth.build_physics(cfg.newton, num_envs=32)
 
     entry = next(e for e in physics.solver_cfg.entries if e.name == "cloth")
     return {
@@ -51,7 +51,7 @@ def solver_kwargs():
         "model_cfg": physics.solver_cfg.model_cfg,
         "substeps": entry.substeps,
         "signature": set(inspect.signature(SolverVBD.__init__).parameters),
-        "cloth": cfg.cloth,
+        "cloth": cfg.deformable_cloth,
     }
 
 
@@ -118,10 +118,9 @@ def test_thickness_and_resolution_stay_on_the_guard_boundary(solver_kwargs):
     assert c.resolution <= c.max_resolution_for_thickness
 
 
-def test_yaml_numbers_are_numbers():
+@pytest.mark.parametrize("preset", sorted((_YAML.parents[1] / "fabric").glob("*.yaml")), ids=lambda p: p.stem)
+def test_fabric_numbers_are_numbers(preset):
     """YAML 1.1 parses `1.0e2` as a STRING -- the exponent needs a sign. Caught this in review."""
-    block = yaml.safe_load(_YAML.read_text())["cloth"]
+    block = yaml.safe_load(preset.read_text())["cloth"]
     for key, value in block.items():
-        if key in ("proxy_mode",):
-            continue
-        assert not isinstance(value, str), f"cloth.{key} = {value!r} parsed as str, not a number"
+        assert not isinstance(value, str), f"{preset.name}: cloth.{key} = {value!r} parsed as str, not a number"

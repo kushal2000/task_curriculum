@@ -1,12 +1,12 @@
 """Success and episode ends.
 
 **Success** (``is_folded``) is two independent conditions: every tracked corner within
-``fold.keypoint_tolerance`` of its target, AND the extent along the sheet's own fold axis halved
+``cloth.keypoint_tolerance`` of its target, AND the extent along the cloth's own fold axis halved
 (fold: below ``max_folded_footprint`` of the length; unfold: back above ``min_unfolded_footprint``).
-Keypoints alone pass a dragged, crumpled sheet; the footprint alone passes a crumple.
+Keypoints alone pass a dragged, crumpled cloth; the footprint alone passes a crumple.
 
-**Ends**: the fold entered (``termination.success_steps`` in a row) -- or, with ``fold.release``,
-the fold persisted with the hand clear -- the sheet off the table, a fingertip too far, a
+**Ends**: the fold entered (``termination.success_steps`` in a row) -- or, with ``cloth.release``,
+the fold persisted with the hand clear -- the cloth off the table, a fingertip too far, a
 non-finite state, or the time limit. Each env's reason is in ``env._termination_reasons`` (logged
 as ``done_<reason>``).
 """
@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import torch
 
-from . import geometry
-from .state import ClothState, TaskView
+from isaacsimenvs.tasks.cloth.utils.geometry import fold
+
+from .snapshot import SimState, TaskView
 
 
-def is_folded(env, s: ClothState, v: TaskView) -> torch.Tensor:
-    f = env.cfg.fold
+def is_folded(env, s: SimState, v: TaskView) -> torch.Tensor:
+    f = env.cfg.cloth
     unfold = env._unfold_env
     footprint_ok = torch.where(unfold, v.footprint > f.min_unfolded_footprint, v.footprint < f.max_folded_footprint)
     ok = (v.fold_error < f.keypoint_tolerance) & footprint_ok
@@ -29,23 +30,23 @@ def is_folded(env, s: ClothState, v: TaskView) -> torch.Tensor:
     return ok
 
 
-def on_table(env, s: ClothState) -> torch.Tensor:
-    f = env.cfg.fold
-    spread, lift = geometry.flat_on_table(s.points_w, s.table_top_z)
+def on_table(env, s: SimState) -> torch.Tensor:
+    f = env.cfg.cloth
+    spread, lift = fold.flat_on_table(s.points_w, s.table_top_z)
     return (spread < f.on_table_max_spread) & (lift < f.on_table_max_lift)
 
 
-def hand_sheet_distance(s: ClothState) -> torch.Tensor:
-    """Nearest hand body origin to any sheet point [m]; a non-finite env reads as touching."""
+def hand_sheet_distance(s: SimState) -> torch.Tensor:
+    """Nearest hand body origin to any cloth point [m]; a non-finite env reads as touching."""
     d = torch.cdist(s.hand_pos_w.float(), s.points_w.float()).amin(dim=(1, 2))
     return torch.nan_to_num(d, nan=0.0)
 
 
-def update_release(env, s: ClothState, v: TaskView, folded: torch.Tensor, entered: torch.Tensor) -> torch.Tensor:
-    """``fold.release``: advance the release / persist state; returns the success mask (the fold
+def update_release(env, s: SimState, v: TaskView, folded: torch.Tensor, entered: torch.Tensor) -> torch.Tensor:
+    """``cloth.release``: advance the release / persist state; returns the success mask (the fold
     held ``persist_window_steps`` with the hand clear). The fold must be ENTERED first (its bonus
-    is paid once), so a hand that never touched the sheet releases nothing."""
-    c = env.cfg.fold.release
+    is paid once), so a hand that never touched the cloth releases nothing."""
+    c = env.cfg.cloth.release
     env._bonus_mask.copy_(entered & ~env._entry_paid)
     env._entry_paid |= entered
 
@@ -84,7 +85,7 @@ def update_release(env, s: ClothState, v: TaskView, folded: torch.Tensor, entere
     return env._persist_done.clone()
 
 
-def compute(env, s: ClothState, v: TaskView) -> tuple[torch.Tensor, torch.Tensor]:
+def compute(env, s: SimState, v: TaskView) -> tuple[torch.Tensor, torch.Tensor]:
     """``(terminated, truncated)``; sets ``_bonus_mask`` for this step's reward."""
     cfg = env.cfg
     folded = is_folded(env, s, v)
@@ -92,7 +93,7 @@ def compute(env, s: ClothState, v: TaskView) -> tuple[torch.Tensor, torch.Tensor
     entered = env._fold_hold >= cfg.termination.success_steps
     held = env._fold_hold >= cfg.termination.held_steps
 
-    release = cfg.fold.release.enabled
+    release = cfg.cloth.release.enabled
     if release:
         success = update_release(env, s, v, folded, entered)
     else:
@@ -108,7 +109,7 @@ def compute(env, s: ClothState, v: TaskView) -> tuple[torch.Tensor, torch.Tensor
 
     reasons = {"fold": entered, "fold_held": held, "fall": fall, "hand_far": hand_far,
                "nonfinite": nonfinite, "timeout": truncated}
-    if cfg.fold.task != "fold":
+    if cfg.cloth.task != "fold":
         u = env._unfold_env
         reasons["on_table"] = entered & on_table(env, s)
         reasons["task_unfold"] = u.clone()
@@ -119,6 +120,6 @@ def compute(env, s: ClothState, v: TaskView) -> tuple[torch.Tensor, torch.Tensor
         reasons["released"] = env._released.clone()
         reasons["persist"] = env._persist_done.clone()
         reasons["persist_fail"] = env._persist_fail.clone()
-        end = env._persist_done | (env._persist_fail if cfg.fold.release.persist_fail_terminates else torch.zeros_like(fall))
+        end = env._persist_done | (env._persist_fail if cfg.cloth.release.persist_fail_terminates else torch.zeros_like(fall))
     env._termination_reasons = reasons
     return fall | hand_far | nonfinite | end, truncated

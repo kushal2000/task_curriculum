@@ -1,8 +1,8 @@
-"""Config of the deformable (VBD) cloth env on Newton (``deformable_env.ClothEnv``), Isaac Lab 3.
+"""Config of the deformable (VBD) cloth env on Newton (``deformable_env.DeformableClothEnv``), Isaac Lab 3.
 
-The shared sections (``utils/cfg.ClothTaskEnvCfg``: robot, action, obs, reward, reset, termination,
+The shared sections (``utils/cfg.ClothEnvCfg``: robot, action, obs, reward, reset, termination,
 DR, the fold) + ``newton`` (MJWarp for the robot, Newton's model / solver settings) + ``cloth``: the
-VBD sheet and the coupled MJWarp + VBD solve. Real-fabric presets: ``utils/fabrics.py``.
+VBD cloth and the coupled MJWarp + VBD solve. Real-fabric presets: ``utils/fabrics.py``.
 """
 
 from __future__ import annotations
@@ -16,10 +16,10 @@ compat.install_isaaclab3_compat()
 from isaaclab.sim import SimulationCfg  # noqa: E402
 from isaaclab.utils.configclass import configclass  # noqa: E402
 
-from isaacsimenvs.tasks.cloth.utils.cfg import ClothTaskEnvCfg  # noqa: E402
-from isaacsimenvs.tasks.cloth.utils.robot import ROBOT  # noqa: E402
+from isaacsimenvs.tasks.cloth.cloth_env_cfg import ClothEnvCfg  # noqa: E402
+from isaacsimenvs.tasks.cloth.utils.mdp.flexiv_wuji import ROBOT  # noqa: E402
 
-__all__ = ["ClothCfg", "ClothEnvCfg", "NewtonSolverCfg"]
+__all__ = ["DeformableClothCfg", "DeformableClothEnvCfg", "NewtonSolverCfg"]
 
 
 @configclass
@@ -168,24 +168,24 @@ class NewtonSolverCfg:
 
 
 @configclass
-class ClothCfg:
-    """The VBD sheet: geometry, material, plasticity, and the coupled MJWarp + VBD solve."""
+class DeformableClothCfg:
+    """The VBD cloth: geometry, material, plasticity, and the coupled MJWarp + VBD solve."""
 
     # --- geometry -------------------------------------------------------------------------
     size: float = 0.10
-    """Side length of the square sheet [m]."""
+    """Side length of the square cloth [m]."""
 
     thickness: float = 0.016
     """Cloth thickness [m], as ``2 * particle_radius``.
 
     **A VBD cloth is a surface: thickness IS the particle collision radius**, there is no
     volumetric dimension. That makes it bounded by grid spacing -- particles closer together than
-    their diameter self-collide at rest and the sheet crumples before anything touches it. The
+    their diameter self-collide at rest and the cloth crumples before anything touches it. The
     constraint is ``thickness <= size / (resolution - 1)``, checked in ``__post_init__``.
 
     Thicker is genuinely better for *contact*: the cable was ungraspable at 10 mm and liftable at
     30 mm, and thin geometry tunnels through fingers. But it is worse for *folding*, which needs
-    bending. And 30 mm on a 100 mm sheet forces a 4x4 grid (spacing 33 mm), which is a stiff mat
+    bending. And 30 mm on a 100 mm cloth forces a 4x4 grid (spacing 33 mm), which is a stiff mat
     rather than cloth -- genuine 30 mm material is a volumetric soft body (``add_soft_mesh``, a
     tet mesh), not a cloth.
 
@@ -201,7 +201,7 @@ class ClothCfg:
     and ``resolution`` are the first pair to revert."""
 
     resolution: int = 7
-    """Particles per side, so the sheet is ``resolution**2`` particles and
+    """Particles per side, so the cloth is ``resolution**2`` particles and
     ``2*(resolution-1)**2`` triangles. 7 gives 49 particles / 72 triangles.
 
     **Driven by ``thickness``, not chosen independently.** 16 mm particles cannot sit on a grid
@@ -209,7 +209,7 @@ class ClothCfg:
     forces this down from 9 (81 particles / 128 triangles). The fold geometry survives the change
     unchanged -- ``corner_indices`` still returns the four far-half corners at the same
     coordinates, ``folded_targets`` is identical, and the odd resolution keeps a hinge row -- but
-    the sheet is meaningfully coarser, and a 72-triangle sheet is close to the floor at which
+    the cloth is meaningfully coarser, and a 72-triangle cloth is close to the floor at which
     "cloth" stops being a useful description."""
 
     start_height: float = 0.30
@@ -217,22 +217,22 @@ class ClothCfg:
 
     **The table's collision surface is at ``table_reset_z + 0.150``, not + 0.045.** See
     ``table_half_thickness``. Everything below is measured with zero actions, so the robot never
-    approaches the sheet and anything it does is spawn behaviour:
+    approaches the cloth and anything it does is spawn behaviour:
 
         0.150  -> spawn 0.5300, surface 0.5298: in contact. EJECTED upward at ~1.7 m/s, peaks at
                   0.68 by step 10, falls back, settles by step 30 with a 17 mm spread across a
-                  12 mm sheet -- i.e. visibly wrinkled.
+                  12 mm cloth -- i.e. visibly wrinkled.
         0.300  -> spawn 0.6800, a genuine 15 cm drop. Falls at exactly g (predicted 0.0340 m over
                   the first 5 steps, measured 0.0349), lands at 0.5360 and settles PERFECTLY flat
                   (min = mean = max to four decimals).
 
     An earlier version of this docstring reported 0.150 as "settles dead flat", which was wrong: it
     was read after settling and never checked the spread. Every episode was therefore starting with
-    the sheet thrown into the air and landing creased, and that was mis-attributed in turn to
+    the cloth thrown into the air and landing creased, and that was mis-attributed in turn to
     thickness, to grid resolution, and to cloth physics.
 
     Values below the surface are worse still, and were correctly diagnosed at the time: at 0.010 the
-    sheet starts inside the table and reaches 51 m by step 80."""
+    cloth starts inside the table and reaches 51 m by step 80."""
 
     # --- material -------------------------------------------------------------------------
     density: float = 2.0
@@ -241,7 +241,7 @@ class ClothCfg:
     This reaches ``ModelBuilder.add_cloth_mesh(density=...)`` unchanged (via the ``newton:density``
     USD attribute, read in ``isaaclab_contrib.deformable.deformable_object``), and Newton documents
     that argument as "the density per-area of the mesh". The old 100.0 was written as though it
-    were volumetric: it made the 0.1 x 0.1 m sheet weigh **1 kg**, a handkerchief with the mass of
+    were volumetric: it made the 0.1 x 0.1 m cloth weigh **1 kg**, a handkerchief with the mass of
     a litre of water, and it disagreed by 83x with the ``area_density = density * thickness``
     that ``cloth_env`` computes for the ``ClothAsRigidObject`` mass proxy.
 
@@ -255,8 +255,8 @@ class ClothCfg:
 
     This was 1.0e4. The justification was the cable, where softening stretch was catastrophic
     (x0.01 peaked at 94.9 m/s) -- but a cable is a 1-D chain whose only in-plane mode IS stretch,
-    and the sheet has an area term (``tri_ka``) carrying load the cable had no analogue for. The
-    cable result is not evidence about a membrane. If the sheet oscillates or blows up, this is the
+    and the cloth has an area term (``tri_ka``) carrying load the cable had no analogue for. The
+    cable result is not evidence about a membrane. If the cloth oscillates or blows up, this is the
     first suspect and 1.0e3 is the obvious intermediate."""
     tri_ka: float = 1.0e2
     """In-plane shear/area stiffness -- the Lame ``lambda`` (area modulus). SIM1 Table 2.
@@ -292,7 +292,7 @@ class ClothCfg:
 
     A hinge bent past ``kappa x hinge width`` (16.7 mm along the grid, 11.8 mm on the diagonals)
     keeps the excess as a new rest angle, so a pressed fold stays folded instead of springing back
-    (``utils/plasticity.py``, after Narain et al. 2013). Reset to flat with the sheet.
+    (``utils/plasticity.py``, after Narain et al. 2013). Reset to flat with the cloth.
     It is a mesh-level parameter: in the scripted fold-press-release test
     (``scripts/analysis/cloth_plasticity_probe.py``) 100 (95 deg per grid cell) holds a pressed
     towel or cotton fold without changing the free drape; napkin and denim need 50, chiffon and silk 25."""
@@ -319,8 +319,8 @@ class ClothCfg:
     **This directly contradicts a cable measurement**: on the cable there was a sharp optimum at 2,
     with 1 peaking at 37 m/s and 4/8/16 degrading monotonically, on the theory that fewer, larger
     substeps mean fewer proxy exchanges per step and the exchange is where the energy enters. That
-    was never re-measured for the sheet, and the cloth is a different solver entry, but it is a
-    direct conflict and not a gap -- if the sheet gains energy at reset or under contact, revert
+    was never re-measured for the cloth, and the cloth is a different solver entry, but it is a
+    direct conflict and not a gap -- if the cloth gains energy at reset or under contact, revert
     this first.
 
     Costs 3x the VBD work per policy step, on top of the iteration increase."""
@@ -356,9 +356,9 @@ class ClothCfg:
 
     **10 is a COUPLING floor, not a cloth-physics one.** Newton's standalone cloth examples run 4-10
     (example_cloth_franka.py uses 5, example_cloth_twist.py 4), and iterations here serve two jobs at
-    once: converging the sheet's internal dynamics, and resolving contact against the rigid proxy.
+    once: converging the cloth's internal dynamics, and resolving contact against the rigid proxy.
     What degrades at 5 is only the second -- the hand stops gripping, footprint stays near 1.0, the
-    sheet is untouched rather than unstable -- so the extra iterations are buying contact, not cloth.
+    cloth is untouched rather than unstable -- so the extra iterations are buying contact, not cloth.
 
     A previous version of this note proposed `SolverVBD(rigid_contact_history=True)` as the targeted
     fix, and recorded it as tried-and-reverted because contact warm-starting packs contact ids into
@@ -366,7 +366,7 @@ class ClothCfg:
     7,962,624 triangle pairs at 32 envs. **That blocker is real but it was aimed at the wrong
     lever.** In Newton 1.5 `rigid_contact_history` is body-BODY only -- it drives
     `snapshot_body_body_contact_history` and never touches body-particle contacts, so it could not
-    have helped the sheet's grip even if it had fit.
+    have helped the cloth's grip even if it had fit.
 
     The knob that does reach cloth-vs-hand contact is `rigid_avbd_beta`; see that field."""
     coupler_iterations: int = 1
@@ -416,7 +416,7 @@ class ClothCfg:
     ``soft_contact_mu`` for cloth-on-table, which left ply-on-ply as the LOWEST friction in the
     scene (big napkin 0.265 against 0.36 table, 0.63 fingertips), so a pressed fold slid apart.
 
-    When > 0: ``model.soft_contact_mu`` becomes this value and ``ClothEnv`` rescales every
+    When > 0: ``model.soft_contact_mu`` becomes this value and ``DeformableClothEnv`` rescales every
     shape's friction IN THE CLOTH SOLVER'S VIEW ONLY by ``soft_contact_mu / self_contact_mu``, so
     each cloth-vs-shape coefficient stays ``sqrt(soft_contact_mu * shape_mu)``. The rigid solver
     (robot vs table) keeps the original shape frictions."""
@@ -466,7 +466,7 @@ class ClothCfg:
 
     # --- self-contact ---------------------------------------------------------------------
     enable_self_contact: bool = True
-    """Whether the sheet collides with ITSELF.
+    """Whether the cloth collides with ITSELF.
 
     NEW FIELD, and the largest behavioural change in this config. `VBDSolverCfg` defaults
     `particle_enable_self_contact` to False and `build_physics` never set it, so until now the
@@ -481,7 +481,7 @@ class ClothCfg:
     `collision_radius` alone.
 
     So copying SIM1's number does not reproduce SIM1's behaviour on our geometry. Their cloth is a
-    scanned garment with ~mm triangles, where 2 mm is comparable to the mesh scale; our sheet is
+    scanned garment with ~mm triangles, where 2 mm is comparable to the mesh scale; our cloth is
     16 mm thick on a 16.7 mm grid, so a folded flap will settle 2 mm above the layer beneath it
     rather than ~16 mm -- the two layers visually interpenetrate by most of their thickness.
 
@@ -505,7 +505,7 @@ class ClothCfg:
     Newton 1.5 defaults this to 0.85; 0.42 was the default in the Newton 0.1.3 that SIM1 forked, so
     their Table 2 row is arguably just that default restated. Kept anyway -- it is the value their
     calibration ran against, and a tighter bound truncates more aggressively, which is the safe
-    direction on a sheet that has never had self-contact enabled before.
+    direction on a cloth that has never had self-contact enabled before.
 
     Only has any effect when `enable_self_contact` is True."""
 
@@ -515,7 +515,7 @@ class ClothCfg:
     against the rigid baseline is not worth reintroducing."""
 
     proxy_table: bool = True
-    """The table must be in the proxy set or the sheet falls through it."""
+    """The table must be in the proxy set or the cloth falls through it."""
 
     full_surface_contact: bool = False
     """Cloth EDGES and TRIANGLE INTERIORS collide with the proxy shapes, not only its particles.
@@ -526,7 +526,7 @@ class ClothCfg:
     lets a fingertip push the particle under it aside and reach the table between particles.
 
     Every participating mesh shape (hand proxy links, a mesh table) needs a volume SDF, which
-    ``ClothEnv`` provisions before finalize (``shape_force_sdf``). Rigid-rigid contacts run in
+    ``DeformableClothEnv`` provisions before finalize (``shape_force_sdf``). Rigid-rigid contacts run in
     Newton's pipeline too (``use_mujoco_contacts: false``), so those SDFs can change hand-table
     contact as well. Off by default, so earlier results keep their meaning."""
 
@@ -536,7 +536,7 @@ class ClothCfg:
     def proxy_body_patterns(self, robot_spec=None) -> list[str]:
         """Body-path regexes of the rigid shapes the cloth feels (the proxy set).
 
-        ``robot_spec`` names the hand bodies (``utils/robot.py``'s robot when omitted).
+        ``robot_spec`` names the hand bodies (``utils/mdp/flexiv_wuji.py``'s robot when omitted).
         """
         robot_spec = robot_spec or ROBOT
         robot = r"/World/envs/env_.*/Robot/"
@@ -575,7 +575,7 @@ class ClothCfg:
 
     Raised from 512 after a 32-env run overflowed twice. That run then died with
     ``normal expects all elements of std >= 0.0`` from the policy's sampler -- dropped contacts let
-    a sheet penetrate, which produced NaN in that env's observation. The policy error was the
+    a cloth penetrate, which produced NaN in that env's observation. The policy error was the
     symptom; the overflow was the cause, and it is worth remembering that this class of failure
     surfaces far from its origin."""
 
@@ -601,7 +601,7 @@ class ClothCfg:
         """Warn when particle DIAMETER exceeds grid spacing. No longer an error.
 
         **The original premise was wrong.** This raised on `thickness > spacing`, on the grounds
-        that closer particles "self-collide at rest and the sheet crumples before anything
+        that closer particles "self-collide at rest and the cloth crumples before anything
         touches it". They cannot: self-collision is driven by `self_contact_radius` via
         `evaluate_self_contact_force_norm`, and `particle_radius` appears in exactly three
         kernels, all of them body-contact. The two never meet.
@@ -618,7 +618,7 @@ class ClothCfg:
         Kept as a WARNING because the ratio is still worth knowing: a diameter far above spacing
         means neighbouring particles present overlapping collision spheres to a finger, which
         changes grip in ways nobody here has measured. But it is not a correctness constraint, and
-        as an error it forced this task from a 9x9 sheet to 7x7 for no reason.
+        as an error it forced this task from a 9x9 cloth to 7x7 for no reason.
         """
         if self.thickness > self.spacing + 1e-9:
             import warnings
@@ -640,11 +640,11 @@ class ClothCfg:
         """``NewtonCfg`` for the coupled MJWarp (robot) + VBD (cloth) scene.
 
         The one structural difference from the cable: the VBD entry owns **particles**, not bodies.
-        A cloth is a particle system, so ``all_particles=True`` is what assigns the sheet to the
+        A cloth is a particle system, so ``all_particles=True`` is what assigns the cloth to the
         deformable solver -- a body selector would match nothing and the cloth would be integrated
-        by nobody, presenting as a sheet frozen in mid-air.
+        by nobody, presenting as a cloth frozen in mid-air.
 
-        ``robot_spec`` names the hand bodies the cloth couples to (``utils/robot.py``'s robot).
+        ``robot_spec`` names the hand bodies the cloth couples to (``utils/mdp/flexiv_wuji.py``'s robot).
         """
         from isaaclab_contrib.coupling import (
             CouplerEntryCfg,
@@ -763,7 +763,7 @@ class ClothCfg:
                 # because this call only passed `ke` and `mu`.
                 soft_contact_kd=self.soft_contact_kd,
                 # Self-contact reads this raw; cloth-vs-shape pairs are rescaled in the cloth view
-                # (`deformable_env.ClothEnv._install_cloth_friction`) so they keep using `soft_contact_mu`.
+                # (`deformable_env.DeformableClothEnv._install_cloth_friction`) so they keep using `soft_contact_mu`.
                 soft_contact_mu=self.self_contact_mu if self.self_contact_mu > 0.0 else self.soft_contact_mu,
             ),
         )
@@ -781,10 +781,10 @@ class ClothCfg:
         )
 
     def triangle_pair_budget(self, newton_cfg, num_envs: int) -> int:
-        """Global triangle-pair budget for this sheet at ``num_envs``.
+        """Global triangle-pair budget for this cloth at ``num_envs``.
 
         Scales with particle count as well as env count. The cable overflowed a correctly
-        env-scaled 4.19M as soon as its segment count doubled, and a sheet has far more triangles
+        env-scaled 4.19M as soon as its segment count doubled, and a cloth has far more triangles
         than a cable -- so geometry has to be in this product, not just ``num_envs``.
         """
         base = newton_cfg.resolve_max_triangle_pairs(num_envs)
@@ -793,12 +793,12 @@ class ClothCfg:
 
 
 @configclass
-class ClothEnvCfg(ClothTaskEnvCfg):
-    """Fold a VBD cloth sheet with the Flexiv + right Wuji, on a coupled MJWarp + VBD solve."""
+class DeformableClothEnvCfg(ClothEnvCfg):
+    """Fold a VBD cloth cloth with the Flexiv + right Wuji, on a coupled MJWarp + VBD solve."""
 
     sim: SimulationCfg = SimulationCfg(dt=1.0 / 120.0, render_interval=2, gravity=(0.0, 0.0, -9.81))
-    """``sim.physics`` is set at construction from ``newton`` + ``cloth`` (``ClothCfg.build_physics``)."""
+    """``sim.physics`` is set at construction from ``newton`` + ``cloth`` (``DeformableClothCfg.build_physics``)."""
     newton: NewtonSolverCfg = NewtonSolverCfg()
     use_gravcomp: bool = True
     """The robot's gravity-free bodies as MuJoCo gravity compensation (global gravity stays -9.81)."""
-    cloth: ClothCfg = ClothCfg()
+    deformable_cloth: DeformableClothCfg = DeformableClothCfg()

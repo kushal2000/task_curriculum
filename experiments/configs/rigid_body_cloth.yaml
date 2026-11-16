@@ -1,11 +1,11 @@
-# Rigid2Deform: fold a rigid single-hinge sheet, Flexiv Rizon 4s + right Wuji Hand 2 (identified
+# Rigid2Deform: fold a rigid cloth (two plates, one hinge), Flexiv Rizon 4s + right Wuji Hand 2 (identified
 # hand), SimToolReal's DR, from scratch.
 #
-# Every env carries one of 4096 sheet designs (16 lengths x 16 widths, 10-30 cm, x 16 thicknesses,
+# Every env carries one of 4096 rigid-cloth designs (16 lengths x 16 widths, 10-30 cm, x 16 thicknesses,
 # 2-20 mm): env i -> design i % 4096, so each of the 6 SAPG blocks of 4096 envs holds every design
 # once. The task is fold only (start flat, + half onto -); the uniform start yaw also covers
 # "vertical" folds. Material differences are re-drawn per env at EVERY reset: hinge damping and
-# stiffness, plate / robot / table friction (sheet.randomization in cfg/task/RigidBodyCloth.yaml).
+# stiffness, plate / robot / table friction (rigid_cloth.randomization, tasks/cloth/rigid_cloth_env_cfg.py).
 #
 #   experiments/submit.sh --time=7-00:00:00 experiments/train.sh \
 #       --task Isaacsimenvs-RigidBodyCloth-Direct-v0 --experiment rigid_body_cloth \
@@ -15,7 +15,7 @@
 # agent.params.config.expl_coef_block_size=2048; each block of 2048 then holds half the designs.
 #
 # Variants are command-line overrides, not more files:
-#   no sheet DR:          env.sheet.randomization.enabled=false
+#   no cloth DR:          env.rigid_cloth.randomization.enabled=false
 #   no DR at all:         --pinned
 task: Isaacsimenvs-RigidBodyCloth-Direct-v0
 
@@ -23,7 +23,7 @@ env:
   scene:
     num_envs: 24576
 
-  # Contact frictions: plates 1.0 (sheet.friction), robot 0.5, table 0.5 -- the table what the
+  # Contact frictions: plates 1.0 (rigid_cloth.friction), robot 0.5, table 0.5 -- the table what the
   # pre-rewrite env actually applied (Play's material pass gave it robot_friction) and what the
   # measured fabric presets were fit against (Cloth.yaml table_friction 0.5).
   assets:

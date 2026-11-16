@@ -12,16 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from isaacsimenvs.tasks.play.robots import KUKA_SHARPA, ROBOT_SPECS
+from isaacsimenvs.tasks.cloth.utils.mdp.flexiv_wuji import ROBOT
 
 REPO = Path(__file__).resolve().parents[4]
-URDFS = {
-    "kuka_sharpa": "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf",
-    "flexiv_wuji_right_human_like": "assets/urdf/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
-    "flexiv_wuji_right_real": "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
-}
-#: Every selectable robot; a new one without a URDF entry above fails here rather than going unchecked.
-SPECS = list(ROBOT_SPECS.values())
+URDFS = {ROBOT.name: "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"}
+SPECS = [ROBOT]
 
 
 def _bodies(spec) -> set[str]:
@@ -49,28 +44,12 @@ def test_finger_segments_are_the_finger_bodies(spec):
 
 @pytest.mark.parametrize("spec", SPECS, ids=lambda s: s.name)
 def test_cloth_proxies_follow_the_robot(spec):
-    from isaacsimenvs.tasks.cloth.deformable_env_cfg import ClothEnvCfg
+    from isaacsimenvs.tasks.cloth.deformable_cloth_env_cfg import DeformableClothEnvCfg
 
-    cfg = ClothEnvCfg()
-    physics = cfg.cloth.build_physics(cfg.newton, 32, spec)
+    cfg = DeformableClothEnvCfg()
+    physics = cfg.deformable_cloth.build_physics(cfg.newton, 32, spec)
     proxy = [re.compile(b) for p in physics.solver_cfg.proxies for b in p.bodies]
     matched = {b for b in _bodies(spec) if any(p.fullmatch(f"/World/envs/env_7/Robot/{b}") for p in proxy)}
     fingers = re.compile(spec.finger_links_regex("distal", "middle", "proximal"))
     expected = {b for b in _bodies(spec) if fingers.fullmatch(b)} | {spec.palm_body_name, *spec.palm_side_link_names}
     assert matched == expected
-
-
-def test_kuka_proxies_unchanged():
-    """The Kuka's proxy patterns are the ones written out before the spec carried them."""
-    from isaacsimenvs.tasks.cloth.deformable_env_cfg import ClothEnvCfg
-
-    cfg = ClothEnvCfg()
-    physics = cfg.cloth.build_physics(cfg.newton, 32)
-    proxy = [re.compile(b) for p in physics.solver_cfg.proxies for b in p.bodies]
-    old = [
-        re.compile(r"/World/envs/env_.*/Robot/left_(thumb|index|middle|ring|pinky)_(DP|MP|PP)"),
-        re.compile(r"/World/envs/env_.*/Robot/(iiwa14_link_7|left_thumb_MC|left_pinky_MC)"),
-    ]
-    for b in _bodies(KUKA_SHARPA):
-        path = f"/World/envs/env_7/Robot/{b}"
-        assert any(p.fullmatch(path) for p in proxy) == any(p.fullmatch(path) for p in old), b

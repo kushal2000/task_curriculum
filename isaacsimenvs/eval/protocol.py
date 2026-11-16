@@ -17,7 +17,7 @@ def disable_randomization(cfg) -> None:
     random wrench impulses all inject variance that has nothing to do with the backend under
     test, which is the comparison this measurement exists to support.
     """
-    if hasattr(cfg, "fold"):  # the cloth envs (tasks/cloth/utils/cfg.py)
+    if hasattr(cfg, "cloth"):  # the cloth envs (tasks/cloth/cloth_env_cfg.py)
         _disable_cloth_randomization(cfg)
         return
     dr = cfg.domain_randomization
@@ -78,8 +78,8 @@ def _disable_cloth_randomization(cfg) -> None:
     rs.reset_dof_vel_random_interval = 0.0
     rs.table_reset_z_range = 0.0
     rs.random_yaw = False
-    if hasattr(cfg, "sheet"):
-        cfg.sheet.randomization.enabled = False
+    if hasattr(cfg, "rigid_cloth"):
+        cfg.rigid_cloth.randomization.enabled = False
 
 
 #: Set when :func:`use_single_object_variant` has been requested, so a backend that patches

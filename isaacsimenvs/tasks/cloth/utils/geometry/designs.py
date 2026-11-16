@@ -1,4 +1,4 @@
-"""Rigid-body sheet designs: the size grid, and the plates + hinges that approximate one sheet.
+"""Rigid-body cloth designs: the size grid, and the plates + hinges that approximate one cloth.
 
 Generation 0 is one hinge at the horizontal fold line: two boxes (each length/2 x width x
 thickness), the -x one the articulation root, a revolute joint along -y ON THE TOP SURFACE
@@ -47,7 +47,7 @@ def design_of(env_ids, n_designs: int, seed: int = 0) -> np.ndarray:
 
 @dataclass(frozen=True)
 class Box:
-    """A rigid plate: a box with its centre and half extents in the sheet frame at rest."""
+    """A rigid plate: a box with its centre and half extents in the cloth frame at rest."""
 
     name: str
     center: tuple[float, float, float]
@@ -56,7 +56,7 @@ class Box:
 
 @dataclass(frozen=True)
 class Hinge:
-    """Revolute joint ``parent -> child``: a line through ``anchor`` along unit ``axis`` (sheet
+    """Revolute joint ``parent -> child``: a line through ``anchor`` along unit ``axis`` (cloth
     frame at rest); positive angle rotates the child about ``axis`` (right hand)."""
 
     parent: str
@@ -68,7 +68,7 @@ class Hinge:
 
 @dataclass(frozen=True)
 class SheetSpec:
-    """Plates (the first is the articulation root) and the hinges of one sheet."""
+    """Plates (the first is the articulation root) and the hinges of one cloth."""
 
     length: float
     width: float
@@ -86,7 +86,7 @@ class SheetSpec:
 
 
 def single_hinge(length: float, width: float, thickness: float) -> SheetSpec:
-    """The sheet as two plates and one hinge at the horizontal fold line (module docstring)."""
+    """The cloth as two plates and one hinge at the horizontal fold line (module docstring)."""
     if min(length, width, thickness) <= 0.0:
         raise ValueError(f"dimensions must be positive, got {(length, width, thickness)}")
     q, hw, ht = length / 4.0, width / 2.0, thickness / 2.0
@@ -105,7 +105,7 @@ def single_hinge(length: float, width: float, thickness: float) -> SheetSpec:
 
 def box_mass_properties(box: Box, density: float) -> tuple[float, np.ndarray, np.ndarray]:
     """``(mass, centre of mass, principal inertia diagonal about the COM)`` of a uniform box.
-    ``density`` is per AREA [kg/m^2] (as ``ClothCfg.density``), so a sheet weighs what the cloth
+    ``density`` is per AREA [kg/m^2] (as ``ClothCfg.density``), so a cloth weighs what the cloth
     weighs whatever its thickness."""
     a, b, c = (2.0 * h for h in box.half_extents)
     m = density * a * b
@@ -122,7 +122,7 @@ def _rot(axis, theta: float) -> np.ndarray:
 
 def hinge_transform(hinge: Hinge, angle: float) -> tuple[np.ndarray, np.ndarray]:
     """``(R, t)`` taking a child point at rest to its position with the hinge at ``angle`` [rad],
-    both in the parent's (= sheet) frame: ``p' = R p + t``."""
+    both in the parent's (= cloth) frame: ``p' = R p + t``."""
     r = _rot(hinge.axis, angle)
     a = np.asarray(hinge.anchor, dtype=float)
     return r, a - r @ a

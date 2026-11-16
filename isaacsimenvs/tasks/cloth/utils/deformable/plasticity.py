@@ -1,7 +1,7 @@
-"""Bending plasticity for a VBD sheet: a fold that goes past the yield point stays partly folded.
+"""Bending plasticity for a VBD cloth: a fold that goes past the yield point stays partly folded.
 
 ``BendingPlasticity`` updates Newton's per-edge rest angles after every VBD substep (yield-curvature
-rule, optional two-stage set gate); ``deformable_env.ClothEnv`` installs it into the coupled
+rule, optional two-stage set gate); ``deformable_env.DeformableClothEnv`` installs it into the coupled
 solver's cloth entry and resets it per env.
 """
 
@@ -90,8 +90,8 @@ class BendingPlasticity:
     """Yield-curvature plasticity on ``model.edge_rest_angle``.
 
     ``yield_curvature`` [1/m]: scalar, or one value per edge. ``inf`` disables yielding (the
-    elastic sheet, unchanged). Call :meth:`apply` after every solver step with the new state, and
-    :meth:`reset` (all edges, or the ids of some) when a sheet is put back flat.
+    elastic cloth, unchanged). Call :meth:`apply` after every solver step with the new state, and
+    :meth:`reset` (all edges, or the ids of some) when a cloth is put back flat.
     """
 
     def __init__(self, model, yield_curvature, rest_q=None, solver_rest_angle=None, set_curvature=0.0) -> None:

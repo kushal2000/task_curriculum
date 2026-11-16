@@ -1,32 +1,21 @@
 # Deformable cloth, Flexiv Rizon 4s + right Wuji Hand 2 (identified hand), SimToolReal's DR.
 #
-# The VBD sheet on Newton (Cloth.yaml: 10 cm sheet, 768 envs), where rigid-cloth policies are
-# evaluated or fine-tuned. The robot is the identified hand (FlexivWujiRightReal: sysid dynamics, the
-# real joint limits). Self-contained: no base: chain.
+# The VBD cloth on Newton (Cloth.yaml: 10 cm, 768 envs), where rigid-cloth policies are evaluated or
+# fine-tuned. Self-contained: no base: chain.
 #
 #   experiments/submit.sh --time=2-00:00:00 experiments/train.sh \
-#       --task Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0 \
+#       --task Isaacsimenvs-Cloth-Direct-v0 \
 #       --experiment deformable_cloth_flexiv_wuji_full_dr \
 #       --checkpoint <rigid-cloth run>/nn/<name>.pth --checkpoint_load_mode weights \
-#       --single_variant agent.params.config.name=0_<run name>
+#       agent.params.config.name=0_<run name>
 #
-# Task: fold (the default). The VBD sheet has no mixed mode -- that is the PhysX pool's and chain's
-# only -- so an unfold run is the override env.cloth.task=unfold.
-#
-# DR: SimToolReal's Play DR (below). Of the extra DR, the hand friction / effort-limit ranges are
-# PhysX-only (reset_utils needs root_physx_view) and the fabric is a fixed preset.
+# Task: fold (the default); an unfold run is the override env.cloth.task=unfold (no mixed on VBD).
+# The fabric is a fixed preset (tasks/cloth/utils/deformable/fabrics.py).
 #
 # More DR is a command-line override, not another file:
-#   camera-like object lags: env.domain_randomization.point_dr_mode=realistic
-#                         env.domain_randomization.use_object_state_delay_noise=false
-#                         (point lag/noise knobs: domain_randomization.point_* in play_env_cfg.py)
-#   robot physics:        env.domain_randomization.robot_stiffness_scale_range=[0.7,1.3]
-#                         env.domain_randomization.robot_damping_scale_range=[0.7,1.3]
-#                         env.domain_randomization.hand_friction_scale_range=[0.7,1.3]
-#                         env.domain_randomization.hand_effort_limit_scale_range=[0.85,1.15]
 #   action noise:         env.domain_randomization.action_noise_std=0.05
 #   no DR at all:         --pinned
-task: Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0
+task: Isaacsimenvs-Cloth-Direct-v0
 
 env:
   domain_randomization:
@@ -41,12 +30,7 @@ env:
     object_state_xyz_noise_std: 0.01     # m
     object_state_rotation_noise_degrees: 5.0
     joint_velocity_obs_noise_std: 0.1
-    point_dr_mode: "off"                 # the point-level camera model: an override (header)
     # Robot physics: not randomized (1.0 = the robot spec's value).
-    robot_stiffness_scale_range: [1.0, 1.0]
-    robot_damping_scale_range: [1.0, 1.0]
-    hand_friction_scale_range: [1.0, 1.0]
-    hand_effort_limit_scale_range: [1.0, 1.0]
 
 agent:
   params:

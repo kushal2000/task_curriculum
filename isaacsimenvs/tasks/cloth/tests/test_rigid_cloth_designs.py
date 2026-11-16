@@ -1,4 +1,4 @@
-"""The rigid-sheet design grid and the single-hinge sheet: what the env builds and the fold targets assume."""
+"""The rigid-cloth design grid and the single-hinge plates: what the env builds and the fold targets assume."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 
-from isaacsimenvs.tasks.cloth.utils import sheet_designs as sd
+from isaacsimenvs.tasks.cloth.utils.geometry import designs as sd
 
 
 def test_the_grid_is_4096_distinct_designs_spanning_the_ranges():

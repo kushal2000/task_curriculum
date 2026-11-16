@@ -34,7 +34,7 @@ def load(name: str) -> dict:
 
 
 def cloth_params(name: str, plastic: bool = False) -> dict[str, float]:
-    """``{ClothCfg field: value}``; with ``plastic`` also ``plastic_yield_curvature``."""
+    """``{DeformableClothCfg field: value}``; with ``plastic`` also ``plastic_yield_curvature``."""
     d = load(name)
     out = {k: float(v) for k, v in d["cloth"].items()}
     if plastic:

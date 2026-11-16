@@ -3,9 +3,9 @@
     .venv/isaaclab3/bin/python experiments/nov16_cloth_from_scratch/probe_vbd.py --num_envs 8 [hydra overrides]
 
 1. builds, resets, obs 134 / critic 156, finite;
-2. zero actions for 120 steps: every sheet lands flat on its table (lowest particle within 2 cm of
+2. zero actions for 120 steps: every cloth lands flat on its table (lowest particle within 2 cm of
    the table top, height spread < 1.5 cm) and is NOT folded (the negative control);
-3. a teleported perfect fold (``geometry.folded_start`` at 180 deg) left to settle 360 physics steps keeps
+3. a teleported perfect fold (``grid.folded_start`` at 180 deg) left to settle 360 physics steps keeps
    ``fold_error`` small (measured ~2 mm before the rewrite) and passes ``is_folded``;
    envs a fingertip came within 3 cm of are skipped and counted; then one task step on it
    terminates with ``done_fold``.
@@ -31,7 +31,7 @@ import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
 
 import isaacsimenvs  # noqa: E402,F401
-from isaacsimenvs.tasks.cloth.utils import geometry  # noqa: E402
+from isaacsimenvs.tasks.cloth.utils.geometry import fold, grid  # noqa: E402
 from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml  # noqa: E402
 
 TASK = "Isaacsimenvs-Cloth-Direct-v0"
@@ -65,21 +65,21 @@ def run(env_cfg, agent_cfg) -> None:
         obs, *_ = env.step(zero)
         near = torch.minimum(near, hand_gap())
     s = e._read_state()
-    spread, lift = geometry.flat_on_table(s.points_w, s.table_top_z)
+    spread, lift = fold.flat_on_table(s.points_w, s.table_top_z)
     free = near > 0.03
-    print(f"[probe] {int((~free).sum())}/{n} envs had a fingertip within 3 cm of the sheet: skipped", flush=True)
+    print(f"[probe] {int((~free).sum())}/{n} envs had a fingertip within 3 cm of the cloth: skipped", flush=True)
     print(f"[probe] flat: spread {spread.min():.4f}-{spread.max():.4f} m, lift {lift.min():.4f}-{lift.max():.4f} m", flush=True)
-    check(bool((lift[free].abs() < 0.02).all()), f"sheets on their tables (lowest particle {float(lift[free].abs().max()) * 1e3:.1f} mm from the top)")
-    check(bool((spread[free] < 0.015).all()), f"sheets flat (spread max {float(spread[free].max()) * 1e3:.1f} mm)")
-    check(not bool(e.is_folded()[free].any()), "no flat sheet counts as folded")
+    check(bool((lift[free].abs() < 0.02).all()), f"cloths on their tables (lowest particle {float(lift[free].abs().max()) * 1e3:.1f} mm from the top)")
+    check(bool((spread[free] < 0.015).all()), f"cloths flat (spread max {float(spread[free].max()) * 1e3:.1f} mm)")
+    check(not bool(e.is_folded()[free].any()), "no flat cloth counts as folded")
     check(bool(torch.isfinite(obs["policy"]).all()), "obs finite after 120 steps")
 
-    # 3. teleport a perfect fold onto each sheet where it lies, and let it settle
+    # 3. teleport a perfect fold onto each cloth where it lies, and let it settle
     s = e._read_state()
     ids = torch.arange(n, device=dev)
-    sheet = e._sheet_geom
-    r, c = geometry.stationary_frame(sheet, s.points_w)
-    folded = geometry.carry(sheet, geometry.folded_start(sheet, torch.full((n,), math.pi, device=dev)), r, c)
+    cloth = e._cloth_grid
+    r, c = fold.stationary_frame(cloth, s.points_w)
+    folded = fold.carry(cloth, grid.folded_start(cloth, torch.full((n,), math.pi, device=dev)), r, c)
     e._cloth.write_nodal_pos_to_sim_index(folded, ids)
     e._cloth.write_nodal_velocity_to_sim_index(torch.zeros_like(folded), ids)
     err0 = e.fold_error()

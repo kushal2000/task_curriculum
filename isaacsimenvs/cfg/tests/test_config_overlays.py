@@ -54,9 +54,14 @@ CASES = [
         [PLAY_CFG], id="PlayFlexivWujiRightHumanLike",
     ),
     pytest.param(
-        "isaacsimenvs/cfg/task/RigidBodyCloth.yaml", "RigidBodyClothEnvCfg",
-        ["isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py", "isaacsimenvs/tasks/cloth/utils/cfg.py"],
+        "isaacsimenvs/cfg/task/RigidBodyCloth.yaml", "RigidClothEnvCfg",
+        ["isaacsimenvs/tasks/cloth/rigid_cloth_env_cfg.py", "isaacsimenvs/tasks/cloth/cloth_env_cfg.py"],
         id="RigidBodyCloth",
+    ),
+    pytest.param(
+        "isaacsimenvs/cfg/task/Cloth.yaml", "DeformableClothEnvCfg",
+        ["isaacsimenvs/tasks/cloth/deformable_cloth_env_cfg.py", "isaacsimenvs/tasks/cloth/cloth_env_cfg.py"],
+        id="Cloth",
     ),
 ]
 
@@ -142,19 +147,19 @@ EXPERIMENT_DIR = REPO_ROOT / "experiments/configs"
 EXPERIMENT_TASKS = {
     # The deformable (VBD) sheet on Newton.
     "Isaacsimenvs-Cloth-Direct-v0": (
-        "ClothEnvCfg",
+        "DeformableClothEnvCfg",
         [
-            "isaacsimenvs/tasks/cloth/deformable_env_cfg.py",
-            "isaacsimenvs/tasks/cloth/utils/cfg.py",
+            "isaacsimenvs/tasks/cloth/deformable_cloth_env_cfg.py",
+            "isaacsimenvs/tasks/cloth/cloth_env_cfg.py",
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
     ),
-    # Rigid2Deform: the single-hinge rigid sheet on PhysX (tasks/cloth/rigid_body_env.py).
+    # Rigid2Deform: the single-hinge rigid sheet on PhysX (tasks/cloth/rigid_cloth_env.py).
     "Isaacsimenvs-RigidBodyCloth-Direct-v0": (
-        "RigidBodyClothEnvCfg",
+        "RigidClothEnvCfg",
         [
-            "isaacsimenvs/tasks/cloth/rigid_body_env_cfg.py",
-            "isaacsimenvs/tasks/cloth/utils/cfg.py",
+            "isaacsimenvs/tasks/cloth/rigid_cloth_env_cfg.py",
+            "isaacsimenvs/tasks/cloth/cloth_env_cfg.py",
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
     ),

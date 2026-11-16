@@ -1,8 +1,8 @@
-"""The PhysX scene (Isaac Sim 5.1 / Isaac Lab 2.3): robot, table, ground, light, and the rigid sheets.
+"""The PhysX scene (Isaac Sim 5.1 / Isaac Lab 2.3): robot, table, ground, light, and the rigid cloths.
 
 Robot and table go URDF -> USD (Isaac Lab's converter) -> a baked copy with the PhysX properties
 authored (Play's recipe: contact offset 2 mm / rest 0 on every collider; the robot gravity-free,
-8/0 solver iterations, self-collision on with the spec's filtered pairs). The sheets are authored
+8/0 solver iterations, self-collision on with the spec's filtered pairs). The cloths are authored
 straight into the stage: a template in a private in-memory stage, ``Sdf.CopySpec``-ed into every env
 inside one ``Sdf.ChangeBlock``, each env given its design's dimensions -- one articulation spans all
 envs (every env has the same prim structure).
@@ -19,9 +19,9 @@ from pathlib import Path
 
 import torch
 
-from . import sheet_designs
+from isaacsimenvs.tasks.cloth.utils.geometry import designs
 
-SHEET = "Sheet"
+RIGID_CLOTH = "RigidCloth"
 PLATES = ("minus", "plus")      # body names; "minus" is the articulation root
 HINGE = "hinge"
 
@@ -224,7 +224,7 @@ def build_robot_and_table(env, spec) -> None:
     _log(t0, "robot + table spawned")
 
 
-# ------------------------------------------------------------------ the sheets
+# ------------------------------------------------------------------ the cloths
 
 
 def _apply_physx_api(prim, schema: str, attrs: dict) -> None:
@@ -234,17 +234,17 @@ def _apply_physx_api(prim, schema: str, attrs: dict) -> None:
         prim.CreateAttribute(name, vtype).Set(value)
 
 
-def author_sheets(num_envs: int, dims, sheet_cfg, spawn_z) -> None:
-    """Every env's two-plate, one-hinge sheet (``dims (N, 3)`` numpy; ``spawn_z(i)`` its root's
+def author_rigid_cloths(num_envs: int, dims, cloth_cfg, spawn_z) -> None:
+    """Every env's two-plate, one-hinge cloth (``dims (N, 3)`` numpy; ``spawn_z(i)`` its root's
     env-frame height). The ~60 schema edits of the template go into a private in-memory stage --
     written into the scene's stage under Kit they took 78 s at 6144 envs."""
     from isaaclab.sim.utils import get_current_stage
     from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, Vt
 
-    s = sheet_cfg
+    s = cloth_cfg
     layer = get_current_stage().GetRootLayer()
     stage = Usd.Stage.CreateInMemory()
-    tpl = f"/{SHEET}"
+    tpl = f"/{RIGID_CLOTH}"
     dbl = UsdGeom.XformOp.PrecisionDouble
     UsdGeom.Xform.Define(stage, tpl).AddTranslateOp(precision=dbl)
     colors = {"minus": (0.29, 0.56, 0.76), "plus": (0.95, 0.68, 0.22)}
@@ -302,14 +302,14 @@ def author_sheets(num_envs: int, dims, sheet_cfg, spawn_z) -> None:
 
     with Sdf.ChangeBlock():
         for i in range(num_envs):
-            root = f"/World/envs/env_{i}/{SHEET}"
+            root = f"/World/envs/env_{i}/{RIGID_CLOTH}"
             Sdf.CreatePrimInLayer(layer, f"/World/envs/env_{i}")
             if not Sdf.CopySpec(src, tpl, layer, root):
                 raise RuntimeError(f"Sdf.CopySpec {tpl} -> {root} failed")
-            spec = sheet_designs.single_hinge(*(float(v) for v in dims[i]))
+            spec = designs.single_hinge(*(float(v) for v in dims[i]))
             put(f"{root}.xformOp:translate", Gf.Vec3d(0.0, 0.0, float(spawn_z(i))))
             for box in spec.plates:
-                m, com, inertia = sheet_designs.box_mass_properties(box, float(s.density))
+                m, com, inertia = designs.box_mass_properties(box, float(s.density))
                 put(f"{root}/{box.name}.physics:mass", float(m))
                 put(f"{root}/{box.name}.physics:centerOfMass", Gf.Vec3f(*map(float, com)))
                 put(f"{root}/{box.name}.physics:diagonalInertia", Gf.Vec3f(*map(float, inertia)))
@@ -320,17 +320,17 @@ def author_sheets(num_envs: int, dims, sheet_cfg, spawn_z) -> None:
             put(f"{root}/{HINGE}.physics:localPos1", anchor)
 
 
-def sheet_articulation(sheet_cfg, spawn_z0: float):
+def rigid_cloth_articulation(cloth_cfg, spawn_z0: float):
     from isaaclab.actuators import ImplicitActuatorCfg
     from isaaclab.assets import Articulation, ArticulationCfg
 
-    s, rd = sheet_cfg, sheet_cfg.randomization
+    s, rd = cloth_cfg, cloth_cfg.randomization
     stiffness = float(s.hinge_stiffness)
     # The position gain must exist to be written per reset: a negligible one when DR draws it.
     if rd.enabled and float(rd.hinge_stiffness[1]) > 0.0 and stiffness == 0.0:
         stiffness = 1.0e-9
     return Articulation(ArticulationCfg(
-        prim_path=f"/World/envs/env_.*/{SHEET}",
+        prim_path=f"/World/envs/env_.*/{RIGID_CLOTH}",
         spawn=None,
         init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.0, float(spawn_z0))),
         actuators={HINGE: ImplicitActuatorCfg(

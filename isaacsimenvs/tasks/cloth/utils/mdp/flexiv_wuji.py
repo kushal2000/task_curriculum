@@ -5,7 +5,7 @@ there) so the cloth package stands alone. Stdlib only. Field names match Play's 
 which the Newton helpers (``newton/patches.author_drive_gains`` etc.) read by attribute.
 
 The policy-facing joint order (``joint_names_canonical``) and the fingertip order are what the Play
-prior was trained on; ``tests/test_cloth_robot.py`` pins both.
+prior was trained on; ``tests/test_cloth_utils.py`` pins both.
 """
 
 from __future__ import annotations

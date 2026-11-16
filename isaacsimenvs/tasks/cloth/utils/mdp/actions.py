@@ -1,6 +1,6 @@
 """Play's action map, unchanged in meaning (the Play prior's actions must mean the same here).
 
-The policy acts in the canonical joint order (arm first, ``robot.joint_names_canonical``), in
+The policy acts in the canonical joint order (arm first, ``flexiv_wuji.ROBOT.joint_names_canonical``), in
 [-1, 1]: the arm as a joint-target VELOCITY (``prev + dof_speed_scale * dt * a``), the hand as
 ABSOLUTE targets over its limits, both through an EMA and clamped. Optional per-step action delay.
 """
