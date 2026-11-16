@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-_YAML = Path(__file__).resolve().parents[4] / "isaacsimenvs" / "cfg" / "task" / "Cloth.yaml"
+_YAML = Path(__file__).resolve().parents[4] / "isaacsimenvs" / "scripts" / "configs" / "task" / "Cloth.yaml"
 
 
 @pytest.fixture(scope="module")
@@ -39,7 +39,7 @@ def solver_kwargs():
     from isaaclab_newton.physics.newton_manager import NewtonManager
     from newton.solvers import SolverVBD
 
-    from isaacsimenvs.tasks.cloth.deformable_cloth_env_cfg import DeformableClothEnvCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.config import DeformableClothEnvCfg
 
     cfg = DeformableClothEnvCfg()
     cfg.from_dict(yaml.safe_load(_YAML.read_text()))
@@ -106,12 +106,11 @@ def test_cloth_substeps_reach_the_coupler_entry(solver_kwargs):
     assert solver_kwargs["substeps"] == 6
 
 
-def test_thickness_and_resolution_stay_on_the_guard_boundary(solver_kwargs):
-    """16 mm particles need >= 16.7 mm spacing; resolution 7 is the finest grid that admits it.
+def test_default_particle_diameter_does_not_exceed_grid_spacing(solver_kwargs):
+    """The shipped preset keeps rigid-contact sphere diameter within grid spacing.
 
-    These two are one decision, and the guard only runs in `__post_init__` -- it does NOT re-run
-    after the YAML overlay is applied. So a YAML that raised `resolution` without lowering
-    `thickness` would produce a sheet that self-collides at rest, with no error.
+    This is a cloth-rigid contact geometry choice, not a self-collision constraint:
+    self-contact uses its own radius and larger particle diameters only warn.
     """
     c = solver_kwargs["cloth"]
     assert c.thickness <= c.spacing + 1e-9

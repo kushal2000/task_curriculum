@@ -665,11 +665,11 @@ and the damping that acts is an Isaac Lab actuator gain outside the cache key.
 
 ```bash
 # once: bake all five chains (plus the tool pool) in a single Kit start
-OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.newton.usd_cache \
+OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.scripts.assets.prepare_usd_cache \
     --populate --rigid_cloth_variants
 
 # then, per variant
-.venv/isaaclab3/bin/python scripts/training/train.py \
+.venv/isaaclab3/bin/python isaacsimenvs/scripts/training/train.py \
     --task Isaacsimenvs-RigidCloth-Direct-v0 \
     --agent rl_games_sapg_cfg_entry_point --headless \
     env.rigid_cloth.variant=box3-mid env.scene.num_envs=768

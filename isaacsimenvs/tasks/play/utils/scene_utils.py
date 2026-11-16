@@ -211,7 +211,7 @@ def _diagnose_target_expr(expr: str) -> None:
     counts. If they disagree, the worker will error with
     "1 mesh prim vs N physics prims" and this print pinpoints which target.
     """
-    from pxr import Usd, UsdPhysics
+    from pxr import UsdPhysics
     from isaaclab.sim.utils import find_matching_prims, find_first_matching_prim
 
     try:
@@ -652,7 +652,6 @@ def _draw_depth_sticks(
     max_len = max(1, int(cfg.depth_aug_stick_max_len_px))
     max_w = max(1, int(cfg.depth_aug_stick_max_width_px))
     w_half_max = max_w // 2
-    K = 2 * w_half_max + 1  # kernel side, matches the old `out[..., y±w_half, x±w_half]` slice
     lo = float(cfg.depth_aug_randu_min_m)
     hi = float(cfg.depth_aug_randu_max_m)
 
@@ -837,18 +836,6 @@ def _run_foundation_stereo(env, cfg) -> torch.Tensor:
         raise NotImplementedError(
             "The Foundation-Stereo depth backend is not included in this "
             "state-based release of Play2Perfect."
-        )
-        engine_dir = str(cfg.fs_engine_dir).strip() or None
-        env._fs_module = FastFoundationStereoModule(
-            model_dir=str(cfg.fs_model_dir),
-            engine_dir=engine_dir,
-            valid_iters=int(cfg.fs_valid_iters),
-            max_disp=int(cfg.fs_max_disp),
-            device=str(env.device),
-        )
-        print(
-            f"[foundation_stereo] FS module loaded ({env._fs_module.backend})",
-            flush=True,
         )
 
     left_rgba = env.student_camera_left.data.output["rgb"]

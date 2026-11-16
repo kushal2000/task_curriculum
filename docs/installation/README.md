@@ -13,7 +13,7 @@ From the repo root:
 docs/installation/install_isaacsim.sh
 docs/installation/install_isaaclab3.sh     # Isaac Lab from the vendored third_party/IsaacLab
 # The URDF -> USD cache the Newton envs read (.cache/usd/), baked with Isaac Sim:
-OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.newton.usd_cache --populate \
+OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.scripts.assets.prepare_usd_cache --populate \
     --num_assets_per_type 1 'env.assets.handle_head_types=[hammer]'
 ```
 
@@ -113,3 +113,12 @@ mkdir -p "$OMNI_KIT_CACHE_PATH"
 - **One Isaac Sim instance per GPU.** Booting a second Kit process while another is running
   on the same GPU can crash the booting one mid-startup. Wait for training/eval/demo
   processes to finish before launching another.
+
+To prepare the default VBD robot and table, use the rigid cloth task with the
+VBD table asset (the rigid task otherwise defaults to a different table):
+
+```sh
+OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python -m isaacsimenvs.scripts.assets.prepare_usd_cache --populate \
+    --task Isaacsimenvs-RigidBodyCloth-Direct-v0 --num_envs 1 \
+    env.assets.table_urdf=assets/urdf/table_narrow.urdf
+```

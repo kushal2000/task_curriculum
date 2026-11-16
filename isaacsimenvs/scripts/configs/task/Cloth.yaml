@@ -1,0 +1,20 @@
+# Isaacsimenvs-Cloth-Direct-v0 -- fold a deformable (VBD) cloth on Newton (Isaac Lab 3, .venv/isaaclab3):
+# coupled MJWarp (robot) + VBD (cloth) solve (tasks/cloth/backends/vbd/backend.py). Robot: Flexiv Rizon 4s +
+# right Wuji Hand 2 with the identified hand (tasks/cloth/backends/robot.py, part of the cfg).
+#
+# Only what differs from the configclass defaults (tasks/cloth/cloth_cfg.py, backends/vbd/config.py),
+# which hold the documentation of every key. Real fabrics: tasks/cloth/backends/vbd/fabrics.py.
+
+scene:
+  num_envs: 768                          # 6 x 128 SAPG blocks; see isaacsimenvs/scripts/configs/train/ClothSAPG.yaml
+
+domain_randomization:                    # off: this env evaluates
+  use_obs_delay: false
+  use_action_delay: false
+  use_object_state_delay_noise: false
+  object_state_xyz_noise_std: 0.0
+  object_state_rotation_noise_degrees: 0.0
+  joint_velocity_obs_noise_std: 0.0
+
+task:
+  nan_policy: raise                      # a NaN in an eval is a bug to diagnose

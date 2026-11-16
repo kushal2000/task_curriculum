@@ -16,7 +16,7 @@ declare -A CK=([prior]="$1" [scratch]="$2")
 CAM=(--cam_offset 0.6 -0.6 1.05 --look_at 0.0 0.0 0.5)
 COMMON=(--policy_config pretrained_policy/flexiv_wuji/config.yaml --sapg_expl_coef 0 --steps "${STEPS:-900}"
         --stop_on_episode_end "${CAM[@]}")
-EVAL_OV=(env.cloth.keypoint_tolerance=0.015 env.termination.success_steps=10 env.cloth.nan_policy=reset)
+EVAL_OV=(env.task.keypoint_tolerance=0.015 env.termination.success_steps=10 env.task.nan_policy=reset)
 read -r -a FAB <<<"$(.venv/isaaclab3/bin/python -m isaacsimenvs.tasks.cloth.deformable_env_cfg cotton_measured --plastic)"
 { echo "## $(date '+%Y-%m-%d %H:%M:%S') host=$(hostname -s) commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain)" && echo YES || echo no)"
   echo "\$ $D/render.sh $*"; } >>"$D/submissions.log"
@@ -27,17 +27,17 @@ run() {  # name, command...
     "$@" >"$OUT/$name.log" 2>&1 && echo "[render] $name ok" || echo "[render] $name FAILED (see $OUT/$name.log)"
 }
 for P in prior scratch; do
-    run "${P}__rigid__fold" .venv/isaacsim/bin/python scripts/visualization/render_physx.py --headless \
+    run "${P}__rigid__fold" .venv/isaacsim/bin/python isaacsimenvs/scripts/visualization/render_physx.py --headless \
         --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --experiment rigid_cloth_flexiv_wuji_full_dr \
         --checkpoint "${CK[$P]}" --single_variant --num_envs 8 "${COMMON[@]}" --out "$OUT/${P}__rigid__fold.mp4" \
-        env.cloth.task=fold env.fold_pool.init_fold_prob=0.0 "${EVAL_OV[@]}"
-    run "${P}__rigid__unfold" .venv/isaacsim/bin/python scripts/visualization/render_physx.py --headless \
+        env.task.mode=fold env.fold_pool.init_fold_prob=0.0 "${EVAL_OV[@]}"
+    run "${P}__rigid__unfold" .venv/isaacsim/bin/python isaacsimenvs/scripts/visualization/render_physx.py --headless \
         --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --experiment rigid_cloth_flexiv_wuji_full_dr \
         --checkpoint "${CK[$P]}" --single_variant --num_envs 8 "${COMMON[@]}" --out "$OUT/${P}__rigid__unfold.mp4" \
-        env.cloth.task=unfold "${EVAL_OV[@]}"
+        env.task.mode=unfold "${EVAL_OV[@]}"
     for T in fold unfold; do
-        run "${P}__cotton__$T" xvfb-run -a .venv/isaaclab3/bin/python scripts/visualization/render_newton.py \
+        run "${P}__cotton__$T" xvfb-run -a .venv/isaaclab3/bin/python isaacsimenvs/scripts/visualization/render_newton.py \
             --task Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0 --checkpoint "${CK[$P]}" --num_envs 4 \
-            "${COMMON[@]}" --out "$OUT/${P}__cotton__$T.mp4" env.cloth.task=$T "${EVAL_OV[@]}" "${FAB[@]}"
+            "${COMMON[@]}" --out "$OUT/${P}__cotton__$T.mp4" env.task.mode=$T "${EVAL_OV[@]}" "${FAB[@]}"
     done
 done

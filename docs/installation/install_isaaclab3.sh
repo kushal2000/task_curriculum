@@ -3,7 +3,7 @@
 # .venv/isaacsim rather than replacing it.
 #
 # Isaac Lab 2.3 needs Python 3.11 and Isaac Lab 3.0 needs 3.12, so the two cannot share an
-# interpreter. Both venvs editable-install this same source tree, so `isaacsimenvs.eval`,
+# interpreter. Both venvs editable-install this same source tree, so `isaacsimenvs.scripts.evaluation`,
 # `isaacsimenvs.tasks.play.utils.*` and `rl_games` resolve to one copy of the code from either
 # one -- which is what makes a phase-1 number and a phase-3 number comparable.
 #
@@ -18,7 +18,7 @@ VENV="${ROOT}/${VENV_DIR:-.venv/isaaclab3}"
 PY="${VENV}/bin/python"
 LAB="${ROOT}/third_party/IsaacLab"
 
-# Isaac Lab is vendored in the repo at the commit the Newton compat patches (isaacsimenvs/newton/)
+# Isaac Lab is vendored in the repo at the commit the Newton compat patches (isaacsimenvs/tasks/cloth/backends/vbd/newton_support/)
 # are written against -- see third_party/VENDORED.md; bump it with third_party/vendor.sh.
 echo "==> Isaac Lab source: ${LAB} (VERSION $(cat "${LAB}/VERSION" 2>/dev/null || echo '?'))"
 [[ -f "${LAB}/isaaclab.sh" ]] || { echo "missing ${LAB}: it is committed, check the clone" >&2; exit 1; }

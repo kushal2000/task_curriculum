@@ -23,7 +23,7 @@ parser.add_argument("--num_envs", type=int, default=8)
 args, hydra_args = parser.parse_known_args()
 sys.argv = [sys.argv[0]] + hydra_args
 
-from isaacsimenvs.newton import compat  # noqa: E402
+from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat  # noqa: E402
 
 compat.install_isaaclab3_compat()
 
@@ -31,8 +31,8 @@ import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
 
 import isaacsimenvs  # noqa: E402,F401
-from isaacsimenvs.tasks.cloth.utils.geometry import fold, grid  # noqa: E402
-from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml  # noqa: E402
+from isaacsimenvs.tasks.cloth.mdp.geometry import fold, grid  # noqa: E402
+from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml  # noqa: E402
 
 TASK = "Isaacsimenvs-Cloth-Direct-v0"
 FAILS: list[str] = []
@@ -58,13 +58,13 @@ def run(env_cfg, agent_cfg) -> None:
     near = torch.full((n,), 9.0, device=dev)
 
     def hand_gap():
-        s = e._read_state()
+        s = e.backend.read_state()
         return torch.cdist(s.fingertip_pos_w, s.points_w).amin(dim=(1, 2))
 
     for _ in range(120):
         obs, *_ = env.step(zero)
         near = torch.minimum(near, hand_gap())
-    s = e._read_state()
+    s = e.backend.read_state()
     spread, lift = fold.flat_on_table(s.points_w, s.table_top_z)
     free = near > 0.03
     print(f"[probe] {int((~free).sum())}/{n} envs had a fingertip within 3 cm of the cloth: skipped", flush=True)
@@ -75,13 +75,13 @@ def run(env_cfg, agent_cfg) -> None:
     check(bool(torch.isfinite(obs["policy"]).all()), "obs finite after 120 steps")
 
     # 3. teleport a perfect fold onto each cloth where it lies, and let it settle
-    s = e._read_state()
+    s = e.backend.read_state()
     ids = torch.arange(n, device=dev)
-    cloth = e._cloth_grid
+    cloth = e.backend.cloth_grid
     r, c = fold.stationary_frame(cloth, s.points_w)
     folded = fold.carry(cloth, grid.folded_start(cloth, torch.full((n,), math.pi, device=dev)), r, c)
-    e._cloth.write_nodal_pos_to_sim_index(folded, ids)
-    e._cloth.write_nodal_velocity_to_sim_index(torch.zeros_like(folded), ids)
+    e.backend._cloth.write_nodal_pos_to_sim_index(folded, ids)
+    e.backend._cloth.write_nodal_velocity_to_sim_index(torch.zeros_like(folded), ids)
     err0 = e.fold_error()
     print(f"[probe] teleported fold: fold_error {float(err0.max()) * 1e3:.2f} mm (before settling)", flush=True)
     # Settle on raw physics steps: a task step would end the episode on the fold (success) and reset.

@@ -15,7 +15,7 @@ The Play prior goes in `pretrained_policy/flexiv_wuji/{model.pth,config.yaml}` (
 
 ## The three experiments
 
-Each is one config in `experiments/configs/`: Flexiv + right Wuji (the identified hand), every
+Each is one config in `isaacsimenvs/scripts/configs/runs/`: Flexiv + right Wuji (the identified hand), every
 randomization on, no epoch limit. Lighter variants are the overrides listed in each config's header.
 
 ```bash

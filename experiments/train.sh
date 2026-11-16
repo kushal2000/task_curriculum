@@ -1,7 +1,7 @@
 #!/bin/bash
 # Train any task: experiments/submit.sh [sbatch options] experiments/train.sh --task <id> [train.py args]
 #
-# The args go to scripts/training/train.py unchanged (--experiment, --checkpoint, --checkpoint_load_mode,
+# The args go to isaacsimenvs/scripts/training/train.py unchanged (--experiment, --checkpoint, --checkpoint_load_mode,
 # --wandb_*, hydra overrides). In an array job, task i gets agent.params.seed=i+1 unless the args
 # set a seed. The run itself lands in debug_outputs/train_logs/<date>/<time>/ (Hydra) and wandb in debug_outputs/train_logs/wandb/.
 #
@@ -49,7 +49,7 @@ fi
 
 gpu_log_start
 START=$(date +%s)
-"${LAUNCH[@]}" scripts/training/train.py "${HEADLESS[@]}" "${ARGS[@]}"
+"${LAUNCH[@]}" isaacsimenvs/scripts/training/train.py "${HEADLESS[@]}" "${ARGS[@]}"
 RC=$?
 gpu_log_stop
 echo "[slurm] exit=$RC wall_s=$(( $(date +%s) - START ))"

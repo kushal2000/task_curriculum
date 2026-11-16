@@ -3,19 +3,14 @@
 * Kit guard: in .venv/isaacsim, importing Isaac Lab would boot Kit. ``_NoKitIsaacLab`` makes those
   imports fail fast, and the hooks below turn that failure into a skip, so the Isaac-Lab-backed
   tests skip there and run in .venv/isaaclab3.
-* Session fixtures: Kit-free modules that many tests share, loaded once per run with
-  ``isaacsimenvs.utils.testing.load_module`` (by file path, bypassing package ``__init__`` chains).
 """
 
 from __future__ import annotations
 
 import importlib.util
 import sys
-from pathlib import Path
 
 import pytest
-
-from isaacsimenvs.utils.testing import REPO_ROOT, load_module  # noqa: F401  re-exported
 
 
 class _NoKitIsaacLab:

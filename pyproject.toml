@@ -60,11 +60,17 @@ include = [
     "isaacsimenvs*",
 ]
 
+[tool.setuptools.package-data]
+"isaacsimenvs.scripts.visualization.interactive_viewer" = ["*.html"]
+"isaacsimenvs.scripts.configs" = [
+    "task/*.yaml", "robot/*.yaml", "fabric/*.yaml", "train/*.yaml", "runs/*.yaml",
+]
+
 # Every tool cache lives under .cache/ (gitignored), one subfolder per tool.
 [tool.pytest.ini_options]
 cache_dir = ".cache/pytest"
-# Tests live next to the code they check (isaacsimenvs/**/tests/); isaacsimenvs/conftest.py is the
-# shared setup. importlib mode: the tests/ folders need no __init__.py and same-named files can't clash.
+# Tests live next to the runtime code and YAML configuration they check.
+# importlib mode allows tests/ folders without __init__.py and avoids filename clashes.
 testpaths = ["isaacsimenvs"]
 addopts = "--import-mode=importlib"
 

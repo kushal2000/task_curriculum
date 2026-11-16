@@ -1,4 +1,4 @@
-"""cloth/utils without a simulator: geometry, quaternions, actions, obs layout, reward, termination."""
+"""Shared manipulation task and policy interface, exercised without a simulator."""
 
 from __future__ import annotations
 
@@ -8,8 +8,12 @@ from types import SimpleNamespace as NS
 import pytest
 import torch
 
-from isaacsimenvs.tasks.cloth.utils.geometry import fold, grid, rotations
-from isaacsimenvs.tasks.cloth.utils.mdp import actions, flexiv_wuji, observations, rewards, snapshot, terminations
+from isaacsimenvs.tasks.cloth.backends import robot as flexiv_wuji
+from isaacsimenvs.tasks.cloth.mdp import actions, observations
+from isaacsimenvs.tasks.cloth.mdp import task as rewards
+from isaacsimenvs.tasks.cloth.mdp.geometry import fold, grid, rotations
+from isaacsimenvs.tasks.cloth.mdp.state import SimState
+from isaacsimenvs.tasks.cloth.mdp.task import ClothTask
 
 POLICY = ("joint_pos", "joint_vel", "prev_action_targets", "palm_pos", "palm_rot", "object_rot",
           "fingertip_pos_rel_palm", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales")
@@ -190,14 +194,14 @@ def test_ratchet_pays_only_improvement_on_the_best():
 
 def test_reward_guard_zeros_huge_finite_rewards_not_just_nan():
     env = NS(num_envs=4, extras={}, _nonfinite_envs=torch.zeros(4, dtype=torch.bool), _insane_count=0)
-    out = rewards.guard(env, torch.tensor([1.0, -1e6, float("nan"), 1000.0]))
+    out = ClothTask.guard_reward(env, torch.tensor([1.0, -1e6, float("nan"), 1000.0]))
     assert torch.equal(out, torch.tensor([1.0, 0.0, 0.0, 1000.0]))
     assert env._nonfinite_envs.tolist() == [False, True, True, False]
 
 
-def _task_env(n=2, task="fold", release=False):
+def _task_env(n=2, mode="fold", release=False):
     cfg = NS(
-        cloth=NS(task=task, nan_policy="reset", keypoint_tolerance=0.04, max_folded_footprint=0.65, min_unfolded_footprint=0.9,
+        task=NS(mode=mode, nan_policy="reset", keypoint_tolerance=0.04, max_folded_footprint=0.65, min_unfolded_footprint=0.9,
                 unfold_on_table=False, on_table_max_spread=0.015, on_table_max_lift=0.015,
                 release=NS(enabled=release, clearance=0.03, latch_steps=3, fold_tolerance=0.0, touch="origin",
                            release_dist_rew_scale=3000.0, persist_consecutive=True, persist_window_steps=4,
@@ -209,8 +213,11 @@ def _task_env(n=2, task="fold", release=False):
     env = NS(cfg=cfg, num_envs=n, device="cpu", _spec=flexiv_wuji.ROBOT, extras={},
              episode_length_buf=torch.zeros(n, dtype=torch.long), max_episode_length=600,
              scene=NS(env_origins=torch.zeros(n, 3)))
-    snapshot.allocate(env)
-    return env
+    cfg.reward = NS(object_base_size=0.04, fingertip_distance_from_pad=True)
+    task = ClothTask(cfg, cloth_grid(((0.2, 0.15, 0.01),) * n), env.scene.env_origins, list(range(7)), list(range(7,27)))
+    task.episode_length_buf = env.episode_length_buf
+    task.max_episode_length = env.max_episode_length
+    return task
 
 
 def _view(err, footprint, z=0.5):
@@ -222,24 +229,24 @@ def _view(err, footprint, z=0.5):
 def test_success_needs_both_keypoints_and_footprint():
     env = _task_env(4)
     v = _view([0.01, 0.01, 0.2, 0.2], [0.55, 0.95, 0.55, 0.95])
-    term, _ = terminations.compute(env, None, v)
+    term, _ = env.compute_terminations(None, v)
     assert env._termination_reasons["fold"].tolist() == [True, False, False, False]
     assert term.tolist() == [True, False, False, False]
     assert env._bonus_mask.tolist() == [True, False, False, False]
 
 
 def test_unfold_success_wants_the_full_footprint():
-    env = _task_env(2, task="unfold")
+    env = _task_env(2, mode="unfold")
     v = _view([0.01, 0.01], [0.95, 0.55])
     flat = NS(points_w=torch.zeros(2, 4, 3), table_top_z=torch.zeros(2))
-    terminations.compute(env, flat, v)
+    env.compute_terminations(flat, v)
     assert env._termination_reasons["fold"].tolist() == [True, False]
     assert env._termination_reasons["on_table"].tolist() == [True, False]
 
 
 def test_a_fallen_sheet_ends_the_episode():
     env = _task_env(1)
-    term, _ = terminations.compute(env, None, _view([0.2], [1.0], z=0.05))
+    term, _ = env.compute_terminations(None, _view([0.2], [1.0], z=0.05))
     assert bool(term[0]) and bool(env._termination_reasons["fall"][0])
 
 
@@ -249,13 +256,13 @@ def test_release_latches_after_the_fold_and_persists():
     near = NS(hand_pos_w=torch.zeros(1, 2, 3), points_w=pts)
     far = NS(hand_pos_w=torch.full((1, 2, 3), 1.0), points_w=pts)
     v = _view([0.01], [0.55])
-    terminations.compute(env, near, v)            # folded, hand on it: entry bonus only
+    env.compute_terminations(near, v)            # folded, hand on it: entry bonus only
     assert bool(env._bonus_mask[0]) and not bool(env._released[0])
     for _ in range(3):                                  # three clear steps latch the release
-        terminations.compute(env, far, v)
+        env.compute_terminations(far, v)
     assert bool(env._released[0]) and not bool(env._bonus_mask[0])
     for _ in range(3):
-        term, _ = terminations.compute(env, far, v)
+        term, _ = env.compute_terminations(far, v)
     assert bool(env._persist_done[0]) and bool(term[0])
 
 
@@ -263,7 +270,7 @@ def test_release_counts_nothing_without_the_fold():
     env = _task_env(1, release=True)
     far = NS(hand_pos_w=torch.full((1, 2, 3), 1.0), points_w=torch.zeros(1, 4, 3))
     for _ in range(10):
-        terminations.compute(env, far, _view([0.2], [1.0]))
+        env.compute_terminations(far, _view([0.2], [1.0]))
     assert not bool(env._released[0]) and not bool(env._persist_done[0])
 
 
@@ -275,36 +282,32 @@ def _obs_env(n: int, dr_on: bool):
     env = _task_env(n)
     cg = cloth_grid(((0.2, 0.15, 0.01),) * n)
     canon = list(flexiv_wuji.ROBOT.joint_names_canonical)
-    m = actions.joint_maps(canon, flexiv_wuji.ROBOT)
     env.cfg.domain_randomization = NS(
         use_object_state_delay_noise=dr_on, object_state_xyz_noise_std=0.01, object_state_rotation_noise_degrees=5.0,
         joint_velocity_obs_noise_std=0.1 if dr_on else 0.0, joint_pos_obs_noise_std=0.0,
         use_obs_delay=dr_on, obs_delay_max=3, action_delay_max=3, object_state_delay_max=10)
     env.cfg.obs = NS(obs_list=POLICY, state_list=CRITIC, clamp_abs_observations=10.0)
-    env.cfg.reward = NS(fingertip_distance_from_pad=True)
-    snapshot.allocate(env)
-    env.__dict__.update(
-        _cloth_grid=cg, _perm_lab_to_canon=torch.tensor(m["lab_to_canon"]),
-        _joint_lower_canon=-torch.ones(27), _joint_upper_canon=torch.ones(27),
-        _palm_offset=torch.tensor(flexiv_wuji.ROBOT.palm_center_offset),
-        _palm_obs_shift=torch.tensor(flexiv_wuji.ROOT_POS) - torch.tensor(flexiv_wuji.PLAY_ROBOT_ROOT_POS),
-        _fingertip_offsets=torch.tensor(flexiv_wuji.ROBOT.fingertip_offsets),
-        _object_scales=cg.dims / 0.04, reward_buf=torch.zeros(n))
+    env.cfg.reward = NS(fingertip_distance_from_pad=True, object_base_size=0.04)
+    env.cfg.robot_root_pos = flexiv_wuji.ROOT_POS
+    env._cloth_grid = cg
+    limits = torch.stack((-torch.ones(n, 27), torch.ones(n, 27)), dim=-1)
+    controller = actions.JointController(env.cfg, canon, torch.zeros(n, 27), limits, 1.0/60)
+    observer = observations.ObservationBuilder(env.cfg, controller, env)
     folded = grid.folded_start(cg, torch.full((n,), math.pi)) + torch.tensor([0.0, 0.0, 0.5])
-    s = snapshot.SimState(
+    s = SimState(
         joint_pos=torch.zeros(n, 27), joint_vel=torch.zeros(n, 27),
         palm_pos_w=torch.tensor([[0.0, 0.3, 0.8]] * n), palm_quat_w=torch.tensor([[1.0, 0, 0, 0]] * n),
         palm_vel_w=torch.zeros(n, 6), fingertip_pos_w=torch.zeros(n, 5, 3),
         fingertip_quat_w=torch.tensor([1.0, 0, 0, 0]).expand(n, 5, 4), hand_pos_w=torch.zeros(n, 6, 3),
         points_w=folded, points_vel_w=torch.zeros_like(folded), table_top_z=torch.full((n,), 0.495))
-    return env, s
+    return env, s, observer
 
 
 @pytest.mark.parametrize("dr_on", [False, True])
 def test_observations_have_plays_shape_and_a_perfect_fold_reads_zero_goal_offset(dr_on):
-    env, s = _obs_env(8, dr_on)
-    v = snapshot.derive(env, s)
-    obs = observations.build(env, s, v)
+    env, s, observer = _obs_env(8, dr_on)
+    v = env.derive(s)
+    obs = observer.build(s, v, env.episode_length_buf)
     assert obs["policy"].shape == (8, 134) and obs["critic"].shape == (8, 156)
     assert bool(torch.isfinite(obs["policy"]).all()) and bool(torch.isfinite(obs["critic"]).all())
     # critic is clean: keypoints_rel_goal (columns 27*3 + 3+4+6+4+6+15+12 = ...) is zero at a perfect fold
@@ -316,11 +319,11 @@ def test_observations_have_plays_shape_and_a_perfect_fold_reads_zero_goal_offset
 
 
 def test_nonfinite_sheet_is_zeroed_and_flagged():
-    env, s = _obs_env(4, False)
+    env, s, observer = _obs_env(4, False)
     s.points_w[2, 0, 0] = float("nan")
-    v = snapshot.derive(env, s)
-    obs = observations.build(env, s, v)
-    observations.guard_finite(env, obs, s)
+    v = env.derive(s)
+    obs = observer.build(s, v, env.episode_length_buf)
+    observer.guard_finite(obs, s, env.episode_length_buf)
     assert env._nonfinite_envs.tolist() == [False, False, True, False]
     assert bool(torch.isfinite(obs["policy"]).all())
 
@@ -329,13 +332,13 @@ def test_nonfinite_sheet_is_zeroed_and_flagged():
 
 
 @pytest.mark.parametrize("bad", [
-    {"task": "flip"}, {"nan_policy": "ignore"}, {"task": "mixed", "unfold_prob": 1.0},
+    {"mode": "flip"}, {"nan_policy": "ignore"}, {"mode": "mixed", "unfold_prob": 1.0},
     {"unfold_start_deg": [0.0, 180.0]}, {"unfold_start_deg": [120.0, 90.0]}, {"min_unfolded_footprint": 0.4},
-    {"on_table_max_lift": 0.0}, {"task": "unfold", "release": {"enabled": True}}, {"release": {"touch": "near"}},
+    {"on_table_max_lift": 0.0}, {"mode": "unfold", "release": {"enabled": True}}, {"release": {"touch": "near"}},
 ])
 def test_cloth_cfg_rejects_bad_settings(bad):
-    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.cloth_env_cfg")
-    c = cfg_mod.ClothCfg()
+    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.mdp.config")
+    c = cfg_mod.ClothTaskCfg()
     c.check()  # the defaults pass
     c.from_dict(bad)
     with pytest.raises(ValueError):

@@ -15,5 +15,5 @@ run() {  # name, extra sbatch options, extra train args
 }
 run asis      ""                                                          "--capture_viewer_per_shape"
 run noviewer  "--export=ALL,VIEWER=0"                                     ""
-run foldonly  ""                                                          "--capture_viewer_per_shape env.cloth.task=fold env.fold_pool.init_fold_prob=0.0"
+run foldonly  ""                                                          "--capture_viewer_per_shape env.task.mode=fold env.fold_pool.init_fold_prob=0.0"
 run expandseg "--export=ALL,PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" "--capture_viewer_per_shape"

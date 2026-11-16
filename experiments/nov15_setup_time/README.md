@@ -4,8 +4,9 @@ A 24576-env `rigid_cloth_flexiv_wuji_full_dr` run takes ~40 min before its first
 expensive phases, then test whether authoring the pool's prims directly into each env is faster than
 referencing one USD file per sheet size.
 
-Instrumentation: `isaacsimenvs/utils/setup_timer.py` (`stamp()`), called at the phase boundaries of
-`physx_envs.py` (`_setup_scene`, `_pool_spawn`) and after `gym.make` in `scripts/training/train.py`.
+Historical instrumentation (removed during the compact-layout cleanup):
+`isaacsimenvs/utils/setup_timer.py` (`stamp()`), called at the phase boundaries of
+`physx_envs.py` (`_setup_scene`, `_pool_spawn`) and after `gym.make` in `isaacsimenvs/scripts/training/train.py`.
 Log lines: `[setup_t] +<since start>s (+<since previous>s) <phase>`.
 
 Runs: local, one RTX 6000 Ada (portal-compute-02, interactive job), `train.py ... max_epochs=1`, the

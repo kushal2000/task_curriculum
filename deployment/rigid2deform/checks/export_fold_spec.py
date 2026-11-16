@@ -2,7 +2,7 @@
 
 The fold policies in deployment/rigid2deform/policy/ (flat7RW_*, box2RW_allDR) were trained on branch
 yiboc_wuji with `train.py --experiment <name>`: a FoldPoolPhysx task on the Flexiv Rizon 4s + RIGHT Wuji
-Hand 2 in the real setup's geometry. This script rebuilds that run's env config the way hydra_utils
+Hand 2 in the real setup's geometry. This script rebuilds that run's env config the way the config loader
 does -- the task YAML, then the robot overlay (cfg/robot/), then the experiment's `base:` chain and the
 experiment -- and writes the spec: every field Play's spec has (deployment/utils/spec_export.py: robot,
 action pipeline, observation, table, ...), plus a `fold` block (the sheet's grid, the scored keypoints, the fold target, the
@@ -50,7 +50,7 @@ DEPLOY_SHAPE = "box2-mid"   # the real object: two plates taped along one edge
 
 
 def deep_merge(base: dict, over: dict) -> dict:
-    """hydra_utils._deep_merge: `over` onto `base`, recursing into dicts; anything else replaces."""
+    """configs.loader._deep_merge: `over` onto `base`, recursing into dicts; anything else replaces."""
     out = dict(base)
     for k, v in over.items():
         out[k] = deep_merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
@@ -58,7 +58,7 @@ def deep_merge(base: dict, over: dict) -> dict:
 
 
 def load_experiment(ref: str, name: str) -> dict:
-    """hydra_utils.load_experiment: experiments/configs/<name>.yaml over its `base:` chain."""
+    """Load isaacsimenvs/cfg/experiment/<name>.yaml from the historical Git ref and merge its base chain."""
     exp = yaml.safe_load(git_show(ref, f"{CFG}/experiment/{name}.yaml")) or {}
     base = exp.pop("base", None)
     return deep_merge(load_experiment(ref, base), exp) if base else exp
@@ -218,7 +218,7 @@ def flat(spec: dict) -> dict:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--ref", default=DEFAULT_REF, help="git ref of the training branch")
-    p.add_argument("--experiment", default=DEFAULT_EXPERIMENT, help="experiments/configs/<name>.yaml of the run")
+    p.add_argument("--experiment", default=DEFAULT_EXPERIMENT, help="isaacsimenvs/cfg/experiment/<name>.yaml in the selected historical Git ref")
     p.add_argument("--out", type=Path, default=HERE.parent / "spec" / "spec_flexiv_wuji_right_fold.json")
     p.add_argument("--compare", action="store_true",
                    help=f"build all of {POLICY_EXPERIMENTS} and print every field that differs")

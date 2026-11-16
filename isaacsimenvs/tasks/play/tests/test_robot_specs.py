@@ -12,15 +12,15 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import pytest
 
-from isaacsimenvs.utils.testing import REPO_ROOT, load_module
+from isaacsimenvs import REPO_ROOT
+from isaacsimenvs.tasks.play import robots
 
-robots = load_module("isaacsimenvs/tasks/play/robots.py", "play_robots")
 sys.path.insert(0, str(REPO_ROOT / "assets/urdf/flexiv_wuji/tools"))
 import flexiv_wuji as fw  # noqa: E402
 
@@ -49,7 +49,7 @@ def test_default_pose_matches_the_viewer_constant() -> None:
 
 def _task_cfg(task: str) -> dict:
     yaml = pytest.importorskip("yaml")
-    return yaml.safe_load((REPO_ROOT / "isaacsimenvs" / "cfg" / "task" / f"{task}.yaml").read_text())
+    return yaml.safe_load((REPO_ROOT / "isaacsimenvs" / "scripts" / "configs" / "task" / f"{task}.yaml").read_text())
 
 
 def _box_size(urdf: str) -> tuple[float, ...]:
@@ -376,7 +376,7 @@ def test_hand_spring_effort() -> None:
 
     import torch
 
-    au = load_module("isaacsimenvs/tasks/play/utils/action_utils.py", "action_utils_spring")
+    from isaacsimenvs.tasks.play.utils import action_utils as au
     gen = torch.Generator().manual_seed(0)
     n, j = 8, 27
     ks = torch.rand(j, generator=gen) * 0.2

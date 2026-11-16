@@ -5,17 +5,18 @@ registry for the DirectRLEnv training path.
 
 Entry points:
 - ``env_cfg_entry_point``           → PlayEnvCfg (typed defaults in code)
-- ``env_cfg_yaml_entry_point``      → cfg/task/Play.yaml overlay
-- ``rl_games_cfg_entry_point``      → cfg/train/PlayPPO.yaml (baseline)
-- ``rl_games_sapg_cfg_entry_point`` → cfg/train/PlaySAPG.yaml (default)
+- ``env_cfg_yaml_entry_point``      → isaacsimenvs/scripts/configs/task/Play.yaml overlay
+- ``rl_games_cfg_entry_point``      → isaacsimenvs/scripts/configs/train/PlayPPO.yaml (baseline)
+- ``rl_games_sapg_cfg_entry_point`` → isaacsimenvs/scripts/configs/train/PlaySAPG.yaml (default)
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import gymnasium as gym
+
+from isaacsimenvs import CONFIG_DIR
 
 if TYPE_CHECKING:
     from .play_env import PlayEnv
@@ -44,7 +45,7 @@ def __getattr__(name: str):
         return PlayEnvCfg
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-_CFG_DIR = Path(__file__).resolve().parents[2] / "cfg"
+
 
 gym.register(
     id="Isaacsimenvs-Play-Direct-v0",
@@ -53,9 +54,9 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": "isaacsimenvs.tasks.play.play_env_cfg:PlayEnvCfg",
-        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "Play.yaml"),
-        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
-        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
+        "env_cfg_yaml_entry_point": str(CONFIG_DIR / "task" / "Play.yaml"),
+        "rl_games_cfg_entry_point": str(CONFIG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(CONFIG_DIR / "train" / "PlaySAPG.yaml"),
     },
 )
 
@@ -67,14 +68,14 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": "isaacsimenvs.tasks.play.play_env_cfg:PlayFlexivWujiRightHumanLikeEnvCfg",
-        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "PlayFlexivWujiRightHumanLike.yaml"),
-        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
-        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
+        "env_cfg_yaml_entry_point": str(CONFIG_DIR / "task" / "PlayFlexivWujiRightHumanLike.yaml"),
+        "rl_games_cfg_entry_point": str(CONFIG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(CONFIG_DIR / "train" / "PlaySAPG.yaml"),
     },
 )
 
 # The same Play setup with the identified right hand (sysid dynamics, real joint limits): the
-# PlayFlexivWujiRightHumanLike task with only the robot swapped (cfg/robot/flexiv_wuji_right_real_play.yaml).
+# PlayFlexivWujiRightHumanLike task with only the robot swapped (isaacsimenvs/scripts/configs/robot/flexiv_wuji_right_real_play.yaml).
 gym.register(
     id="Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0",
     entry_point="isaacsimenvs.tasks.play.play_env:PlayEnv",
@@ -82,10 +83,10 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": "isaacsimenvs.tasks.play.play_env_cfg:PlayFlexivWujiRightHumanLikeEnvCfg",
-        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "PlayFlexivWujiRightHumanLike.yaml"),
-        "env_cfg_robot_yaml_entry_point": str(_CFG_DIR / "robot" / "flexiv_wuji_right_real_play.yaml"),
-        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
-        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
+        "env_cfg_yaml_entry_point": str(CONFIG_DIR / "task" / "PlayFlexivWujiRightHumanLike.yaml"),
+        "env_cfg_robot_yaml_entry_point": str(CONFIG_DIR / "robot" / "flexiv_wuji_right_real_play.yaml"),
+        "rl_games_cfg_entry_point": str(CONFIG_DIR / "train" / "PlayPPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(CONFIG_DIR / "train" / "PlaySAPG.yaml"),
     },
 )
 

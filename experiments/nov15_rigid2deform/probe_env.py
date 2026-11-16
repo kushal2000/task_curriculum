@@ -14,7 +14,7 @@
 5. per-reset DR: resetting envs 0-31 changes their hinge damping / stiffness and plate / robot /
    table frictions and leaves envs 32+ untouched (the untouched ones are the negative control);
 6. the table's base friction is ``assets.table_friction`` (Play gave it the robot's);
-7. with ``env.cloth.task=unfold`` (pass it on the command line): every cloth starts folded (hinge
+7. with ``env.task.mode=unfold`` (pass it on the command line): every cloth starts folded (hinge
    ~180 deg) and is NOT a success; laid flat, every one is.
 """
 
@@ -39,7 +39,7 @@ import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
 
 import isaacsimenvs  # noqa: E402,F401
-from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml  # noqa: E402
+from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml  # noqa: E402
 
 TASK = "Isaacsimenvs-RigidBodyCloth-Direct-v0"
 FAILS: list[str] = []
@@ -83,7 +83,7 @@ def run(env_cfg, agent_cfg) -> None:
         ft = e.robot.data.body_pos_w[:, e._fingertip_ids]
         return torch.cdist(ft, e._particles_w()).amin(dim=(1, 2))
 
-    unfold = e.cfg.cloth.task == "unfold"
+    unfold = e.cfg.task.mode == "unfold"
     if unfold:
         q0 = e._rigid_cloth.data.joint_pos[:, 0]
         check(float((q0 - math.pi).abs().max()) < math.radians(1), f"unfold: every cloth starts folded (hinge {math.degrees(float(q0.min())):.1f}-{math.degrees(float(q0.max())):.1f} deg)")

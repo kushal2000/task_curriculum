@@ -33,7 +33,7 @@ LOG_PREFIX="debug_outputs/train_logs/.slurm/${SLURM_JOB_NAME:-job}_${JOB_TAG}"
 mkdir -p debug_outputs/train_logs/.slurm
 
 # Move this job's log from .slurm/ into <dir> as slurm_<job>.out, leaving a symlink (Slurm keeps
-# writing to the moved file). The shell twin of isaacsimenvs/utils/paths.py:adopt_slurm_log.
+# writing to the moved file). The shell twin of isaacsimenvs/scripts/output.py:adopt_slurm_log.
 adopt_log() {
     local dest="$1" src="${LOG_PREFIX}.out"
     mkdir -p "$dest"

@@ -34,11 +34,11 @@ gpu_log_start
 for ES in ${SEEDS:-3 4 5 6 7 8}; do
     JSON="$OUT/${POLICY_TAG}__${CLOTH_TASK}__${FABRIC}_s${ES}.json"
     [[ -s "$JSON" ]] && { echo "[fabeval] exists: $JSON"; continue; }
-    "${PY[@]}" scripts/evaluation/eval.py --task "$TASK_ID" \
+    "${PY[@]}" isaacsimenvs/scripts/evaluation/eval.py --task "$TASK_ID" \
         --checkpoint "$CKPT" --policy_config pretrained_policy/flexiv_wuji/config.yaml \
         --sapg_expl_coef 0 --num_envs "${NENVS:-32}" --max_steps "${MAXSTEPS:-900}" \
         --success_tolerance 0.01 --num_assets_per_type 1 --single_variant --seed "$ES" --out "$JSON" \
-        env.cloth.task="$CLOTH_TASK" env.cloth.keypoint_tolerance=0.015 env.cloth.nan_policy=reset \
+        env.task.mode="$CLOTH_TASK" env.task.keypoint_tolerance=0.015 env.task.nan_policy=reset \
         env.termination.success_steps=10 "${FAB_OV[@]}" \
         || echo "[fabeval] $JSON FAILED"
 done

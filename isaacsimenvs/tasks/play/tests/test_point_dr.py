@@ -7,9 +7,7 @@ import math
 import pytest
 import torch
 
-from isaacsimenvs.utils.testing import load_module
-
-pdr = load_module("isaacsimenvs/tasks/play/utils/point_dr.py", "point_dr")
+from isaacsimenvs.tasks.play.utils import point_dr as pdr
 
 
 def _quat_to_mat(q: torch.Tensor) -> torch.Tensor:

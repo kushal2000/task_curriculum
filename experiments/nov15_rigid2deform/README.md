@@ -5,7 +5,7 @@ folding on rigid-body approximations of cloth, transfer zero-shot to VBD cloth o
 materials. Generation 0 is one hinge at the horizontal fold line.
 
 New env `Isaacsimenvs-RigidBodyCloth-Direct-v0` (`isaacsimenvs/tasks/cloth/rigid_body_env.py`,
-`rigid_body_env_cfg.py`, `cfg/task/RigidBodyCloth.yaml`, experiment `experiments/configs/rigid_body_cloth.yaml`):
+`rigid_body_env_cfg.py`, `isaacsimenvs/scripts/configs/task/RigidBodyCloth.yaml`, experiment `isaacsimenvs/scripts/configs/runs/rigid_body_cloth.yaml`):
 
 - **Designs** (`utils/sheet_designs.py`): 16 lengths x 16 widths (10-30 cm) x 16 thicknesses (2-20 mm)
   = 4096; env i -> design `perm[i % 4096]`, so each 4096-env SAPG block holds every design once.

@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 
-from isaacsimenvs.tasks.cloth.utils.geometry import designs as sd
+from isaacsimenvs.tasks.cloth.backends.rigid import designs as sd
 
 
 def test_the_grid_is_4096_distinct_designs_spanning_the_ranges():

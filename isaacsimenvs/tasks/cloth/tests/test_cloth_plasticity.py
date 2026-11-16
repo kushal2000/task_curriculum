@@ -13,7 +13,7 @@ import pytest
 wp = pytest.importorskip("warp")
 newton = pytest.importorskip("newton")
 
-plast = pytest.importorskip("isaacsimenvs.tasks.cloth.utils.deformable.plasticity")
+plast = pytest.importorskip("isaacsimenvs.tasks.cloth.backends.vbd.plasticity")
 
 H = 0.0167
 

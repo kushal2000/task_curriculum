@@ -13,9 +13,7 @@ import pytest
 torch = pytest.importorskip("torch")
 Rotation = pytest.importorskip("scipy.spatial.transform").Rotation
 
-from isaacsimenvs.utils.testing import load_module
-
-gtc = load_module("isaacsimenvs/tasks/play/utils/goal_table_clearance.py")
+from isaacsimenvs.tasks.play.utils import goal_table_clearance as gtc
 
 
 def _urdf(tmp_path, collisions: str):

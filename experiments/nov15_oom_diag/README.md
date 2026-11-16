@@ -10,7 +10,7 @@ RTX 6000 Ada, until the LSTM's 1.45 GiB rollout allocation failed.
 |---|---|---|
 | `oom_asis` | none | the growth reproduces |
 | `oom_noviewer` | no pose viewer (`VIEWER=0`) | the 7 stacked viewers |
-| `oom_foldonly` | `cloth.task=fold`, flat starts | the mixed fold/unfold resets |
+| `oom_foldonly` | `task.mode=fold`, flat starts | the mixed fold/unfold resets |
 | `oom_expandseg` | `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` | allocator fragmentation |
 
 Read each run folder's `gpumem_<job>.csv` (every 30 s).

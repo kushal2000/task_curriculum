@@ -57,10 +57,10 @@ def main() -> None:
     import torch
 
     import isaacsimenvs  # noqa: F401
-    from isaacsimenvs.eval.player import PretrainedPlayer
-    from isaacsimenvs.eval.protocol import disable_randomization
+    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
     from isaacsimenvs.tasks.play.utils.object_size_distributions import OBJECT_SIZE_DISTRIBUTIONS
-    from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
+    from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

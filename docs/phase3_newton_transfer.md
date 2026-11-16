@@ -16,12 +16,12 @@ Raw: `docs/results/phase3_{newton,physx}_64env_single.json`.
 
 ```bash
 # Newton (kit-less, .venv/isaaclab3)
-.venv/isaaclab3/bin/python scripts/evaluation/eval.py \
+.venv/isaaclab3/bin/python isaacsimenvs/scripts/evaluation/eval.py \
   --task Isaacsimenvs-PlayNewton-Direct-v0 --num_envs 64 --num_assets_per_type 1 \
   --single_variant --max_steps 12000 'env.assets.handle_head_types=[hammer]'
 
 # PhysX, identical protocol
-.venv/isaacsim/bin/python scripts/evaluation/eval.py \
+.venv/isaacsim/bin/python isaacsimenvs/scripts/evaluation/eval.py \
   --task Isaacsimenvs-Play-Direct-v0 --num_envs 64 --num_assets_per_type 1 \
   --single_variant --max_steps 12000 --headless 'env.assets.handle_head_types=[hammer]'
 ```

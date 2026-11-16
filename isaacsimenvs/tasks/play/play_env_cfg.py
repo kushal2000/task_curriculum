@@ -1,7 +1,7 @@
 """PlayEnvCfg — typed defaults for the Play goal-pose-reaching task.
 
 Organized into sectioned sub-configclasses that mirror the YAML overlay
-in cfg/task/Play.yaml 1:1:
+in isaacsimenvs/scripts/configs/task/Play.yaml 1:1:
 
     sim                     → isaaclab.sim.SimulationCfg (+ PhysxCfg)
     scene                   → PlaySceneCfg(InteractiveSceneCfg)
@@ -600,7 +600,7 @@ def _default_sim_cfg() -> SimulationCfg:
 class PlayEnvCfg(DirectRLEnvCfg):
     """Top-level configclass for the Play goal-pose-reaching env.
 
-    Structure mirrors ``cfg/task/Play.yaml`` exactly — YAML overlay
+    Structure mirrors ``isaacsimenvs/scripts/configs/task/Play.yaml`` exactly — YAML overlay
     key paths resolve to these fields via ``configclass.from_dict``.
     """
 

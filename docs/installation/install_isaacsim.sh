@@ -39,7 +39,7 @@ step "typing_extensions re-pin (must come after isaaclab)"
 uv pip install --python "$PY" "typing_extensions>=4.13"
 
 step "websockets for viser (overrides isaacsim-kernel's pin)"
-# isaacsim-kernel pins websockets==12.0, but viser (the live viewer, scripts/visualization/viser_play.py) needs >=13.1
+# isaacsim-kernel pins websockets==12.0, but viser (the live viewer, isaacsimenvs/scripts/visualization/viser_play.py) needs >=13.1
 # (websockets.asyncio). Nothing a training run loads uses websockets -- only Nucleus search/auth
 # extensions, uvicorn and a haptics device -- so the venv takes the newer one, --no-deps so the
 # resolver does not reject Isaac's pin.

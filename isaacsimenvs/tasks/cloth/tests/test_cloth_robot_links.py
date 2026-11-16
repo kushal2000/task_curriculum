@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from isaacsimenvs.tasks.cloth.utils.mdp.flexiv_wuji import ROBOT
+from isaacsimenvs.tasks.cloth.backends.robot import ROBOT
 
 REPO = Path(__file__).resolve().parents[4]
 URDFS = {ROBOT.name: "assets/urdf/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"}
@@ -44,7 +44,7 @@ def test_finger_segments_are_the_finger_bodies(spec):
 
 @pytest.mark.parametrize("spec", SPECS, ids=lambda s: s.name)
 def test_cloth_proxies_follow_the_robot(spec):
-    from isaacsimenvs.tasks.cloth.deformable_cloth_env_cfg import DeformableClothEnvCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.config import DeformableClothEnvCfg
 
     cfg = DeformableClothEnvCfg()
     physics = cfg.deformable_cloth.build_physics(cfg.newton, 32, spec)
