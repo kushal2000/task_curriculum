@@ -2,7 +2,7 @@
 
     rigid_cloth_env.py / rigid_cloth_env_cfg.py   Isaacsimenvs-RigidBodyCloth-Direct-v0   (.venv/isaacsim)
     deformable_cloth_env.py / deformable_cloth_env_cfg.py   Isaacsimenvs-Cloth-Direct-v0            (.venv/isaaclab3)
-    utils/                                      the fold task both run (task_env.ClothEnv + functions)
+    utils/                                      geometry, backend helpers, and shared task functions
 
 Robot: Flexiv Rizon 4s + right Wuji Hand 2 with the identified hand (utils/mdp/flexiv_wuji.py), for both.
 

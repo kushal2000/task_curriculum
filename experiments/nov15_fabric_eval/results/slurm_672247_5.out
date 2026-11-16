@@ -1,0 +1,1263 @@
+[slurm] task=Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0 backend=newton python=.venv/isaaclab3/bin/python
+[slurm] host=portal-compute-02 job=672247_5 commit=7a1161c dirty=YES
+NVIDIA RTX 6000 Ada Generation, 49140 MiB
+[fabeval] policy=prior task=fold fabric=silk_measured ckpt=debug_outputs/train_logs/nov/2026-11-15_rigid_cloth_prior_2gpu_659538/nn/snap_0_rigid_cloth_prior_2gpu_ep_1300.pth
+[episodes] running kit-less (no Isaac Sim runtime): AppLauncher requires the full Isaac Sim runtime. Install Isaac Sim or avoid constructing AppLauncher in a kitless process.
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.cloth.cloth_env_cfg:ClothEnvCfg
+/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py:132: Hydra15MigrationWarning: The version_base parameter is deprecated and will be removed in Hydra 1.5.
+Omit the version_base parameter to use the current Hydra defaults.
+  @hydra.main(config_path=None, config_name=short_name, version_base="1.3")
+[2026-11-15 20:30:13,680][isaaclab.envs.common][WARNING] - env_cfg.viewer is deprecated. Set env_cfg.sim.default_visualizer_cfg = KitVisualizerCfg(eye=..., lookat=...) instead. The viewer values have been automatically forwarded for this run.
+[INFO]: Base environment:
+	Environment device    : cuda:0
+	Environment seed      : 3
+	Physics step-size     : 0.00833333333
+	Rendering step-size   : 0.01666666666
+	Environment step-size : 0.01666666666
+[2026-11-15 20:30:15,197][isaaclab.cloner._fabric_notices][INFO] - libcarb.so unavailable — Fabric notice suspension disabled (Linux x86_64 only)
+[scene_utils][+0.00s] setup start num_envs=32 num_assets_per_type=1
+[scene_utils][+0.07s] generated 2 object URDFs
+[scene_utils] self-collision: filtered 64 link pairs across 28 robot bodies in rizon4s_right_wuji_real_limits_physics.usd
+[scene_utils][+0.67s] resolved baked USDs
+[quat_convention] robot init rot (1.0, 0.0, 0.0, 0.0) (wxyz) -> (0.0, 0.0, 0.0, 1.0) (xyzw)
+[2026-11-15 20:30:15,884][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory Articulation.
+[2026-11-15 20:30:15,908][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory RigidObject.
+[2026-11-15 20:30:15,911][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 20:30:15,921][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 20:30:15,931][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[scene_utils][+0.73s] spawned robot/table/object/goalviz
+I: Initializing Version 2.72.3-release.7151+gl.5390bed9
+I: Client ID: TDWU04Z8
+I: Not using Hub: Hub not found
+I: Successfully created S3 provider for https://omniverse-content-staging.s3-us-west-2.amazonaws.com
+[2026-11-15 20:30:16,371][isaaclab.utils.assets][WARNING] - Serving remote assets from the local cache under '/share/portal/kk837/tmp'. Each copy is checked against the server before use; delete the directory to force a full re-download.
+[2026-11-15 20:30:16,371][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd'.
+[2026-11-15 20:30:16,480][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png'.
+[2026-11-15 20:30:16,482][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png'.
+[2026-11-15 20:30:16,485][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png'.
+[scene_utils][+1.31s] registered assets with scene
+[cloth] neutralised rigid tool (1 prims, 2 colliders off)
+[cloth] goal marker reshaped on 1 prims (half-sheet mesh, 21 verts / 24 tris)
+[2026-11-15 20:30:16,549][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory DeformableObject.
+[2026-11-15 20:30:16,553][isaaclab_contrib.deformable.deformable_object][INFO] - Registered visual UsdGeom.Mesh at /World/envs/env_.*/Cloth.
+[2026-11-15 20:30:16,553][isaaclab_contrib.deformable.deformable_object][INFO] - Registered UsdGeom.Mesh: 49 vertices.
+[cloth] object_scale = [2.5, 2.5, 0.4] (bbox [0.1, 0.1, 0.016] m / base 0.04)
+[cloth] 7x7 sheet, 0.100 m, 49 particles, 72 triangles, keypoints [28, 34, 42, 48]
+[cloning] pushed CollisionAPI onto 35 mesh prims under 35 collision Xforms
+[cloning] marked 3 object colliders convexHull
+[cloning] authored PD gains on 27 joint drives
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/replicate.py:105: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/base_link/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link1/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link2/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link3/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link4/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link5/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link6/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_mount/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_wrist/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal/collisions/r_index_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal_abd/collisions/r_index_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_middle/collisions/r_index_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal/collisions/r_middle_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal_abd/collisions/r_middle_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_middle/collisions/r_middle_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal/collisions/r_pinky_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal_abd/collisions/r_pinky_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_middle/collisions/r_pinky_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal/collisions/r_ring_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal_abd/collisions/r_ring_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_middle/collisions/r_ring_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal/collisions/r_thumb_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal_abd/collisions/r_thumb_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_middle/collisions/r_thumb_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/newton/_src/geometry/utils.py:821: UserWarning: remesh_convex_hull: input point cloud is coplanar (rank 2); returning a zero-volume fallback mesh. Downstream inertia computations will produce zero mass / COM / inertia.
+  _warn_degenerate("coplanar (rank 2)")
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/newton_clone_utils.py:147: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+[clone_patch] replicated 32 environments from 1 prototype row(s); variant counts [1, 1, 1, 1]
+[INFO]: Time taken for scene creation Last: 3.241797 s, Mean: 3.241797 s, Std: 0.000000 s, N: 1
+[INFO]: Scene manager:  <class InteractiveScene>
+	Number of environments: 32
+	Environment spacing   : 1.2
+	Source prim name      : /World/envs/env_0
+	Global prim paths     : []
+	Replicate physics     : False
+[INFO]: Starting the simulation. This may take a few seconds. Please wait...
+[2026-11-15 20:30:18,391][isaaclab_newton.physics.newton_manager][INFO] - Dispatching MODEL_INIT callbacks
+[2026-11-15 20:30:18,407][isaaclab_newton.physics.newton_manager][INFO] - Finalizing model on device: cuda:0
+[gravcomp] mujoco:gravcomp=1 on 896/992 bodies before finalize
+[condim] mujoco:condim=6 on 448 grasping shapes before finalize
+Finalize builder took: Last: 0.618915 s, Mean: 0.618915 s, Std: 0.000000 s, N: 1
+[2026-11-15 20:30:19,028][isaaclab_newton.physics.newton_manager][INFO] - Dispatching PHYSICS_READY callbacks
+[2026-11-15 20:30:19,041][isaaclab_newton.assets.articulation.articulation_data][WARNING] - Failed to get root com velocity. If the articulation is fixed, this is expected. Setting root com velocity to zeros.
+[2026-11-15 20:30:19,261][isaaclab_newton.assets.articulation.articulation][INFO] - Simulation parameters for joints in /World/envs/env_.*/Robot:
++-----------------------------------------------------------------------------------------------------------------------------------------+
+|                                    Simulation Joint Information (Prim path: /World/envs/env_.*/Robot)                                   |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+| Index | Name                     | Stiffness | Damping | Armature | Static Friction | Position Limits | Velocity Limits | Effort Limits |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+|   0   | joint1                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.793, 2.793] |      2.094      |    123.000    |
+|   1   | joint2                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.269, 2.269] |      2.094      |    123.000    |
+|   2   | joint3                   |  128.000  |  12.483 |  0.000   |      0.000      | [-2.967, 2.967] |      2.443      |     64.000    |
+|   3   | joint4                   |  128.000  |  12.483 |  0.000   |      0.000      | [-1.867, 2.688] |      2.443      |     64.000    |
+|   4   | joint5                   |   78.000  |  6.090  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   5   | joint6                   |   78.000  |  5.713  |  0.000   |      0.000      | [-1.396, 4.538] |      4.887      |     39.000    |
+|   6   | joint7                   |   78.000  |  5.713  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   7   | r_index_finger_mcp_flex  |   1.345   |  0.047  |  0.000   |      0.078      | [-0.349, 1.570] |     100.000     |     0.599     |
+|   8   | r_index_finger_mcp_abd   |   0.889   |  0.027  |  0.000   |      0.023      | [-0.035, 0.035] |     100.000     |     0.232     |
+|   9   | r_index_finger_pip       |   0.779   |  0.024  |  0.000   |      0.016      |  [0.000, 1.745] |     100.000     |     0.179     |
+|   10  | r_index_finger_dip       |   0.656   |  0.021  |  0.000   |      0.006      | [-0.175, 1.570] |     100.000     |     0.135     |
+|   11  | r_middle_finger_mcp_flex |   1.299   |  0.046  |  0.000   |      0.075      | [-0.349, 1.570] |     100.000     |     0.661     |
+|   12  | r_middle_finger_mcp_abd  |   0.943   |  0.028  |  0.000   |      0.018      | [-0.035, 0.035] |     100.000     |     0.201     |
+|   13  | r_middle_finger_pip      |   0.737   |  0.023  |  0.000   |      0.013      |  [0.000, 1.745] |     100.000     |     0.164     |
+|   14  | r_middle_finger_dip      |   0.710   |  0.022  |  0.000   |      0.005      | [-0.175, 1.570] |     100.000     |     0.114     |
+|   15  | r_pinky_mcp_flex         |   1.103   |  0.044  |  0.000   |      0.033      | [-0.349, 1.570] |     100.000     |     0.478     |
+|   16  | r_pinky_mcp_abd          |   0.910   |  0.027  |  0.000   |      0.011      | [-0.035, 0.035] |     100.000     |     0.109     |
+|   17  | r_pinky_pip              |   0.862   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.100     |
+|   18  | r_pinky_dip              |   0.657   |  0.021  |  0.000   |      0.011      | [-0.175, 1.570] |     100.000     |     0.157     |
+|   19  | r_ring_finger_mcp_flex   |   1.277   |  0.046  |  0.000   |      0.070      | [-0.349, 1.570] |     100.000     |     0.557     |
+|   20  | r_ring_finger_mcp_abd    |   1.013   |  0.029  |  0.000   |      0.016      | [-0.035, 0.035] |     100.000     |     0.205     |
+|   21  | r_ring_finger_pip        |   0.859   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.169     |
+|   22  | r_ring_finger_dip        |   0.648   |  0.020  |  0.000   |      0.008      | [-0.175, 1.570] |     100.000     |     0.163     |
+|   23  | r_thumb_cmc_flex         |   1.355   |  0.048  |  0.000   |      0.043      | [-0.349, 1.291] |     100.000     |     0.439     |
+|   24  | r_thumb_cmc_abd          |   2.199   |  0.063  |  0.000   |      0.036      | [-1.484, 0.698] |     100.000     |     0.204     |
+|   25  | r_thumb_mcp              |   0.886   |  0.028  |  0.000   |      0.018      | [-0.175, 1.570] |     100.000     |     0.255     |
+|   26  | r_thumb_ip               |   0.654   |  0.020  |  0.000   |      0.053      | [-0.262, 1.570] |     100.000     |     0.222     |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+[2026-11-15 20:30:19,273][isaaclab_contrib.deformable.deformable_object][INFO] - Newton deformable object initialized at: /World/envs/env_.*/Cloth
+[2026-11-15 20:30:19,273][isaaclab_contrib.deformable.deformable_object][INFO] - Number of instances: 32
+[2026-11-15 20:30:19,273][isaaclab_contrib.deformable.deformable_object][INFO] - Particles per body: 49
+Initialize solver took: Last: 2.893207 s, Mean: 2.893207 s, Std: 0.000000 s, N: 1
+[INFO]: Time taken for simulation start Last: 3.801375 s, Mean: 3.801375 s, Std: 0.000000 s, N: 1
+[cloth] plasticity writes the cloth solver's edge_rest_angle (its own view copy, mirrored to the model)
+[cloth] plasticity: yield curvature 32 /m = 30.6 deg per grid cell, 21.6 deg per diagonal, 3072 hinges
+[INFO]: Completed setting up the environment...
+[material_patch] friction set: 1249 shapes at mu=0.5, 320 fingertip shapes at mu=1.5
+[spring] passive hand spring on 20 joints as a joint effort: ks 0.0110-0.1447 N m/rad, ks / kp 0.015-0.111
+[dr] obs delay off, action delay off, object state off | delay_mode per_step | joint vel noise 0.0, joint pos noise 0.0 rad, action noise 0.0 | object bias +-(0.0, 0.0, 0.0) m / 0.0 deg | robot gains k x(1.0, 1.0) d x(1.0, 1.0)
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/share/portal/kk837/task_curriculum/isaacsimenvs/eval/player.py:60: UserWarning: register_new_resolver() is deprecated and will be removed in a future release.
+Use register_resolver() instead.
+See https://github.com/hydra-ecosystem/omegaconf/issues/426 for migration instructions.
+
+  OmegaConf.register_new_resolver(name, fn)
+self.seed = 42
+[BasePlayer] Creating regular env:  rlgpu
+{'observation_space': Box(-inf, inf, (134,), float32), 'action_space': Box(-1.0, 1.0, (27,), float32), 'agents': 1, 'value_size': 1}
+build mlp: 1024
+RunningMeanStd:  (1,)
+RunningMeanStd:  (134,)
+=> loading checkpoint 'debug_outputs/train_logs/nov/2026-11-15_rigid_cloth_prior_2gpu_659538/nn/snap_0_rigid_cloth_prior_2gpu_ep_1300.pth'
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/utils/reset_utils.py:336: DeprecationWarning: The function 'write_joint_state_to_sim' will be deprecated in a future release. Please use 'write_joint_state_to_sim_index' instead.
+  env.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:2122: DeprecationWarning: The function 'write_root_pose_to_sim' will be deprecated in a future release. Please use 'write_root_pose_to_sim_index' instead.
+  return _orig(value, *args, **kwargs)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
+  value = getattr(object.__getattribute__(self, "_wrapped"), name)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:68: DeprecationWarning: The function 'set_joint_position_target' will be deprecated in a future release. Please use 'set_joint_position_target_index' instead.
+  self.robot.set_joint_position_target(self._cur_targets)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:72: DeprecationWarning: The function 'set_joint_effort_target' will be deprecated in a future release. Please use 'set_joint_effort_target_index' instead.
+  self.robot.set_joint_effort_target(spring)
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 1 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 25/32 envs done
+[cloth] plasticity reset of 1 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 25/32 envs done
+
+========================================================================
+Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0  |  32 envs  |  first episode per env
+goals/episode = 0.0 +/- 0.0   (n=32, censored=0)
+lift fraction = 0.0
+termination   = {'fall': 26, 'max_successes': 0, 'hand_far': 0, 'timeout': 6, 'fold': 0, 'fold_held': 0, 'nonfinite': 0}
+mean ep length= 323.5 steps
+========================================================================
+
+[episodes] wrote experiments/nov15_fabric_eval/results/prior__fold__silk_s3.json
+[2026-11-15 20:41:01,572][isaaclab.sim.simulation_context][INFO] - SimulationContext cleared
+[episodes] running kit-less (no Isaac Sim runtime): AppLauncher requires the full Isaac Sim runtime. Install Isaac Sim or avoid constructing AppLauncher in a kitless process.
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.cloth.cloth_env_cfg:ClothEnvCfg
+/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py:132: Hydra15MigrationWarning: The version_base parameter is deprecated and will be removed in Hydra 1.5.
+Omit the version_base parameter to use the current Hydra defaults.
+  @hydra.main(config_path=None, config_name=short_name, version_base="1.3")
+[2026-11-15 20:41:08,173][isaaclab.envs.common][WARNING] - env_cfg.viewer is deprecated. Set env_cfg.sim.default_visualizer_cfg = KitVisualizerCfg(eye=..., lookat=...) instead. The viewer values have been automatically forwarded for this run.
+[INFO]: Base environment:
+	Environment device    : cuda:0
+	Environment seed      : 4
+	Physics step-size     : 0.00833333333
+	Rendering step-size   : 0.01666666666
+	Environment step-size : 0.01666666666
+[2026-11-15 20:41:09,761][isaaclab.cloner._fabric_notices][INFO] - libcarb.so unavailable — Fabric notice suspension disabled (Linux x86_64 only)
+[scene_utils][+0.00s] setup start num_envs=32 num_assets_per_type=1
+[scene_utils][+0.00s] generated 2 object URDFs
+[scene_utils] self-collision: filtered 64 link pairs across 28 robot bodies in rizon4s_right_wuji_real_limits_physics.usd
+[scene_utils][+0.50s] resolved baked USDs
+[quat_convention] robot init rot (1.0, 0.0, 0.0, 0.0) (wxyz) -> (0.0, 0.0, 0.0, 1.0) (xyzw)
+[2026-11-15 20:41:10,270][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory Articulation.
+[2026-11-15 20:41:10,296][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory RigidObject.
+[2026-11-15 20:41:10,298][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 20:41:10,307][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 20:41:10,316][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[scene_utils][+0.55s] spawned robot/table/object/goalviz
+I: Initializing Version 2.72.3-release.7151+gl.5390bed9
+I: Client ID: 5W9DDGAH
+I: Not using Hub: Hub not found
+I: Successfully created S3 provider for https://omniverse-content-staging.s3-us-west-2.amazonaws.com
+[2026-11-15 20:41:10,745][isaaclab.utils.assets][WARNING] - Serving remote assets from the local cache under '/share/portal/kk837/tmp'. Each copy is checked against the server before use; delete the directory to force a full re-download.
+[2026-11-15 20:41:10,745][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd'.
+[2026-11-15 20:41:10,850][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png'.
+[2026-11-15 20:41:10,851][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png'.
+[2026-11-15 20:41:10,853][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png'.
+[scene_utils][+1.11s] registered assets with scene
+[cloth] neutralised rigid tool (1 prims, 2 colliders off)
+[cloth] goal marker reshaped on 1 prims (half-sheet mesh, 21 verts / 24 tris)
+[2026-11-15 20:41:10,903][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory DeformableObject.
+[2026-11-15 20:41:10,907][isaaclab_contrib.deformable.deformable_object][INFO] - Registered visual UsdGeom.Mesh at /World/envs/env_.*/Cloth.
+[2026-11-15 20:41:10,908][isaaclab_contrib.deformable.deformable_object][INFO] - Registered UsdGeom.Mesh: 49 vertices.
+[cloth] object_scale = [2.5, 2.5, 0.4] (bbox [0.1, 0.1, 0.016] m / base 0.04)
+[cloth] 7x7 sheet, 0.100 m, 49 particles, 72 triangles, keypoints [28, 34, 42, 48]
+[cloning] pushed CollisionAPI onto 35 mesh prims under 35 collision Xforms
+[cloning] marked 3 object colliders convexHull
+[cloning] authored PD gains on 27 joint drives
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/replicate.py:105: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/base_link/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link1/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link2/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link3/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link4/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link5/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link6/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_mount/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_wrist/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal/collisions/r_index_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal_abd/collisions/r_index_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_middle/collisions/r_index_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal/collisions/r_middle_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal_abd/collisions/r_middle_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_middle/collisions/r_middle_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal/collisions/r_pinky_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal_abd/collisions/r_pinky_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_middle/collisions/r_pinky_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal/collisions/r_ring_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal_abd/collisions/r_ring_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_middle/collisions/r_ring_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal/collisions/r_thumb_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal_abd/collisions/r_thumb_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_middle/collisions/r_thumb_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/newton/_src/geometry/utils.py:821: UserWarning: remesh_convex_hull: input point cloud is coplanar (rank 2); returning a zero-volume fallback mesh. Downstream inertia computations will produce zero mass / COM / inertia.
+  _warn_degenerate("coplanar (rank 2)")
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/newton_clone_utils.py:147: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+[clone_patch] replicated 32 environments from 1 prototype row(s); variant counts [1, 1, 1, 1]
+[INFO]: Time taken for scene creation Last: 3.365559 s, Mean: 3.365559 s, Std: 0.000000 s, N: 1
+[INFO]: Scene manager:  <class InteractiveScene>
+	Number of environments: 32
+	Environment spacing   : 1.2
+	Source prim name      : /World/envs/env_0
+	Global prim paths     : []
+	Replicate physics     : False
+[INFO]: Starting the simulation. This may take a few seconds. Please wait...
+[2026-11-15 20:41:13,069][isaaclab_newton.physics.newton_manager][INFO] - Dispatching MODEL_INIT callbacks
+[2026-11-15 20:41:13,097][isaaclab_newton.physics.newton_manager][INFO] - Finalizing model on device: cuda:0
+[gravcomp] mujoco:gravcomp=1 on 896/992 bodies before finalize
+[condim] mujoco:condim=6 on 448 grasping shapes before finalize
+Finalize builder took: Last: 0.601970 s, Mean: 0.601970 s, Std: 0.000000 s, N: 1
+[2026-11-15 20:41:13,702][isaaclab_newton.physics.newton_manager][INFO] - Dispatching PHYSICS_READY callbacks
+[2026-11-15 20:41:13,721][isaaclab_newton.assets.articulation.articulation_data][WARNING] - Failed to get root com velocity. If the articulation is fixed, this is expected. Setting root com velocity to zeros.
+[2026-11-15 20:41:13,872][isaaclab_newton.assets.articulation.articulation][INFO] - Simulation parameters for joints in /World/envs/env_.*/Robot:
++-----------------------------------------------------------------------------------------------------------------------------------------+
+|                                    Simulation Joint Information (Prim path: /World/envs/env_.*/Robot)                                   |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+| Index | Name                     | Stiffness | Damping | Armature | Static Friction | Position Limits | Velocity Limits | Effort Limits |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+|   0   | joint1                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.793, 2.793] |      2.094      |    123.000    |
+|   1   | joint2                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.269, 2.269] |      2.094      |    123.000    |
+|   2   | joint3                   |  128.000  |  12.483 |  0.000   |      0.000      | [-2.967, 2.967] |      2.443      |     64.000    |
+|   3   | joint4                   |  128.000  |  12.483 |  0.000   |      0.000      | [-1.867, 2.688] |      2.443      |     64.000    |
+|   4   | joint5                   |   78.000  |  6.090  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   5   | joint6                   |   78.000  |  5.713  |  0.000   |      0.000      | [-1.396, 4.538] |      4.887      |     39.000    |
+|   6   | joint7                   |   78.000  |  5.713  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   7   | r_index_finger_mcp_flex  |   1.345   |  0.047  |  0.000   |      0.078      | [-0.349, 1.570] |     100.000     |     0.599     |
+|   8   | r_index_finger_mcp_abd   |   0.889   |  0.027  |  0.000   |      0.023      | [-0.035, 0.035] |     100.000     |     0.232     |
+|   9   | r_index_finger_pip       |   0.779   |  0.024  |  0.000   |      0.016      |  [0.000, 1.745] |     100.000     |     0.179     |
+|   10  | r_index_finger_dip       |   0.656   |  0.021  |  0.000   |      0.006      | [-0.175, 1.570] |     100.000     |     0.135     |
+|   11  | r_middle_finger_mcp_flex |   1.299   |  0.046  |  0.000   |      0.075      | [-0.349, 1.570] |     100.000     |     0.661     |
+|   12  | r_middle_finger_mcp_abd  |   0.943   |  0.028  |  0.000   |      0.018      | [-0.035, 0.035] |     100.000     |     0.201     |
+|   13  | r_middle_finger_pip      |   0.737   |  0.023  |  0.000   |      0.013      |  [0.000, 1.745] |     100.000     |     0.164     |
+|   14  | r_middle_finger_dip      |   0.710   |  0.022  |  0.000   |      0.005      | [-0.175, 1.570] |     100.000     |     0.114     |
+|   15  | r_pinky_mcp_flex         |   1.103   |  0.044  |  0.000   |      0.033      | [-0.349, 1.570] |     100.000     |     0.478     |
+|   16  | r_pinky_mcp_abd          |   0.910   |  0.027  |  0.000   |      0.011      | [-0.035, 0.035] |     100.000     |     0.109     |
+|   17  | r_pinky_pip              |   0.862   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.100     |
+|   18  | r_pinky_dip              |   0.657   |  0.021  |  0.000   |      0.011      | [-0.175, 1.570] |     100.000     |     0.157     |
+|   19  | r_ring_finger_mcp_flex   |   1.277   |  0.046  |  0.000   |      0.070      | [-0.349, 1.570] |     100.000     |     0.557     |
+|   20  | r_ring_finger_mcp_abd    |   1.013   |  0.029  |  0.000   |      0.016      | [-0.035, 0.035] |     100.000     |     0.205     |
+|   21  | r_ring_finger_pip        |   0.859   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.169     |
+|   22  | r_ring_finger_dip        |   0.648   |  0.020  |  0.000   |      0.008      | [-0.175, 1.570] |     100.000     |     0.163     |
+|   23  | r_thumb_cmc_flex         |   1.355   |  0.048  |  0.000   |      0.043      | [-0.349, 1.291] |     100.000     |     0.439     |
+|   24  | r_thumb_cmc_abd          |   2.199   |  0.063  |  0.000   |      0.036      | [-1.484, 0.698] |     100.000     |     0.204     |
+|   25  | r_thumb_mcp              |   0.886   |  0.028  |  0.000   |      0.018      | [-0.175, 1.570] |     100.000     |     0.255     |
+|   26  | r_thumb_ip               |   0.654   |  0.020  |  0.000   |      0.053      | [-0.262, 1.570] |     100.000     |     0.222     |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+[2026-11-15 20:41:13,886][isaaclab_contrib.deformable.deformable_object][INFO] - Newton deformable object initialized at: /World/envs/env_.*/Cloth
+[2026-11-15 20:41:13,886][isaaclab_contrib.deformable.deformable_object][INFO] - Number of instances: 32
+[2026-11-15 20:41:13,886][isaaclab_contrib.deformable.deformable_object][INFO] - Particles per body: 49
+Initialize solver took: Last: 2.841087 s, Mean: 2.841087 s, Std: 0.000000 s, N: 1
+[INFO]: Time taken for simulation start Last: 3.688849 s, Mean: 3.688849 s, Std: 0.000000 s, N: 1
+[cloth] plasticity writes the cloth solver's edge_rest_angle (its own view copy, mirrored to the model)
+[cloth] plasticity: yield curvature 32 /m = 30.6 deg per grid cell, 21.6 deg per diagonal, 3072 hinges
+[INFO]: Completed setting up the environment...
+[material_patch] friction set: 1249 shapes at mu=0.5, 320 fingertip shapes at mu=1.5
+[spring] passive hand spring on 20 joints as a joint effort: ks 0.0110-0.1447 N m/rad, ks / kp 0.015-0.111
+[dr] obs delay off, action delay off, object state off | delay_mode per_step | joint vel noise 0.0, joint pos noise 0.0 rad, action noise 0.0 | object bias +-(0.0, 0.0, 0.0) m / 0.0 deg | robot gains k x(1.0, 1.0) d x(1.0, 1.0)
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/share/portal/kk837/task_curriculum/isaacsimenvs/eval/player.py:60: UserWarning: register_new_resolver() is deprecated and will be removed in a future release.
+Use register_resolver() instead.
+See https://github.com/hydra-ecosystem/omegaconf/issues/426 for migration instructions.
+
+  OmegaConf.register_new_resolver(name, fn)
+self.seed = 42
+[BasePlayer] Creating regular env:  rlgpu
+{'observation_space': Box(-inf, inf, (134,), float32), 'action_space': Box(-1.0, 1.0, (27,), float32), 'agents': 1, 'value_size': 1}
+build mlp: 1024
+RunningMeanStd:  (1,)
+RunningMeanStd:  (134,)
+=> loading checkpoint 'debug_outputs/train_logs/nov/2026-11-15_rigid_cloth_prior_2gpu_659538/nn/snap_0_rigid_cloth_prior_2gpu_ep_1300.pth'
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/utils/reset_utils.py:336: DeprecationWarning: The function 'write_joint_state_to_sim' will be deprecated in a future release. Please use 'write_joint_state_to_sim_index' instead.
+  env.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:2122: DeprecationWarning: The function 'write_root_pose_to_sim' will be deprecated in a future release. Please use 'write_root_pose_to_sim_index' instead.
+  return _orig(value, *args, **kwargs)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
+  value = getattr(object.__getattribute__(self, "_wrapped"), name)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:68: DeprecationWarning: The function 'set_joint_position_target' will be deprecated in a future release. Please use 'set_joint_position_target_index' instead.
+  self.robot.set_joint_position_target(self._cur_targets)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:72: DeprecationWarning: The function 'set_joint_effort_target' will be deprecated in a future release. Please use 'set_joint_effort_target_index' instead.
+  self.robot.set_joint_effort_target(spring)
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 1 envs: largest set angle 32.1 deg, 5 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 29/32 envs done
+[cloth] plasticity reset of 1 envs: largest set angle 32.1 deg, 5 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 29/32 envs done
+
+========================================================================
+Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0  |  32 envs  |  first episode per env
+goals/episode = 0.0 +/- 0.0   (n=32, censored=0)
+lift fraction = 0.0
+termination   = {'fall': 30, 'max_successes': 0, 'hand_far': 0, 'timeout': 2, 'fold': 0, 'fold_held': 0, 'nonfinite': 0}
+mean ep length= 304.3 steps
+========================================================================
+
+[episodes] wrote experiments/nov15_fabric_eval/results/prior__fold__silk_s4.json
+[2026-11-15 20:50:41,145][isaaclab.sim.simulation_context][INFO] - SimulationContext cleared
+[episodes] running kit-less (no Isaac Sim runtime): AppLauncher requires the full Isaac Sim runtime. Install Isaac Sim or avoid constructing AppLauncher in a kitless process.
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.cloth.cloth_env_cfg:ClothEnvCfg
+/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py:132: Hydra15MigrationWarning: The version_base parameter is deprecated and will be removed in Hydra 1.5.
+Omit the version_base parameter to use the current Hydra defaults.
+  @hydra.main(config_path=None, config_name=short_name, version_base="1.3")
+[2026-11-15 20:50:47,912][isaaclab.envs.common][WARNING] - env_cfg.viewer is deprecated. Set env_cfg.sim.default_visualizer_cfg = KitVisualizerCfg(eye=..., lookat=...) instead. The viewer values have been automatically forwarded for this run.
+[INFO]: Base environment:
+	Environment device    : cuda:0
+	Environment seed      : 5
+	Physics step-size     : 0.00833333333
+	Rendering step-size   : 0.01666666666
+	Environment step-size : 0.01666666666
+[2026-11-15 20:50:49,532][isaaclab.cloner._fabric_notices][INFO] - libcarb.so unavailable — Fabric notice suspension disabled (Linux x86_64 only)
+[scene_utils][+0.00s] setup start num_envs=32 num_assets_per_type=1
+[scene_utils][+0.00s] generated 2 object URDFs
+[scene_utils] self-collision: filtered 64 link pairs across 28 robot bodies in rizon4s_right_wuji_real_limits_physics.usd
+[scene_utils][+0.47s] resolved baked USDs
+[quat_convention] robot init rot (1.0, 0.0, 0.0, 0.0) (wxyz) -> (0.0, 0.0, 0.0, 1.0) (xyzw)
+[2026-11-15 20:50:50,014][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory Articulation.
+[2026-11-15 20:50:50,034][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory RigidObject.
+[2026-11-15 20:50:50,037][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 20:50:50,049][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 20:50:50,058][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[scene_utils][+0.53s] spawned robot/table/object/goalviz
+I: Initializing Version 2.72.3-release.7151+gl.5390bed9
+I: Client ID: YM2A2HTP
+I: Not using Hub: Hub not found
+I: Successfully created S3 provider for https://omniverse-content-staging.s3-us-west-2.amazonaws.com
+[2026-11-15 20:50:50,484][isaaclab.utils.assets][WARNING] - Serving remote assets from the local cache under '/share/portal/kk837/tmp'. Each copy is checked against the server before use; delete the directory to force a full re-download.
+[2026-11-15 20:50:50,484][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd'.
+[2026-11-15 20:50:50,587][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png'.
+[2026-11-15 20:50:50,588][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png'.
+[2026-11-15 20:50:50,589][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png'.
+[scene_utils][+1.08s] registered assets with scene
+[cloth] neutralised rigid tool (1 prims, 2 colliders off)
+[cloth] goal marker reshaped on 1 prims (half-sheet mesh, 21 verts / 24 tris)
+[2026-11-15 20:50:50,641][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory DeformableObject.
+[2026-11-15 20:50:50,645][isaaclab_contrib.deformable.deformable_object][INFO] - Registered visual UsdGeom.Mesh at /World/envs/env_.*/Cloth.
+[2026-11-15 20:50:50,646][isaaclab_contrib.deformable.deformable_object][INFO] - Registered UsdGeom.Mesh: 49 vertices.
+[cloth] object_scale = [2.5, 2.5, 0.4] (bbox [0.1, 0.1, 0.016] m / base 0.04)
+[cloth] 7x7 sheet, 0.100 m, 49 particles, 72 triangles, keypoints [28, 34, 42, 48]
+[cloning] pushed CollisionAPI onto 35 mesh prims under 35 collision Xforms
+[cloning] marked 3 object colliders convexHull
+[cloning] authored PD gains on 27 joint drives
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/replicate.py:105: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/base_link/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link1/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link2/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link3/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link4/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link5/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link6/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_mount/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_wrist/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal/collisions/r_index_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal_abd/collisions/r_index_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_middle/collisions/r_index_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal/collisions/r_middle_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal_abd/collisions/r_middle_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_middle/collisions/r_middle_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal/collisions/r_pinky_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal_abd/collisions/r_pinky_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_middle/collisions/r_pinky_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal/collisions/r_ring_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal_abd/collisions/r_ring_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_middle/collisions/r_ring_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal/collisions/r_thumb_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal_abd/collisions/r_thumb_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_middle/collisions/r_thumb_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/newton/_src/geometry/utils.py:821: UserWarning: remesh_convex_hull: input point cloud is coplanar (rank 2); returning a zero-volume fallback mesh. Downstream inertia computations will produce zero mass / COM / inertia.
+  _warn_degenerate("coplanar (rank 2)")
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/newton_clone_utils.py:147: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+[clone_patch] replicated 32 environments from 1 prototype row(s); variant counts [1, 1, 1, 1]
+[INFO]: Time taken for scene creation Last: 3.433493 s, Mean: 3.433493 s, Std: 0.000000 s, N: 1
+[INFO]: Scene manager:  <class InteractiveScene>
+	Number of environments: 32
+	Environment spacing   : 1.2
+	Source prim name      : /World/envs/env_0
+	Global prim paths     : []
+	Replicate physics     : False
+[INFO]: Starting the simulation. This may take a few seconds. Please wait...
+[2026-11-15 20:50:52,904][isaaclab_newton.physics.newton_manager][INFO] - Dispatching MODEL_INIT callbacks
+[2026-11-15 20:50:52,930][isaaclab_newton.physics.newton_manager][INFO] - Finalizing model on device: cuda:0
+[gravcomp] mujoco:gravcomp=1 on 896/992 bodies before finalize
+[condim] mujoco:condim=6 on 448 grasping shapes before finalize
+Finalize builder took: Last: 0.600467 s, Mean: 0.600467 s, Std: 0.000000 s, N: 1
+[2026-11-15 20:50:53,533][isaaclab_newton.physics.newton_manager][INFO] - Dispatching PHYSICS_READY callbacks
+[2026-11-15 20:50:53,550][isaaclab_newton.assets.articulation.articulation_data][WARNING] - Failed to get root com velocity. If the articulation is fixed, this is expected. Setting root com velocity to zeros.
+[2026-11-15 20:50:53,696][isaaclab_newton.assets.articulation.articulation][INFO] - Simulation parameters for joints in /World/envs/env_.*/Robot:
++-----------------------------------------------------------------------------------------------------------------------------------------+
+|                                    Simulation Joint Information (Prim path: /World/envs/env_.*/Robot)                                   |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+| Index | Name                     | Stiffness | Damping | Armature | Static Friction | Position Limits | Velocity Limits | Effort Limits |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+|   0   | joint1                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.793, 2.793] |      2.094      |    123.000    |
+|   1   | joint2                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.269, 2.269] |      2.094      |    123.000    |
+|   2   | joint3                   |  128.000  |  12.483 |  0.000   |      0.000      | [-2.967, 2.967] |      2.443      |     64.000    |
+|   3   | joint4                   |  128.000  |  12.483 |  0.000   |      0.000      | [-1.867, 2.688] |      2.443      |     64.000    |
+|   4   | joint5                   |   78.000  |  6.090  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   5   | joint6                   |   78.000  |  5.713  |  0.000   |      0.000      | [-1.396, 4.538] |      4.887      |     39.000    |
+|   6   | joint7                   |   78.000  |  5.713  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   7   | r_index_finger_mcp_flex  |   1.345   |  0.047  |  0.000   |      0.078      | [-0.349, 1.570] |     100.000     |     0.599     |
+|   8   | r_index_finger_mcp_abd   |   0.889   |  0.027  |  0.000   |      0.023      | [-0.035, 0.035] |     100.000     |     0.232     |
+|   9   | r_index_finger_pip       |   0.779   |  0.024  |  0.000   |      0.016      |  [0.000, 1.745] |     100.000     |     0.179     |
+|   10  | r_index_finger_dip       |   0.656   |  0.021  |  0.000   |      0.006      | [-0.175, 1.570] |     100.000     |     0.135     |
+|   11  | r_middle_finger_mcp_flex |   1.299   |  0.046  |  0.000   |      0.075      | [-0.349, 1.570] |     100.000     |     0.661     |
+|   12  | r_middle_finger_mcp_abd  |   0.943   |  0.028  |  0.000   |      0.018      | [-0.035, 0.035] |     100.000     |     0.201     |
+|   13  | r_middle_finger_pip      |   0.737   |  0.023  |  0.000   |      0.013      |  [0.000, 1.745] |     100.000     |     0.164     |
+|   14  | r_middle_finger_dip      |   0.710   |  0.022  |  0.000   |      0.005      | [-0.175, 1.570] |     100.000     |     0.114     |
+|   15  | r_pinky_mcp_flex         |   1.103   |  0.044  |  0.000   |      0.033      | [-0.349, 1.570] |     100.000     |     0.478     |
+|   16  | r_pinky_mcp_abd          |   0.910   |  0.027  |  0.000   |      0.011      | [-0.035, 0.035] |     100.000     |     0.109     |
+|   17  | r_pinky_pip              |   0.862   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.100     |
+|   18  | r_pinky_dip              |   0.657   |  0.021  |  0.000   |      0.011      | [-0.175, 1.570] |     100.000     |     0.157     |
+|   19  | r_ring_finger_mcp_flex   |   1.277   |  0.046  |  0.000   |      0.070      | [-0.349, 1.570] |     100.000     |     0.557     |
+|   20  | r_ring_finger_mcp_abd    |   1.013   |  0.029  |  0.000   |      0.016      | [-0.035, 0.035] |     100.000     |     0.205     |
+|   21  | r_ring_finger_pip        |   0.859   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.169     |
+|   22  | r_ring_finger_dip        |   0.648   |  0.020  |  0.000   |      0.008      | [-0.175, 1.570] |     100.000     |     0.163     |
+|   23  | r_thumb_cmc_flex         |   1.355   |  0.048  |  0.000   |      0.043      | [-0.349, 1.291] |     100.000     |     0.439     |
+|   24  | r_thumb_cmc_abd          |   2.199   |  0.063  |  0.000   |      0.036      | [-1.484, 0.698] |     100.000     |     0.204     |
+|   25  | r_thumb_mcp              |   0.886   |  0.028  |  0.000   |      0.018      | [-0.175, 1.570] |     100.000     |     0.255     |
+|   26  | r_thumb_ip               |   0.654   |  0.020  |  0.000   |      0.053      | [-0.262, 1.570] |     100.000     |     0.222     |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+[2026-11-15 20:50:53,713][isaaclab_contrib.deformable.deformable_object][INFO] - Newton deformable object initialized at: /World/envs/env_.*/Cloth
+[2026-11-15 20:50:53,713][isaaclab_contrib.deformable.deformable_object][INFO] - Number of instances: 32
+[2026-11-15 20:50:53,713][isaaclab_contrib.deformable.deformable_object][INFO] - Particles per body: 49
+Initialize solver took: Last: 2.847967 s, Mean: 2.847967 s, Std: 0.000000 s, N: 1
+[INFO]: Time taken for simulation start Last: 3.686222 s, Mean: 3.686222 s, Std: 0.000000 s, N: 1
+[cloth] plasticity writes the cloth solver's edge_rest_angle (its own view copy, mirrored to the model)
+[cloth] plasticity: yield curvature 32 /m = 30.6 deg per grid cell, 21.6 deg per diagonal, 3072 hinges
+[INFO]: Completed setting up the environment...
+[material_patch] friction set: 1249 shapes at mu=0.5, 320 fingertip shapes at mu=1.5
+[spring] passive hand spring on 20 joints as a joint effort: ks 0.0110-0.1447 N m/rad, ks / kp 0.015-0.111
+[dr] obs delay off, action delay off, object state off | delay_mode per_step | joint vel noise 0.0, joint pos noise 0.0 rad, action noise 0.0 | object bias +-(0.0, 0.0, 0.0) m / 0.0 deg | robot gains k x(1.0, 1.0) d x(1.0, 1.0)
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/share/portal/kk837/task_curriculum/isaacsimenvs/eval/player.py:60: UserWarning: register_new_resolver() is deprecated and will be removed in a future release.
+Use register_resolver() instead.
+See https://github.com/hydra-ecosystem/omegaconf/issues/426 for migration instructions.
+
+  OmegaConf.register_new_resolver(name, fn)
+self.seed = 42
+[BasePlayer] Creating regular env:  rlgpu
+{'observation_space': Box(-inf, inf, (134,), float32), 'action_space': Box(-1.0, 1.0, (27,), float32), 'agents': 1, 'value_size': 1}
+build mlp: 1024
+RunningMeanStd:  (1,)
+RunningMeanStd:  (134,)
+=> loading checkpoint 'debug_outputs/train_logs/nov/2026-11-15_rigid_cloth_prior_2gpu_659538/nn/snap_0_rigid_cloth_prior_2gpu_ep_1300.pth'
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/utils/reset_utils.py:336: DeprecationWarning: The function 'write_joint_state_to_sim' will be deprecated in a future release. Please use 'write_joint_state_to_sim_index' instead.
+  env.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:2122: DeprecationWarning: The function 'write_root_pose_to_sim' will be deprecated in a future release. Please use 'write_root_pose_to_sim_index' instead.
+  return _orig(value, *args, **kwargs)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
+  value = getattr(object.__getattribute__(self, "_wrapped"), name)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:68: DeprecationWarning: The function 'set_joint_position_target' will be deprecated in a future release. Please use 'set_joint_position_target_index' instead.
+  self.robot.set_joint_position_target(self._cur_targets)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:72: DeprecationWarning: The function 'set_joint_effort_target' will be deprecated in a future release. Please use 'set_joint_effort_target_index' instead.
+  self.robot.set_joint_effort_target(spring)
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 1 envs: largest set angle 63.0 deg, 3 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 26/32 envs done
+[cloth] plasticity reset of 1 envs: largest set angle 63.0 deg, 3 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 26/32 envs done
+
+========================================================================
+Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0  |  32 envs  |  first episode per env
+goals/episode = 0.0 +/- 0.0   (n=32, censored=0)
+lift fraction = 0.0
+termination   = {'fall': 27, 'max_successes': 0, 'hand_far': 0, 'timeout': 5, 'fold': 0, 'fold_held': 0, 'nonfinite': 0}
+mean ep length= 336.3 steps
+========================================================================
+
+[episodes] wrote experiments/nov15_fabric_eval/results/prior__fold__silk_s5.json
+[2026-11-15 21:00:34,806][isaaclab.sim.simulation_context][INFO] - SimulationContext cleared
+[episodes] running kit-less (no Isaac Sim runtime): AppLauncher requires the full Isaac Sim runtime. Install Isaac Sim or avoid constructing AppLauncher in a kitless process.
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.cloth.cloth_env_cfg:ClothEnvCfg
+/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py:132: Hydra15MigrationWarning: The version_base parameter is deprecated and will be removed in Hydra 1.5.
+Omit the version_base parameter to use the current Hydra defaults.
+  @hydra.main(config_path=None, config_name=short_name, version_base="1.3")
+[2026-11-15 21:00:41,023][isaaclab.envs.common][WARNING] - env_cfg.viewer is deprecated. Set env_cfg.sim.default_visualizer_cfg = KitVisualizerCfg(eye=..., lookat=...) instead. The viewer values have been automatically forwarded for this run.
+[INFO]: Base environment:
+	Environment device    : cuda:0
+	Environment seed      : 6
+	Physics step-size     : 0.00833333333
+	Rendering step-size   : 0.01666666666
+	Environment step-size : 0.01666666666
+[2026-11-15 21:00:42,288][isaaclab.cloner._fabric_notices][INFO] - libcarb.so unavailable — Fabric notice suspension disabled (Linux x86_64 only)
+[scene_utils][+0.00s] setup start num_envs=32 num_assets_per_type=1
+[scene_utils][+0.01s] generated 2 object URDFs
+[scene_utils] self-collision: filtered 64 link pairs across 28 robot bodies in rizon4s_right_wuji_real_limits_physics.usd
+[scene_utils][+0.41s] resolved baked USDs
+[quat_convention] robot init rot (1.0, 0.0, 0.0, 0.0) (wxyz) -> (0.0, 0.0, 0.0, 1.0) (xyzw)
+[2026-11-15 21:00:42,709][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory Articulation.
+[2026-11-15 21:00:42,727][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory RigidObject.
+[2026-11-15 21:00:42,729][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 21:00:42,745][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 21:00:42,755][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[scene_utils][+0.47s] spawned robot/table/object/goalviz
+I: Initializing Version 2.72.3-release.7151+gl.5390bed9
+I: Client ID: 7PR8OZ97
+I: Not using Hub: Hub not found
+I: Successfully created S3 provider for https://omniverse-content-staging.s3-us-west-2.amazonaws.com
+[2026-11-15 21:00:43,180][isaaclab.utils.assets][WARNING] - Serving remote assets from the local cache under '/share/portal/kk837/tmp'. Each copy is checked against the server before use; delete the directory to force a full re-download.
+[2026-11-15 21:00:43,180][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd'.
+[2026-11-15 21:00:43,278][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png'.
+[2026-11-15 21:00:43,280][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png'.
+[2026-11-15 21:00:43,281][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png'.
+[scene_utils][+1.30s] registered assets with scene
+[cloth] neutralised rigid tool (1 prims, 2 colliders off)
+[cloth] goal marker reshaped on 1 prims (half-sheet mesh, 21 verts / 24 tris)
+[2026-11-15 21:00:43,621][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory DeformableObject.
+[2026-11-15 21:00:43,626][isaaclab_contrib.deformable.deformable_object][INFO] - Registered visual UsdGeom.Mesh at /World/envs/env_.*/Cloth.
+[2026-11-15 21:00:43,627][isaaclab_contrib.deformable.deformable_object][INFO] - Registered UsdGeom.Mesh: 49 vertices.
+[cloth] object_scale = [2.5, 2.5, 0.4] (bbox [0.1, 0.1, 0.016] m / base 0.04)
+[cloth] 7x7 sheet, 0.100 m, 49 particles, 72 triangles, keypoints [28, 34, 42, 48]
+[cloning] pushed CollisionAPI onto 35 mesh prims under 35 collision Xforms
+[cloning] marked 3 object colliders convexHull
+[cloning] authored PD gains on 27 joint drives
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/replicate.py:105: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/base_link/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link1/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link2/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link3/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link4/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link5/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link6/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_mount/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_wrist/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal/collisions/r_index_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal_abd/collisions/r_index_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_middle/collisions/r_index_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal/collisions/r_middle_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal_abd/collisions/r_middle_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_middle/collisions/r_middle_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal/collisions/r_pinky_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal_abd/collisions/r_pinky_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_middle/collisions/r_pinky_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal/collisions/r_ring_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal_abd/collisions/r_ring_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_middle/collisions/r_ring_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal/collisions/r_thumb_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal_abd/collisions/r_thumb_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_middle/collisions/r_thumb_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/newton/_src/geometry/utils.py:821: UserWarning: remesh_convex_hull: input point cloud is coplanar (rank 2); returning a zero-volume fallback mesh. Downstream inertia computations will produce zero mass / COM / inertia.
+  _warn_degenerate("coplanar (rank 2)")
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/newton_clone_utils.py:147: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+[clone_patch] replicated 32 environments from 1 prototype row(s); variant counts [1, 1, 1, 1]
+[INFO]: Time taken for scene creation Last: 3.034102 s, Mean: 3.034102 s, Std: 0.000000 s, N: 1
+[INFO]: Scene manager:  <class InteractiveScene>
+	Number of environments: 32
+	Environment spacing   : 1.2
+	Source prim name      : /World/envs/env_0
+	Global prim paths     : []
+	Replicate physics     : False
+[INFO]: Starting the simulation. This may take a few seconds. Please wait...
+[2026-11-15 21:00:45,260][isaaclab_newton.physics.newton_manager][INFO] - Dispatching MODEL_INIT callbacks
+[2026-11-15 21:00:45,282][isaaclab_newton.physics.newton_manager][INFO] - Finalizing model on device: cuda:0
+[gravcomp] mujoco:gravcomp=1 on 896/992 bodies before finalize
+[condim] mujoco:condim=6 on 448 grasping shapes before finalize
+Finalize builder took: Last: 0.595693 s, Mean: 0.595693 s, Std: 0.000000 s, N: 1
+[2026-11-15 21:00:45,880][isaaclab_newton.physics.newton_manager][INFO] - Dispatching PHYSICS_READY callbacks
+[2026-11-15 21:00:45,896][isaaclab_newton.assets.articulation.articulation_data][WARNING] - Failed to get root com velocity. If the articulation is fixed, this is expected. Setting root com velocity to zeros.
+[2026-11-15 21:00:46,415][isaaclab_newton.assets.articulation.articulation][INFO] - Simulation parameters for joints in /World/envs/env_.*/Robot:
++-----------------------------------------------------------------------------------------------------------------------------------------+
+|                                    Simulation Joint Information (Prim path: /World/envs/env_.*/Robot)                                   |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+| Index | Name                     | Stiffness | Damping | Armature | Static Friction | Position Limits | Velocity Limits | Effort Limits |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+|   0   | joint1                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.793, 2.793] |      2.094      |    123.000    |
+|   1   | joint2                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.269, 2.269] |      2.094      |    123.000    |
+|   2   | joint3                   |  128.000  |  12.483 |  0.000   |      0.000      | [-2.967, 2.967] |      2.443      |     64.000    |
+|   3   | joint4                   |  128.000  |  12.483 |  0.000   |      0.000      | [-1.867, 2.688] |      2.443      |     64.000    |
+|   4   | joint5                   |   78.000  |  6.090  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   5   | joint6                   |   78.000  |  5.713  |  0.000   |      0.000      | [-1.396, 4.538] |      4.887      |     39.000    |
+|   6   | joint7                   |   78.000  |  5.713  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   7   | r_index_finger_mcp_flex  |   1.345   |  0.047  |  0.000   |      0.078      | [-0.349, 1.570] |     100.000     |     0.599     |
+|   8   | r_index_finger_mcp_abd   |   0.889   |  0.027  |  0.000   |      0.023      | [-0.035, 0.035] |     100.000     |     0.232     |
+|   9   | r_index_finger_pip       |   0.779   |  0.024  |  0.000   |      0.016      |  [0.000, 1.745] |     100.000     |     0.179     |
+|   10  | r_index_finger_dip       |   0.656   |  0.021  |  0.000   |      0.006      | [-0.175, 1.570] |     100.000     |     0.135     |
+|   11  | r_middle_finger_mcp_flex |   1.299   |  0.046  |  0.000   |      0.075      | [-0.349, 1.570] |     100.000     |     0.661     |
+|   12  | r_middle_finger_mcp_abd  |   0.943   |  0.028  |  0.000   |      0.018      | [-0.035, 0.035] |     100.000     |     0.201     |
+|   13  | r_middle_finger_pip      |   0.737   |  0.023  |  0.000   |      0.013      |  [0.000, 1.745] |     100.000     |     0.164     |
+|   14  | r_middle_finger_dip      |   0.710   |  0.022  |  0.000   |      0.005      | [-0.175, 1.570] |     100.000     |     0.114     |
+|   15  | r_pinky_mcp_flex         |   1.103   |  0.044  |  0.000   |      0.033      | [-0.349, 1.570] |     100.000     |     0.478     |
+|   16  | r_pinky_mcp_abd          |   0.910   |  0.027  |  0.000   |      0.011      | [-0.035, 0.035] |     100.000     |     0.109     |
+|   17  | r_pinky_pip              |   0.862   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.100     |
+|   18  | r_pinky_dip              |   0.657   |  0.021  |  0.000   |      0.011      | [-0.175, 1.570] |     100.000     |     0.157     |
+|   19  | r_ring_finger_mcp_flex   |   1.277   |  0.046  |  0.000   |      0.070      | [-0.349, 1.570] |     100.000     |     0.557     |
+|   20  | r_ring_finger_mcp_abd    |   1.013   |  0.029  |  0.000   |      0.016      | [-0.035, 0.035] |     100.000     |     0.205     |
+|   21  | r_ring_finger_pip        |   0.859   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.169     |
+|   22  | r_ring_finger_dip        |   0.648   |  0.020  |  0.000   |      0.008      | [-0.175, 1.570] |     100.000     |     0.163     |
+|   23  | r_thumb_cmc_flex         |   1.355   |  0.048  |  0.000   |      0.043      | [-0.349, 1.291] |     100.000     |     0.439     |
+|   24  | r_thumb_cmc_abd          |   2.199   |  0.063  |  0.000   |      0.036      | [-1.484, 0.698] |     100.000     |     0.204     |
+|   25  | r_thumb_mcp              |   0.886   |  0.028  |  0.000   |      0.018      | [-0.175, 1.570] |     100.000     |     0.255     |
+|   26  | r_thumb_ip               |   0.654   |  0.020  |  0.000   |      0.053      | [-0.262, 1.570] |     100.000     |     0.222     |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+[2026-11-15 21:00:46,428][isaaclab_contrib.deformable.deformable_object][INFO] - Newton deformable object initialized at: /World/envs/env_.*/Cloth
+[2026-11-15 21:00:46,429][isaaclab_contrib.deformable.deformable_object][INFO] - Number of instances: 32
+[2026-11-15 21:00:46,429][isaaclab_contrib.deformable.deformable_object][INFO] - Particles per body: 49
+Initialize solver took: Last: 2.783588 s, Mean: 2.783588 s, Std: 0.000000 s, N: 1
+[INFO]: Time taken for simulation start Last: 3.981848 s, Mean: 3.981848 s, Std: 0.000000 s, N: 1
+[cloth] plasticity writes the cloth solver's edge_rest_angle (its own view copy, mirrored to the model)
+[cloth] plasticity: yield curvature 32 /m = 30.6 deg per grid cell, 21.6 deg per diagonal, 3072 hinges
+[INFO]: Completed setting up the environment...
+[material_patch] friction set: 1249 shapes at mu=0.5, 320 fingertip shapes at mu=1.5
+[spring] passive hand spring on 20 joints as a joint effort: ks 0.0110-0.1447 N m/rad, ks / kp 0.015-0.111
+[dr] obs delay off, action delay off, object state off | delay_mode per_step | joint vel noise 0.0, joint pos noise 0.0 rad, action noise 0.0 | object bias +-(0.0, 0.0, 0.0) m / 0.0 deg | robot gains k x(1.0, 1.0) d x(1.0, 1.0)
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/share/portal/kk837/task_curriculum/isaacsimenvs/eval/player.py:60: UserWarning: register_new_resolver() is deprecated and will be removed in a future release.
+Use register_resolver() instead.
+See https://github.com/hydra-ecosystem/omegaconf/issues/426 for migration instructions.
+
+  OmegaConf.register_new_resolver(name, fn)
+self.seed = 42
+[BasePlayer] Creating regular env:  rlgpu
+{'observation_space': Box(-inf, inf, (134,), float32), 'action_space': Box(-1.0, 1.0, (27,), float32), 'agents': 1, 'value_size': 1}
+build mlp: 1024
+RunningMeanStd:  (1,)
+RunningMeanStd:  (134,)
+=> loading checkpoint 'debug_outputs/train_logs/nov/2026-11-15_rigid_cloth_prior_2gpu_659538/nn/snap_0_rigid_cloth_prior_2gpu_ep_1300.pth'
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/utils/reset_utils.py:336: DeprecationWarning: The function 'write_joint_state_to_sim' will be deprecated in a future release. Please use 'write_joint_state_to_sim_index' instead.
+  env.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:2122: DeprecationWarning: The function 'write_root_pose_to_sim' will be deprecated in a future release. Please use 'write_root_pose_to_sim_index' instead.
+  return _orig(value, *args, **kwargs)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
+  value = getattr(object.__getattribute__(self, "_wrapped"), name)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:68: DeprecationWarning: The function 'set_joint_position_target' will be deprecated in a future release. Please use 'set_joint_position_target_index' instead.
+  self.robot.set_joint_position_target(self._cur_targets)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:72: DeprecationWarning: The function 'set_joint_effort_target' will be deprecated in a future release. Please use 'set_joint_effort_target_index' instead.
+  self.robot.set_joint_effort_target(spring)
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+nefc overflow - please increase njmax to 8612
+nefc overflow - please increase njmax to 8368
+nefc overflow - please increase njmax to 8276
+nefc overflow - please increase njmax to 8343
+nefc overflow - please increase njmax to 8322
+nefc overflow - please increase njmax to 8274
+nefc overflow - please increase njmax to 8232
+nefc overflow - please increase njmax to 8217
+nefc overflow - please increase njmax to 8220
+nefc overflow - please increase njmax to 8286
+nefc overflow - please increase njmax to 8274
+nefc overflow - please increase njmax to 8271
+nefc overflow - please increase njmax to 8247
+nefc overflow - please increase njmax to 8241
+nefc overflow - please increase njmax to 8217
+nefc overflow - please increase njmax to 8250
+nefc overflow - please increase njmax to 8244
+nefc overflow - please increase njmax to 8211
+nefc overflow - please increase njmax to 8205
+nefc overflow - please increase njmax to 8223
+nefc overflow - please increase njmax to 8217
+nefc overflow - please increase njmax to 8214
+nefc overflow - please increase njmax to 8202
+nefc overflow - please increase njmax to 8325
+nefc overflow - please increase njmax to 8319
+nefc overflow - please increase njmax to 8295
+nefc overflow - please increase njmax to 8265
+nefc overflow - please increase njmax to 8274
+nefc overflow - please increase njmax to 8250
+nefc overflow - please increase njmax to 8223
+nefc overflow - please increase njmax to 8199
+nefc overflow - please increase njmax to 8211
+nefc overflow - please increase njmax to 8199
+nefc overflow - please increase njmax to 8214
+nefc overflow - please increase njmax to 8310
+nefc overflow - please increase njmax to 8280
+nefc overflow - please increase njmax to 8241
+nefc overflow - please increase njmax to 8223
+nefc overflow - please increase njmax to 8268
+nefc overflow - please increase njmax to 8247
+nefc overflow - please increase njmax to 8313
+nefc overflow - please increase njmax to 8295
+nefc overflow - please increase njmax to 8259
+nefc overflow - please increase njmax to 8247
+nefc overflow - please increase njmax to 8283
+nefc overflow - please increase njmax to 8235
+nefc overflow - please increase njmax to 8256
+nefc overflow - please increase njmax to 8202
+nefc overflow - please increase njmax to 8220
+nefc overflow - please increase njmax to 8612
+nefc overflow - please increase njmax to 8368
+nefc overflow - please increase njmax to 8276
+nefc overflow - please increase njmax to 8343
+nefc overflow - please increase njmax to 8322
+nefc overflow - please increase njmax to 8274
+nefc overflow - please increase njmax to 8232
+nefc overflow - please increase njmax to 8217
+nefc overflow - please increase njmax to 8220
+nefc overflow - please increase njmax to 8286
+nefc overflow - please increase njmax to 8274
+nefc overflow - please increase njmax to 8271
+nefc overflow - please increase njmax to 8247
+nefc overflow - please increase njmax to 8241
+nefc overflow - please increase njmax to 8217
+nefc overflow - please increase njmax to 8250
+nefc overflow - please increase njmax to 8244
+nefc overflow - please increase njmax to 8211
+nefc overflow - please increase njmax to 8205
+nefc overflow - please increase njmax to 8223
+nefc overflow - please increase njmax to 8217
+nefc overflow - please increase njmax to 8214
+nefc overflow - please increase njmax to 8202
+nefc overflow - please increase njmax to 8325
+nefc overflow - please increase njmax to 8319
+nefc overflow - please increase njmax to 8295
+nefc overflow - please increase njmax to 8265
+nefc overflow - please increase njmax to 8274
+nefc overflow - please increase njmax to 8250
+nefc overflow - please increase njmax to 8223
+nefc overflow - please increase njmax to 8199
+nefc overflow - please increase njmax to 8211
+nefc overflow - please increase njmax to 8199
+nefc overflow - please increase njmax to 8214
+nefc overflow - please increase njmax to 8310
+nefc overflow - please increase njmax to 8280
+nefc overflow - please increase njmax to 8241
+nefc overflow - please increase njmax to 8223
+nefc overflow - please increase njmax to 8268
+nefc overflow - please increase njmax to 8247
+nefc overflow - please increase njmax to 8313
+nefc overflow - please increase njmax to 8295
+nefc overflow - please increase njmax to 8259
+nefc overflow - please increase njmax to 8247
+nefc overflow - please increase njmax to 8283
+nefc overflow - please increase njmax to 8235
+nefc overflow - please increase njmax to 8256
+nefc overflow - please increase njmax to 8202
+nefc overflow - please increase njmax to 8220
+Error executing job with overrides: ['env.cloth.task=fold', 'env.cloth.keypoint_tolerance=0.015', 'env.cloth.nan_policy=reset', 'env.termination.success_steps=10', 'env.cloth.density=0.1156', 'env.cloth.tri_ke=34.0', 'env.cloth.tri_ka=34.0', 'env.cloth.edge_ke=0.004038', 'env.cloth.edge_kd=5.78e-05', 'env.cloth.soft_contact_mu=0.0622', 'env.cloth.self_contact_radius=0.002', 'env.cloth.plastic_yield_curvature=32.0']
+Traceback (most recent call last):
+  File "/share/portal/kk837/task_curriculum/scripts/evaluation/eval.py", line 498, in <module>
+    main()
+  File "/share/portal/kk837/task_curriculum/scripts/evaluation/eval.py", line 487, in main
+    run()
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py", line 160, in wrapper
+    hydra_main()
+  File "/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/hydra/main.py", line 47, in decorated_main
+    _run_hydra(
+  File "/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 624, in _run_hydra
+    _run_app(
+  File "/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 700, in _run_app
+    run_and_report(
+  File "/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 423, in run_and_report
+    raise ex
+  File "/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 420, in run_and_report
+    return func()
+           ^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/hydra/_internal/utils.py", line 701, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/hydra/_internal/hydra.py", line 212, in run
+    _ = ret.return_value
+        ^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/hydra/core/utils.py", line 831, in return_value
+    raise self._return_value
+  File "/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/hydra/core/utils.py", line 223, in _run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py", line 147, in hydra_main
+    func(env_cfg_restored, merged_agent, *args, **kwargs)
+  File "/share/portal/kk837/task_curriculum/scripts/evaluation/eval.py", line 345, in run
+    raise_if_overflowed(capture(), num_envs, f"the rollout (step {step})")
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/newton/contact_guard.py", line 105, in raise_if_overflowed
+    raise RuntimeError(
+RuntimeError: Newton reported a contact-buffer overflow at num_envs=32 during the rollout (step 150) (49 warnings). Contacts are being dropped and every number from this run would be measured on a scene where the hand cannot fully feel the object.
+
+  nefc overflow - please increase njmax to 8612
+  nefc overflow - please increase njmax to 8368
+  nefc overflow - please increase njmax to 8276
+  nefc overflow - please increase njmax to 8343
+  nefc overflow - please increase njmax to 8322
+  nefc overflow - please increase njmax to 8274
+
+Buffer budgets in Newton are GLOBAL, not per-env, so they must scale with num_envs AND with scene geometry -- a 24-segment cable generates far more triangle pairs than a 12-segment one at the same env count. Check that the sized budget reaches the solver: a coupled scene builds a separate CollisionPipeline per proxy, and that one defaults to max_triangle_pairs=1e6 regardless of NewtonCfg.collision_cfg.
+[fabeval] experiments/nov15_fabric_eval/results/prior__fold__silk_s6.json FAILED
+[episodes] running kit-less (no Isaac Sim runtime): AppLauncher requires the full Isaac Sim runtime. Install Isaac Sim or avoid constructing AppLauncher in a kitless process.
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.cloth.cloth_env_cfg:ClothEnvCfg
+/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py:132: Hydra15MigrationWarning: The version_base parameter is deprecated and will be removed in Hydra 1.5.
+Omit the version_base parameter to use the current Hydra defaults.
+  @hydra.main(config_path=None, config_name=short_name, version_base="1.3")
+[2026-11-15 21:03:18,743][isaaclab.envs.common][WARNING] - env_cfg.viewer is deprecated. Set env_cfg.sim.default_visualizer_cfg = KitVisualizerCfg(eye=..., lookat=...) instead. The viewer values have been automatically forwarded for this run.
+[INFO]: Base environment:
+	Environment device    : cuda:0
+	Environment seed      : 7
+	Physics step-size     : 0.00833333333
+	Rendering step-size   : 0.01666666666
+	Environment step-size : 0.01666666666
+[2026-11-15 21:03:20,079][isaaclab.cloner._fabric_notices][INFO] - libcarb.so unavailable — Fabric notice suspension disabled (Linux x86_64 only)
+[scene_utils][+0.00s] setup start num_envs=32 num_assets_per_type=1
+[scene_utils][+0.01s] generated 2 object URDFs
+[scene_utils] self-collision: filtered 64 link pairs across 28 robot bodies in rizon4s_right_wuji_real_limits_physics.usd
+[scene_utils][+0.73s] resolved baked USDs
+[quat_convention] robot init rot (1.0, 0.0, 0.0, 0.0) (wxyz) -> (0.0, 0.0, 0.0, 1.0) (xyzw)
+[2026-11-15 21:03:20,816][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory Articulation.
+[2026-11-15 21:03:20,834][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory RigidObject.
+[2026-11-15 21:03:20,836][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 21:03:20,845][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 21:03:20,854][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[scene_utils][+0.78s] spawned robot/table/object/goalviz
+I: Initializing Version 2.72.3-release.7151+gl.5390bed9
+I: Client ID: U81GF4WN
+I: Not using Hub: Hub not found
+I: Successfully created S3 provider for https://omniverse-content-staging.s3-us-west-2.amazonaws.com
+[2026-11-15 21:03:21,288][isaaclab.utils.assets][WARNING] - Serving remote assets from the local cache under '/share/portal/kk837/tmp'. Each copy is checked against the server before use; delete the directory to force a full re-download.
+[2026-11-15 21:03:21,289][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd'.
+[2026-11-15 21:03:21,394][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png'.
+[2026-11-15 21:03:21,395][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png'.
+[2026-11-15 21:03:21,396][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png'.
+[scene_utils][+1.63s] registered assets with scene
+[cloth] neutralised rigid tool (1 prims, 2 colliders off)
+[cloth] goal marker reshaped on 1 prims (half-sheet mesh, 21 verts / 24 tris)
+[2026-11-15 21:03:21,735][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory DeformableObject.
+[2026-11-15 21:03:21,739][isaaclab_contrib.deformable.deformable_object][INFO] - Registered visual UsdGeom.Mesh at /World/envs/env_.*/Cloth.
+[2026-11-15 21:03:21,740][isaaclab_contrib.deformable.deformable_object][INFO] - Registered UsdGeom.Mesh: 49 vertices.
+[cloth] object_scale = [2.5, 2.5, 0.4] (bbox [0.1, 0.1, 0.016] m / base 0.04)
+[cloth] 7x7 sheet, 0.100 m, 49 particles, 72 triangles, keypoints [28, 34, 42, 48]
+[cloning] pushed CollisionAPI onto 35 mesh prims under 35 collision Xforms
+[cloning] marked 3 object colliders convexHull
+[cloning] authored PD gains on 27 joint drives
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/replicate.py:105: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/base_link/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link1/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link2/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link3/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link4/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link5/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link6/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_mount/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_wrist/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal/collisions/r_index_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal_abd/collisions/r_index_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_middle/collisions/r_index_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal/collisions/r_middle_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal_abd/collisions/r_middle_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_middle/collisions/r_middle_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal/collisions/r_pinky_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal_abd/collisions/r_pinky_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_middle/collisions/r_pinky_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal/collisions/r_ring_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal_abd/collisions/r_ring_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_middle/collisions/r_ring_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal/collisions/r_thumb_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal_abd/collisions/r_thumb_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_middle/collisions/r_thumb_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/newton/_src/geometry/utils.py:821: UserWarning: remesh_convex_hull: input point cloud is coplanar (rank 2); returning a zero-volume fallback mesh. Downstream inertia computations will produce zero mass / COM / inertia.
+  _warn_degenerate("coplanar (rank 2)")
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/newton_clone_utils.py:147: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+[clone_patch] replicated 32 environments from 1 prototype row(s); variant counts [1, 1, 1, 1]
+[INFO]: Time taken for scene creation Last: 3.412006 s, Mean: 3.412006 s, Std: 0.000000 s, N: 1
+[INFO]: Scene manager:  <class InteractiveScene>
+	Number of environments: 32
+	Environment spacing   : 1.2
+	Source prim name      : /World/envs/env_0
+	Global prim paths     : []
+	Replicate physics     : False
+[INFO]: Starting the simulation. This may take a few seconds. Please wait...
+[2026-11-15 21:03:23,430][isaaclab_newton.physics.newton_manager][INFO] - Dispatching MODEL_INIT callbacks
+[2026-11-15 21:03:23,452][isaaclab_newton.physics.newton_manager][INFO] - Finalizing model on device: cuda:0
+[gravcomp] mujoco:gravcomp=1 on 896/992 bodies before finalize
+[condim] mujoco:condim=6 on 448 grasping shapes before finalize
+Finalize builder took: Last: 0.599858 s, Mean: 0.599858 s, Std: 0.000000 s, N: 1
+[2026-11-15 21:03:24,054][isaaclab_newton.physics.newton_manager][INFO] - Dispatching PHYSICS_READY callbacks
+[2026-11-15 21:03:24,074][isaaclab_newton.assets.articulation.articulation_data][WARNING] - Failed to get root com velocity. If the articulation is fixed, this is expected. Setting root com velocity to zeros.
+[2026-11-15 21:03:24,592][isaaclab_newton.assets.articulation.articulation][INFO] - Simulation parameters for joints in /World/envs/env_.*/Robot:
++-----------------------------------------------------------------------------------------------------------------------------------------+
+|                                    Simulation Joint Information (Prim path: /World/envs/env_.*/Robot)                                   |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+| Index | Name                     | Stiffness | Damping | Armature | Static Friction | Position Limits | Velocity Limits | Effort Limits |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+|   0   | joint1                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.793, 2.793] |      2.094      |    123.000    |
+|   1   | joint2                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.269, 2.269] |      2.094      |    123.000    |
+|   2   | joint3                   |  128.000  |  12.483 |  0.000   |      0.000      | [-2.967, 2.967] |      2.443      |     64.000    |
+|   3   | joint4                   |  128.000  |  12.483 |  0.000   |      0.000      | [-1.867, 2.688] |      2.443      |     64.000    |
+|   4   | joint5                   |   78.000  |  6.090  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   5   | joint6                   |   78.000  |  5.713  |  0.000   |      0.000      | [-1.396, 4.538] |      4.887      |     39.000    |
+|   6   | joint7                   |   78.000  |  5.713  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   7   | r_index_finger_mcp_flex  |   1.345   |  0.047  |  0.000   |      0.078      | [-0.349, 1.570] |     100.000     |     0.599     |
+|   8   | r_index_finger_mcp_abd   |   0.889   |  0.027  |  0.000   |      0.023      | [-0.035, 0.035] |     100.000     |     0.232     |
+|   9   | r_index_finger_pip       |   0.779   |  0.024  |  0.000   |      0.016      |  [0.000, 1.745] |     100.000     |     0.179     |
+|   10  | r_index_finger_dip       |   0.656   |  0.021  |  0.000   |      0.006      | [-0.175, 1.570] |     100.000     |     0.135     |
+|   11  | r_middle_finger_mcp_flex |   1.299   |  0.046  |  0.000   |      0.075      | [-0.349, 1.570] |     100.000     |     0.661     |
+|   12  | r_middle_finger_mcp_abd  |   0.943   |  0.028  |  0.000   |      0.018      | [-0.035, 0.035] |     100.000     |     0.201     |
+|   13  | r_middle_finger_pip      |   0.737   |  0.023  |  0.000   |      0.013      |  [0.000, 1.745] |     100.000     |     0.164     |
+|   14  | r_middle_finger_dip      |   0.710   |  0.022  |  0.000   |      0.005      | [-0.175, 1.570] |     100.000     |     0.114     |
+|   15  | r_pinky_mcp_flex         |   1.103   |  0.044  |  0.000   |      0.033      | [-0.349, 1.570] |     100.000     |     0.478     |
+|   16  | r_pinky_mcp_abd          |   0.910   |  0.027  |  0.000   |      0.011      | [-0.035, 0.035] |     100.000     |     0.109     |
+|   17  | r_pinky_pip              |   0.862   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.100     |
+|   18  | r_pinky_dip              |   0.657   |  0.021  |  0.000   |      0.011      | [-0.175, 1.570] |     100.000     |     0.157     |
+|   19  | r_ring_finger_mcp_flex   |   1.277   |  0.046  |  0.000   |      0.070      | [-0.349, 1.570] |     100.000     |     0.557     |
+|   20  | r_ring_finger_mcp_abd    |   1.013   |  0.029  |  0.000   |      0.016      | [-0.035, 0.035] |     100.000     |     0.205     |
+|   21  | r_ring_finger_pip        |   0.859   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.169     |
+|   22  | r_ring_finger_dip        |   0.648   |  0.020  |  0.000   |      0.008      | [-0.175, 1.570] |     100.000     |     0.163     |
+|   23  | r_thumb_cmc_flex         |   1.355   |  0.048  |  0.000   |      0.043      | [-0.349, 1.291] |     100.000     |     0.439     |
+|   24  | r_thumb_cmc_abd          |   2.199   |  0.063  |  0.000   |      0.036      | [-1.484, 0.698] |     100.000     |     0.204     |
+|   25  | r_thumb_mcp              |   0.886   |  0.028  |  0.000   |      0.018      | [-0.175, 1.570] |     100.000     |     0.255     |
+|   26  | r_thumb_ip               |   0.654   |  0.020  |  0.000   |      0.053      | [-0.262, 1.570] |     100.000     |     0.222     |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+[2026-11-15 21:03:24,605][isaaclab_contrib.deformable.deformable_object][INFO] - Newton deformable object initialized at: /World/envs/env_.*/Cloth
+[2026-11-15 21:03:24,606][isaaclab_contrib.deformable.deformable_object][INFO] - Number of instances: 32
+[2026-11-15 21:03:24,606][isaaclab_contrib.deformable.deformable_object][INFO] - Particles per body: 49
+Initialize solver took: Last: 2.787404 s, Mean: 2.787404 s, Std: 0.000000 s, N: 1
+[INFO]: Time taken for simulation start Last: 3.992016 s, Mean: 3.992016 s, Std: 0.000000 s, N: 1
+[cloth] plasticity writes the cloth solver's edge_rest_angle (its own view copy, mirrored to the model)
+[cloth] plasticity: yield curvature 32 /m = 30.6 deg per grid cell, 21.6 deg per diagonal, 3072 hinges
+[INFO]: Completed setting up the environment...
+[material_patch] friction set: 1249 shapes at mu=0.5, 320 fingertip shapes at mu=1.5
+[spring] passive hand spring on 20 joints as a joint effort: ks 0.0110-0.1447 N m/rad, ks / kp 0.015-0.111
+[dr] obs delay off, action delay off, object state off | delay_mode per_step | joint vel noise 0.0, joint pos noise 0.0 rad, action noise 0.0 | object bias +-(0.0, 0.0, 0.0) m / 0.0 deg | robot gains k x(1.0, 1.0) d x(1.0, 1.0)
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/share/portal/kk837/task_curriculum/isaacsimenvs/eval/player.py:60: UserWarning: register_new_resolver() is deprecated and will be removed in a future release.
+Use register_resolver() instead.
+See https://github.com/hydra-ecosystem/omegaconf/issues/426 for migration instructions.
+
+  OmegaConf.register_new_resolver(name, fn)
+self.seed = 42
+[BasePlayer] Creating regular env:  rlgpu
+{'observation_space': Box(-inf, inf, (134,), float32), 'action_space': Box(-1.0, 1.0, (27,), float32), 'agents': 1, 'value_size': 1}
+build mlp: 1024
+RunningMeanStd:  (1,)
+RunningMeanStd:  (134,)
+=> loading checkpoint 'debug_outputs/train_logs/nov/2026-11-15_rigid_cloth_prior_2gpu_659538/nn/snap_0_rigid_cloth_prior_2gpu_ep_1300.pth'
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/utils/reset_utils.py:336: DeprecationWarning: The function 'write_joint_state_to_sim' will be deprecated in a future release. Please use 'write_joint_state_to_sim_index' instead.
+  env.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:2122: DeprecationWarning: The function 'write_root_pose_to_sim' will be deprecated in a future release. Please use 'write_root_pose_to_sim_index' instead.
+  return _orig(value, *args, **kwargs)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
+  value = getattr(object.__getattribute__(self, "_wrapped"), name)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:68: DeprecationWarning: The function 'set_joint_position_target' will be deprecated in a future release. Please use 'set_joint_position_target_index' instead.
+  self.robot.set_joint_position_target(self._cur_targets)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:72: DeprecationWarning: The function 'set_joint_effort_target' will be deprecated in a future release. Please use 'set_joint_effort_target_index' instead.
+  self.robot.set_joint_effort_target(spring)
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 1 envs: largest set angle 64.4 deg, 3 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 28/32 envs done
+[cloth] plasticity reset of 1 envs: largest set angle 64.4 deg, 3 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 28/32 envs done
+
+========================================================================
+Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0  |  32 envs  |  first episode per env
+goals/episode = 0.0 +/- 0.0   (n=32, censored=0)
+lift fraction = 0.0
+termination   = {'fall': 29, 'max_successes': 0, 'hand_far': 0, 'timeout': 3, 'fold': 0, 'fold_held': 0, 'nonfinite': 0}
+mean ep length= 300.8 steps
+========================================================================
+
+[episodes] wrote experiments/nov15_fabric_eval/results/prior__fold__silk_s7.json
+[2026-11-15 21:13:06,702][isaaclab.sim.simulation_context][INFO] - SimulationContext cleared
+[episodes] running kit-less (no Isaac Sim runtime): AppLauncher requires the full Isaac Sim runtime. Install Isaac Sim or avoid constructing AppLauncher in a kitless process.
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.cloth.cloth_env_cfg:ClothEnvCfg
+/share/portal/kk837/task_curriculum/isaacsimenvs/utils/hydra_utils.py:132: Hydra15MigrationWarning: The version_base parameter is deprecated and will be removed in Hydra 1.5.
+Omit the version_base parameter to use the current Hydra defaults.
+  @hydra.main(config_path=None, config_name=short_name, version_base="1.3")
+[2026-11-15 21:13:12,755][isaaclab.envs.common][WARNING] - env_cfg.viewer is deprecated. Set env_cfg.sim.default_visualizer_cfg = KitVisualizerCfg(eye=..., lookat=...) instead. The viewer values have been automatically forwarded for this run.
+[INFO]: Base environment:
+	Environment device    : cuda:0
+	Environment seed      : 8
+	Physics step-size     : 0.00833333333
+	Rendering step-size   : 0.01666666666
+	Environment step-size : 0.01666666666
+[2026-11-15 21:13:13,745][isaaclab.cloner._fabric_notices][INFO] - libcarb.so unavailable — Fabric notice suspension disabled (Linux x86_64 only)
+[scene_utils][+0.00s] setup start num_envs=32 num_assets_per_type=1
+[scene_utils][+0.02s] generated 2 object URDFs
+[scene_utils] self-collision: filtered 64 link pairs across 28 robot bodies in rizon4s_right_wuji_real_limits_physics.usd
+[scene_utils][+0.98s] resolved baked USDs
+[quat_convention] robot init rot (1.0, 0.0, 0.0, 0.0) (wxyz) -> (0.0, 0.0, 0.0, 1.0) (xyzw)
+[2026-11-15 21:13:14,732][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory Articulation.
+[2026-11-15 21:13:14,749][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory RigidObject.
+[2026-11-15 21:13:14,750][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 21:13:14,757][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[2026-11-15 21:13:14,763][isaaclab.sim.spawners.wrappers.wrappers][WARNING] - `random_choice` parameter in `spawn_multi_asset` is deprecated, and nothing will happen. Use `isaaclab.scene.interactive_scene_cfg.InteractiveSceneCfg.random_heterogeneous_cloning` instead.
+[scene_utils][+1.02s] spawned robot/table/object/goalviz
+I: Initializing Version 2.72.3-release.7151+gl.5390bed9
+I: Client ID: XO62N96Y
+I: Not using Hub: Hub not found
+I: Successfully created S3 provider for https://omniverse-content-staging.s3-us-west-2.amazonaws.com
+[2026-11-15 21:13:15,184][isaaclab.utils.assets][WARNING] - Serving remote assets from the local cache under '/share/portal/kk837/tmp'. Each copy is checked against the server before use; delete the directory to force a full re-download.
+[2026-11-15 21:13:15,184][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/default_environment.usd'.
+[2026-11-15 21:13:15,288][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/Wireframe_blue.png'.
+[2026-11-15 21:13:15,289][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_blue.png'.
+[2026-11-15 21:13:15,290][isaaclab.utils.assets][INFO] - Loading local copy of remote asset 'https://omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png' from '/share/portal/kk837/tmp/https/omniverse-content-staging.s3-us-west-2.amazonaws.com/Assets/Isaac/6.1/Isaac/Environments/Grid/Materials/Textures/WireframeBlur_basecolor.png'.
+[scene_utils][+1.85s] registered assets with scene
+[cloth] neutralised rigid tool (1 prims, 2 colliders off)
+[cloth] goal marker reshaped on 1 prims (half-sheet mesh, 21 verts / 24 tris)
+[2026-11-15 21:13:15,624][isaaclab.utils.backend_utils][INFO] - Registered backend 'newton' for factory DeformableObject.
+[2026-11-15 21:13:15,627][isaaclab_contrib.deformable.deformable_object][INFO] - Registered visual UsdGeom.Mesh at /World/envs/env_.*/Cloth.
+[2026-11-15 21:13:15,628][isaaclab_contrib.deformable.deformable_object][INFO] - Registered UsdGeom.Mesh: 49 vertices.
+[cloth] object_scale = [2.5, 2.5, 0.4] (bbox [0.1, 0.1, 0.016] m / base 0.04)
+[cloth] 7x7 sheet, 0.100 m, 49 particles, 72 triangles, keypoints [28, 34, 42, 48]
+[cloning] pushed CollisionAPI onto 35 mesh prims under 35 collision Xforms
+[cloning] marked 3 object colliders convexHull
+[cloning] authored PD gains on 27 joint drives
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/replicate.py:105: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/base_link/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link1/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link2/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link3/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link4/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link5/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link6/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/convex_mesh/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_mount/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/link7/collisions/r_wrist/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal/collisions/r_index_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_proximal_abd/collisions/r_index_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_middle/collisions/r_index_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_index_finger_distal/collisions/r_index_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal/collisions/r_middle_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_proximal_abd/collisions/r_middle_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_middle/collisions/r_middle_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_middle_finger_distal/collisions/r_middle_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal/collisions/r_pinky_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_proximal_abd/collisions/r_pinky_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_middle/collisions/r_pinky_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_pinky_distal/collisions/r_pinky_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal/collisions/r_ring_finger_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_proximal_abd/collisions/r_ring_finger_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_middle/collisions/r_ring_finger_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_ring_finger_distal/collisions/r_ring_finger_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal/collisions/r_thumb_proximal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_proximal_abd/collisions/r_thumb_proximal_abd/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_middle/collisions/r_thumb_middle/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_distal/node_STL_BINARY_. [python3.12]
+Warning: CollisionAPI applied to an unknown UsdGeomGPrim type, prim /World/envs/env_0/Robot/r_thumb_distal/collisions/r_thumb_tip_sensor_frame/node_STL_BINARY_. [python3.12]
+/share/portal/kk837/task_curriculum/.venv/isaaclab3/lib/python3.12/site-packages/newton/_src/geometry/utils.py:821: UserWarning: remesh_convex_hull: input point cloud is coplanar (rank 2); returning a zero-volume fallback mesh. Downstream inertia computations will produce zero mass / COM / inertia.
+  _warn_degenerate("coplanar (rank 2)")
+/share/portal/kk837/task_curriculum/third_party/IsaacLab/source/isaaclab_newton/isaaclab_newton/cloner/newton_clone_utils.py:147: FutureWarning: Newton shape color replacement is enabled; this workaround will be deprecated in a future release.
+  replace_newton_builder_shape_colors(builder, stage)
+[clone_patch] replicated 32 environments from 1 prototype row(s); variant counts [1, 1, 1, 1]
+[INFO]: Time taken for scene creation Last: 3.205924 s, Mean: 3.205924 s, Std: 0.000000 s, N: 1
+[INFO]: Scene manager:  <class InteractiveScene>
+	Number of environments: 32
+	Environment spacing   : 1.2
+	Source prim name      : /World/envs/env_0
+	Global prim paths     : []
+	Replicate physics     : False
+[INFO]: Starting the simulation. This may take a few seconds. Please wait...
+[2026-11-15 21:13:16,905][isaaclab_newton.physics.newton_manager][INFO] - Dispatching MODEL_INIT callbacks
+[2026-11-15 21:13:16,920][isaaclab_newton.physics.newton_manager][INFO] - Finalizing model on device: cuda:0
+[gravcomp] mujoco:gravcomp=1 on 896/992 bodies before finalize
+[condim] mujoco:condim=6 on 448 grasping shapes before finalize
+Finalize builder took: Last: 0.459548 s, Mean: 0.459548 s, Std: 0.000000 s, N: 1
+[2026-11-15 21:13:17,382][isaaclab_newton.physics.newton_manager][INFO] - Dispatching PHYSICS_READY callbacks
+[2026-11-15 21:13:17,394][isaaclab_newton.assets.articulation.articulation_data][WARNING] - Failed to get root com velocity. If the articulation is fixed, this is expected. Setting root com velocity to zeros.
+[2026-11-15 21:13:17,846][isaaclab_newton.assets.articulation.articulation][INFO] - Simulation parameters for joints in /World/envs/env_.*/Robot:
++-----------------------------------------------------------------------------------------------------------------------------------------+
+|                                    Simulation Joint Information (Prim path: /World/envs/env_.*/Robot)                                   |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+| Index | Name                     | Stiffness | Damping | Armature | Static Friction | Position Limits | Velocity Limits | Effort Limits |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+|   0   | joint1                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.793, 2.793] |      2.094      |    123.000    |
+|   1   | joint2                   |  246.000  |  17.306 |  0.000   |      0.000      | [-2.269, 2.269] |      2.094      |    123.000    |
+|   2   | joint3                   |  128.000  |  12.483 |  0.000   |      0.000      | [-2.967, 2.967] |      2.443      |     64.000    |
+|   3   | joint4                   |  128.000  |  12.483 |  0.000   |      0.000      | [-1.867, 2.688] |      2.443      |     64.000    |
+|   4   | joint5                   |   78.000  |  6.090  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   5   | joint6                   |   78.000  |  5.713  |  0.000   |      0.000      | [-1.396, 4.538] |      4.887      |     39.000    |
+|   6   | joint7                   |   78.000  |  5.713  |  0.000   |      0.000      | [-2.967, 2.967] |      4.887      |     39.000    |
+|   7   | r_index_finger_mcp_flex  |   1.345   |  0.047  |  0.000   |      0.078      | [-0.349, 1.570] |     100.000     |     0.599     |
+|   8   | r_index_finger_mcp_abd   |   0.889   |  0.027  |  0.000   |      0.023      | [-0.035, 0.035] |     100.000     |     0.232     |
+|   9   | r_index_finger_pip       |   0.779   |  0.024  |  0.000   |      0.016      |  [0.000, 1.745] |     100.000     |     0.179     |
+|   10  | r_index_finger_dip       |   0.656   |  0.021  |  0.000   |      0.006      | [-0.175, 1.570] |     100.000     |     0.135     |
+|   11  | r_middle_finger_mcp_flex |   1.299   |  0.046  |  0.000   |      0.075      | [-0.349, 1.570] |     100.000     |     0.661     |
+|   12  | r_middle_finger_mcp_abd  |   0.943   |  0.028  |  0.000   |      0.018      | [-0.035, 0.035] |     100.000     |     0.201     |
+|   13  | r_middle_finger_pip      |   0.737   |  0.023  |  0.000   |      0.013      |  [0.000, 1.745] |     100.000     |     0.164     |
+|   14  | r_middle_finger_dip      |   0.710   |  0.022  |  0.000   |      0.005      | [-0.175, 1.570] |     100.000     |     0.114     |
+|   15  | r_pinky_mcp_flex         |   1.103   |  0.044  |  0.000   |      0.033      | [-0.349, 1.570] |     100.000     |     0.478     |
+|   16  | r_pinky_mcp_abd          |   0.910   |  0.027  |  0.000   |      0.011      | [-0.035, 0.035] |     100.000     |     0.109     |
+|   17  | r_pinky_pip              |   0.862   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.100     |
+|   18  | r_pinky_dip              |   0.657   |  0.021  |  0.000   |      0.011      | [-0.175, 1.570] |     100.000     |     0.157     |
+|   19  | r_ring_finger_mcp_flex   |   1.277   |  0.046  |  0.000   |      0.070      | [-0.349, 1.570] |     100.000     |     0.557     |
+|   20  | r_ring_finger_mcp_abd    |   1.013   |  0.029  |  0.000   |      0.016      | [-0.035, 0.035] |     100.000     |     0.205     |
+|   21  | r_ring_finger_pip        |   0.859   |  0.027  |  0.000   |      0.012      |  [0.000, 1.745] |     100.000     |     0.169     |
+|   22  | r_ring_finger_dip        |   0.648   |  0.020  |  0.000   |      0.008      | [-0.175, 1.570] |     100.000     |     0.163     |
+|   23  | r_thumb_cmc_flex         |   1.355   |  0.048  |  0.000   |      0.043      | [-0.349, 1.291] |     100.000     |     0.439     |
+|   24  | r_thumb_cmc_abd          |   2.199   |  0.063  |  0.000   |      0.036      | [-1.484, 0.698] |     100.000     |     0.204     |
+|   25  | r_thumb_mcp              |   0.886   |  0.028  |  0.000   |      0.018      | [-0.175, 1.570] |     100.000     |     0.255     |
+|   26  | r_thumb_ip               |   0.654   |  0.020  |  0.000   |      0.053      | [-0.262, 1.570] |     100.000     |     0.222     |
++-------+--------------------------+-----------+---------+----------+-----------------+-----------------+-----------------+---------------+
+[2026-11-15 21:13:17,855][isaaclab_contrib.deformable.deformable_object][INFO] - Newton deformable object initialized at: /World/envs/env_.*/Cloth
+[2026-11-15 21:13:17,856][isaaclab_contrib.deformable.deformable_object][INFO] - Number of instances: 32
+[2026-11-15 21:13:17,856][isaaclab_contrib.deformable.deformable_object][INFO] - Particles per body: 49
+Initialize solver took: Last: 2.203629 s, Mean: 2.203629 s, Std: 0.000000 s, N: 1
+[INFO]: Time taken for simulation start Last: 3.174981 s, Mean: 3.174981 s, Std: 0.000000 s, N: 1
+[cloth] plasticity writes the cloth solver's edge_rest_angle (its own view copy, mirrored to the model)
+[cloth] plasticity: yield curvature 32 /m = 30.6 deg per grid cell, 21.6 deg per diagonal, 3072 hinges
+[INFO]: Completed setting up the environment...
+[material_patch] friction set: 1249 shapes at mu=0.5, 320 fingertip shapes at mu=1.5
+[spring] passive hand spring on 20 joints as a joint effort: ks 0.0110-0.1447 N m/rad, ks / kp 0.015-0.111
+[dr] obs delay off, action delay off, object state off | delay_mode per_step | joint vel noise 0.0, joint pos noise 0.0 rad, action noise 0.0 | object bias +-(0.0, 0.0, 0.0) m / 0.0 deg | robot gains k x(1.0, 1.0) d x(1.0, 1.0)
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+/share/portal/kk837/task_curriculum/isaacsimenvs/eval/player.py:60: UserWarning: register_new_resolver() is deprecated and will be removed in a future release.
+Use register_resolver() instead.
+See https://github.com/hydra-ecosystem/omegaconf/issues/426 for migration instructions.
+
+  OmegaConf.register_new_resolver(name, fn)
+self.seed = 42
+[BasePlayer] Creating regular env:  rlgpu
+{'observation_space': Box(-inf, inf, (134,), float32), 'action_space': Box(-1.0, 1.0, (27,), float32), 'agents': 1, 'value_size': 1}
+build mlp: 1024
+RunningMeanStd:  (1,)
+RunningMeanStd:  (134,)
+=> loading checkpoint 'debug_outputs/train_logs/nov/2026-11-15_rigid_cloth_prior_2gpu_659538/nn/snap_0_rigid_cloth_prior_2gpu_ep_1300.pth'
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/utils/reset_utils.py:336: DeprecationWarning: The function 'write_joint_state_to_sim' will be deprecated in a future release. Please use 'write_joint_state_to_sim_index' instead.
+  env.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:2122: DeprecationWarning: The function 'write_root_pose_to_sim' will be deprecated in a future release. Please use 'write_root_pose_to_sim_index' instead.
+  return _orig(value, *args, **kwargs)
+/share/portal/kk837/task_curriculum/isaacsimenvs/newton/patches.py:388: DeprecationWarning: The `body_state_w` property will be deprecated in IsaacLab 4.0. Please use `body_link_pose_w` and `body_com_vel_w` instead.
+  value = getattr(object.__getattribute__(self, "_wrapped"), name)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:68: DeprecationWarning: The function 'set_joint_position_target' will be deprecated in a future release. Please use 'set_joint_position_target_index' instead.
+  self.robot.set_joint_position_target(self._cur_targets)
+/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/play_env.py:72: DeprecationWarning: The function 'set_joint_effort_target' will be deprecated in a future release. Please use 'set_joint_effort_target_index' instead.
+  self.robot.set_joint_effort_target(spring)
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 32 envs: largest set angle 0.0 deg, 0 hinges past 10 deg; after reset 0.0 deg
+[cloth] plasticity reset of 1 envs: largest set angle 60.0 deg, 7 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 27/32 envs done
+[cloth] plasticity reset of 1 envs: largest set angle 60.0 deg, 7 hinges past 10 deg; after reset 0.0 deg
+[episodes] step 500: 27/32 envs done
+
+========================================================================
+Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0  |  32 envs  |  first episode per env
+goals/episode = 0.0 +/- 0.0   (n=32, censored=0)
+lift fraction = 0.0
+termination   = {'fall': 28, 'max_successes': 0, 'hand_far': 0, 'timeout': 4, 'fold': 0, 'fold_held': 0, 'nonfinite': 0}
+mean ep length= 340.7 steps
+========================================================================
+
+[episodes] wrote experiments/nov15_fabric_eval/results/prior__fold__silk_s8.json
+[2026-11-15 21:25:27,921][isaaclab.sim.simulation_context][INFO] - SimulationContext cleared
+[slurm] peak_gpu_mib=3572

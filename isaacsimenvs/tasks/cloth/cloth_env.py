@@ -6,10 +6,10 @@ Each hook is a call into the utils (cf. Play's ``play_env.py``)::
     _apply_action       joint position targets + the hand's passive spring
     _get_dones          snapshot.derive -> terminations.compute
     _get_rewards        rewards.compute -> metrics.log_step
-    _reset_idx          reset_utils draws -> the backend's writes -> snapshot.clear
+    _reset_idx          events draws -> the backend's writes -> snapshot.clear
     _get_observations   snapshot.derive -> observations.build -> observations.guard_finite
 
-A backend (``rigid_body_env.py`` PhysX, ``deformable_env.py`` Newton) builds the scene and implements
+A backend (``rigid_cloth_env.py`` PhysX, ``deformable_cloth_env.py`` Newton) builds the scene and implements
 the small simulator surface below: ``_read_state`` (fill a ``SimState``) and the reset writes.
 Nothing else in the task reads or writes the simulator.
 """
@@ -78,10 +78,10 @@ class ClothEnv(DirectRLEnv):
     def _init_task(self) -> None:
         dev = self.device
         names, self._default_joint_pos, limits = self._robot_defaults()
-        m = actions.joint_maps(names, ROBOT)
-        self._perm_canon_to_lab = torch.tensor(m["canon_to_lab"], device=dev)
-        self._perm_lab_to_canon = torch.tensor(m["lab_to_canon"], device=dev)
-        self._arm_ids, self._hand_ids = m["arm"], m["hand"]
+        joint_maps = actions.joint_maps(names, ROBOT)
+        self._perm_canon_to_lab = torch.tensor(joint_maps["canon_to_lab"], device=dev)
+        self._perm_lab_to_canon = torch.tensor(joint_maps["lab_to_canon"], device=dev)
+        self._arm_ids, self._hand_ids = joint_maps["arm"], joint_maps["hand"]
         self._joint_limits = limits
         self._joint_lower_canon = limits[0, :, 0][self._perm_lab_to_canon]
         self._joint_upper_canon = limits[0, :, 1][self._perm_lab_to_canon]
@@ -91,8 +91,10 @@ class ClothEnv(DirectRLEnv):
 
         self._palm_id = self._body_ids([ROBOT.palm_body_name])[0]
         self._fingertip_ids = self._body_ids(list(ROBOT.fingertip_link_names))
-        rx = self.cfg.cloth.release.contact_bodies
-        self._hand_body_ids = self._body_ids_regex(rx) if rx else self._fingertip_ids + [self._palm_id]
+        contact_bodies = self.cfg.cloth.release.contact_bodies
+        self._hand_body_ids = (
+            self._body_ids_regex(contact_bodies) if contact_bodies else self._fingertip_ids + [self._palm_id]
+        )
         self._palm_offset = torch.tensor(ROBOT.palm_center_offset, device=dev)
         self._fingertip_offsets = torch.tensor(ROBOT.fingertip_offsets, device=dev)
         self._palm_obs_shift = torch.tensor(self.cfg.robot_root_pos, device=dev) - torch.tensor(PLAY_ROBOT_ROOT_POS, device=dev)
@@ -134,11 +136,15 @@ class ClothEnv(DirectRLEnv):
         return reward
 
     def _reset_idx(self, env_ids) -> None:
-        ids = torch.arange(self.num_envs, device=self.device) if env_ids is None else \
-            torch.as_tensor(env_ids, device=self.device, dtype=torch.long).reshape(-1)
+        if env_ids is None:
+            ids = torch.arange(self.num_envs, device=self.device)
+        else:
+            ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long).reshape(-1)
         super()._reset_idx(ids)
-        pos, vel = events.robot_start(self, ids, self._default_joint_pos[ids],
-                                           self._joint_limits[ids, :, 0], self._joint_limits[ids, :, 1])
+        pos, vel = events.robot_start(
+            self, ids, self._default_joint_pos[ids],
+            self._joint_limits[ids, :, 0], self._joint_limits[ids, :, 1],
+        )
         self._write_robot(ids, pos, vel)
         self._write_table(ids, events.table_height(self, ids))
         angle = events.start_task(self, ids)
@@ -148,16 +154,17 @@ class ClothEnv(DirectRLEnv):
         snapshot.clear(self, ids)
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
-        s = self._read_state()
-        obs = observations.build(self, s, snapshot.derive(self, s))
-        observations.guard_finite(self, obs, s)
+        state = self._read_state()
+        view = snapshot.derive(self, state)
+        obs = observations.build(self, state, view)
+        observations.guard_finite(self, obs, state)
         return obs
 
     # ------------------------------------------------------------------ queries (eval, viewers, probes)
 
     def _now(self) -> tuple[SimState, TaskView]:
-        s = self._read_state()
-        return s, snapshot.derive(self, s)
+        state = self._read_state()
+        return state, snapshot.derive(self, state)
 
     def _particles_w(self) -> torch.Tensor:
         return self._read_state().points_w
@@ -175,13 +182,13 @@ class ClothEnv(DirectRLEnv):
         return self._now()[1].footprint
 
     def is_folded(self) -> torch.Tensor:
-        s, v = self._now()
-        return terminations.is_folded(self, s, v)
+        state, view = self._now()
+        return terminations.is_folded(self, state, view)
 
     def folded_half_w(self) -> torch.Tensor:
         """``(N, M, 3)``: where every moving-half point belongs (the goal as a ghost cloth)."""
-        _, v = self._now()
-        return fold.moving_half_targets(self._cloth_grid, v.frame_r, v.frame_c, self._unfold_env)
+        _, view = self._now()
+        return fold.moving_half_targets(self._cloth_grid, view.frame_r, view.frame_c, self._unfold_env)
 
     def folded_half_topology(self) -> list[int]:
         return grid.half_triangles(self._cloth_grid.resolution, reflected=self.cfg.cloth.task != "unfold")

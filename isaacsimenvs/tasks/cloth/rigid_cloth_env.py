@@ -1,19 +1,19 @@
 """The fold task on a rigid-body cloth: two plates and one hinge, one size design per env (PhysX).
 
 Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv/isaacsim``). The task -- hooks, obs, reward, success -- is
-``utils/task_env.ClothEnv``, shared with the VBD cloth env; this file is the PhysX side only:
+``cloth_env.ClothEnv``, shared with the VBD cloth env; this file is the PhysX side only:
 the scene, reading a ``SimState`` from it, and the reset writes.
 
     OMNI_KIT_ACCEPT_EULA=YES .venv/isaacsim/bin/python scripts/training/train.py --headless \\
         --task Isaacsimenvs-RigidBodyCloth-Direct-v0 --experiment rigid_body_cloth
 
-**The cloth** (``utils/designs.single_hinge``): two boxes ``length/2 x width x thickness``
+**The cloth** (``utils/geometry/designs.single_hinge``): two boxes ``length/2 x width x thickness``
 joined by a revolute hinge on the top surface at the crease, so folding the ``+x`` plate 180 deg
 lays it one thickness above the ``-x`` plate: the fold target (reflect across the crease, lift by
 the ply gap = the thickness). Env ``i`` carries design ``perm[i % n_designs]`` of the grid. The
 task reads the cloth as a ``point_resolution`` grid of points carried by the two plates.
 
-**Per-reset DR** (``utils/randomization.py``): hinge damping / stiffness and plate / robot / table friction.
+**Per-reset DR** (``utils/rigid/randomization.py``): hinge damping / stiffness and plate / robot / table friction.
 """
 
 from __future__ import annotations
