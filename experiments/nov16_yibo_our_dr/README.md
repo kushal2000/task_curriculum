@@ -147,3 +147,25 @@ experiments/submit.sh --job-name=yibo_vbd_branch_base \
   experiments/nov16_yibo_our_dr/submit_vbd_eval.sh \
   --material base --experiment experiments/nov16_yibo_our_dr/vbd_base_branch.yaml
 ```
+
+## VBD contact convergence
+
+`vbd_iteration_sweep.sh` compares 12, 40 and 80 VBD iterations per cloth substep
+with the same branch-value base cloth, Flexiv-Wuji checkpoint, seed, resets and
+32 first 10-second episodes. Material, timestep, six cloth substeps, two coupled
+substeps and one coupler iteration stay fixed. The native VBD count is checked
+against the config at startup.
+
+```bash
+experiments/submit.sh --array=0-2 experiments/nov16_yibo_our_dr/vbd_iteration_sweep.sh
+```
+
+Results land in `results/vbd_iterations_<array>/iterations_<12|40|80>/base.json`.
+Opt-in diagnostics distinguish collision-envelope overlap (including the 8 mm
+particle radius) from crossing a cached robot/table contact plane. Contact counts
+are recorded: zero depth with zero records does not establish collision coverage.
+An independent signed-distance query against the actual native table box measures
+cloth-node penetration, including nodes without contact records. These policy-rate
+measurements can miss between-step and triangle-interior crossings, and do not
+measure cloth self-intersections. Higher iteration counts are a convergence test;
+fold counts alone do not establish that penetration was fixed.

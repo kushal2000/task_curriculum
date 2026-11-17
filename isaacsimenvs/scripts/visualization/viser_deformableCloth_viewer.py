@@ -34,6 +34,7 @@ def parse_args(argv=None):
     parser.add_argument('--preset', choices=('yibo', 'materials'), default='yibo')
     parser.add_argument('--size', type=float, help='Square sheet side length [m].')
     parser.add_argument('--resolution', type=int, help='Vertices per side (default 7).')
+    parser.add_argument('--vbd-iterations', type=int, help='Cloth solver iterations per substep (default 12).')
     parser.add_argument('--drop-height', type=float, help='Cloth center above tabletop [m].')
     parser.add_argument('--experiment', type=Path, help='Optional recipe with env overrides.')
     parser.add_argument('--checkpoint', type=Path,
@@ -46,6 +47,8 @@ def parse_args(argv=None):
     args = parser.parse_args(argv)
     if args.steps < 0 or (args.resolution is not None and args.resolution < 5):
         parser.error('Require --steps >= 0 and --resolution >= 5.')
+    if args.vbd_iterations is not None and args.vbd_iterations < 1:
+        parser.error('--vbd-iterations must be positive.')
     if args.size is not None and (not np.isfinite(args.size) or args.size <= 0):
         parser.error('--size must be finite and positive.')
     if args.drop_height is not None and (not np.isfinite(args.drop_height) or args.drop_height < 0):
@@ -103,6 +106,8 @@ def build_config(args):
         cloth.start_height = urdf_box_size(cfg.assets.table_urdf)[2]/2 + args.drop_height
     if args.resolution is not None:
         cloth.resolution = args.resolution
+    if args.vbd_iterations is not None:
+        cloth.vbd_iterations = args.vbd_iterations
     # One visible environment; do not inherit training batch sizes or renderers.
     cfg.scene.num_envs, cfg.sim.device, cfg.seed = 1, args.device, args.seed
     if cfg.backend != 'vbd' or cfg.robot_preset != 'yibo' or cfg.obs.keypoint_mode != 'yibo':
@@ -234,6 +239,7 @@ def main(argv=None):
             material = server.gui.add_dropdown('Material', options=fabrics.names(), initial_value=args.material)
             size = server.gui.add_number('Side length [m]', initial_value=cloth.size, min=.02, max=.6, step=.01)
             resolution = server.gui.add_number('Vertices per side', initial_value=cloth.resolution, min=5, max=41, step=1)
+            iterations = server.gui.add_number('VBD iterations / substep', initial_value=cloth.vbd_iterations, min=1, max=200, step=1)
             drop = server.gui.add_number('Drop above table [m]', initial_value=cloth.start_height-urdf_box_size(cfg.assets.table_urdf)[2]/2,
                                          min=0., max=.5, step=.01)
             rebuild = server.gui.add_button('Apply and restart')
@@ -263,7 +269,9 @@ def main(argv=None):
                 current.visible = target.visible = markers.value != 'Hidden'
             status.content = (f'Fold error: **{float(view.fold_error[0])*100:.1f} cm** · reward {playback.reward:.2f}  \n'
                               f'Completed: {playback.episodes} · folds: {playback.folds}  \n'
-                              f'`{args.material}` · {cloth.size*100:g} cm · {cloth.resolution}×{cloth.resolution} particles')
+                              f'`{args.material}` · {cloth.size*100:g} cm · {cloth.resolution}×{cloth.resolution} particles  \n'
+                              f'VBD: {cloth.vbd_iterations} iterations × {cloth.substeps} cloth substeps; '
+                              f'{cfg.newton.num_substeps} coupled substeps/tick')
 
         draw()
         print(f'Deformable cloth viewer ready: http://localhost:{args.port}', flush=True)
@@ -283,7 +291,8 @@ def main(argv=None):
                     elif command == 'rebuild':
                         restart = [sys.executable, str(Path(__file__).resolve()), *sys.argv[1:],
                                    '--material', material.value, '--size', str(size.value),
-                                   '--resolution', str(int(resolution.value)), '--drop-height', str(drop.value)]
+                                   '--resolution', str(int(resolution.value)), '--drop-height', str(drop.value),
+                                   '--vbd-iterations', str(int(iterations.value))]
                 if restart is not None:
                     break
                 if playing.value or step_once:

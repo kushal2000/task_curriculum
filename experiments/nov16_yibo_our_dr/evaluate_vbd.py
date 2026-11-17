@@ -35,6 +35,7 @@ def parser():
     cli.add_argument('--policy-config', type=Path, default=ROOT/'pretrained_policy/flexiv_wuji/config.yaml')
     cli.add_argument('--expl-coef', type=float, default=0.)
     cli.add_argument('--experiment', type=Path, help='Run recipe with env overrides applied after the material preset.')
+    cli.add_argument('--contact-diagnostics', action='store_true', help='Measure native contact overlaps and table penetration.')
     cli.add_argument('--out-dir', type=Path, default=ROOT/'experiments/nov16_yibo_our_dr/results/vbd_materials')
     cli.add_argument('--check-config', action='store_true')
     cli.add_argument('--skip-cache-check', action='store_true', help='Only with --check-config; inspect configs before asset baking.')
@@ -164,6 +165,8 @@ def evaluate(args):
                 'centroid_outside_table_xy': (relative_xy.mean(1).abs()>self.eval_table_half_xy).any(dim=1),
                 'any_particle_near_ground': (local[..., 2]<.1).any(dim=1),
             }
+            if getattr(self, 'eval_contacts', None) is not None:
+                self.eval_metrics.update(self.eval_contacts.read())
             return result
 
     result = dict(status='running', material=args.material,
@@ -178,6 +181,7 @@ def evaluate(args):
                   release_evaluated=False,
                   limitation='Physical fold only. Whole-robot 10 cm release clearance is unsupported for VBD.',
                   experiment=str(args.experiment) if args.experiment is not None else None,
+                  contact_diagnostics=args.contact_diagnostics,
                   config=cfg.to_dict())
     destination = args.out_dir/f'{args.material}.json'
     write_json(destination, result)
@@ -186,6 +190,11 @@ def evaluate(args):
         with capture_fd_output() as captured:
             try:
                 env = EvaluationEnv(cfg)
+                from isaaclab_newton.physics import NewtonManager
+
+                result['native_vbd_iterations'] = int(NewtonManager._solver.solver('cloth').iterations)
+                if result['native_vbd_iterations'] != cfg.deformable_cloth.vbd_iterations:
+                    raise RuntimeError('Native VBD iteration count differs from the requested config')
                 player = PretrainedPlayer(args.policy_config, args.checkpoint, args.num_envs, device=args.device,
                                           num_observations=134, num_actions=27, expl_coef=args.expl_coef)
                 # Runner initialization can reseed global RNG; restore requested evaluation seed.
@@ -229,6 +238,10 @@ def evaluate(args):
                     as_torch(env.backend.table.data.root_pos_w)-env.scene.env_origins
                 ).cpu().tolist()
                 result['initial_table_top_z_m'] = (initial_state.table_top_z-env.scene.env_origins[:, 2]).cpu().tolist()
+                if args.contact_diagnostics:
+                    from experiments.nov16_yibo_our_dr.vbd_contacts import VbdContactDiagnostics
+
+                    env.eval_contacts = VbdContactDiagnostics(env)
                 env.eval_initial_q = initial_state.joint_pos.clone()
                 env.eval_initial_palm = initial_state.palm_pos_w.clone()
                 tracking_sq_sum = torch.zeros(n, device=device)

@@ -45,9 +45,11 @@ def test_material_switch_constructs_fresh_complete_physics_config():
 def test_explicit_geometry_and_drop_height_override_preset():
     cfg = viewer.build_config(viewer.parse_args([
         '--preset', 'materials', '--size', '.18', '--resolution', '9', '--drop-height', '.07',
+        '--vbd-iterations', '80',
     ]))
     assert cfg.deformable_cloth.size == pytest.approx(.18)
     assert cfg.deformable_cloth.resolution == 9
+    assert cfg.deformable_cloth.vbd_iterations == 80
     # start_height is measured from table center; the collision box is30cm high.
     assert cfg.deformable_cloth.start_height == pytest.approx(.15 + .07)
 

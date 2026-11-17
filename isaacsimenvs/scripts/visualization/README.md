@@ -26,6 +26,12 @@ wireframe, and policy markers versus physical fold corners/targets. The sheet
 mesh follows the live VBD particles. Material, side length, mesh resolution and
 drop-height edits take effect with **Apply and restart**; the browser reconnects
 on the same port. Material changes start from a fresh config and reset the policy.
+VBD iterations per substep are also editable under **Rebuild scene**. To inspect
+the checkpoint with more contact-solving work immediately:
+
+```sh
+.venv/isaaclab3/bin/python isaacsimenvs/scripts/visualization/viser_deformableCloth_viewer.py --vbd-iterations 80
+```
 
 The viewer uses the environment's observations, controller and episode resets.
 It loads `flat7RW_fricition.pth` by default; `--checkpoint` and `--policy-config`
