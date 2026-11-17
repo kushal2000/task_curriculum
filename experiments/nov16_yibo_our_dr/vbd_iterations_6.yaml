@@ -1,0 +1,4 @@
+base: vbd_base_branch.yaml
+env:
+  deformable_cloth:
+    vbd_iterations: 6

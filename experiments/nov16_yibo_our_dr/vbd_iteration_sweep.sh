@@ -13,7 +13,7 @@ if [[ -z "${SLURM_JOB_ID:-}" ]]; then
 fi
 export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
-levels=(12 40 80)
+levels=(12 40 80 6)
 iterations="${levels[${SLURM_ARRAY_TASK_ID:-0}]}"
 recipe=experiments/nov16_yibo_our_dr/vbd_base_branch.yaml
 if [[ "$iterations" != 12 ]]; then
