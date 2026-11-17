@@ -1,0 +1,194 @@
+<title>/*TITLE*/</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a test-bench report. Each section is one scripted test: a 3D stage you can scrub, then the measured numbers. */
+:root {
+  --bg: #f2f3f1; --panel: #ffffff; --fg: #1b2120; --muted: #5b6764; --line: #d3d9d6;
+  --accent: #2e5d8a; --accent-soft: #dde7f1; --good: #2c7a4b; --bad: #b0472a; --warn: #9a6a12;
+  --stage: #e7eae8; --grid: #c6cdca;
+  --display: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141817; --panel: #1c2120; --fg: #e2e7e5; --muted: #97a29f; --line: #313937;
+  --accent: #7fb0de; --accent-soft: #22303d; --good: #69c08c; --bad: #e3896a; --warn: #d8b06a;
+  --stage: #191e1d; --grid: #2b3331; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #141817; --panel: #1c2120; --fg: #e2e7e5; --muted: #97a29f; --line: #313937;
+  --accent: #7fb0de; --accent-soft: #22303d; --good: #69c08c; --bad: #e3896a; --warn: #d8b06a;
+  --stage: #191e1d; --grid: #2b3331; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 32px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 36px; }
+header { display: grid; gap: 10px; max-width: 78ch; }
+h1 { font-family: var(--display); font-size: 2rem; font-weight: 700; margin: 0; letter-spacing: -0.015em; text-wrap: balance; }
+h2 { font-family: var(--display); font-size: 1.3rem; font-weight: 600; margin: 0; text-wrap: balance; }
+header p, .lede { margin: 0; color: var(--muted); max-width: 75ch; }
+header ul { margin: 0; padding-left: 1.2em; color: var(--muted); display: grid; gap: 4px; }
+header b, .lede b { color: var(--fg); font-weight: 600; }
+section { display: grid; gap: 12px; min-width: 0; }
+.stage { position: relative; background: var(--stage); border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  aspect-ratio: 16 / 7; max-width: 100%; min-height: 280px; }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.lbl { position: absolute; transform: translate(-50%, 0); font: 500 0.7rem var(--mono); color: var(--fg); white-space: nowrap;
+  pointer-events: none; background: color-mix(in srgb, var(--panel) 82%, transparent); padding: 1px 5px; border-radius: 3px; }
+.phase { position: absolute; top: 10px; right: 12px; font: 0.78rem var(--mono); background: var(--panel); border: 1px solid var(--line);
+  padding: 4px 8px; border-radius: 3px; max-width: 60%; text-align: right; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+button { font: inherit; font-size: 0.85rem; border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+  padding: 5px 11px; border-radius: 3px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.play { min-width: 70px; font-weight: 600; }
+.time { font: 0.82rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 64px; }
+input[type=range] { flex: 1 1 240px; accent-color: var(--accent); min-width: 0; }
+.ledger { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+th { font: 600 0.7rem var(--sans); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+td.n, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+tr.grp td { border-top: 2px solid var(--line); }
+.chip { display: inline-block; font-size: 0.74rem; padding: 1px 7px; border-radius: 10px; font-weight: 600; }
+.ok { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.no { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+.mid { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.sub { color: var(--muted); font-size: 0.78rem; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+footer { color: var(--muted); font-size: 0.85rem; max-width: 80ch; display: grid; gap: 6px; }
+footer code, .lede code { font-family: var(--mono); font-size: 0.85em; }
+@media (max-width: 600px) { .stage { aspect-ratio: 4 / 3; } .phase { max-width: 85%; font-size: 0.7rem; } h1 { font-size: 1.6rem; } }
+</style>
+
+<div class="wrap">
+  <header>
+/*HEADER*/
+  </header>
+  <div id="sections" style="display:grid;gap:44px"></div>
+  <footer>
+/*FOOTER*/
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const SECTIONS = /*SECTIONS*/;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const dec = (s, T) => { const r = Uint8Array.from(atob(s), c => c.charCodeAt(0)); return new T(r.buffer); };
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const root = document.getElementById("sections");
+const viewers = [];
+
+function buildPanel(sec, host) {
+  host.innerHTML = `<h2></h2><p class="lede"></p>
+    <div class="stage"><canvas></canvas><div class="phase">loading</div></div>
+    <div class="bar"><button type="button" class="play">Play</button>
+      <input type="range" min="0" step="1" value="0" aria-label="Time">
+      <span class="time">0.0 s</span>
+      <span class="bar spd" role="group" aria-label="Speed"></span></div>
+    <div class="bar jumps"></div>`;
+  host.querySelector("h2").textContent = sec.title;
+  host.querySelector(".lede").innerHTML = sec.lede;
+  const stage = host.querySelector(".stage"), cv = host.querySelector("canvas");
+  const renderer = new THREE.WebGLRenderer({canvas: cv, antialias: true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const scene = new THREE.Scene();
+  const [ex, ez] = sec.extent;
+  const span = Math.max(ex, ez * 1.6, 0.35);
+  const camera = new THREE.PerspectiveCamera(30, 2, 0.01, 20);
+  camera.position.set(0, span * 0.62, span * 1.15);
+  const controls = new THREE.OrbitControls(camera, cv);
+  controls.target.set(0, 0.02, 0); controls.enableDamping = true;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444c49, 0.78));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.72); sun.position.set(0.5, 1.2, 0.7); scene.add(sun);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(span * 3, span * 3), new THREE.MeshStandardMaterial({roughness: 1}));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.0005; scene.add(ground);
+  let grid = null;
+  const theme = () => {
+    renderer.setClearColor(new THREE.Color(css("--stage"))); ground.material.color.set(css("--stage"));
+    if (grid) scene.remove(grid);
+    grid = new THREE.GridHelper(span * 3, Math.round(span * 3 / 0.05), new THREE.Color(css("--grid")), new THREE.Color(css("--grid")));
+    scene.add(grid);
+  };
+  theme();
+  const T = sec.times.length;
+  const sheets = sec.sheets.map(sh => {
+    const Q = dec(sh.frames, Int16Array), F = sh.wide ? dec(sh.faces, Uint32Array) : dec(sh.faces, Uint16Array);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(sh.n * 3), 3));
+    g.setIndex(new THREE.BufferAttribute(F, 1));
+    const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({color: new THREE.Color(sh.color), side: THREE.DoubleSide, flatShading: true, roughness: 0.85}));
+    const wire = new THREE.Mesh(g, new THREE.MeshBasicMaterial({color: 0x000000, wireframe: true, transparent: true, opacity: 0.16}));
+    const grp = new THREE.Group(); grp.add(mesh); grp.add(wire); grp.position.set(sh.x, 0, sh.z); scene.add(grp);
+    const el = document.createElement("div"); el.className = "lbl"; el.textContent = sh.label; stage.appendChild(el);
+    return {sh, Q, g, el, pos: new THREE.Vector3(sh.x, 0, sh.z + sh.size_cm / 200 + 0.025)};
+  });
+  const setFrame = t => {
+    for (const s of sheets) {
+      const a = s.g.attributes.position.array, o = t * s.sh.n * 3, Q = s.Q;
+      for (let i = 0; i < s.sh.n; i++) {
+        a[3 * i] = Q[o + 3 * i] * 1e-4; a[3 * i + 1] = Q[o + 3 * i + 2] * 1e-4; a[3 * i + 2] = -Q[o + 3 * i + 1] * 1e-4;
+      }
+      s.g.attributes.position.needsUpdate = true; s.g.computeVertexNormals();
+    }
+  };
+  const scrub = host.querySelector("input"), timeEl = host.querySelector(".time"), phaseEl = host.querySelector(".phase");
+  const playBtn = host.querySelector(".play");
+  scrub.max = T - 1;
+  const st = {cur: 0, playing: false, speed: 1, acc: 0, shown: -1, visible: false};
+  const setPlay = p => { st.playing = p; playBtn.textContent = p ? "Pause" : "Play"; };
+  playBtn.addEventListener("click", () => setPlay(!st.playing));
+  scrub.addEventListener("input", () => { st.cur = +scrub.value; st.acc = 0; });
+  const spd = host.querySelector(".spd");
+  [0.5, 1, 2].forEach(s => { const b = document.createElement("button"); b.type = "button"; b.textContent = s + "×";
+    b.setAttribute("aria-pressed", String(s === 1));
+    b.addEventListener("click", () => { st.speed = s; spd.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); });
+    spd.appendChild(b); });
+  const frameAt = sec2 => { let lo = 0, hi = T - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (sec.times[m] < sec2) lo = m + 1; else hi = m; } return lo; };
+  const jumps = host.querySelector(".jumps");
+  (sec.jumps || []).forEach(([name, prefix]) => {
+    const p = sec.phases.find(([, n]) => n.startsWith(prefix)); if (!p) return;
+    const b = document.createElement("button"); b.type = "button"; b.textContent = name;
+    b.addEventListener("click", () => { st.cur = frameAt(p[0]); st.acc = 0; }); jumps.appendChild(b);
+  });
+  const resize = () => { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+  new ResizeObserver(resize).observe(stage); resize();
+  new IntersectionObserver(es => { st.visible = es[0].isIntersecting; if (st.visible && !reduced && st.shown < 0) setPlay(true); }).observe(stage);
+  const v = new THREE.Vector3();
+  const tick = dt => {
+    if (st.playing && st.visible) { st.acc += dt * st.speed; const fdt = Math.max(1e-3, sec.times[1] - sec.times[0]);
+      while (st.acc >= fdt) { st.acc -= fdt; st.cur = (st.cur + 1) % T; } }
+    if (st.cur !== st.shown) {
+      setFrame(st.cur); st.shown = st.cur; scrub.value = st.cur;
+      const tt = sec.times[st.cur]; timeEl.textContent = tt.toFixed(1) + " s";
+      let ph = sec.phases.length ? sec.phases[0][1] : ""; for (const [t0, n] of sec.phases) if (t0 <= tt + 1e-6) ph = n;
+      phaseEl.textContent = ph;
+    }
+    if (!st.visible) return;
+    controls.update();
+    const w = stage.clientWidth, h = stage.clientHeight;
+    for (const s of sheets) { v.copy(s.pos).project(camera); s.el.style.left = ((v.x + 1) / 2 * w) + "px"; s.el.style.top = ((1 - v.y) / 2 * h) + "px"; s.el.hidden = v.z > 1; }
+    renderer.render(scene, camera);
+  };
+  setFrame(0); st.shown = 0;
+  viewers.push({tick, theme});
+}
+
+for (const sec of SECTIONS) {
+  const host = document.createElement("section");
+  root.appendChild(host);
+  if (sec.kind === "panel") buildPanel(sec, host);
+  else host.innerHTML = `<h2></h2><p class="lede">${sec.lede || ""}</p><div class="ledger">${sec.html}</div>`, host.querySelector("h2").textContent = sec.title;
+}
+const retheme = () => viewers.forEach(v => v.theme());
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", retheme);
+new MutationObserver(retheme).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
+let last = performance.now();
+const loop = now => { const dt = Math.min(0.1, (now - last) / 1000); last = now; viewers.forEach(v => v.tick(dt)); requestAnimationFrame(loop); };
+requestAnimationFrame(loop);
+</script>
