@@ -135,7 +135,7 @@ run.py does.
 
 | mode | what |
 |---|---|
-| `home` | Hand to home first (it opens and lets go), then the arm, both jerk-limited at `move_speed` / `hand_move_speed`; checks it got there, then exits |
+| `home` | Arm to home first, then the hand (it opens and lets go), both jerk-limited at `move_speed` / `hand_move_speed`; checks it got there, then exits |
 | `free_drive` | Arm: kp 0, light damping, gravity compensated, movable by hand; a soft wall starts `free_drive_limit_margin_deg` before each joint limit. Hand: connected, never enabled. Publishes `joint_state` and prints the distance to home every second |
 | `policy` | Forwards `joint_target` at 200 Hz. No new target for 0.1 s: holds the measured pose until targets come back |
 | `openloop` | Hand to home, then sends target k of `openloop.path` from k/60 s on, with no feedback, and the same safety checks as `policy`. After the last one it holds it until Ctrl-C |

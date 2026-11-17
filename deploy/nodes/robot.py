@@ -3,7 +3,7 @@ a task's run.py (deploy/utils/runner.py); deploy/simtoolreal/README.md has the d
 
 robot.arm   serial number | mujoco (aioflexiv's MuJoCo Rizon, same code path)
 robot.hand  serial number | auto | dry_run (connected, never enabled) | fake (deploy/utils/fake_hand.py)
-robot.mode  home        hand, then arm, to home (spec default_q, the training start pose), then exit
+robot.mode  home        arm, then hand, to home (spec default_q, the training start pose), then exit
             free_drive  arm movable by hand (kp 0, Flexiv compensates gravity), with a soft wall before
                         each joint limit (deploy/utils/free_drive.py); hand never enabled
             policy      the arm must be at home; the hand is brought home; then forward policy.py's
@@ -195,15 +195,15 @@ def check_target_step(cfg, spec, commanded: np.ndarray, new: np.ndarray) -> str 
 # ----------------------------------------------------------------------------------------- modes
 
 async def go_home(cfg, spec, arm, hand) -> str:
-    """Hand first (opens, lets go), then the arm, jerk-limited; the arm in a straight joint-space line."""
+    """Arm first, then the hand (opens, lets go), jerk-limited; the arm in a straight joint-space line."""
     rc, home = cfg.robot, spec["default_q"]
-    if not hand.dry_run:
-        print("[robot] home: hand ...", flush=True)
-        await hand.move(clip_hand(home[HAND]), max_velocity=rc.hand_move_speed)
     print("[robot] home: arm ...", flush=True)
     v = rc.move_speed
     await arm.move(home[ARM], max_velocity=v, max_acceleration=2.0 * v, max_jerk=10.0 * v)
     set_arm_gains(arm, rc, spec)          # move() keeps the gains, but make sure
+    if not hand.dry_run:
+        print("[robot] home: hand ...", flush=True)
+        await hand.move(clip_hand(home[HAND]), max_velocity=rc.hand_move_speed)
     q = read_q(arm, hand)
     if q is None:
         return ARM_STOPPED
