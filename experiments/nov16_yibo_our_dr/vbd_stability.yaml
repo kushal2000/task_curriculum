@@ -1,0 +1,32 @@
+# Numerical search only: material, contact coefficients, robot and timestep stay fixed.
+base_recipe: vbd_base_branch.yaml
+reference_candidate: vbd12
+num_envs: 12  # Four each: flat drop/hold, prescribed manipulation, folded release.
+steps: 300
+candidates:
+  vbd6: {vbd_iterations: 6, substeps: 6, coupler_iterations: 1}
+  vbd12: {vbd_iterations: 12, substeps: 6, coupler_iterations: 1}
+  vbd40: {vbd_iterations: 40, substeps: 6, coupler_iterations: 1}
+  vbd80: {vbd_iterations: 80, substeps: 6, coupler_iterations: 1}
+  substeps3: {vbd_iterations: 24, substeps: 3, coupler_iterations: 1}
+  substeps12: {vbd_iterations: 6, substeps: 12, coupler_iterations: 1}
+  coupler2: {vbd_iterations: 12, substeps: 6, coupler_iterations: 2}
+
+# Keep the scenarios separate: reopening after folded release is legitimate physics.
+quality_metrics:
+  settle: [table_box_center_depth_m, particle_speed_m_s, late_particle_speed_m_s, edge_stretch_ratio, p95_edge_stretch_ratio]
+  scripted: [table_box_center_depth_m, robot_record_contact_plane_crossing_m, particle_speed_m_s, late_particle_speed_m_s, edge_stretch_ratio, p95_edge_stretch_ratio]
+  fold_release: [table_box_center_depth_m, particle_speed_m_s, late_particle_speed_m_s, edge_stretch_ratio, p95_edge_stretch_ratio]
+
+# Explicit, provisional acceptance targets for this benchmark, not measured cloth limits.
+# No candidate meeting these targets => report no acceptable candidate, not a false optimum.
+# Speeds include physical impacts; stretch can also be real material compliance.
+quality_limits:
+  global:
+    table_box_center_depth_m: 0.001
+    particle_speed_m_s: 5.0
+    edge_stretch_ratio: 1.5
+    p95_edge_stretch_ratio: 1.3
+  probes:
+    scripted:
+      robot_record_contact_plane_crossing_m: 0.002  # Cached-plane proxy, not exact hand-mesh SDF.

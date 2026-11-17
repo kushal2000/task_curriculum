@@ -150,14 +150,14 @@ experiments/submit.sh --job-name=yibo_vbd_branch_base \
 
 ## VBD contact convergence
 
-`vbd_iteration_sweep.sh` compares 12, 40 and 80 VBD iterations per cloth substep
+`vbd_iteration_sweep.sh` compares 6, 12, 40 and 80 VBD iterations per cloth substep
 with the same branch-value base cloth, Flexiv-Wuji checkpoint, seed, resets and
 32 first 10-second episodes. Material, timestep, six cloth substeps, two coupled
 substeps and one coupler iteration stay fixed. The native VBD count is checked
 against the config at startup.
 
 ```bash
-experiments/submit.sh --array=0-2 experiments/nov16_yibo_our_dr/vbd_iteration_sweep.sh
+experiments/submit.sh --array=0-3 experiments/nov16_yibo_our_dr/vbd_iteration_sweep.sh
 ```
 
 Submitted array `717322` on commit `407aae9`: tasks 0/1/2 use 12/40/80 iterations
@@ -168,7 +168,23 @@ table record-envelope overlap was 0.138 mm, with zero table contact-plane crossi
 or independent table-box node penetration. This short check does not establish
 folding performance or convergence with respect to iteration count.
 
-Results land in `results/vbd_iterations_<array>/iterations_<12|40|80>/base.json`.
+The additional 6-iteration case is job `718953_3` (commit `aa688fb`). Completed
+closed-loop results so far, each with 32 first episodes:
+
+| Iterations | Folds | Falls | Worst robot contact-plane crossing | Table-node penetration |
+|---|---:|---:|---:|---:|
+| 6 | 0 | 8 | 17.49 mm | 0 |
+| 12 | 0 | 11 | 16.89 mm | 0 |
+| 40 | 1 | 11 | 18.52 mm | 0 |
+| 80 | 0 | 9 | 30.89 mm | 0 |
+
+These runs have otherwise identical resolved configs and exactly matching initial
+joint positions, cloth centers and table positions. Policy actions then diverge
+with the simulated states; this is not a fixed-action convergence test. The robot
+metric uses cached contact planes, not exact current hand-mesh signed distance.
+None of these preliminary results establishes an optimal iteration count.
+
+Results land in `results/vbd_iterations_<array>/iterations_<6|12|40|80>/base.json`.
 Opt-in diagnostics distinguish collision-envelope overlap (including the 8 mm
 particle radius) from crossing a cached robot/table contact plane. Contact counts
 are recorded: zero depth with zero records does not establish collision coverage.
@@ -177,3 +193,55 @@ cloth-node penetration, including nodes without contact records. These policy-ra
 measurements can miss between-step and triangle-interior crossings, and do not
 measure cloth self-intersections. Higher iteration counts are a convergence test;
 fold counts alone do not establish that penetration was fixed.
+
+## Repeatable solver stability test
+
+`benchmark_vbd_stability.py` restores one saved native initial state and action
+tape in a fresh process per candidate. Its 12 worlds contain four flat-drop/hold,
+four prescribed manipulation and four folded-release probes. The robot uses its
+normal finite-stiffness PD control. A folded sheet is allowed to reopen; folding
+success is not the stability criterion. There are no policy-dependent actions or
+automatic episode resets in these probes.
+
+The matrix in `vbd_stability.yaml` tests `(VBD iterations, cloth substeps, coupling
+passes)`:
+
+`(6,6,1), (12,6,1), (40,6,1), (80,6,1), (24,3,1), (6,12,1), (12,6,2)`.
+
+Material, robot, contact coefficients and the 120 Hz outer physics timestep are
+fixed. The two alternative cloth-substep cases preserve the baseline's total
+iteration work. Native solver readbacks verify the actual settings; every physics
+call checks its measured clock advance. Diagnostics sample each 120 Hz physics
+boundary and separate synchronized physics time from diagnostic overhead.
+
+Measured outputs include node/table penetration, robot contact-plane crossing and
+coverage, stretch/compression, velocity/acceleration spikes, cloth kinetic energy,
+tracking error and last-third peak speed. The initial drop is excluded from that
+late-speed metric. Comparisons require matching initial-state, action and physical
+protocol hashes. Different horizons, missing contact coverage, nonfinite states
+and contact-buffer overflows cannot produce a false optimum.
+
+From the repository root, prepare an immutable fixture before submitting all
+seven candidates. Set a new output directory for each material/seed experiment:
+
+```bash
+export VBD_STABILITY_RUN=experiments/nov16_yibo_our_dr/results/vbd_stability_trial
+experiments/submit.sh --job-name=vbd_stability_fixture \
+  experiments/nov16_yibo_our_dr/vbd_stability_job.sh --prepare-fixture
+# Replace <fixture-job> with the returned job ID.
+experiments/submit.sh --array=0-6 --dependency=afterok:<fixture-job> \
+  experiments/nov16_yibo_our_dr/vbd_stability_job.sh
+
+.venv/isaaclab3/bin/python experiments/nov16_yibo_our_dr/analyze_vbd_stability.py \
+  "$VBD_STABILITY_RUN" --limits experiments/nov16_yibo_our_dr/vbd_stability.yaml \
+  --out-dir "$VBD_STABILITY_RUN/report"
+```
+
+Pass the same `--material` and `--seed` to both preparation and replay jobs for
+additional fabrics/seeds. The report provides per-probe quality/runtime Pareto
+frontiers and selects the fastest tested candidate passing all declared probe
+limits only after the full matrix completes. The YAML acceptance limits are
+explicit provisional targets, not calibrated real-cloth truth; if none passes,
+the report recommends none. Rerunning analysis with revised limits requires no
+simulation changes. Short smoke replays can use `--steps 12`; their shorter
+horizon keeps them separate from the full five-second benchmark.
