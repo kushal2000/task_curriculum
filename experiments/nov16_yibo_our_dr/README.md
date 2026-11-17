@@ -117,3 +117,17 @@ controlled baselines supersede earlier diagnostics whose loader reseeded to 42.
 Use `ABLATION_CASES='hybrid delays_off noise_off'` or `ABLATION_SEED=1` before the
 submission command for additional cases or a repeat. Single-seed outcomes remain
 preliminary; the script reports paired rescues/losses alongside the headline rates.
+
+## VBD base with branch geometry and resets
+
+`vbd_base_branch.yaml` restores `yiboc_wuji@2b82faf`'s 10 cm sheet,
+15 cm drop above the tabletop, +/-10 cm XY reset noise and +/-1 cm table-height
+variation. The evaluator retains the Flexiv-Wuji checkpoint, robot/table assets,
+base material and Yibo actor encoding. It scores 32 first episodes over 10 seconds;
+whole-robot release is not evaluated.
+
+```bash
+experiments/submit.sh --job-name=yibo_vbd_branch_base \
+  experiments/nov16_yibo_our_dr/submit_vbd_eval.sh \
+  --material base --experiment experiments/nov16_yibo_our_dr/vbd_base_branch.yaml
+```

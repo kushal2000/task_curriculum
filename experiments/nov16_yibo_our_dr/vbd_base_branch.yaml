@@ -1,0 +1,10 @@
+# Geometry/reset values from yiboc_wuji@2b82faf: cfg/task/Cloth.yaml.
+# evaluate_vbd.py retains the Flexiv-Wuji checkpoint's robot, table and actor encoding.
+env:
+  deformable_cloth:
+    size: 0.10
+    start_height: 0.30  # Above table center: 15 cm above the tabletop.
+  reset:
+    reset_position_noise_x: 0.10
+    reset_position_noise_y: 0.10
+    table_reset_z_range: 0.01

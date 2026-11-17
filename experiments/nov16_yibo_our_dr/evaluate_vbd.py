@@ -34,6 +34,7 @@ def parser():
     cli.add_argument('--checkpoint', type=Path, default=ROOT/'pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth')
     cli.add_argument('--policy-config', type=Path, default=ROOT/'pretrained_policy/flexiv_wuji/config.yaml')
     cli.add_argument('--expl-coef', type=float, default=0.)
+    cli.add_argument('--experiment', type=Path, help='Run recipe with env overrides applied after the material preset.')
     cli.add_argument('--out-dir', type=Path, default=ROOT/'experiments/nov16_yibo_our_dr/results/vbd_materials')
     cli.add_argument('--check-config', action='store_true')
     cli.add_argument('--skip-cache-check', action='store_true', help='Only with --check-config; inspect configs before asset baking.')
@@ -87,6 +88,10 @@ def build_config(args, material):
     cloth = cfg.deformable_cloth
     cloth.size, cloth.resolution, cloth.start_height = args.size, args.resolution, .20
     cloth.from_dict(fabrics.cloth_params(material, plastic=True))
+    if args.experiment is not None:
+        from isaacsimenvs.scripts.configs.loader import load_experiment
+
+        cfg.from_dict(load_experiment(str(args.experiment)).get('env', {}))
     cfg.task.check()
     cloth.check_thickness()
     return cfg
@@ -172,6 +177,7 @@ def evaluate(args):
                   sapg_expl_coef=args.expl_coef, actor_encoding='yibo', robot_preset='yibo',
                   release_evaluated=False,
                   limitation='Physical fold only. Whole-robot 10 cm release clearance is unsupported for VBD.',
+                  experiment=str(args.experiment) if args.experiment is not None else None,
                   config=cfg.to_dict())
     destination = args.out_dir/f'{args.material}.json'
     write_json(destination, result)
@@ -217,6 +223,12 @@ def evaluate(args):
                 env.eval_rest_edge_lengths = (cg.rest[:, env.eval_edges[:, 1]]-cg.rest[:, env.eval_edges[:, 0]]).norm(dim=-1)
                 env.eval_table_half_xy = torch.tensor(urdf_box_size(cfg.assets.table_urdf)[:2], device=device)/2
                 initial_state = env.backend.read_state()
+                from isaacsimenvs.tasks.cloth.backends.base import as_torch
+
+                result['initial_table_centers_m'] = (
+                    as_torch(env.backend.table.data.root_pos_w)-env.scene.env_origins
+                ).cpu().tolist()
+                result['initial_table_top_z_m'] = (initial_state.table_top_z-env.scene.env_origins[:, 2]).cpu().tolist()
                 env.eval_initial_q = initial_state.joint_pos.clone()
                 env.eval_initial_palm = initial_state.palm_pos_w.clone()
                 tracking_sq_sum = torch.zeros(n, device=device)
