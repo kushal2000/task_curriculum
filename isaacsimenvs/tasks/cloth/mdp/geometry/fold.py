@@ -89,8 +89,34 @@ def cloth_frame(points: torch.Tensor, points_vel: torch.Tensor, r: torch.Tensor)
     lin = points_vel.mean(dim=1)
     rel = points - pos.unsqueeze(1)
     dv = points_vel - lin.unsqueeze(1)
+    # Scale before squaring: a finite but diverged sheet can overflow the normal
+    # equations, or make a fixed 1e-9 ridge disappear in float32. One bad row must
+    # not raise from a batched solve and terminate every environment.
+    finite = torch.isfinite(rel).all(dim=(1, 2)) & torch.isfinite(dv).all(dim=(1, 2))
+    rel = torch.where(finite[:, None, None], rel, 0.)
+    dv = torch.where(finite[:, None, None], dv, 0.)
+    length_scale = rel.abs().amax(dim=(1, 2)).clamp_min(1e-9 ** .5)
+    velocity_scale = dv.abs().amax(dim=(1, 2)).clamp_min(1.)
+    rel = rel / length_scale[:, None, None]
+    dv = dv / velocity_scale[:, None, None]
     eye = torch.eye(3, device=points.device, dtype=points.dtype)
     inertia = (rel * rel).sum(dim=(1, 2)).view(-1, 1, 1) * eye - torch.einsum("npi,npj->nij", rel, rel)
     mom = torch.cross(rel, dv, dim=-1).sum(dim=1)
-    ang = torch.linalg.solve(inertia + 1e-9 * eye, mom.unsqueeze(-1)).squeeze(-1)
+    # Retain the original absolute ridge, with a precision floor for unobservable
+    # spins in collapsed/collinear clouds. Well-conditioned sheets keep the exact
+    # original ridge rather than biasing their observable angular velocities.
+    ridge = (1e-9 / length_scale) / length_scale
+    diagonal_scale = inertia.diagonal(dim1=-2, dim2=-1).amax(dim=-1)
+    determinant = (inertia[:, 0] * torch.cross(inertia[:, 1], inertia[:, 2], dim=-1)).sum(dim=-1)
+    eps = torch.finfo(points.dtype).eps
+    ill_conditioned = determinant <= 32 * eps * diagonal_scale.pow(3)
+    precision_floor = torch.where(ill_conditioned, 4 * eps * diagonal_scale, 0.)
+    ridge = torch.maximum(ridge, precision_floor)
+    solution, info = torch.linalg.solve_ex(inertia + ridge[:, None, None] * eye, mom.unsqueeze(-1), check_errors=False)
+    ang = solution.squeeze(-1) * (velocity_scale / length_scale)[:, None]
+    valid = finite & (info == 0) & torch.isfinite(ang).all(dim=-1)
+    # Keep failures as NaN (not inf, which observation clamping can hide). The
+    # task's finite-frame termination guard resets only this row, including policy
+    # representations such as Yibo that omit fitted angular velocity.
+    ang = torch.where(valid[:, None], ang, torch.full_like(ang, float("nan")))
     return pos, rotations.from_matrix(r), lin, ang

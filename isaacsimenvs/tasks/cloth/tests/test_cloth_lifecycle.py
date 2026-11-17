@@ -100,6 +100,20 @@ def test_bad_observation_is_terminated_on_the_next_step(components):
     assert task._termination_reasons["nonfinite"].tolist() == [False, True, False]
 
 
+def test_invalid_frame_resets_without_relying_on_policy_observations(components):
+    """Yibo omits angular velocity, so termination must inspect the task fit itself."""
+    _, task, _, state = components
+    view = task.derive(state)
+    view.ang_vel_w[1] = float("nan")
+    task.episode_length_buf = torch.ones(3, dtype=torch.long)
+    task.max_episode_length = 600
+    terminated, _ = task.compute_terminations(state, view)
+    assert terminated[1]
+    assert task._termination_reasons["nonfinite"].tolist() == [False, True, False]
+    assert task._successes.tolist() == [1, 0, 1]
+    assert task._bonus_mask.tolist() == [True, False, True]
+
+
 def test_rigid_and_vbd_robot_readouts_share_one_convention():
     """Tensor/wxyz and ProxyArray/xyzw asset data produce identical public state."""
     torch.manual_seed(0)

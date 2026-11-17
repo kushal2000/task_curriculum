@@ -30,7 +30,8 @@ def step(obj, folded=True, clearance=.01):
     state = NS(joint_vel=torch.zeros(n, 27))
     folded = torch.as_tensor(folded).expand(n)
     view = NS(fold_error=torch.where(folded, .001, .2), footprint=torch.where(folded, .5, 1.),
-              pos_w=torch.tensor([[0., 0., .5]]*n), fingertip_dist=torch.full((n, 5), .2))
+              pos_w=torch.tensor([[0., 0., .5]]*n), fingertip_dist=torch.full((n, 5), .2),
+              lin_vel_w=torch.zeros(n, 3), ang_vel_w=torch.zeros(n, 3))
     obj.robot_clearance = torch.as_tensor(clearance).expand(n)
     done, _ = obj.compute_terminations(state, view)
     reward = obj.compute_reward(state, view)

@@ -223,7 +223,8 @@ def _task_env(n=2, mode="fold", release=False):
 def _view(err, footprint, z=0.5):
     n = len(err)
     return NS(fold_error=torch.tensor(err), footprint=torch.tensor(footprint),
-              pos_w=torch.tensor([[0.0, 0.0, z]] * n), fingertip_dist=torch.full((n, 5), 0.2))
+              pos_w=torch.tensor([[0.0, 0.0, z]] * n), fingertip_dist=torch.full((n, 5), 0.2),
+              lin_vel_w=torch.zeros(n, 3), ang_vel_w=torch.zeros(n, 3))
 
 
 def test_success_needs_both_keypoints_and_footprint():

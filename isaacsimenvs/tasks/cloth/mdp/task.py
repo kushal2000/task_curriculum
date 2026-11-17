@@ -237,7 +237,11 @@ class ClothTask:
     def compute_terminations(self, state: SimState, view: TaskView) -> tuple[torch.Tensor, torch.Tensor]:
         """``(terminated, truncated)``; sets ``_bonus_mask`` for this step's reward."""
         cfg = self.cfg
-        folded = self.is_folded(state, view)
+        # Some policy representations omit angular velocity. Check the fitted
+        # frame here so an invalid fit still resets its environment this step.
+        frame = torch.cat((view.pos_w, view.lin_vel_w, view.ang_vel_w), dim=-1)
+        nonfinite = self._nonfinite_envs | ~torch.isfinite(frame).all(dim=-1)
+        folded = self.is_folded(state, view) & ~nonfinite
         self._fold_hold = torch.where(folded, self._fold_hold + 1, torch.zeros_like(self._fold_hold))
         entered = self._fold_hold >= cfg.termination.success_steps
         held = self._fold_hold >= cfg.termination.held_steps
@@ -252,7 +256,6 @@ class ClothTask:
 
         fall = (view.pos_w[:, 2] - self.origins[:, 2]) < cfg.termination.fall_height
         hand_far = view.fingertip_dist.amax(dim=-1) > cfg.termination.hand_far_distance
-        nonfinite = self._nonfinite_envs.clone()
         self._nonfinite_envs.zero_()
         truncated = self.episode_length_buf >= self.max_episode_length
 

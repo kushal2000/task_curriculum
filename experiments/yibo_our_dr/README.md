@@ -6,12 +6,21 @@ Completed evaluation findings: [transfer analysis](analysis/README.md),
 ## Active training and viewer verification
 
 W&B project: [rigidClothDR](https://wandb.ai/kk837/rigidClothDR).
-Current memory-adjusted runs are
+The initial memory-adjusted runs were
 [fine-tune 710318](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_finetune_20261116_194243)
 and [scratch 710319](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20261116_194220),
-each with 12,288 environments and six SAPG blocks. Both reached optimizer
-updates and saved checkpoints (fine-tune best model and scratch epoch-10 full
-checkpoint). This verifies early training, not long-run convergence or stability.
+each with 12,288 environments and six SAPG blocks. Fine-tune failed after epoch
+127 and scratch after epoch 238: a singular angular-velocity least-squares fit
+in one environment raised from the batched solve and stopped the whole run.
+Neither failure was a GPU out-of-memory error.
+
+Recovery uses the finite full fine-tune checkpoint at epoch 122 (47,972,352
+frames) and scratch periodic checkpoint at epoch 230 (90,439,680 frames), restoring
+model, critic, optimizer, normalization statistics and training counters. Physics
+state is not checkpointed, so episodes and recurrent rollout state restart.
+The estimator now scales its equations and handles failed rows independently;
+invalid task frames terminate their own environments even when the actor omits
+angular velocity. Physics and DR settings are unchanged.
 
 Previous jobs [fine-tune 709852](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_finetune_20261116_192340)
 and [scratch 709853](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20261116_192301)
