@@ -220,7 +220,9 @@ def main() -> None:
             result.update(
                 resolution=int(cloth.resolution),
                 particles=int(cloth.num_particles),
-                triangles=2 * (int(cloth.resolution) - 1) ** 2,
+                mesh_kind=str(cloth.mesh_kind),
+                edge_length=float(cloth.spacing),
+                triangles=len(cloth.sheet_mesh().indices) // 3,
                 thickness=float(cloth.thickness),
                 substeps=int(cloth.substeps),
                 vbd_iterations=int(cloth.vbd_iterations),

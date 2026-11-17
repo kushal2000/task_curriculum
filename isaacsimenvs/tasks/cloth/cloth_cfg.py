@@ -61,6 +61,20 @@ class ClothCfg:
     the sheet is meaningfully coarser, and a 72-triangle sheet is close to the floor at which
     "cloth" stops being a useful description."""
 
+    mesh_kind: str = "grid"
+    """``grid``: the legacy ``resolution x resolution`` sheet (``cloth_geometry.grid_mesh``).
+    ``irregular``: a rotated, jittered near-equilateral Delaunay mesh at ``edge_length``
+    (``cloth_geometry.irregular_mesh``), with no mesh line on the midline, so the fold is not
+    pulled onto one row of hinges. ``resolution`` is ignored for an irregular sheet."""
+
+    edge_length: float = 0.0
+    """Target edge length [m] of the irregular sheet. Material wrinkles are ~1-3 cm long, so a
+    sheet that should show them needs a few mm here. The particle count grows as
+    ``(size / edge_length)**2``: about 350 at 10 cm / 6 mm, 3,000 at 30 cm / 6 mm."""
+
+    mesh_seed: int = 0
+    """Seed of the irregular sheet's lattice angle and jitter. One mesh is shared by every env."""
+
     reset_offset_xy: list[float] = [0.0, 0.0]
     """Env-frame shift of the sheet's reset centre [m], added to every reset (pinned or random).
 
@@ -610,13 +624,26 @@ class ClothCfg:
         """Half the thickness: what the solver actually consumes."""
         return 0.5 * self.thickness
 
+    def sheet_mesh(self):
+        """The VBD sheet's mesh and fold bookkeeping (``cloth_geometry.SheetMesh``)."""
+        from isaacsimenvs.tasks.cloth.utils.cloth_geometry import sheet_mesh
+
+        return sheet_mesh(
+            float(self.size), self.fold_axis, self.mesh_kind, int(self.resolution),
+            float(self.edge_length), int(self.mesh_seed),
+        )
+
     @property
     def num_particles(self) -> int:
-        return self.resolution**2
+        if self.mesh_kind == "grid":
+            return self.resolution**2
+        return self.sheet_mesh().num_particles
 
     @property
     def spacing(self) -> float:
-        return self.size / (self.resolution - 1)
+        if self.mesh_kind == "grid":
+            return self.size / (self.resolution - 1)
+        return float(self.edge_length)
 
     @property
     def max_resolution_for_thickness(self) -> int:

@@ -6,7 +6,20 @@ geometry, and getting them wrong would look exactly like a policy that cannot fo
 
 from __future__ import annotations
 
-__all__ = ["grid_mesh", "half_indices", "half_mesh", "keypoint_indices", "folded_targets"]
+import math
+from dataclasses import dataclass, field
+
+__all__ = [
+    "grid_mesh",
+    "irregular_mesh",
+    "sub_mesh",
+    "SheetMesh",
+    "sheet_mesh",
+    "half_indices",
+    "half_mesh",
+    "keypoint_indices",
+    "folded_targets",
+]
 
 
 def grid_mesh(size: float, resolution: int, diagonals: str = "alternate") -> tuple[list, list]:
@@ -195,3 +208,201 @@ def folded_targets(
         v[2] += lift
         out.append(tuple(v))
     return out
+
+
+# --------------------------------------------------------------------------------------------
+# Irregular sheet: no mesh line the fold has to follow
+# --------------------------------------------------------------------------------------------
+
+
+def irregular_mesh(
+    size: float,
+    edge_length: float,
+    seed: int = 0,
+    jitter: float = 0.3,
+    rotate: bool = True,
+) -> tuple[list, list]:
+    """A square sheet triangulated without a preferred fold line.
+
+    A regular grid can only bend along its own rows, columns and diagonals, and with an odd
+    resolution one of those rows lies exactly on the midline -- so every fold lands there whatever
+    the hand does. Real cloth folds about equally easily along any line near the centre. This mesh
+    gets as close to that as a triangle mesh can:
+
+    * interior points on a near-equilateral (hexagonal) lattice, so every edge is about
+      ``edge_length`` and no direction is short-cut by a diagonal,
+    * the lattice turned by a random angle (``rotate``), so its three edge directions are not
+      aligned with the sheet's sides or the fold axis,
+    * each interior point jittered by up to ``jitter * edge_length``, which breaks the remaining
+      straight lines of vertices into zig-zags,
+    * Delaunay triangulation of those points plus evenly spaced boundary points.
+
+    The four corners are always vertices (the fold keypoints are corners). Deterministic for a
+    given ``seed``; one mesh is shared by every env.
+
+    Returns ``(vertices, indices)`` in the same form as :func:`grid_mesh`: centred, ``z = 0``,
+    flat index list, every triangle wound with a +z normal.
+    """
+    import numpy as np
+    from scipy.spatial import Delaunay
+
+    if edge_length <= 0.0 or edge_length >= size:
+        raise ValueError(f"edge_length must be in (0, size), got {edge_length} for size {size}")
+    rng = np.random.default_rng(seed)
+    half = 0.5 * size
+    n = max(2, int(round(size / edge_length)))  # boundary segments per side
+    h = size / n
+
+    # Boundary: evenly spaced, corners included, counter-clockwise without repeats.
+    t = np.linspace(-half, half, n + 1)
+    bottom = np.stack([t, np.full_like(t, -half)], 1)
+    right = np.stack([np.full_like(t, half), t], 1)[1:]
+    top = np.stack([t[::-1], np.full_like(t, half)], 1)[1:]
+    left = np.stack([np.full_like(t, -half), t[::-1]], 1)[1:-1]
+    boundary = np.concatenate([bottom, right, top, left])
+
+    # Interior: hexagonal lattice, rotated and jittered, kept 0.6 h clear of the boundary.
+    ang = float(rng.uniform(0.0, math.pi / 3.0)) if rotate else 0.0
+    dy = h * math.sqrt(3.0) / 2.0
+    m = int(math.ceil(size / min(h, dy))) + 2
+    ii, jj = np.meshgrid(np.arange(-m, m + 1), np.arange(-m, m + 1), indexing="ij")
+    lat = np.stack([(ii + 0.5 * (jj % 2)) * h, jj * dy], -1).reshape(-1, 2)
+    c, s = math.cos(ang), math.sin(ang)
+    lat = lat @ np.array([[c, s], [-s, c]])
+    if jitter > 0.0:
+        r = jitter * h * np.sqrt(rng.uniform(0.0, 1.0, len(lat)))
+        phi = rng.uniform(0.0, 2.0 * math.pi, len(lat))
+        lat = lat + np.stack([r * np.cos(phi), r * np.sin(phi)], 1)
+    lim = half - 0.6 * h
+    interior = lat[(np.abs(lat[:, 0]) <= lim) & (np.abs(lat[:, 1]) <= lim)]
+
+    pts = np.concatenate([boundary, interior])
+    # Bulge the boundary out by a hair so Qhull sees a strictly convex hull and keeps every
+    # collinear side point as a vertex (it would otherwise drop them as "coplanar").
+    bulge = pts.copy()
+    nb = len(boundary)
+    bulge[:nb] *= 1.0 + 1e-7 * (1.0 + rng.uniform(0.0, 1.0, (nb, 1)))
+    tri = Delaunay(bulge).simplices
+
+    # Wind every triangle +z and drop slivers.
+    a, b, cc = pts[tri[:, 0]], pts[tri[:, 1]], pts[tri[:, 2]]
+    cross = (b[:, 0] - a[:, 0]) * (cc[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (cc[:, 0] - a[:, 0])
+    tri = np.where((cross < 0)[:, None], tri[:, [0, 2, 1]], tri)
+    tri = tri[np.abs(cross) > 1e-6 * h * h]
+    used = np.unique(tri)
+    if len(used) != len(pts):
+        raise RuntimeError(f"irregular_mesh left {len(pts) - len(used)} vertices out of the triangulation")
+
+    verts = [(float(x), float(y), 0.0) for x, y in pts]
+    return verts, [int(i) for i in tri.reshape(-1)]
+
+
+def sub_mesh(verts: list, indices: list[int], keep: list[int]) -> tuple[list, list]:
+    """The triangles of ``(verts, indices)`` whose three vertices are all in ``keep``.
+
+    Vertices come back in ``sorted(keep)`` order, re-centred on their own XY centroid (the goal
+    marker is posed at the folded centroid), triangles re-indexed into that order.
+    """
+    keep = sorted(set(keep))
+    remap = {v: i for i, v in enumerate(keep)}
+    pts = [list(verts[v]) for v in keep]
+    cx = sum(p[0] for p in pts) / len(pts)
+    cy = sum(p[1] for p in pts) / len(pts)
+    out_verts = [(p[0] - cx, p[1] - cy, 0.0) for p in pts]
+    out_idx: list[int] = []
+    for t in range(0, len(indices), 3):
+        tri = indices[t : t + 3]
+        if all(v in remap for v in tri):
+            out_idx += [remap[v] for v in tri]
+    return out_verts, out_idx
+
+
+@dataclass(frozen=True)
+class SheetMesh:
+    """One sheet's mesh and the fold bookkeeping derived from it.
+
+    The env and task read the sheet only through this, so a grid and an irregular mesh are
+    interchangeable: the policy sees four corner keypoints either way.
+    """
+
+    verts: list
+    indices: list
+    size: float
+    axis: str
+    kind: str
+    edge_length: float
+    #: Moving-half corners, (near-left, near-right, far-left, far-right) as :func:`corner_indices`.
+    corner_idx: list = field(default_factory=list)
+    #: Vertices strictly on the + (moving) and - (stationary) side of the crease band.
+    moving_idx: list = field(default_factory=list)
+    stationary_idx: list = field(default_factory=list)
+
+    @property
+    def num_particles(self) -> int:
+        return len(self.verts)
+
+    @property
+    def num_triangles(self) -> int:
+        return len(self.indices) // 3
+
+    def half_mesh(self) -> tuple[list, list]:
+        """The moving half as its own mesh, vertices in ``moving_idx`` order (see :func:`half_mesh`)."""
+        return sub_mesh(self.verts, self.indices, self.moving_idx)
+
+
+def sheet_mesh(
+    size: float,
+    axis: str = "x",
+    kind: str = "grid",
+    resolution: int = 7,
+    edge_length: float = 0.0,
+    seed: int = 0,
+) -> SheetMesh:
+    """Build the sheet: ``kind="grid"`` is the legacy :func:`grid_mesh` (``resolution`` per side),
+    ``kind="irregular"`` is :func:`irregular_mesh` at ``edge_length``.
+
+    For the irregular mesh the halves exclude a band of half an edge around the midline (the grid
+    excludes its hinge row the same way), and the near corners are the first boundary vertices past
+    that band on the two side edges.
+    """
+    if axis not in ("x", "y"):
+        raise ValueError(f"axis must be 'x' or 'y', got {axis!r}")
+    if kind == "grid":
+        verts, idx = grid_mesh(size, resolution)
+        return SheetMesh(
+            verts=verts, indices=idx, size=size, axis=axis, kind=kind,
+            edge_length=size / (resolution - 1),
+            corner_idx=corner_indices(resolution, axis),
+            moving_idx=sorted(set(half_indices(resolution, axis, positive=True))),
+            stationary_idx=sorted(set(half_indices(resolution, axis, positive=False))),
+        )
+    if kind != "irregular":
+        raise ValueError(f"mesh kind must be grid or irregular, got {kind!r}")
+    if edge_length <= 0.0:
+        raise ValueError("an irregular sheet needs edge_length > 0")
+    verts, idx = irregular_mesh(size, edge_length, seed=seed)
+    ax, lat = (0, 1) if axis == "x" else (1, 0)
+    half = 0.5 * size
+    band = 0.25 * edge_length
+    eps = 1e-9 * size
+    moving = [i for i, v in enumerate(verts) if v[ax] > band]
+    stationary = [i for i, v in enumerate(verts) if v[ax] < -band]
+
+    def on_side(i: int, sign: float) -> bool:
+        return abs(verts[i][lat] - sign * half) < eps
+
+    def near(sign: float) -> int:
+        cand = [i for i in moving if on_side(i, sign)]
+        return min(cand, key=lambda i: verts[i][ax])
+
+    def far(sign: float) -> int:
+        cand = [i for i in moving if on_side(i, sign) and abs(verts[i][ax] - half) < eps]
+        if len(cand) != 1:
+            raise RuntimeError("irregular sheet lost a corner vertex")
+        return cand[0]
+
+    corners = [near(-1.0), near(1.0), far(-1.0), far(1.0)]
+    return SheetMesh(
+        verts=verts, indices=idx, size=size, axis=axis, kind=kind, edge_length=edge_length,
+        corner_idx=corners, moving_idx=moving, stationary_idx=stationary,
+    )

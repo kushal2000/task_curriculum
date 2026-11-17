@@ -28,9 +28,9 @@ from isaacsimenvs.curriculum import (
 
 from isaacsimenvs.tasks.cloth.utils.usd_bulk import bulk_edit_layer
 from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
+    SheetMesh,
     folded_targets,
-    half_indices,
-    half_mesh,
+    sheet_mesh,
 )
 
 __all__ = ["ClothTaskMixin"]
@@ -89,6 +89,17 @@ def _author_in_every_env(asset: str, layout, author, check, samples: int = 4):
 
 class ClothTaskMixin:
     """The fold task, independent of the simulator the Play env underneath runs on."""
+
+    def _sheet(self) -> SheetMesh:
+        """The sheet's mesh and halves. The VBD env sets ``_sheet_mesh`` from ``cloth.sheet_mesh()``
+        (grid or irregular); the rigid stand-ins (chain, fold pool) present the legacy grid point
+        cloud, so anything that has not set one gets the ``resolution`` grid."""
+        sm = getattr(self, "_sheet_mesh", None)
+        if sm is None:
+            c = self.cfg.cloth
+            sm = sheet_mesh(float(c.size), c.fold_axis, "grid", int(c.resolution))
+            self._sheet_mesh = sm
+        return sm
 
     def __init__(self, cfg: ClothEnvCfg, render_mode: str | None = None, **kwargs):
         cfg.cloth.check_task()  # CLI overrides land after ClothCfg.__post_init__
@@ -252,7 +263,7 @@ class ClothTaskMixin:
         # both reads as a brick and shows a thickness the cloth does not have (a VBD cloth is a
         # surface -- its thickness is a collision radius the renderer never draws, so the sheet
         # itself always renders flat).
-        gv, gi = half_mesh(float(c.size), int(c.resolution), c.fold_axis)
+        gv, gi = self._sheet().half_mesh()
         points = Vt.Vec3fArray([Gf.Vec3f(*[float(x) for x in v]) for v in gv])
         indices = Vt.IntArray([int(i) for i in gi])
         counts = Vt.IntArray([3] * (len(gi) // 3))
@@ -364,7 +375,7 @@ class ClothTaskMixin:
 
         # Same two quantities for EVERY particle of the moving half, so the folded configuration
         # can be drawn as a ghost copy of the sheet rather than approximated by a rigid marker.
-        moving = sorted(set(half_indices(c.resolution, c.fold_axis, positive=True)))
+        moving = list(self._sheet().moving_idx)
         self._moving_idx = torch.tensor(moving, device=self.device, dtype=torch.long)
         mv_rest = rest[self._moving_idx]
         self._mv_rest_offset = mv_rest[:, ax] - crease_local
@@ -390,14 +401,14 @@ class ClothTaskMixin:
         self._mv_flat_rest = rest[self._moving_idx].clone()
         self._kp_flat_rest = rest[self._kp_idx_t].clone()
         st_rest = rest[torch.tensor(
-            half_indices(c.resolution, c.fold_axis, positive=False),
+            list(self._sheet().stationary_idx),
             device=self.device, dtype=torch.long,
         )]
         self._st_rest_centroid = st_rest.mean(dim=0)
         self._st_rest_centred = st_rest - self._st_rest_centroid
         self._fold_targets_xy = t.unsqueeze(0) + self.scene.env_origins.unsqueeze(1)
         self._stationary_idx = torch.tensor(
-            half_indices(c.resolution, c.fold_axis, positive=False),
+            list(self._sheet().stationary_idx),
             device=self.device, dtype=torch.long,
         )
         self._kp_idx_t = torch.tensor(self._cloth_kp_idx, device=self.device, dtype=torch.long)
@@ -512,9 +523,7 @@ class ClothTaskMixin:
         so the goal replica renders as an unlit back face -- a black shape with a lit rim, which is
         exactly how it first appeared.
         """
-        _, idx = half_mesh(
-            float(self.cfg.cloth.size), int(self.cfg.cloth.resolution), self.cfg.cloth.fold_axis
-        )
+        _, idx = self._sheet().half_mesh()
         if self._unfold:  # the flat goal is not reflected, so its winding is the rest sheet's
             return list(idx)
         return [v for t in range(0, len(idx), 3) for v in reversed(idx[t : t + 3])]

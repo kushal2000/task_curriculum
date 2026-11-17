@@ -71,12 +71,19 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
     def _build_html(self, frames: list[dict[str, Any]]) -> str:
         import numpy as np
 
-        from isaacsimenvs.tasks.cloth.utils.cloth_geometry import grid_mesh, half_indices, half_mesh
+        from isaacsimenvs.tasks.cloth.utils.cloth_geometry import sheet_mesh
 
         inner = self.env.unwrapped
-        c = inner.cfg.cloth
-        _, sheet_tris = grid_mesh(float(c.size), int(c.resolution))
-        _, ghost_tris = half_mesh(float(c.size), int(c.resolution), c.fold_axis)
+        if hasattr(inner, "_sheet"):  # the sheet's own mesh, grid or irregular
+            sm = inner._sheet()
+        else:
+            c = inner.cfg.cloth
+            sm = sheet_mesh(
+                float(c.size), c.fold_axis, getattr(c, "mesh_kind", "grid"), int(c.resolution),
+                float(getattr(c, "edge_length", 0.0)), int(getattr(c, "mesh_seed", 0)),
+            )
+        sheet_tris = sm.indices
+        _, ghost_tris = sm.half_mesh()
 
         sheet = np.asarray([f["cloth_vertices"] for f in frames], dtype=float)
         ghost = np.asarray([f["goal_vertices"] for f in frames], dtype=float)
@@ -84,7 +91,7 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
         # Split the sheet by which half each triangle belongs to, by MAJORITY vertex. An
         # all-three test leaves every triangle touching the excluded hinge row unclassified --
         # a quarter of the sheet -- which reads as a third stripe rather than two halves.
-        moving = set(half_indices(int(c.resolution), c.fold_axis, positive=True))
+        moving = set(sm.moving_idx)
         tri = np.asarray(sheet_tris, dtype=int).reshape(-1, 3)
         in_moving = np.isin(tri, list(moving)).sum(axis=1) >= 2
 

@@ -21,10 +21,6 @@ from isaacsimenvs.newton import patches  # noqa: F401
 from isaacsimenvs.tasks.cloth.cloth_env_cfg import ClothEnvCfg
 from isaacsimenvs.tasks.cloth.cloth_task import ClothTaskMixin
 from isaacsimenvs.tasks.cloth.utils.cloth_adapter import ClothAsRigidObject
-from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
-    corner_indices,
-    grid_mesh,
-)
 from isaacsimenvs.tasks.cloth.newton_base_env import PlayNewtonEnv
 
 __all__ = ["ClothEnv"]
@@ -323,11 +319,12 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         from pxr import Sdf, UsdGeom, UsdShade
 
         c = self.cfg.cloth
-        verts, indices = grid_mesh(c.size, c.resolution)
+        self._sheet_mesh = c.sheet_mesh()  # grid or irregular (cloth.mesh_kind)
+        verts, indices = self._sheet_mesh.verts, self._sheet_mesh.indices
         self._cloth_rest_local = verts
         # Corners of the moving half, not points along one edge: four points spanning an area
         # determine a rotation; four collinear points do not.
-        self._cloth_kp_idx = corner_indices(c.resolution, c.fold_axis)
+        self._cloth_kp_idx = list(self._sheet_mesh.corner_idx)
 
         # The inherited rigid tool is still spawned by `setup_scene` -- the asset pipeline, USD
         # cache and `object_scales` observation are all built around it. Make it inert, or it is a
@@ -420,7 +417,8 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         self._write_object_scale()
 
         print(
-            f"[cloth] {c.resolution}x{c.resolution} sheet, {c.size:.3f} m, "
+            f"[cloth] {c.mesh_kind} sheet ({c.resolution}x{c.resolution} grid or {c.edge_length * 1e3:.1f} mm "
+            f"edges), {c.size:.3f} m, "
             f"{c.num_particles} particles, {len(indices) // 3} triangles, "
             f"keypoints {self._cloth_kp_idx}",
             flush=True,
