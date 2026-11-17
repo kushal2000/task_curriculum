@@ -1,0 +1,24 @@
+# big_napkin: the irregular-mesh hinge-rheology cloth (isaacsimenvs/tasks/cloth/utils/hinge_rheology.py), 2026-11-17.
+# Bending from the swatch's measured rigidity B (per-edge B / w_e), a soft membrane (10 N/m) so VBD at the env's
+# 12 iterations / 1/1440 s resolves bending, and a calibrated solver factor bending_stiffness_scale so the 5 cm
+# cantilever droops like the swatch (outputs/cloth_probe/v4, v5). Contact as the env: 8 mm particle radius,
+# 2 mm self-contact. Swatch target: unpressed fold stays.
+cloth:
+  mesh_kind: irregular
+  edge_length: 0.010
+  density: 0.08
+  tri_ke: 10.0
+  tri_ka: 10.0
+  edge_kd: 4e-05
+  soft_contact_mu: 0.265
+  bending_rigidity: 2.324e-05
+  bending_stiffness_scale: 1.39
+  friction_ratio: 0.3
+  friction_slip_curvature: 20.0
+  yield_curvature: 30.0   # 0 = no permanent set
+  yield_hardening: 0.0
+  creep_curvature: 90.0   # held tighter than this, the crease sets with time constant creep_tau
+  creep_tau: 0.3
+measured:
+  cantilever_deg: 30
+  bending_rigidity: 2.324e-05

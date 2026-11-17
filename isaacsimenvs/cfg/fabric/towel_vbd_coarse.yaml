@@ -1,0 +1,25 @@
+# towel_vbd_coarse: towel_vbd on a 17 mm irregular mesh (50 particles on 10 cm, as the 7x7 grid), 2026-11-16.
+# bending_stiffness_scale re-fit with the elastic cantilever probe (outputs/cloth_probe/coarse_cal, fit.json);
+# fold/press checks in outputs/cloth_probe/coarse17. Rheology as towel_vbd. Header of towel_vbd below.
+# towel: the irregular-mesh hinge-rheology cloth (isaacsimenvs/tasks/cloth/utils/hinge_rheology.py), 2026-11-17.
+# Bending from the swatch's measured rigidity B (per-edge B / w_e), a soft membrane (10 N/m) so VBD at the env's
+# 12 iterations / 1/1440 s resolves bending, and a calibrated solver factor bending_stiffness_scale so the 5 cm
+# cantilever droops like the swatch (outputs/cloth_probe/v4, v5). Contact as the env: 8 mm particle radius,
+# 2 mm self-contact. Swatch target: unpressed fold stays.
+cloth:
+  mesh_kind: irregular
+  edge_length: 0.017
+  density: 0.3244
+  tri_ke: 10.0
+  tri_ka: 10.0
+  edge_kd: 0.000162
+  soft_contact_mu: 0.667
+  bending_rigidity: 9.26e-06
+  bending_stiffness_scale: 0.96
+  friction_ratio: 0.3
+  friction_slip_curvature: 20.0
+  yield_curvature: 0.0   # 0 = no permanent set
+  yield_hardening: 0.0
+measured:
+  cantilever_deg: 75
+  bending_rigidity: 9.26e-06

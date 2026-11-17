@@ -54,10 +54,10 @@ def load(name: str) -> dict:
         return yaml.safe_load(f)
 
 
-def cloth_params(name: str, plastic: bool = False) -> dict[str, float]:
+def cloth_params(name: str, plastic: bool = False) -> dict[str, float | str]:
     """``{ClothCfg field: value}``; with ``plastic`` also ``plastic_yield_curvature``."""
     d = load(name)
-    out = {k: float(v) for k, v in d["cloth"].items()}
+    out = {k: (v if isinstance(v, str) else float(v)) for k, v in d["cloth"].items()}
     if plastic:
         out["plastic_yield_curvature"] = float(d.get("plastic_yield_curvature", 0.0))
         if float(d.get("plastic_set_curvature", 0.0)) > 0.0:  # two-stage presets only
@@ -67,7 +67,8 @@ def cloth_params(name: str, plastic: bool = False) -> dict[str, float]:
 
 def overrides(name: str, plastic: bool = False) -> list[str]:
     """Hydra overrides ``env.cloth.<key>=<value>`` for the preset."""
-    return [f"env.cloth.{k}={v!r}" for k, v in cloth_params(name, plastic).items()]
+    return [f"env.cloth.{k}={v}" if isinstance(v, str) else f"env.cloth.{k}={v!r}"
+            for k, v in cloth_params(name, plastic).items()]
 
 
 if __name__ == "__main__":
