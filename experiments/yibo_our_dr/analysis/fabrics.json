@@ -1,0 +1,240 @@
+{
+  "status": "complete",
+  "slurm_array": 709496,
+  "episodes": 256,
+  "physical_folds": 1,
+  "falls": 99,
+  "timeouts": 156,
+  "release_evaluated": false,
+  "post_settle_definition": "Diagnostic samples every20steps, step>60 and first episode active; sampled maxima can miss between-sample peaks.",
+  "materials": [
+    {
+      "material": "base",
+      "physical_folds": 0,
+      "episodes": 32,
+      "falls": 5,
+      "timeouts": 27,
+      "centroid_exits": 5,
+      "any_particle_exits": 10,
+      "nominal_mass_g": 45.0,
+      "median_best_fold_error_cm": 14.937416464090347,
+      "post_settle_peak_moving_height_cm_percentiles": {
+        "p50": 0.9897381067276001,
+        "p95": 2.712632715702056,
+        "max": 8.4972083568573
+      },
+      "post_settle_peak_edge_stretch_median": 1.0751712322235107,
+      "post_settle_peak_edge_stretch_max": 1.3662621974945068,
+      "post_settle_peak_actor_marker_fit_rms_mm_median": 1.0510444990359247,
+      "post_settle_peak_actor_marker_fit_rms_mm_max": 20.085908472537994,
+      "plasticity_active": false,
+      "gpu": "NVIDIA RTX A6000",
+      "total_seconds": 1011.5579522931948
+    },
+    {
+      "material": "big_napkin_measured",
+      "physical_folds": 0,
+      "episodes": 32,
+      "falls": 16,
+      "timeouts": 16,
+      "centroid_exits": 17,
+      "any_particle_exits": 25,
+      "nominal_mass_g": 1.8,
+      "median_best_fold_error_cm": 14.907979220151901,
+      "post_settle_peak_moving_height_cm_percentiles": {
+        "p50": 1.0453075170516968,
+        "p95": 6.1185020208358765,
+        "max": 9.81743335723877
+      },
+      "post_settle_peak_edge_stretch_median": 1.0243057012557983,
+      "post_settle_peak_edge_stretch_max": 1.2312006950378418,
+      "post_settle_peak_actor_marker_fit_rms_mm_median": 1.890828541945666,
+      "post_settle_peak_actor_marker_fit_rms_mm_max": 19.37011256814003,
+      "plasticity_active": true,
+      "gpu": "NVIDIA RTX A6000",
+      "total_seconds": 1111.0222584754229
+    },
+    {
+      "material": "chiffon_measured",
+      "physical_folds": 1,
+      "episodes": 32,
+      "falls": 14,
+      "timeouts": 17,
+      "centroid_exits": 14,
+      "any_particle_exits": 27,
+      "nominal_mass_g": 0.40005,
+      "median_best_fold_error_cm": 14.711080491542816,
+      "post_settle_peak_moving_height_cm_percentiles": {
+        "p50": 1.80281400680542,
+        "p95": 10.078499019145964,
+        "max": 16.488343477249146
+      },
+      "post_settle_peak_edge_stretch_median": 1.023863673210144,
+      "post_settle_peak_edge_stretch_max": 1.3355528116226196,
+      "post_settle_peak_actor_marker_fit_rms_mm_median": 5.461518419906497,
+      "post_settle_peak_actor_marker_fit_rms_mm_max": 18.425775691866875,
+      "plasticity_active": true,
+      "gpu": "NVIDIA RTX A6000",
+      "total_seconds": 990.5635231500491
+    },
+    {
+      "material": "cotton_measured",
+      "physical_folds": 0,
+      "episodes": 32,
+      "falls": 11,
+      "timeouts": 21,
+      "centroid_exits": 12,
+      "any_particle_exits": 22,
+      "nominal_mass_g": 2.6009999999999995,
+      "median_best_fold_error_cm": 14.967063814401627,
+      "post_settle_peak_moving_height_cm_percentiles": {
+        "p50": 1.0710954666137695,
+        "p95": 2.9437848925590515,
+        "max": 3.543531894683838
+      },
+      "post_settle_peak_edge_stretch_median": 1.0702785849571228,
+      "post_settle_peak_edge_stretch_max": 1.4375923871994019,
+      "post_settle_peak_actor_marker_fit_rms_mm_median": 1.7430722946301103,
+      "post_settle_peak_actor_marker_fit_rms_mm_max": 10.365690104663372,
+      "plasticity_active": true,
+      "gpu": "NVIDIA RTX A6000",
+      "total_seconds": 1152.770503484644
+    },
+    {
+      "material": "denim_measured",
+      "physical_folds": 0,
+      "episodes": 32,
+      "falls": 14,
+      "timeouts": 18,
+      "centroid_exits": 15,
+      "any_particle_exits": 20,
+      "nominal_mass_g": 4.0995,
+      "median_best_fold_error_cm": 14.891611784696579,
+      "post_settle_peak_moving_height_cm_percentiles": {
+        "p50": 1.3242781162261963,
+        "p95": 7.678158283233641,
+        "max": 10.40184497833252
+      },
+      "post_settle_peak_edge_stretch_median": 1.0304596424102783,
+      "post_settle_peak_edge_stretch_max": 1.217057704925537,
+      "post_settle_peak_actor_marker_fit_rms_mm_median": 6.494769128039479,
+      "post_settle_peak_actor_marker_fit_rms_mm_max": 34.75252166390419,
+      "plasticity_active": true,
+      "gpu": "NVIDIA RTX 6000 Ada Generation",
+      "total_seconds": 672.7857417035848
+    },
+    {
+      "material": "napkin_measured",
+      "physical_folds": 0,
+      "episodes": 32,
+      "falls": 17,
+      "timeouts": 15,
+      "centroid_exits": 19,
+      "any_particle_exits": 27,
+      "nominal_mass_g": 0.9,
+      "median_best_fold_error_cm": 14.898476004600525,
+      "post_settle_peak_moving_height_cm_percentiles": {
+        "p50": 0.9888917207717896,
+        "p95": 4.148499071598052,
+        "max": 10.229557752609253
+      },
+      "post_settle_peak_edge_stretch_median": 1.005466639995575,
+      "post_settle_peak_edge_stretch_max": 1.1871323585510254,
+      "post_settle_peak_actor_marker_fit_rms_mm_median": 1.6687240567989647,
+      "post_settle_peak_actor_marker_fit_rms_mm_max": 36.139439791440964,
+      "plasticity_active": true,
+      "gpu": "NVIDIA RTX 6000 Ada Generation",
+      "total_seconds": 622.9123373478651
+    },
+    {
+      "material": "silk_measured",
+      "physical_folds": 0,
+      "episodes": 32,
+      "falls": 15,
+      "timeouts": 17,
+      "centroid_exits": 19,
+      "any_particle_exits": 28,
+      "nominal_mass_g": 2.6009999999999995,
+      "median_best_fold_error_cm": 14.8994080722332,
+      "post_settle_peak_moving_height_cm_percentiles": {
+        "p50": 1.1463314294815063,
+        "p95": 4.296431541442869,
+        "max": 9.448421001434326
+      },
+      "post_settle_peak_edge_stretch_median": 1.057352602481842,
+      "post_settle_peak_edge_stretch_max": 1.5575156211853027,
+      "post_settle_peak_actor_marker_fit_rms_mm_median": 2.4251436116173863,
+      "post_settle_peak_actor_marker_fit_rms_mm_max": 20.471008494496346,
+      "plasticity_active": true,
+      "gpu": "NVIDIA RTX 6000 Ada Generation",
+      "total_seconds": 600.8867678958923
+    },
+    {
+      "material": "towel_measured",
+      "physical_folds": 0,
+      "episodes": 32,
+      "falls": 7,
+      "timeouts": 25,
+      "centroid_exits": 8,
+      "any_particle_exits": 18,
+      "nominal_mass_g": 7.2989999999999995,
+      "median_best_fold_error_cm": 14.942298084497452,
+      "post_settle_peak_moving_height_cm_percentiles": {
+        "p50": 1.5248388051986694,
+        "p95": 8.470676243305206,
+        "max": 9.235519170761108
+      },
+      "post_settle_peak_edge_stretch_median": 1.045430839061737,
+      "post_settle_peak_edge_stretch_max": 1.3888319730758667,
+      "post_settle_peak_actor_marker_fit_rms_mm_median": 2.4571153335273266,
+      "post_settle_peak_actor_marker_fit_rms_mm_max": 61.84094771742821,
+      "plasticity_active": true,
+      "gpu": "NVIDIA RTX 6000 Ada Generation",
+      "total_seconds": 610.1078798780218
+    }
+  ],
+  "actuation_diagnostic": {
+    "slurm_job_id": 709920,
+    "episodes": 8,
+    "policy_steps": 120,
+    "episode_seconds": 2,
+    "material": "base",
+    "finite_checks_passed": true,
+    "overflow_checks_passed": true,
+    "joint_displacement_rad": {
+      "median": 1.6232239603996277,
+      "min": 1.539172649383545,
+      "max": 1.7444957494735718
+    },
+    "arm_joint_displacement_rad": {
+      "median": 0.2820664942264557,
+      "min": 0.168756365776062,
+      "max": 0.3014794588088989
+    },
+    "hand_joint_displacement_rad": {
+      "median": 1.6232239603996277,
+      "min": 1.539172649383545,
+      "max": 1.7444957494735718
+    },
+    "palm_displacement_m": {
+      "median": 0.1601400300860405,
+      "min": 0.07958788424730301,
+      "max": 0.26905059814453125
+    },
+    "action_max_abs": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "rollout_arm_target_tracking_rmse_rad": {
+      "median": 0.016884351149201393,
+      "min": 0.010191201232373714,
+      "max": 0.03642602637410164
+    },
+    "peak_instantaneous_arm_target_tracking_rmse_rad": {
+      "median": 0.028867777436971664,
+      "min": 0.01627078838646412,
+      "max": 0.0896935760974884
+    }
+  }
+}

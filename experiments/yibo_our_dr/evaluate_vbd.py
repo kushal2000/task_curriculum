@@ -143,6 +143,12 @@ def evaluate(args):
             edge_vectors = points[:, self.eval_edges[:, 1]]-points[:, self.eval_edges[:, 0]]
             stretch = edge_vectors.norm(dim=-1)/self.eval_rest_edge_lengths
             self.eval_metrics = {
+                'joint_displacement_rad': (state.joint_pos-self.eval_initial_q).abs().amax(1),
+                'arm_joint_displacement_rad': (state.joint_pos[:, self.controller._arm_ids]-self.eval_initial_q[:, self.controller._arm_ids]).abs().amax(1),
+                'hand_joint_displacement_rad': (state.joint_pos[:, self.controller._hand_ids]-self.eval_initial_q[:, self.controller._hand_ids]).abs().amax(1),
+                'palm_displacement_m': (state.palm_pos_w-self.eval_initial_palm).norm(dim=-1),
+                'arm_target_tracking_rmse_rad': (state.joint_pos[:, self.controller._arm_ids]-self.controller._cur_targets[:, self.controller._arm_ids]).square().mean(1).sqrt(),
+                'action_max_abs': self.eval_actions.abs().amax(1),
                 'moving_height_above_table_m': (points[:, cg.moving_idx, 2]-state.table_top_z[:, None]).amax(1),
                 'centroid_height_above_table_m': points[..., 2].mean(1)-state.table_top_z,
                 'particle_speed_m_s': velocities.norm(dim=-1).amax(1),
@@ -210,6 +216,11 @@ def evaluate(args):
                 env.eval_edges = torch.unique(torch.sort(edges, dim=1).values, dim=0)
                 env.eval_rest_edge_lengths = (cg.rest[:, env.eval_edges[:, 1]]-cg.rest[:, env.eval_edges[:, 0]]).norm(dim=-1)
                 env.eval_table_half_xy = torch.tensor(urdf_box_size(cfg.assets.table_urdf)[:2], device=device)/2
+                initial_state = env.backend.read_state()
+                env.eval_initial_q = initial_state.joint_pos.clone()
+                env.eval_initial_palm = initial_state.palm_pos_w.clone()
+                tracking_sq_sum = torch.zeros(n, device=device)
+                tracking_count = torch.zeros(n, device=device)
                 peaks, events, samples = {}, {}, []
                 result['startup_seconds'] = time.perf_counter()-started
                 rollout_started = time.perf_counter()
@@ -218,12 +229,15 @@ def evaluate(args):
                         action = player.get_action(obs['policy'], deterministic=True)
                         if not bool(torch.isfinite(action).all()):
                             raise RuntimeError(f'Nonfinite policy action at step {step}')
+                        env.eval_actions = action.detach()
                         obs, reward, terminated, truncated, extras = env.step(action)
                     if not env.eval_finite or not all(bool(torch.isfinite(value).all()) for value in obs.values()):
                         raise RuntimeError(f'Nonfinite state/observation at step {step}')
                     if not bool(torch.isfinite(reward).all()) or env.task._nonfinite_count or env.task._insane_count:
                         raise RuntimeError(f'Invalid reward/state counter at step {step}')
                     active = ~done_once
+                    tracking_sq_sum += env.eval_metrics['arm_target_tracking_rmse_rad'].square()*active
+                    tracking_count += active
                     for key, values in env.eval_metrics.items():
                         if values.dtype == torch.bool:
                             events.setdefault(key, torch.zeros(n, dtype=torch.bool, device=device))
@@ -276,7 +290,8 @@ def evaluate(args):
                               plasticity_active=env.backend._plasticity is not None,
                               per_env_peak_metrics={key:value.cpu().tolist() for key,value in peaks.items()},
                               per_env_events={key:value.cpu().tolist() for key,value in events.items()},
-                              diagnostic_samples=samples)
+                              diagnostic_samples=samples,
+                              per_env_arm_target_tracking_rmse_rad=(tracking_sq_sum/tracking_count.clamp_min(1)).sqrt().cpu().tolist())
                 classes = []
                 for index in range(n):
                     if folded[index]:

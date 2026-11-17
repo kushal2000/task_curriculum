@@ -1,0 +1,493 @@
+{
+  "protocol": {
+    "n": 64,
+    "steps": 600,
+    "seed": 0,
+    "checkpoint": "pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth",
+    "physical_fold_tolerance_m": 0.04,
+    "max_footprint": 0.65,
+    "whole_robot_release_clearance_m": 0.1
+  },
+  "cases": {
+    "hybrid": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 15,
+      "full_releases": 1,
+      "successes": 1,
+      "min_fold_error_m": 4.805480102731963e-07,
+      "median_best_fold_error_m": 0.10599929839372635,
+      "mean_length": 571.53125,
+      "termination_reasons": {
+        "fold": 13,
+        "fold_held": 11,
+        "fall": 10,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 53,
+        "released": 1,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 2.1155937910079956,
+      "median_max_xy_drift_m": 0.19127628207206726,
+      "fold_lost_without_release": 2,
+      "terminal_fold_valid_without_release": 12
+    },
+    "yibo": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 58,
+      "full_releases": 4,
+      "successes": 4,
+      "min_fold_error_m": 0.0,
+      "median_best_fold_error_m": 0.00913930218666792,
+      "mean_length": 578.859375,
+      "termination_reasons": {
+        "fold": 33,
+        "fold_held": 33,
+        "fall": 5,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 56,
+        "released": 4,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 1.3187998533248901,
+      "median_max_xy_drift_m": 0.19088934361934662,
+      "fold_lost_without_release": 25,
+      "terminal_fold_valid_without_release": 29
+    },
+    "sensors_off": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 12,
+      "full_releases": 2,
+      "successes": 2,
+      "min_fold_error_m": 7.407300927297911e-06,
+      "median_best_fold_error_m": 0.11253251880407333,
+      "mean_length": 589.40625,
+      "termination_reasons": {
+        "fold": 7,
+        "fold_held": 7,
+        "fall": 4,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 58,
+        "released": 2,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 1.8271138072013855,
+      "median_max_xy_drift_m": 0.1930491030216217,
+      "fold_lost_without_release": 5,
+      "terminal_fold_valid_without_release": 5
+    },
+    "thickness_16mm": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 13,
+      "full_releases": 1,
+      "successes": 1,
+      "min_fold_error_m": 5.960464477539063e-08,
+      "median_best_fold_error_m": 0.11769396811723709,
+      "mean_length": 567.859375,
+      "termination_reasons": {
+        "fold": 9,
+        "fold_held": 9,
+        "fall": 8,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 55,
+        "released": 1,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 2.049704432487488,
+      "median_max_xy_drift_m": 0.21966633945703506,
+      "fold_lost_without_release": 4,
+      "terminal_fold_valid_without_release": 8
+    },
+    "density_2": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 16,
+      "full_releases": 0,
+      "successes": 0,
+      "min_fold_error_m": 5.960464477539063e-08,
+      "median_best_fold_error_m": 0.1367226541042328,
+      "mean_length": 593.59375,
+      "termination_reasons": {
+        "fold": 14,
+        "fold_held": 13,
+        "fall": 2,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 63,
+        "released": 0,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 1.1240504384040833,
+      "median_max_xy_drift_m": 0.15173666924238205,
+      "fold_lost_without_release": 2,
+      "terminal_fold_valid_without_release": 14
+    },
+    "hinges_yibo": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 7,
+      "full_releases": 0,
+      "successes": 0,
+      "min_fold_error_m": 0.00010709241178119555,
+      "median_best_fold_error_m": 0.15332750976085663,
+      "mean_length": 574.953125,
+      "termination_reasons": {
+        "fold": 4,
+        "fold_held": 4,
+        "fall": 9,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 55,
+        "released": 0,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 1.387640118598938,
+      "median_max_xy_drift_m": 0.1840599775314331,
+      "fold_lost_without_release": 3,
+      "terminal_fold_valid_without_release": 4
+    },
+    "sizes_small": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 24,
+      "full_releases": 4,
+      "successes": 4,
+      "min_fold_error_m": 4.842304406338371e-07,
+      "median_best_fold_error_m": 0.059476371854543686,
+      "mean_length": 577.703125,
+      "termination_reasons": {
+        "fold": 19,
+        "fold_held": 18,
+        "fall": 6,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 54,
+        "released": 4,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 2.063386082649231,
+      "median_max_xy_drift_m": 0.205170139670372,
+      "fold_lost_without_release": 5,
+      "terminal_fold_valid_without_release": 15
+    },
+    "contacts_yibo": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 24,
+      "full_releases": 5,
+      "successes": 5,
+      "min_fold_error_m": 0.0,
+      "median_best_fold_error_m": 0.0587010495364666,
+      "mean_length": 534.546875,
+      "termination_reasons": {
+        "fold": 16,
+        "fold_held": 15,
+        "fall": 17,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 42,
+        "released": 5,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 2.6575469970703125,
+      "median_max_xy_drift_m": 0.2677823454141617,
+      "fold_lost_without_release": 8,
+      "terminal_fold_valid_without_release": 11
+    },
+    "contacts_thickness_16mm": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 18,
+      "full_releases": 4,
+      "successes": 4,
+      "min_fold_error_m": 5.960464477539063e-08,
+      "median_best_fold_error_m": 0.09028234332799911,
+      "mean_length": 532.28125,
+      "termination_reasons": {
+        "fold": 12,
+        "fold_held": 10,
+        "fall": 17,
+        "hand_far": 1,
+        "nonfinite": 0,
+        "timeout": 42,
+        "released": 4,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 2.8322551250457764,
+      "median_max_xy_drift_m": 0.26038533449172974,
+      "fold_lost_without_release": 6,
+      "terminal_fold_valid_without_release": 8
+    },
+    "historical_physics": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 37,
+      "full_releases": 4,
+      "successes": 4,
+      "min_fold_error_m": 0.0,
+      "median_best_fold_error_m": 0.020714152604341507,
+      "mean_length": 572.203125,
+      "termination_reasons": {
+        "fold": 20,
+        "fold_held": 20,
+        "fall": 9,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 51,
+        "released": 4,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 1.2077667713165283,
+      "median_max_xy_drift_m": 0.20150279998779297,
+      "fold_lost_without_release": 17,
+      "terminal_fold_valid_without_release": 16
+    },
+    "yibo_with_our_sensors": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 55,
+      "full_releases": 1,
+      "successes": 1,
+      "min_fold_error_m": 0.0,
+      "median_best_fold_error_m": 0.011418571695685387,
+      "mean_length": 573.078125,
+      "termination_reasons": {
+        "fold": 30,
+        "fold_held": 30,
+        "fall": 5,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 58,
+        "released": 1,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 1.1850513815879822,
+      "median_max_xy_drift_m": 0.21754062175750732,
+      "fold_lost_without_release": 25,
+      "terminal_fold_valid_without_release": 29
+    },
+    "yibo_with_thickness_2mm": {
+      "n": 64,
+      "completed": 64,
+      "fold_entries": 56,
+      "full_releases": 8,
+      "successes": 8,
+      "min_fold_error_m": 0.0,
+      "median_best_fold_error_m": 0.011819489300251007,
+      "mean_length": 547.71875,
+      "termination_reasons": {
+        "fold": 28,
+        "fold_held": 27,
+        "fall": 10,
+        "hand_far": 0,
+        "nonfinite": 0,
+        "timeout": 46,
+        "released": 8,
+        "persist": 0,
+        "persist_fail": 0
+      },
+      "median_peak_cloth_speed_mps": 1.4191778302192688,
+      "median_max_xy_drift_m": 0.21116691827774048,
+      "fold_lost_without_release": 28,
+      "terminal_fold_valid_without_release": 20
+    }
+  },
+  "material_allocation_recheck": {
+    "hybrid": {
+      "before": {
+        "n": 64,
+        "completed": 64,
+        "fold_entries": 15,
+        "full_releases": 1,
+        "successes": 1,
+        "min_fold_error_m": 4.805480102731963e-07,
+        "median_best_fold_error_m": 0.10599929839372635,
+        "mean_length": 571.53125,
+        "termination_reasons": {
+          "fold": 13,
+          "fold_held": 11,
+          "fall": 10,
+          "hand_far": 0,
+          "nonfinite": 0,
+          "timeout": 53,
+          "released": 1,
+          "persist": 0,
+          "persist_fail": 0
+        },
+        "median_peak_cloth_speed_mps": 2.1155937910079956,
+        "median_max_xy_drift_m": 0.19127628207206726,
+        "fold_lost_without_release": 2,
+        "terminal_fold_valid_without_release": 12
+      },
+      "after_shared_material_fix": {
+        "n": 64,
+        "completed": 64,
+        "fold_entries": 15,
+        "full_releases": 1,
+        "successes": 1,
+        "min_fold_error_m": 4.805480102731963e-07,
+        "median_best_fold_error_m": 0.10599929839372635,
+        "mean_length": 571.53125,
+        "termination_reasons": {
+          "fold": 13,
+          "fold_held": 11,
+          "fall": 10,
+          "hand_far": 0,
+          "nonfinite": 0,
+          "timeout": 53,
+          "released": 1,
+          "persist": 0,
+          "persist_fail": 0
+        },
+        "median_peak_cloth_speed_mps": 2.1155937910079956,
+        "median_max_xy_drift_m": 0.19127628207206726,
+        "fold_lost_without_release": 2,
+        "terminal_fold_valid_without_release": 12
+      },
+      "folded_envs_changed": 0,
+      "released_envs_changed": 0,
+      "max_initial_point_difference_m": 0.0
+    },
+    "yibo": {
+      "before": {
+        "n": 64,
+        "completed": 64,
+        "fold_entries": 58,
+        "full_releases": 4,
+        "successes": 4,
+        "min_fold_error_m": 0.0,
+        "median_best_fold_error_m": 0.00913930218666792,
+        "mean_length": 578.859375,
+        "termination_reasons": {
+          "fold": 33,
+          "fold_held": 33,
+          "fall": 5,
+          "hand_far": 0,
+          "nonfinite": 0,
+          "timeout": 56,
+          "released": 4,
+          "persist": 0,
+          "persist_fail": 0
+        },
+        "median_peak_cloth_speed_mps": 1.3187998533248901,
+        "median_max_xy_drift_m": 0.19088934361934662,
+        "fold_lost_without_release": 25,
+        "terminal_fold_valid_without_release": 29
+      },
+      "after_shared_material_fix": {
+        "n": 64,
+        "completed": 64,
+        "fold_entries": 58,
+        "full_releases": 4,
+        "successes": 4,
+        "min_fold_error_m": 0.0,
+        "median_best_fold_error_m": 0.00913930218666792,
+        "mean_length": 578.859375,
+        "termination_reasons": {
+          "fold": 33,
+          "fold_held": 33,
+          "fall": 5,
+          "hand_far": 0,
+          "nonfinite": 0,
+          "timeout": 56,
+          "released": 4,
+          "persist": 0,
+          "persist_fail": 0
+        },
+        "median_peak_cloth_speed_mps": 1.3187998533248901,
+        "median_max_xy_drift_m": 0.19088934361934662,
+        "fold_lost_without_release": 25,
+        "terminal_fold_valid_without_release": 29
+      },
+      "folded_envs_changed": 0,
+      "released_envs_changed": 0,
+      "max_initial_point_difference_m": 0.0
+    }
+  },
+  "baseline_cohorts": {
+    "by_size": {
+      "max_side_10_15cm": {
+        "n": 2,
+        "fold_entries": 0,
+        "full_releases": 0,
+        "median_best_error_m": 0.0646933950483799,
+        "median_max_speed_mps": 2.42453134059906
+      },
+      "max_side_15_20cm": {
+        "n": 16,
+        "fold_entries": 4,
+        "full_releases": 0,
+        "median_best_error_m": 0.07575377821922302,
+        "median_max_speed_mps": 2.1842569708824158
+      },
+      "max_side_20_25cm": {
+        "n": 24,
+        "fold_entries": 7,
+        "full_releases": 0,
+        "median_best_error_m": 0.11631174758076668,
+        "median_max_speed_mps": 1.9498713612556458
+      },
+      "max_side_over_25cm": {
+        "n": 22,
+        "fold_entries": 4,
+        "full_releases": 1,
+        "median_best_error_m": 0.160118468105793,
+        "median_max_speed_mps": 1.948662519454956
+      }
+    },
+    "by_density": {
+      "up_to_100g_m2": {
+        "n": 29,
+        "fold_entries": 5,
+        "full_releases": 1,
+        "median_best_error_m": 0.11447136104106903,
+        "median_max_speed_mps": 2.538714647293091
+      },
+      "100_to_500g_m2": {
+        "n": 35,
+        "fold_entries": 10,
+        "full_releases": 0,
+        "median_best_error_m": 0.10369902849197388,
+        "median_max_speed_mps": 1.7401113510131836
+      },
+      "over_500g_m2": {
+        "n": 0,
+        "fold_entries": 0,
+        "full_releases": 0,
+        "median_best_error_m": null,
+        "median_max_speed_mps": null
+      }
+    }
+  },
+  "raw_results": "/share/portal/kk837/task_curriculum/debug_outputs/yibo_our_dr_analysis/rigid_local_2026-11-16",
+  "limitations": [
+    "One seed and 64 first episodes per case; preliminary estimates.",
+    "The smaller-size case also changes placement/yaw conditioning and material RNG realizations.",
+    "Inverse cases use the shared-material implementation and are compared with its reference recheck.",
+    "This evaluates five current designs and a new release objective, not the original Yibo task."
+  ],
+  "source_commits_recorded_at_launch": {
+    "source_commit.txt": "b795c2831e8c570b5260b0477a564a47bacaa58e",
+    "interaction_source_commit.txt": "f556523354194dfe1753911983001be5beea9eb6",
+    "inverse_source_commit.txt": "19a357b9c771ba95bbecb80b7111b1bae50720e7",
+    "shared_material_recheck": "d155a98b0e316f0a8ed005cfd5fffb6bd25be238"
+  }
+}

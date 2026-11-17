@@ -1,5 +1,8 @@
 # Yibo interface with our cloth DR
 
+Completed evaluation findings: [transfer analysis](analysis/README.md),
+[rigid ablations](analysis/rigid.md), and [VBD fabrics](analysis/fabrics.md).
+
 Both recipes inherit `isaacsimenvs/scripts/configs/runs/yibo_our_dr.yaml`, sharing the Yibo observation/robot
 interface, our current rigid designs and material/reset/sensor/action DR, and the
 physical fold-then-release objective.
