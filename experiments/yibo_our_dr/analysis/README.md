@@ -20,7 +20,7 @@ Restoring density alone reduced violent motion and falls but barely changed fold
 
 The inverse tests are useful: the otherwise good Yibo setup still folded in 55–56 episodes with our sensor/action DR or the actual 2 mm thickness feature. These are not the main folding-collapse mechanisms in this screen. Release counts are too small for a strong attribution, and the original checkpoint was not trained for whole-robot withdrawal.
 
-The checkpoint interface was separately checked against historical code and saved checkpoint observations. `yibo` mode intentionally preserves its incorrect goal-quaternion convention for compatibility. Physical success uses the correct cloth target. The tests here hold that convention fixed.
+The checkpoint interface was separately checked against historical code and saved checkpoint observations. A [live VBD perception audit](vbd_perception.md) also checked 12 real environments, 48 controlled cloth states, signed robot quaternions, particle ordering and actual table geometry. `yibo` mode intentionally preserves its incorrect goal-quaternion convention for compatibility. Physical success uses the correct cloth target. The tests here hold that convention fixed.
 
 See [rigid.md](rigid.md) for all interventions, motion diagnostics, controls and limitations, and [rigid.png](rigid.png) for the comparison plot.
 

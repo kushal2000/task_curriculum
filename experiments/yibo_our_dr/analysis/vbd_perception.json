@@ -1,0 +1,171 @@
+{
+  "status": "passed",
+  "num_envs": 12,
+  "controlled_states": 48,
+  "oracle_commit": "2b82faf1c73f5782068f67eac9cd6085aa1e27e7",
+  "actor_max_error": 3.5762786865234375e-07,
+  "checkpoint_action_max_error": 6.4373016357421875e-06,
+  "fk_link_position_error_m": 4.413943259784503e-07,
+  "imported_rest_coordinate_error_m": 1.6763806343078613e-07,
+  "raw_world_row_error": 0.0,
+  "raw_body_label_pose_error": 0.0,
+  "saved_physx_signed_palm_quaternion_error": 7.152557373046875e-07,
+  "saved_physx_palm_position_error_m": 1.2874603271484375e-05,
+  "saved_physx_fingertip_relative_position_error_m": 1.6689300537109375e-05,
+  "actor_field_errors": {
+    "joint_pos": 0.0,
+    "joint_vel": 0.0,
+    "prev_action_targets": 0.0,
+    "palm_pos": 5.960464477539063e-08,
+    "palm_rot": 0.0,
+    "object_rot": 3.5762786865234375e-07,
+    "fingertip_pos_rel_palm": 5.960464477539063e-08,
+    "keypoints_rel_palm": 1.1920928955078125e-07,
+    "keypoints_rel_goal": 1.1920928955078125e-07,
+    "object_scales": 0.0
+  },
+  "table": {
+    "env": 0,
+    "table_center_env": [
+      0.0,
+      0.0,
+      0.3799999952316284
+    ],
+    "table_quaternion_xyzw": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "robot_base_env": [
+      0.0,
+      0.5099999904632568,
+      0.20000000298023224
+    ],
+    "shape_half_extents": [
+      [
+        0.30000001192092896,
+        0.20000000298023224,
+        0.15000000596046448
+      ]
+    ],
+    "shape_transforms": [
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "readout_table_top_env_z": 0.5299999713897705
+  },
+  "cases": [
+    {
+      "joint_velocity_write_read_error": 0.0,
+      "raw_body_label_pose_error": 0.0,
+      "fold_degrees": 0,
+      "deformed": false,
+      "point_write_read_error": 0.0,
+      "velocity_write_read_error": 0.0,
+      "raw_world_row_error": 0.0,
+      "fk_link_position_error_m": 4.413943259784503e-07,
+      "fk_link_quaternion_error_sign_invariant": 3.3375558283754714e-07,
+      "body_state_vs_link_pose_error": 0.0,
+      "actor_field_errors": {
+        "joint_pos": 0.0,
+        "joint_vel": 0.0,
+        "prev_action_targets": 0.0,
+        "palm_pos": 0.0,
+        "palm_rot": 0.0,
+        "object_rot": 5.960464477539063e-08,
+        "fingertip_pos_rel_palm": 0.0,
+        "keypoints_rel_palm": 5.21540641784668e-08,
+        "keypoints_rel_goal": 8.940696716308594e-08,
+        "object_scales": 0.0
+      },
+      "actor_max_error": 8.940696716308594e-08,
+      "checkpoint_action_max_error": 2.7418136596679688e-06
+    },
+    {
+      "joint_velocity_write_read_error": 0.0,
+      "raw_body_label_pose_error": 0.0,
+      "fold_degrees": 90,
+      "deformed": false,
+      "point_write_read_error": 0.0,
+      "velocity_write_read_error": 0.0,
+      "raw_world_row_error": 0.0,
+      "fk_link_position_error_m": 4.084432733142407e-07,
+      "fk_link_quaternion_error_sign_invariant": 3.8058866747014974e-07,
+      "body_state_vs_link_pose_error": 0.0,
+      "actor_field_errors": {
+        "joint_pos": 0.0,
+        "joint_vel": 0.0,
+        "prev_action_targets": 0.0,
+        "palm_pos": 5.960464477539063e-08,
+        "palm_rot": 0.0,
+        "object_rot": 5.960464477539063e-08,
+        "fingertip_pos_rel_palm": 5.960464477539063e-08,
+        "keypoints_rel_palm": 5.960464477539063e-08,
+        "keypoints_rel_goal": 8.940696716308594e-08,
+        "object_scales": 0.0
+      },
+      "actor_max_error": 8.940696716308594e-08,
+      "checkpoint_action_max_error": 3.337860107421875e-06
+    },
+    {
+      "joint_velocity_write_read_error": 0.0,
+      "raw_body_label_pose_error": 0.0,
+      "fold_degrees": 180,
+      "deformed": false,
+      "point_write_read_error": 0.0,
+      "velocity_write_read_error": 0.0,
+      "raw_world_row_error": 0.0,
+      "fk_link_position_error_m": 4.1957937169101456e-07,
+      "fk_link_quaternion_error_sign_invariant": 3.599737739001796e-07,
+      "body_state_vs_link_pose_error": 0.0,
+      "actor_field_errors": {
+        "joint_pos": 0.0,
+        "joint_vel": 0.0,
+        "prev_action_targets": 0.0,
+        "palm_pos": 5.960464477539063e-08,
+        "palm_rot": 0.0,
+        "object_rot": 4.658460284190369e-10,
+        "fingertip_pos_rel_palm": 5.960464477539063e-08,
+        "keypoints_rel_palm": 5.960464477539063e-08,
+        "keypoints_rel_goal": 1.043081283569336e-07,
+        "object_scales": 0.0
+      },
+      "actor_max_error": 1.043081283569336e-07,
+      "checkpoint_action_max_error": 6.4373016357421875e-06
+    },
+    {
+      "joint_velocity_write_read_error": 0.0,
+      "raw_body_label_pose_error": 0.0,
+      "fold_degrees": 65,
+      "deformed": true,
+      "point_write_read_error": 0.0,
+      "velocity_write_read_error": 0.0,
+      "raw_world_row_error": 0.0,
+      "fk_link_position_error_m": 4.2007631562146486e-07,
+      "fk_link_quaternion_error_sign_invariant": 3.24621707181727e-07,
+      "body_state_vs_link_pose_error": 0.0,
+      "actor_field_errors": {
+        "joint_pos": 0.0,
+        "joint_vel": 0.0,
+        "prev_action_targets": 0.0,
+        "palm_pos": 5.960464477539063e-08,
+        "palm_rot": 0.0,
+        "object_rot": 3.5762786865234375e-07,
+        "fingertip_pos_rel_palm": 5.960464477539063e-08,
+        "keypoints_rel_palm": 1.1920928955078125e-07,
+        "keypoints_rel_goal": 1.1920928955078125e-07,
+        "object_scales": 0.0
+      },
+      "actor_max_error": 3.5762786865234375e-07,
+      "checkpoint_action_max_error": 2.3990869522094727e-06
+    }
+  ]
+}
