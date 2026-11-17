@@ -23,6 +23,8 @@ Every message has seq (counts up from 0, the sender counts) and t (time.time(), 
 | goal_pose    | policy.py; robot.py         | policy_port        | pos (3), quat_wxyz (4), goal_index; t = sent   |
 |              | (openloop: the sim's goal)  |                    | status (optional): a markdown line the viewer  |
 |              |                             |                    | shows in place of its keypoint distance        |
+|              |                             |                    | object_kp, goal_kp (4, 3) (optional, rigid2-  |
+|              |                             |                    | deform): the observed keypoints and their goals|
 | sim_object_  | robot.py (openloop)         | policy_port        | pos (3), quat_wxyz (4): where the sim rollout  |
 | pose         |                             |                    | had the object at this step; t = sent          |
 

@@ -10,8 +10,9 @@ perception message into the sheet's grid points; fold.py turns those into the ob
 half gives the object, the stationary half the goal) and the success test. Subscribes the source's
 topic and joint_state. The run stops when the sheet is folded (the training episode ends there too),
 on timeout (fold.timeout_steps), or when the source says its tracking is lost (rigid plates: their
-hinge edges drift apart). Publishes joint_target, and goal_pose (where the moving half lands when folded) with fold_error / footprint, the source's numbers
-and a status line for the viewer and recorder.
+hinge edges drift apart). Publishes joint_target, and goal_pose (where the moving half lands when folded) with fold_error / footprint, the source's numbers,
+object_kp / goal_kp (4, 3) (the observed keypoints and their goals, base frame) and a status line for the viewer
+and recorder.
 
 The policy works in the env frame (the training env's); the bus carries robot-base-frame poses.
 When this node stops, it simply stops publishing: the robot node holds its last target.
@@ -35,6 +36,8 @@ from deploy.utils.policy_net import (action_to_targets,                         
                                      load_network, wait_for_inputs, wait_step)
 from deploy.utils.robot_model import load_robot_model                                                # noqa: E402
 from deploy.utils.spec import env_to_base, load_spec                                                 # noqa: E402
+
+IDENTITY = np.array([1.0, 0.0, 0.0, 0.0])
 
 
 def run_fold(cfg, spec, model, net, pub) -> None:
@@ -132,6 +135,9 @@ def run_fold(cfg, spec, model, net, pub) -> None:
                 goal["pos"], goal["quat_wxyz"] = env_to_base(spec, *s["goal_mesh_pose"])
             else:   # no mesh for the goal: the fold target's centre, the folded orientation
                 goal["pos"], goal["quat_wxyz"] = env_to_base(spec, o["goal_pos"], o["goal_quat_true"])
+            # the 4 keypoints the policy observed and their goals (keypoints_rel_goal), base frame
+            goal["object_kp"] = env_to_base(spec, o["object_kp"], IDENTITY)[0]
+            goal["goal_kp"] = env_to_base(spec, o["goal_kp"], IDENTITY)[0]
             send(pub, "goal_pose", goal)
 
             t_next = wait_step(t_next, dt, step)   # -> 60 Hz

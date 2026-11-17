@@ -9,7 +9,9 @@ Subscribes  joint_state  -> the robot, at its measured joint angles
             object_poses -> the other objects' meshes, each in its own colour (object.name a list)
             object_points -> tracked points (a cloth): green seen, red not (an object without a mesh
                             gets a small flat box for its object / goal poses)
-            goal_pose    -> an orange see-through object mesh; its status line, if it has one
+            goal_pose    -> an orange see-through object mesh; its status line, if it has one; its
+                            object_kp / goal_kp, if it has them (rigid2deform): the 4 keypoints the policy
+                            observed (cyan) and their goals (orange), a line between each pair
             sim_object_pose -> a blue see-through object mesh: where the sim rollout had the object
                             (robot.mode=openloop)
             camera_image -> the camera image in the side panel (if perception sends it)
@@ -33,6 +35,8 @@ from deploy.utils.link import TOPIC_PORTS, age, decode_jpeg, open_subscriber, re
 from deploy.utils.spec import base_to_env, load_spec                                         # noqa: E402
 
 MESH_DIR = REPO / "assets" / "flexiv_wuji"   # the URDF's mesh paths are relative to it (fetch_assets.sh)
+IDENTITY = np.array([1.0, 0.0, 0.0, 0.0])
+KP_COLOR, GOAL_KP_COLOR = (0, 200, 230), (255, 140, 0)   # goal_pose's object_kp (cyan), goal_kp (orange)
 EXTRA_COLORS = [(0.9, 0.25, 0.6), (0.2, 0.75, 0.85), (0.6, 0.4, 0.9), (0.85, 0.85, 0.2)]
 
 
@@ -66,6 +70,13 @@ def build_scene(server, spec, mesh_paths: list[Path]) -> dict:
     points = server.scene.add_point_cloud("/object_points", points=np.zeros((1, 3), np.float32),
                                           colors=np.zeros((1, 3), np.uint8), point_size=0.006, visible=False)
     server.scene.add_frame("/object/axes", axes_length=0.06, axes_radius=0.002)
+    zeros4 = np.zeros((4, 3), np.float32)
+    kp = {"object_kp": server.scene.add_point_cloud("/keypoints/object", points=zeros4, colors=KP_COLOR,
+                                                    point_size=0.014, visible=False),
+          "goal_kp": server.scene.add_point_cloud("/keypoints/goal", points=zeros4, colors=GOAL_KP_COLOR,
+                                                  point_size=0.014, visible=False),
+          "lines": server.scene.add_line_segments("/keypoints/error", points=np.zeros((4, 2, 3), np.float32),
+                                                  colors=KP_COLOR, thickness=0.002, visible=False)}
     goal = server.scene.add_mesh_simple("/goal", vertices=mesh.vertices, faces=mesh.faces,
                                         color=(0.95, 0.6, 0.1), opacity=0.4)
     server.scene.add_frame("/goal/axes", axes_length=0.06, axes_radius=0.002)
@@ -79,7 +90,7 @@ def build_scene(server, spec, mesh_paths: list[Path]) -> dict:
         server.scene.add_frame(f"/object_{i}/axes", axes_length=0.06, axes_radius=0.002)
     return {
         "robot": robot, "ghost": ghost, "object": obj, "goal": goal, "sim_object": sim_obj, "extras": extras,
-        "points": points,
+        "points": points, "keypoints": kp,
         # viser's joint order -> index in the spec's joint order
         "order": [list(spec["joint_names"]).index(j) for j in robot.get_actuated_joint_names()],
         "show_targets": server.gui.add_checkbox("show joint targets (green)", True),
@@ -111,6 +122,16 @@ def draw(server, scene: dict, spec, msgs: dict) -> None:
                                                  np.array([1.0, 0.0, 0.0, 0.0]))[0].astype(np.float32)
             scene["points"].colors = np.where(seen[:, None], [[40, 220, 60]], [[230, 40, 40]]).astype(np.uint8)
             scene["points"].visible = True
+        goal = msgs.get("goal_pose")
+        if goal is not None and "object_kp" in goal and "keypoints" in scene:
+            kp = scene["keypoints"]
+            ends = {}
+            for key in ("object_kp", "goal_kp"):
+                ends[key] = base_to_env(spec, np.asarray(goal[key], dtype=np.float32), IDENTITY)[0].astype(np.float32)
+                kp[key].points = ends[key]
+            kp["lines"].points = np.stack([ends["object_kp"], ends["goal_kp"]], axis=1)
+            for handle in kp.values():
+                handle.visible = True
         poses = msgs.get("object_poses")
         if poses is not None:   # [0] is object_pose's, drawn above
             for handle, pos, quat in zip(scene.get("extras", []), poses["pos"][1:], poses["quat_wxyz"][1:]):
