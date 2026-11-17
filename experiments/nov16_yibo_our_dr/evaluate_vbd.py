@@ -34,7 +34,7 @@ def parser():
     cli.add_argument('--checkpoint', type=Path, default=ROOT/'pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth')
     cli.add_argument('--policy-config', type=Path, default=ROOT/'pretrained_policy/flexiv_wuji/config.yaml')
     cli.add_argument('--expl-coef', type=float, default=0.)
-    cli.add_argument('--out-dir', type=Path, default=ROOT/'experiments/yibo_our_dr/results/vbd_materials')
+    cli.add_argument('--out-dir', type=Path, default=ROOT/'experiments/nov16_yibo_our_dr/results/vbd_materials')
     cli.add_argument('--check-config', action='store_true')
     cli.add_argument('--skip-cache-check', action='store_true', help='Only with --check-config; inspect configs before asset baking.')
     return cli

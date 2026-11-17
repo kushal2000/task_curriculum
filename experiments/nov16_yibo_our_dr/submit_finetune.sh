@@ -6,7 +6,7 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 
 exec experiments/submit.sh --job-name=yibo_our_dr_finetune experiments/train.sh \
     --task Isaacsimenvs-RigidBodyCloth-Direct-v0 \
-    --experiment experiments/yibo_our_dr/finetune.yaml \
+    --experiment experiments/nov16_yibo_our_dr/finetune.yaml \
     --capture_viewer_per_design \
     --wandb_activate --wandb_project rigidClothDR --wandb_group yibo_our_dr \
     --wandb_name rigidClothDR_finetune "$@"

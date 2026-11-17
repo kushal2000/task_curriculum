@@ -34,7 +34,7 @@ Native Newton model readback in all 12 environments confirms:
 - Tabletop: `z=0.53` m, **0.33 m above the robot base**.
 - Table near/far Y edges: `+0.20/-0.20` m, respectively **0.31/0.71 m forward of the robot base**.
 
-This verifies the simulated geometry, not only the configured values. Evaluation configuration is assembled by `experiments/yibo_our_dr/evaluate_vbd.py::build_config`: typed VBD defaults, `isaacsimenvs/scripts/configs/task/Cloth.yaml`, the selected material YAML, checkpoint action/observation settings, and explicit evaluation overrides. Every raw material result stores the fully resolved configuration.
+This verifies the simulated geometry, not only the configured values. Evaluation configuration is assembled by `experiments/nov16_yibo_our_dr/evaluate_vbd.py::build_config`: typed VBD defaults, `isaacsimenvs/scripts/configs/task/Cloth.yaml`, the selected material YAML, checkpoint action/observation settings, and explicit evaluation overrides. Every raw material result stores the fully resolved configuration.
 
 ## What this does not prove
 
@@ -48,7 +48,7 @@ A separate HTML viewer quaternion-conversion issue was identified by the parent 
 
 ```bash
 OMNI_KIT_ACCEPT_EULA=YES OMP_NUM_THREADS=2 \
-  .venv/isaaclab3/bin/python experiments/yibo_our_dr/audit_vbd_observations.py
+  .venv/isaaclab3/bin/python experiments/nov16_yibo_our_dr/audit_vbd_observations.py
 ```
 
 Full per-case results and raw model world/body labels: `debug_outputs/deformable_observation_audit/2026-11-16/audit.json`. The audit raises on failed tolerances and changes no production source.

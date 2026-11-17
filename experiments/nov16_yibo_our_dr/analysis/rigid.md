@@ -63,4 +63,4 @@ The results measure checkpoint compatibility, not which material values best rep
 
 ## Reproduce
 
-Run `experiments/yibo_our_dr/evaluate_rigid.py --headless --device cuda:0 --case <case> --seed 0 --num_envs 64 --max_steps 600 --out <result.json>` using `.venv/isaacsim/bin/python`. `submit_rigid_eval.sh` runs the initial matrix on one scheduler-allocated GPU. Cases, readbacks, pre-reset motion/failure traces and full configs are saved under /share/portal/kk837/task_curriculum/debug_outputs/yibo_our_dr_analysis/rigid_local_2026-11-16.
+Run `experiments/nov16_yibo_our_dr/evaluate_rigid.py --headless --device cuda:0 --case <case> --seed 0 --num_envs 64 --max_steps 600 --out <result.json>` using `.venv/isaacsim/bin/python`. `submit_rigid_eval.sh` runs the initial matrix on one scheduler-allocated GPU. Cases, readbacks, pre-reset motion/failure traces and full configs are saved under /share/portal/kk837/task_curriculum/debug_outputs/yibo_our_dr_analysis/rigid_local_2026-11-16.

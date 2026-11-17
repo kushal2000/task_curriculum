@@ -61,8 +61,8 @@ physical fold-then-release objective.
 From the repository root, submit either recipe using the existing training launcher:
 
 ```bash
-experiments/yibo_our_dr/submit_finetune.sh
-experiments/yibo_our_dr/submit_scratch.sh
+experiments/nov16_yibo_our_dr/submit_finetune.sh
+experiments/nov16_yibo_our_dr/submit_scratch.sh
 ```
 
 The submission scripts pass their YAML paths to `--experiment`; additional training
@@ -99,7 +99,7 @@ Submitting these commands launches training; creating the recipes does not submi
 ## Controlled rigid-cloth evaluation
 
 ```bash
-experiments/yibo_our_dr/submit_rigid_eval.sh
+experiments/nov16_yibo_our_dr/submit_rigid_eval.sh
 ```
 
 This reserves one GPU and evaluates 64 first episodes per case in separate simulator

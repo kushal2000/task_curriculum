@@ -230,9 +230,9 @@ def test_every_experiment_key_maps_to_a_config_field(name):
 
 
 def test_nested_yibo_runs_share_environment_and_select_distinct_initialization():
-    finetune = _load_experiment("experiments/yibo_our_dr/finetune.yaml")
-    scratch = _load_experiment("experiments/yibo_our_dr/scratch.yaml")
-    assert finetune == _load_experiment(str(REPO_ROOT / "experiments/yibo_our_dr/finetune.yaml"))
+    finetune = _load_experiment("experiments/nov16_yibo_our_dr/finetune.yaml")
+    scratch = _load_experiment("experiments/nov16_yibo_our_dr/scratch.yaml")
+    assert finetune == _load_experiment(str(REPO_ROOT / "experiments/nov16_yibo_our_dr/finetune.yaml"))
     assert finetune["env"] == scratch["env"] == _load_experiment("yibo_our_dr")["env"]
     assert finetune["env"]["obs"]["keypoint_mode"] == "yibo"
     assert finetune["env"]["robot_preset"] == "yibo"

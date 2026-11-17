@@ -3,4 +3,4 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 exec experiments/submit.sh --job-name=yibo_rigid_ablation \
-    experiments/yibo_our_dr/rigid_eval_job.sh --task Isaacsimenvs-RigidBodyCloth-Direct-v0 "$@"
+    experiments/nov16_yibo_our_dr/rigid_eval_job.sh --task Isaacsimenvs-RigidBodyCloth-Direct-v0 "$@"

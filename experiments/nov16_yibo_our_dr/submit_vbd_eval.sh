@@ -8,9 +8,9 @@
 #SBATCH --mem=96G
 #SBATCH --time=04:00:00
 # First prepare the shared cache and smoke-test on one allocated GPU:
-# experiments/submit.sh experiments/yibo_our_dr/submit_vbd_eval.sh --prepare-cache --material base --num-envs 2 --steps 12
+# experiments/submit.sh experiments/nov16_yibo_our_dr/submit_vbd_eval.sh --prepare-cache --material base --num-envs 2 --steps 12
 # Then run materials on up to four GPUs (one material per array index):
-# experiments/submit.sh --array=0-7%4 experiments/yibo_our_dr/submit_vbd_eval.sh
+# experiments/submit.sh --array=0-7%4 experiments/nov16_yibo_our_dr/submit_vbd_eval.sh
 set -euo pipefail
 if [[ -z "${SLURM_JOB_ID:-}" ]]; then
     cd "$(dirname "${BASH_SOURCE[0]}")/../.."
@@ -32,5 +32,5 @@ if [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     materials=(base big_napkin_measured chiffon_measured cotton_measured denim_measured napkin_measured silk_measured towel_measured)
     args+=(--material "${materials[$SLURM_ARRAY_TASK_ID]}")
 fi
-.venv/isaaclab3/bin/python experiments/yibo_our_dr/evaluate_vbd.py \
-    --out-dir "experiments/yibo_our_dr/results/vbd_${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-local}}" "${args[@]}"
+.venv/isaaclab3/bin/python experiments/nov16_yibo_our_dr/evaluate_vbd.py \
+    --out-dir "experiments/nov16_yibo_our_dr/results/vbd_${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID:-local}}" "${args[@]}"

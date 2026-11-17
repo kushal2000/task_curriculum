@@ -18,7 +18,7 @@ import torch
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
-from experiments.yibo_our_dr.evaluate_vbd import parser,build_config
+from experiments.nov16_yibo_our_dr.evaluate_vbd import parser,build_config
 REF='2b82faf1c73f5782068f67eac9cd6085aa1e27e7'
 OUT=ROOT/'debug_outputs/deformable_observation_audit/2026-11-16'
 

@@ -133,7 +133,7 @@ def main() -> None:
         "--experiment",
         default=None,
         help="A run recipe name (e.g. rigid_body_cloth) or YAML path (e.g. "
-        "experiments/yibo_our_dr/finetune.yaml), layered before Hydra CLI overrides.",
+        "experiments/nov16_yibo_our_dr/finetune.yaml), layered before Hydra CLI overrides.",
     )
     # --- Runtime toggles ---
     parser.add_argument("--test", action="store_true", help="Run inference (player) instead of training")

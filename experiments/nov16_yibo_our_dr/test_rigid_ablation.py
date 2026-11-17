@@ -2,7 +2,7 @@
 import pytest
 import torch
 
-from experiments.yibo_our_dr.evaluate_rigid import CASES, case_overlay, case_preset, install_contact_only_profile, merge_config
+from experiments.nov16_yibo_our_dr.evaluate_rigid import CASES, case_overlay, case_preset, install_contact_only_profile, merge_config
 from isaacsimenvs.scripts.configs.tests.test_config_overlays import (
     _collect_classes, _env_problems, _experiment_loader, EXPERIMENT_TASKS,
 )
