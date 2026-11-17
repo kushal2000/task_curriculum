@@ -181,6 +181,16 @@ objects:
     scale: [2.5, 1.25, 0.125]
     mesh: deploy/rigid2deform/objects/plate5_green/plate5_green.obj   # the same box, green
     color: [45, 148, 113]       # RGB as the D415 sees it (Nov 12; tol 40: <= 130 stray pixels, on the arm's cyan LED rings)
+  cloth5_purple:              # the 10 x 10 cm two-colour cloth (Nov 15): its purple half
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.025] # 10 x 5 x 0.1 cm grasp box
+    mesh: deploy/rigid2deform/objects/cloth5_purple/cloth5_purple.obj   # plate5_2_white's box scaled to 1 mm thick, purple
+    color: [143, 71, 173]       # RGB from a phone photo (not yet measured on the D415)
+  cloth5_blue:                # ... its blue half
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.025]
+    mesh: deploy/rigid2deform/objects/cloth5_blue/cloth5_blue.obj   # the same box, blue
+    color: [62, 142, 203]       # RGB from a phone photo (not yet measured on the D415)
 
 # ------------------------------------------------------------------------------------------ fold
 # task=fold: the fold-pool policy turns the moving half of the sheet over onto the stationary half
@@ -231,6 +241,13 @@ perception:
     cotracker_dir: ~/co-tracker   # the co-tracker checkout (cotracker/, rs_tracking/ for snapping clicks)
     checkpoint: null        # null = <cotracker_dir>/checkpoints/scaled_online.pth
     snap_radius: 8          # px: a click snaps to the strongest corner this near (m toggles in the window)
+    edge_inset: 0.1         # grid: track the 7 x 7 grid shrunk so its edge rows sit this far (x the side; 0.1 =
+                            #   1.5 cm on a 15 cm cloth) inside the clicked corners, off the cloth/table edge;
+                            #   the corners and edges then come from each half's fit (sent as mode fit). 0 = off
+    iters: 4                # refinement iterations per tracker run (the model's own: 6; 4 is ~30% faster,
+                            #   ~0.4 px worse on average)
+    compile: false          # torch.compile the refinement: 3-4 ms faster with one camera, no gain with two
+                            #   in parallel (stereo_tracker.py); ~2 s to compile at start
     auto_points: 30         # fit: how many points `a` adds
     sigma: 0.25             # fit: the moving least squares width, x the side (0 = one rigid fit per half)
     max_age_s: 0.35         # policy.py: older object_points = lost (results come in 8-frame batches:
@@ -238,6 +255,17 @@ perception:
     max_lost_s: null        # a half with < 3 points seen (occluded): the policy keeps observing the last good
                             #   particles until a frame fits again; null = wait for ever, a number = then stop
     save_dir: null          # a directory: also an overlay mp4 + npz per run (null: only the bus / recorder)
+    # stereo_tracker.py only: a second camera; A's clicks carried into it (the cloth's plane), matched pixels triangulated
+    stereo_extrinsics: deploy/calibration/extrinsics/right_camera_nov10.json   # camera B (its camera_serial picks it)
+    stereo_rate_hz: 30.0      # the loop: each step takes both cameras' newest frames, tracks, triangulates and
+                              #   publishes; slower if a step takes longer (both trackers ~34 ms on the 5090)
+    stereo_max_reproj_px: 4.0 # px: a triangulated point off by more in either view is not visible
+    stereo_snap: true         # B's 4 outer corners snap to image corners and the rest follow them
+    stereo_snap_radius: 20    # px: ... all 4 by one shift within this of where the calibrations put them
+                              #   (right_camera_nov10: 13 px off, nov14: 6), then each within snap_radius;
+                              #   a click in B's window moves a corner
+    stereo_align: true        # move camera B (position only) so A's points project onto B's at the start;
+                              #   false = B's calibration as it is (13 px off: nothing triangulates)
 
   # fake (perception.py -> fake_perception.py, not nodes/perception.py's fake): the SHEET's pose (hinge line middle,
   # plates' mid-plane), [x, y, z, qw, qx, qy, qz] in the robot base frame. Default: training's sheet

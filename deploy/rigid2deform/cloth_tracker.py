@@ -40,6 +40,7 @@ checks/cloth_track_view.py is the same tracking in a window of its own, without 
 from __future__ import annotations
 
 import collections
+import contextlib
 import json
 import sys
 import threading
@@ -99,9 +100,10 @@ def mirrored(px: np.ndarray, unit: np.ndarray) -> bool:
     return bool(np.sign(cross(px)) == np.sign(cross(unit[:, :2])))
 
 
-def corner_sides(depth, intr, h, corner_px, n: int = 15):
-    """(4,) m: the quad's sides, the corners' rays cut by the plane fitted to the depth on an n x n grid
-    inside it (a corner's own pixel often has no depth, or the table's). None with too little depth."""
+def sheet_plane(depth, intr, h, n: int = 15):
+    """(c (3,), normal (3,)) colour-camera frame: the plane fitted to the depth on an n x n grid inside the
+    quad h maps the unit square to (a corner's own pixel often has no depth, or the table's). None with too
+    little depth."""
     s = np.linspace(-0.4, 0.4, n)
     unit = np.stack(np.meshgrid(s, s), -1).reshape(-1, 2)
     xyz = deproject(depth, cv2.perspectiveTransform(unit[None], h)[0], intr)
@@ -109,16 +111,34 @@ def corner_sides(depth, intr, h, corner_px, n: int = 15):
     if len(xyz) < 0.3 * len(unit):
         return None
     c = xyz.mean(0)
-    normal = np.linalg.svd(xyz - c)[2][2]
-    rays = np.c_[(corner_px[:, 0] - intr.cx) / intr.fx, (corner_px[:, 1] - intr.cy) / intr.fy, np.ones(4)]
-    corners = rays * ((c @ normal) / (rays @ normal))[:, None]
+    return c, np.linalg.svd(xyz - c)[2][2]
+
+
+def ray_plane(intr, px: np.ndarray, plane) -> np.ndarray:
+    """(N, 3) colour-camera frame: the pixels' rays cut by plane (c, normal)."""
+    c, normal = plane
+    rays = np.c_[(px[:, 0] - intr.cx) / intr.fx, (px[:, 1] - intr.cy) / intr.fy, np.ones(len(px))]
+    return rays * ((c @ normal) / (rays @ normal))[:, None]
+
+
+def corner_sides(intr, plane, corner_px):
+    """(4,) m: the quad's sides, its corners' rays cut by the sheet's plane. None without a plane."""
+    if plane is None:
+        return None
+    corners = ray_plane(intr, corner_px, plane)
     return np.linalg.norm(corners - np.roll(corners, -1, axis=0), axis=1)
 
 
-def layout(geom: dict, mode: str, clicks: np.ndarray, depth, intr) -> dict:
+def inset_grid(geom: dict, inset: float) -> np.ndarray:
+    """(49, 3) the 7 x 7 grid's sheet coordinates, shrunk toward the middle so each edge row sits inset
+    (x the side) in from the cloth's edge. The hinge row stays on the hinge (x = 0)."""
+    return cp.mode_units(geom, "grid") * (1.0 - 2.0 * inset)
+
+
+def layout(geom: dict, mode: str, clicks: np.ndarray, depth, intr, inset: float = 0.0) -> dict:
     """The clicks -> what to track: queries (N, 2) px on the clicked frame, unit (N, 3) their sheet
     coordinates, mirrored, size_measured (m: the longest side, the square's; NaN if the depth is too thin),
-    sides (4,)."""
+    sides (4,), plane (sheet_plane's, or None). grid with inset: the grid shrunk by inset_grid."""
     clicks = np.asarray(clicks, dtype=np.float64)
     perim = PERIMETER[mode]
     unit = cp.mode_units(geom, "fit" if mode == "grid" else mode).copy()   # grid: the 4 clicks are the corners
@@ -127,7 +147,7 @@ def layout(geom: dict, mode: str, clicks: np.ndarray, depth, intr) -> dict:
         unit[:, 1] *= -1.0
     h, _ = cv2.findHomography(unit[perim, :2], clicks[perim])
     if mode == "grid":
-        unit = cp.mode_units(geom, "grid")
+        unit = inset_grid(geom, inset)
         queries = cv2.perspectiveTransform(unit[None, :, :2], h)[0]
     elif mode == "fit":
         extra = clicks[4:]
@@ -136,20 +156,21 @@ def layout(geom: dict, mode: str, clicks: np.ndarray, depth, intr) -> dict:
         queries = clicks
     else:
         queries = clicks
-    sides = corner_sides(depth, intr, h, clicks[perim])
-    return {"queries": queries.astype(np.float32), "unit": unit, "mirrored": flip,
+    plane = sheet_plane(depth, intr, h)
+    sides = corner_sides(intr, plane, clicks[perim])
+    return {"queries": queries.astype(np.float32), "unit": unit, "mirrored": flip, "plane": plane,
             "sides": np.full(4, np.nan) if sides is None else sides,
             "size_measured": float("nan") if sides is None else float(sides.max())}
 
 
-def preview_grid(geom: dict, mode: str, clicks) -> np.ndarray | None:
-    """The grid as the clicks put it on the image (before the side is resolved), or None."""
+def preview_grid(geom: dict, mode: str, clicks, inset: float = 0.0) -> np.ndarray | None:
+    """The grid (shrunk by inset_grid) as the clicks put it on the image (before the side is resolved), or None."""
     perim = PERIMETER[mode]
     if len(clicks) <= max(perim):
         return None
     corners = cp.mode_units(geom, "fit" if mode == "grid" else mode)
     h, _ = cv2.findHomography(corners[perim, :2], np.asarray(clicks, np.float64)[perim])
-    return None if h is None else cv2.perspectiveTransform(cp.mode_units(geom, "grid")[None, :, :2], h)[0]
+    return None if h is None else cv2.perspectiveTransform(inset_grid(geom, inset)[None, :, :2], h)[0]
 
 
 # --- drawing --------------------------------------------------------------------------------------
@@ -233,30 +254,78 @@ class Capture(threading.Thread):
 
 class Tracker:
     """CoTracker3 online: start(first frame, queries), then add(frame) -> [(frame, uv (N, 2), visible (N))]
-    for each frame a 16-frame window (stride 8) finished, in order."""
+    for each frame a 16-frame window finished, in order. half: float16 on the GPU (RTX 5090, 640 x 480,
+    49 points: 35 ms a window instead of 57; the tracks move 0.01 px on average, 0.5 at most).
+    stride: frames the window moves per run (None = the model's own, 8: results in batches of 8). Smaller =
+    fresher results, same cost per run (35 ms), so more runs; needs online_step in the co-tracker checkout.
+    Each tracker runs on its own CUDA stream, so two of them (stereo_tracker.py) can run at once.
+    Encoder caching (the co-tracker checkout's online_reuse_fmaps): a window shares all but its newest
+    `stride` frames with the last one, so only those are encoded (fp16: 34 -> 26 ms at stride 8, 23 at 4;
+    the tracks agree within 0.7 px).
+    iters: refinement iterations per window (None = the model's 6; 4: ~30% faster, ~0.4 px worse on average).
+    compile: torch.compile the refinement, one graph per iteration (fp16, stride 2: 22.4 -> 18.7 ms at 6
+    iterations, 16.3 -> 13.3 at 4). start() then compiles for the query count before tracking (~2 s)."""
 
-    def __init__(self, checkpoint: str, width: int, height: int):
+    def __init__(self, checkpoint: str, width: int, height: int, half: bool = False, stride: int | None = None,
+                 iters: int | None = None, compile: bool = False):
+        import inspect
+
         import torch
         from cotracker.predictor import CoTrackerOnlinePredictor
 
         self.torch = torch
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.stream = torch.cuda.Stream() if self.device == "cuda" else None
         self.model = CoTrackerOnlinePredictor(checkpoint=checkpoint).to(self.device)
+        self.half = half and self.device == "cuda"
+        self.window = self.model.model.window_len
+        source = inspect.getsource(type(self.model.model).forward)
+        self.model.model.online_reuse_fmaps = "online_reuse_fmaps" in source
+        if not self.model.model.online_reuse_fmaps:
+            print("[cloth_tracker] this co-tracker checkout has no online_reuse_fmaps: every window encodes "
+                  "all its frames", flush=True)
+        if stride is not None and int(stride) != self.model.step:
+            if "online_step" not in source:
+                raise SystemExit("[cloth_tracker] a stride other than 8 needs the co-tracker checkout's online_step "
+                                 "(cotracker3_online.py: step = getattr(self, \"online_step\", S // 2))")
+            if not 1 <= int(stride) <= self.window // 2:
+                raise SystemExit(f"[cloth_tracker] stride {stride}: 1 .. {self.window // 2}")
+            self.model.model.online_step = self.model.step = int(stride)
         self.step = self.model.step
-        self.window = 2 * self.step
+        if iters is not None:
+            if "getattr(self, 'iters'" not in inspect.getsource(type(self.model).forward):
+                raise SystemExit("[cloth_tracker] iters needs the co-tracker checkout's predictor.py iters attribute")
+            self.model.iters = int(iters)
+        self.compiled = bool(compile)
+        if self.compiled:
+            if "graph_break" not in inspect.getsource(type(self.model.model).forward_window):
+                raise SystemExit("[cloth_tracker] compile needs the co-tracker checkout's graph break per refinement "
+                                 "iteration (without it fp16 tracks come out wrong)")
+            self.model.model.forward_window = torch.compile(self.model.model.forward_window, dynamic=False)
         self.inference_ms = 0.0
         video = torch.zeros(1, self.window, 3, height, width, device=self.device)   # warm up
-        self.model(video[:, :1], is_first_step=True, queries=torch.tensor([[[0.0, width / 2, height / 2]]],
-                                                                          device=self.device), add_support_grid=True)
-        self.model(video, add_support_grid=True)
+        self._model(video[:, :1], is_first_step=True, queries=torch.tensor([[[0.0, width / 2, height / 2]]],
+                                                                           device=self.device))
+        self._model(video)
+
+    def _model(self, video, **kw):
+        with self.torch.no_grad(), self.torch.autocast(self.device, dtype=self.torch.float16, enabled=self.half):
+            return self.model(video, add_support_grid=True, **kw)
+
+    def _on_stream(self):
+        return self.torch.cuda.stream(self.stream) if self.stream is not None else contextlib.nullcontext()
 
     def _video(self, frames):
         v = np.stack([f[0] for f in frames])
         return self.torch.from_numpy(v).to(self.device).permute(0, 3, 1, 2)[None].float()
 
     def start(self, frame, queries: np.ndarray):
-        q = self.torch.tensor([[[0.0, float(u), float(v)] for u, v in queries]], device=self.device)
-        self.model(self._video([frame]), is_first_step=True, queries=q, add_support_grid=True)
+        with self._on_stream():
+            q = self.torch.tensor([[[0.0, float(u), float(v)] for u, v in queries]], device=self.device)
+            self._model(self._video([frame]), is_first_step=True, queries=q)
+            if self.compiled:        # compile for this many points now, not on the first tracked frame
+                self._model(self._video([frame] * self.window))
+                self._model(self._video([frame]), is_first_step=True, queries=q)
         self.frames, self.start_idx = [frame], 0
 
     def add(self, frame) -> list:
@@ -265,11 +334,11 @@ class Tracker:
         while len(self.frames) >= self.window:
             chunk = self.frames[:self.window]
             t0 = time.perf_counter()
-            with self.torch.no_grad():
-                tracks, vis = self.model(self._video(chunk), add_support_grid=True)
-            tracks, vis = tracks[0].cpu().numpy(), vis[0].cpu().numpy()   # (frames so far, N, ...)
+            with self._on_stream():           # .cpu() inside: it waits for this stream's work
+                tracks, vis = self._model(self._video(chunk))
+                tracks, vis = tracks[0].float().cpu().numpy(), vis[0].cpu().numpy()   # (frames so far, N, ...)
             self.inference_ms = 1000.0 * (time.perf_counter() - t0)
-            for k in range(0 if self.start_idx == 0 else self.step, self.window):
+            for k in range(0 if self.start_idx == 0 else self.window - self.step, self.window):   # the new frames
                 out.append((chunk[k], tracks[self.start_idx + k], vis[self.start_idx + k]))
             self.start_idx += self.step
             self.frames = self.frames[self.step:]
@@ -278,11 +347,17 @@ class Tracker:
 
 # --- the node -------------------------------------------------------------------------------------
 class Node:
-    def __init__(self, cfg):
+    def __init__(self, cfg, publish: bool = True, half: bool = False, stride: int | None = None):
+        """publish=False: no sockets (a second camera of stereo_tracker.py, which publishes through the first).
+        half, stride: Tracker's (stereo_tracker.py: two trackers have to fit in one stride)."""
         from deploy.calibration.realsense import RealSense
 
         self.cfg, p, c = cfg, cfg.perception, cfg.perception.cotracker
         self.mode = str(c.mode)
+        # grid with edge_inset: the tracked grid sits inside the cloth's edges, away from the table, and the
+        # policy fits the training grid to it per half (cloth_points' fit mode) instead of using it as is
+        self.inset = float(c.edge_inset) if self.mode == "grid" else 0.0
+        self.points_mode = "fit" if self.inset else self.mode
         spec = load_spec(repo_path(cfg.spec_path))
         self.size_range = spec["fold"]["size_range"]
         spec["fold"] = dict(spec["fold"], size_range=[0.0, 1e9])   # this node only draws; the policy checks the size
@@ -304,13 +379,13 @@ class Node:
         self._snap, self._strength_map, self._sample = snap_to_corner, corner_strength_map, sample_points_in_mask
         ckpt = str(Path(str(c.checkpoint)).expanduser()) if c.checkpoint else str(cdir / "checkpoints/scaled_online.pth")
         print(f"[cloth_tracker] loading CoTracker3 online ({ckpt}) ...", flush=True)
-        self.tracker = Tracker(ckpt, p.camera_width, p.camera_height)
+        self.tracker = Tracker(ckpt, p.camera_width, p.camera_height, half, stride, c.iters, c.compile)
         self.cam = RealSense(serial=serial, width=p.camera_width, height=p.camera_height, fps=p.camera_fps)
         self.cam.start()
         self.intr = self.cam.intrinsics
-        self.capture = Capture(self.cam, cfg.bus[FRAME_PORT] if p.frame_stream else None)
+        self.capture = Capture(self.cam, cfg.bus[FRAME_PORT] if p.frame_stream and publish else None)
         self.capture.start()
-        self.pub = open_publisher(cfg.bus.object_pose_port)
+        self.pub = open_publisher(cfg.bus.object_pose_port) if publish else None
         print(f"[cloth_tracker] {self.cam.name} {self.cam.serial}, {p.camera_width}x{p.camera_height} at "
               f"{p.camera_fps} fps, extrinsics {calib_path.name}, mode {self.mode}, sheet "
               + (f"{100 * self.size_cfg:.1f} cm (fold.sheet_size)" if self.size_cfg else "measured from the clicked corners"),
@@ -410,7 +485,7 @@ class Node:
     # ---- 2. tracking, no window: object_points + camera_image (the viewer shows it) ----------------
     def start_tracking(self) -> bool:
         """The clicks -> tracking. False (back to clicking) when the size cannot be measured."""
-        lay = layout(self.geom, self.mode, self.clicks, self.frozen[1], self.intr)
+        lay = layout(self.geom, self.mode, self.clicks, self.frozen[1], self.intr, self.inset)
         measured = lay["size_measured"]
         if self.size_cfg is None and not np.isfinite(measured):
             print("[cloth_tracker] no depth on the cloth to measure it: click again, or set fold.sheet_size", flush=True)
@@ -419,7 +494,8 @@ class Node:
         self.lay = lay
         sides = lay["sides"]
         uneven = np.isfinite(sides).all() and sides.min() < 0.85 * sides.max()
-        print(f"[cloth_tracker] tracking {len(lay['queries'])} points ({self.mode}); corner sides "
+        print(f"[cloth_tracker] tracking {len(lay['queries'])} points ({self.mode}"
+              + (f", {100 * self.inset:.0f}% of the side in from the edges" if self.inset else "") + "); corner sides "
               f"{np.round(100 * sides, 1).tolist()} cm -> sheet {100 * self.geom['size']:.1f} cm square "
               f"({'fold.sheet_size' if self.size_cfg else 'the longest side'})"
               + ("; the sides differ by more than 15%: a corner off, or the cloth not square" if uneven else "")
@@ -446,17 +522,24 @@ class Node:
 
     # ---- one tracked frame -------------------------------------------------------------------------
     def handle(self, frame, uv, vis) -> dict:
-        rgb, depth, t = frame
-        xyz = deproject(depth, uv, self.intr)
+        xyz = deproject(frame[1], uv, self.intr)
         ok = vis.astype(bool) & np.all(np.isfinite(xyz), axis=1)
+        return self.emit(frame, uv, ok, xyz)
+
+    def emit(self, frame, uv, ok, xyz, send_now: bool = True) -> dict:
+        """One tracked frame out: object_points + the log. xyz (N, 3) this camera's frame, ok (N) usable.
+        send_now=False: not sent, only returned as r["msg"] (stereo_tracker.py sends it from its own loop)."""
+        t = frame[2]
         pos = xyz @ self.T_base_cam[:3, :3].T + self.T_base_cam[:3, 3]
-        send(self.pub, "object_points", {"seq": self.seq, "t": t, "mode": self.mode,
-                                         "sigma": float(self.cfg.perception.cotracker.sigma), "unit": self.lay["unit"],
-                                         "pos": np.where(np.isfinite(pos), pos, 0.0), "visible": ok, "uv": uv,
-                                         "size_measured": self.lay["size_measured"]})
-        self.seq += 1
-        parts, measured = cp.particles(self.geom, self.mode, self.lay["unit"], xyz, ok, self.sigma)
-        r = {"frame": frame, "uv": uv, "ok": ok, "parts": parts, "measured": measured, "o": None, "sc": None}
+        msg = {"seq": self.seq, "t": t, "mode": self.points_mode,
+               "sigma": float(self.cfg.perception.cotracker.sigma), "unit": self.lay["unit"],
+               "pos": np.where(np.isfinite(pos), pos, 0.0), "visible": ok, "uv": uv,
+               "size_measured": self.lay["size_measured"]}
+        if send_now:
+            send(self.pub, "object_points", msg)
+            self.seq += 1
+        parts, measured = cp.particles(self.geom, self.points_mode, self.lay["unit"], xyz, ok, self.sigma)
+        r = {"frame": frame, "uv": uv, "ok": ok, "parts": parts, "measured": measured, "o": None, "sc": None, "msg": msg}
         if np.all(np.isfinite(parts)):
             r["o"] = observe(self.geom, parts)
             r["sc"] = score(self.geom, r["o"])
@@ -487,14 +570,7 @@ class Node:
             last = results[-1]
             n += len(results)
             t = last["frame"][2]
-            hz = self.cfg.perception.image_hz
-            if (hz > 0 and t - self.t_image >= 1.0 / hz) or self.log is not None:
-                img = self.render_track(last)
-                if hz > 0 and t - self.t_image >= 1.0 / hz:
-                    send(self.pub, "camera_image", {"seq": self.seq, "t": t, "jpeg": encode_jpeg(
-                        img, self.cfg.perception.image_jpeg_quality)})
-                    self.t_image = t
-                self.save_frame(img)
+            self.show(last)
             if time.time() - t_print > 5.0:
                 sc = last["sc"]
                 state = ("a half has < 3 points seen" if sc is None else
@@ -504,13 +580,27 @@ class Node:
                       flush=True)
                 n, t_print = 0, time.time()
 
+    def show(self, last: dict):
+        """camera_image at image_hz (and every frame into the save_dir mp4) for the newest result."""
+        t, hz = last["frame"][2], self.cfg.perception.image_hz
+        if (hz > 0 and t - self.t_image >= 1.0 / hz) or self.log is not None:
+            img = self.render_track(last)
+            if hz > 0 and t - self.t_image >= 1.0 / hz:
+                send(self.pub, "camera_image", {"seq": self.seq, "t": t, "jpeg": encode_jpeg(
+                    img, self.cfg.perception.image_jpeg_quality)})
+                self.t_image = t
+            self.save_frame(img)
+
     def close(self):
         self.end_run()
         self.capture.running = False
         self.cam.stop()
-        self.pub.close(linger=0)
+        if self.pub is not None:
+            self.pub.close(linger=0)
 
-    def save_frame(self, img):
+    def save_frame(self, img, fps: float | None = None):
+        """img into the save_dir mp4 (save_dir set, while tracking). fps: the rate frames come in at
+        (default camera_fps)."""
         save = self.cfg.perception.cotracker.save_dir
         if not save or self.log is None:
             return
@@ -518,7 +608,7 @@ class Node:
             Path(str(save)).expanduser().mkdir(parents=True, exist_ok=True)
             self.stamp = time.strftime("%Y-%m-%d_%H-%M-%S")
             out = Path(str(save)).expanduser() / f"{self.stamp}_{self.mode}.mp4"
-            self.writer = cv2.VideoWriter(str(out), cv2.VideoWriter_fourcc(*"mp4v"), self.cfg.perception.camera_fps,
+            self.writer = cv2.VideoWriter(str(out), cv2.VideoWriter_fourcc(*"mp4v"), fps or self.cfg.perception.camera_fps,
                                           (img.shape[1], img.shape[0]))
         self.writer.write(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
@@ -529,6 +619,9 @@ class Node:
         uv = preview_grid(self.geom, self.mode, self.clicks)
         if uv is not None:
             draw_grid(img, self.geom, uv)
+            if self.inset:                   # what will be tracked: the grid inside the edges
+                for p in preview_grid(self.geom, self.mode, self.clicks, self.inset):
+                    cv2.circle(img, pt(p), 3, WHITE, -1, cv2.LINE_AA)
         for i, ((u, v), (x, y)) in enumerate(zip(self.clicks, self.raw)):
             if (u, v) != (x, y):
                 cv2.line(img, pt((x, y)), pt((u, v)), (200, 200, 200), 1, cv2.LINE_AA)
@@ -547,9 +640,10 @@ class Node:
     def render_track(self, r):
         rgb, _, t = r["frame"]
         img = rgb.copy()
-        draw_grid(img, self.geom, project(self.intr, r["parts"]), hollow=~r["measured"] if self.mode == "grid" else None)
+        draw_grid(img, self.geom, project(self.intr, r["parts"]),
+                  hollow=~r["measured"] if self.points_mode == "grid" else None)
         for p, good in zip(r["uv"], r["ok"]):
-            if self.mode == "fit":
+            if self.points_mode == "fit":
                 cv2.circle(img, pt(p), 2, WHITE if good else RED, -1 if good else 1, cv2.LINE_AA)
             elif self.mode == "kp8":
                 cv2.circle(img, pt(p), 6, WHITE if good else RED, 1, cv2.LINE_AA)
