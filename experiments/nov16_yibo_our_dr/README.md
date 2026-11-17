@@ -160,6 +160,14 @@ against the config at startup.
 experiments/submit.sh --array=0-2 experiments/nov16_yibo_our_dr/vbd_iteration_sweep.sh
 ```
 
+Submitted array `717322` on commit `407aae9`: tasks 0/1/2 use 12/40/80 iterations
+on RTX 6000 Ada GPUs. The 40-iteration instrumentation smoke completed 12
+environments × 12 steps with finite diagnostics and no overflow. Its maximum
+robot record-envelope overlap was 11.23 mm versus 3.23 mm contact-plane crossing;
+table record-envelope overlap was 0.138 mm, with zero table contact-plane crossing
+or independent table-box node penetration. This short check does not establish
+folding performance or convergence with respect to iteration count.
+
 Results land in `results/vbd_iterations_<array>/iterations_<12|40|80>/base.json`.
 Opt-in diagnostics distinguish collision-envelope overlap (including the 8 mm
 particle radius) from crossing a cached robot/table contact plane. Contact counts
