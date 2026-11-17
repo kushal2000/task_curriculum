@@ -1,0 +1,9 @@
+# Same scratch experiment, with 16 physical thickness levels from 2 to 20 mm.
+base: scratch.yaml
+env:
+  rigid_cloth:
+    thickness_range: [0.002, 0.020]
+agent:
+  params:
+    config:
+      name: 0_yibo_our_dr_scratch_thickness_2_20mm

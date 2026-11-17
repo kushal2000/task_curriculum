@@ -52,6 +52,15 @@ Both recipes inherit `isaacsimenvs/scripts/configs/runs/yibo_our_dr.yaml`, shari
 interface, our current rigid designs and material/reset/sensor/action DR, and the
 physical fold-then-release objective.
 
+Additional `finetune_thickness_2_20mm.yaml` and `scratch_thickness_2_20mm.yaml`
+inherit the corresponding experiment and change only physical thickness to
+`[0.002, 0.020]` m. Construction uses 16 evenly spaced levels (768 environments
+per level), fixed for each environment. The Yibo observation reports that actual
+thickness. The prior-initialized variant uses the original checkpoint's weights
+and normalization with fresh training state; the other starts from scratch.
+Both retain the fixed 33 cm tabletop height, five rigid designs, density/bending/
+friction/sensor DR, 12,288 environments and fold-then-release rewards.
+
 - `finetune.yaml` initializes from
   `pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth`, loading network
   weights and normalization statistics. It starts a fresh optimizer, epoch/frame

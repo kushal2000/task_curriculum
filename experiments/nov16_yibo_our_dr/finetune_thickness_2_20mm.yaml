@@ -1,0 +1,9 @@
+# Same Yibo-prior experiment, with 16 physical thickness levels from 2 to 20 mm.
+base: finetune.yaml
+env:
+  rigid_cloth:
+    thickness_range: [0.002, 0.020]
+agent:
+  params:
+    config:
+      name: 0_yibo_our_dr_finetune_thickness_2_20mm
