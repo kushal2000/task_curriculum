@@ -60,6 +60,10 @@ thickness. The prior-initialized variant uses the original checkpoint's weights
 and normalization with fresh training state; the other starts from scratch.
 Both retain the fixed 33 cm tabletop height, five rigid designs, density/bending/
 friction/sensor DR, 12,288 environments and fold-then-release rewards.
+Submitted as prior-initialized job `711271` and scratch job `711273`, using
+commit `a22a4b5`, W&B project `rigidClothDR` and group
+`yibo_our_dr_thickness_2_20mm`. Their run names are
+`rigidClothDR_2to20mm_finetune` and `rigidClothDR_2to20mm_scratch` (with timestamps).
 
 - `finetune.yaml` initializes from
   `pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth`, loading network
@@ -134,6 +138,9 @@ preliminary; the script reports paired rescues/losses alongside the headline rat
 variation. The evaluator retains the Flexiv-Wuji checkpoint, robot/table assets,
 base material and Yibo actor encoding. It scores 32 first episodes over 10 seconds;
 whole-robot release is not evaluated.
+
+Completed job `711188`: **0/32 folds, 12 falls and 20 timeouts**, with finite
+states and no buffer overflows. See [the comparison](analysis/vbd_branch_base.md).
 
 ```bash
 experiments/submit.sh --job-name=yibo_vbd_branch_base \

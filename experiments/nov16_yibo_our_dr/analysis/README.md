@@ -28,6 +28,10 @@ See [rigid.md](rigid.md) for all interventions, motion diagnostics, controls and
 
 All eight presets completed 32 first episodes each. **Only chiffon reached the fold criterion, once; the other seven presets each reached zero times.**
 
+A subsequent [base evaluation with the branch's 10 cm geometry and reset values](vbd_branch_base.md)
+also reached **0/32 folds**, with 12 falls and 20 timeouts. Restoring that group of
+settings did not recover transfer.
+
 | Material | Folds / 32 | Falls |
 | --- | ---: | ---: |
 | Base | 0 | 5 |
