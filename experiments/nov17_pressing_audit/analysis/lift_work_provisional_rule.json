@@ -1,0 +1,65 @@
+{
+  "status": "research candidate; shadow evaluation only; no production reset changes",
+  "primary_variant": "robot_source_lifting_work",
+  "interpretation": "direct lift-driven manipulation rule, not a numerical solver artifact certificate",
+  "symmetry": "apply to either material half",
+  "robot_work": "force on cloth dot measured robot contact-point velocity; midpoint pre/post velocity integration; normal and friction forces",
+  "qualifying_contact": "force moment about central crease favors opening the rising material half",
+  "minimum_work_fraction_of_half_gravitational_lift": 0.1,
+  "lift_angle_degrees": [
+    30,
+    90
+  ],
+  "only_while_gravitational_potential_increases": true,
+  "other_half_maximum_tilt_degrees": 20,
+  "other_half_maximum_mean_height_over_flat_midplane_m": 0.015,
+  "minimum_lift_height_m": "max(0.005, 0.05 * sheet_length)",
+  "require_current_opposed_load_n": 0.001,
+  "opposed_load_aggregation": "minimum of NET downward robot vertical load and upward table load on the other material half; upward pinching is not pressing",
+  "requires_observed_flat_start": true,
+  "flat_reference": {
+    "maximum_any_plate_tilt_degrees": 5,
+    "maximum_any_plate_linear_speed_mps": 0.02,
+    "maximum_any_plate_angular_speed_radps": 0.5,
+    "maximum_half_mean_height_over_flat_m": 0.003,
+    "requires_table_force": true
+  },
+  "work_credit": "signed source-side work since the whole half last settled flat; persists through release; discarded on return to settled flat",
+  "selection_protocol": {
+    "development_seeds": [
+      17,
+      29,
+      41
+    ],
+    "final_holdout_seed": 53,
+    "final_holdout_worlds": 128,
+    "parameters_fixed_before_seed53_results_inspected": true
+  },
+  "superseded_candidates": {
+    "work_history": "seed29 development: 67/75 reverse-half and 5/21 intended-half intercepted; stale support history is a failure mode",
+    "crease_work": "too restrictive for multi-panel corner grasping"
+  },
+  "receiver_side_candidate_seed41": {
+    "heldout_seed": 41,
+    "reverse_intercepted": 60,
+    "reverse_count": 66,
+    "intended_intercepted": 1,
+    "intended_count": 22,
+    "limitation": "receiver-side work can credit passive contact correction as robot input"
+  },
+  "final_heldout_result": {
+    "seed": 53,
+    "worlds": 128,
+    "reverse_half": {
+      "intercepted": 62,
+      "count": 70,
+      "ready": 70
+    },
+    "intended_half": {
+      "intercepted": 4,
+      "count": 26,
+      "ready": 26
+    },
+    "interpretation": "geometry cohorts, not human-certified good/bad; no parameter changes after inspection"
+  }
+}

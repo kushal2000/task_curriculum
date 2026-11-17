@@ -147,3 +147,11 @@ def test_analyzer_rebuilds_moving_plate_contact_despite_negative_rest_x_at_creas
     np.testing.assert_array_equal(trajectory['force_magnitude_by_half'][0, 0, 1], [0., 3.])
     np.testing.assert_array_equal(trajectory['force_vector_by_half'][0, 0, 1], [[0., 0., 0.], [0., 0., 3.]])
     np.testing.assert_array_equal(trajectory['downward_force_by_half'], np.zeros((1, 1, 2, 2)))
+
+
+def test_analysis_refuses_running_capture_before_opening_partially_written_npz(tmp_path):
+    import json
+    from experiments.nov17_pressing_audit.analyze_pressing import load_dataset
+    (tmp_path/'metadata.json').write_text(json.dumps({'status':'running'}))
+    with pytest.raises(ValueError,match='not complete'):
+        load_dataset(tmp_path)

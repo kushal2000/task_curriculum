@@ -1,5 +1,7 @@
 # Pressing strategy audit — 17 November 2026
 
+Latest: [direct robot lifting-work reset candidate tested on fresh seeds](analysis/lift_work.md). This is more selective than the force/penetration limits, with limitations and raw counts documented.
+
 Follow-up: [reset conditions tested against four current checkpoints](analysis/reset_validation.md). The sweep did not validate a selective pressing-strategy detector.
 
 Actual saved rollouts and 96 fresh first episodes show the hand can pin the designated moving half to the tabletop while the opposite half rises and folds over it. A table-edge reset will not catch the clearest witness. A hard force threshold does not cleanly distinguish this motion from intended-half lifting.

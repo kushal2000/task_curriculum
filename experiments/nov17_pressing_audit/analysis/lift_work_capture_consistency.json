@@ -1,0 +1,26 @@
+{
+  "scratch_2mm": {
+    "max_robot_q_delta": 0.0,
+    "max_cloth_point_delta": 0.0,
+    "first_step_normal_contacts": 0,
+    "first_step_friction_magnitude": 0.0
+  },
+  "prior_2mm": {
+    "max_robot_q_delta": 0.0,
+    "max_cloth_point_delta": 0.0,
+    "first_step_normal_contacts": 0,
+    "first_step_friction_magnitude": 0.0
+  },
+  "scratch_2to20mm": {
+    "max_robot_q_delta": 0.0,
+    "max_cloth_point_delta": 0.0,
+    "first_step_normal_contacts": 0,
+    "first_step_friction_magnitude": 0.0
+  },
+  "prior_2to20mm": {
+    "max_robot_q_delta": 0.0,
+    "max_cloth_point_delta": 0.0,
+    "first_step_normal_contacts": 0,
+    "first_step_friction_magnitude": 0.0
+  }
+}

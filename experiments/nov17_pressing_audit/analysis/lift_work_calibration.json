@@ -1,0 +1,30 @@
+{
+  "calibration": "freely sliding rigid sheet, initial+Xspeed0.2m/s, no robot contacts",
+  "initial_x_kinetic_energy_j": [
+    0.00015911355614662174,
+    1.9141405355185275e-05,
+    0.00010418130084872248,
+    3.731517121195794e-05
+  ],
+  "table_friction_work_j": [
+    -0.0001591447283061079,
+    -1.9143325338104082e-05,
+    -0.00010419499705792521,
+    -3.7320302869162836e-05
+  ],
+  "relative_work_balance_error": [
+    0.00019591139963858495,
+    0.00010030522227495712,
+    0.00013146513905233287,
+    0.00013752200614995219
+  ],
+  "maximum_relative_error": 0.00019591139963858495,
+  "final_x_velocity_mps": [
+    4.15314900692465e-07,
+    8.785548857304093e-07,
+    9.494048640590336e-07,
+    4.567910991681856e-07
+  ],
+  "robot_normal_load_max_n": 0.0,
+  "method": "contact impulse times mean pre/post contact-point velocity; separate normal/friction buffers"
+}

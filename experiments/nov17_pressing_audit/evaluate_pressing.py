@@ -41,6 +41,8 @@ def main():
     parser.add_argument('--steps', type=int, default=600)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--design', help='Optional single topology; otherwise retain all training designs.')
+    parser.add_argument('--record-work', action='store_true', help='Record friction, COM states and actual material parameters.')
+    parser.add_argument('--calibration-slide', action='store_true', help='Controlled +x slide for friction sign/work calibration; no policy.')
     parser.add_argument('--out-dir', type=Path, required=True)
     AppLauncher.add_app_launcher_args(parser)
     args = parser.parse_args()
@@ -61,6 +63,7 @@ def main():
     from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
     from isaacsimenvs.scripts.evaluation.contact_guard import raise_if_overflowed
     from experiments.nov17_pressing_audit.contacts import enable_contact_reporting, RigidClothContacts
+    from experiments.nov17_pressing_audit.work_contacts import friction_records, material_metadata, mechanical_state
 
     saved = yaml.safe_load((args.run/'.hydra/config.yaml').read_text())['env']
     cfg = ClothCfg.for_backend('rigid')
@@ -73,6 +76,13 @@ def main():
     cfg.scene.num_envs, cfg.sim.device, cfg.seed = args.num_envs, args.device, args.seed
     if args.design:
         cfg.rigid_cloth.designs = [args.design]
+    if args.calibration_slide:
+        args.record_work = True
+        cfg.rigid_cloth.designs = ['single_hinge.yaml']
+        cfg.rigid_cloth.length_range = cfg.rigid_cloth.width_range = [.2, .2]
+        cfg.rigid_cloth.thickness_range = [.002, .002]
+        cfg.reset.reset_position_noise_x = cfg.reset.reset_position_noise_y = 0.
+        cfg.reset.random_yaw = False
     cfg.task.check()
 
     class InstrumentedEnv(ClothEnv):
@@ -81,20 +91,32 @@ def main():
             enable_contact_reporting(self.backend)
 
     env = contacts = None
-    frames, records = [], []
+    frames, records, friction = [], [], []
     metadata = dict(run=str(args.run), checkpoint=str(args.checkpoint), seed=args.seed,
                     num_envs=args.num_envs, requested_steps=args.steps, config=cfg.to_dict(),
                     contact_components='normal only; no friction force reconstructed', status='running')
+    if args.record_work:
+        metadata['contact_components'] = 'normal and friction records kept separately'
+        metadata['friction_sign'] = 'native force vectors; validate against controlled sliding capture'
+    metadata['calibration_slide'] = args.calibration_slide
     started = time.perf_counter()
     try:
         with capture_audit_output() as captured:
             env = InstrumentedEnv(cfg)
             contacts = RigidClothContacts(env.backend)
-            player = PretrainedPlayer(ROOT/'pretrained_policy/flexiv_wuji/config.yaml',args.checkpoint,
-                                      args.num_envs,device=args.device,num_observations=134,num_actions=27,expl_coef=0.)
+            player = None if args.calibration_slide else PretrainedPlayer(
+                ROOT/'pretrained_policy/flexiv_wuji/config.yaml',args.checkpoint,
+                args.num_envs,device=args.device,num_observations=134,num_actions=27,expl_coef=0.)
             env.seed(args.seed)
             obs,_ = env.reset()
-            player.reset_rnn()
+            if player is not None:
+                player.reset_rnn()
+            if args.calibration_slide:
+                for group in env.backend.groups:
+                    velocity = torch.zeros(len(group.env_ids),6,device=env.device)
+                    velocity[:,0] = .2
+                    group.articulation.write_root_velocity_to_sim(velocity)
+                env.scene.update(0.)
             n,dev = env.num_envs,env.device
             origins = env.scene.env_origins
             active = torch.ones(n,dtype=torch.bool,device=dev)
@@ -106,7 +128,7 @@ def main():
             half_by_plate = torch.zeros(n,max_plates,dtype=torch.long,device=dev)
             for group in env.backend.groups:
                 masses[group.env_ids] = group.articulation.root_physx_view.get_masses().sum(1).to(dev)
-                for e in group.env_ids.tolist():
+                for local_row,e in enumerate(group.env_ids.tolist()):
                     design_ids[e] = group.design.name
                     spec = group.design.resolve(*env.backend._dimensions_cpu[e])
                     plates = []
@@ -119,7 +141,14 @@ def main():
                                    anchor=h.anchor,axis=h.axis,
                                    limits_deg=(cfg.rigid_cloth.hinge_limits_deg if i == spec.fold_hinge else h.limits_deg))
                               for i,h in enumerate(spec.hinges)]
-                    geometry.append(dict(env_id=e,design=group.design.name,plates=plates,hinges=hinges))
+                    geometry_row = dict(env_id=e,design=group.design.name,plates=plates,hinges=hinges)
+                    if args.record_work:
+                        geometry_row['material'] = material_metadata(group,local_row)
+                        data, bodies = group.articulation.data, group.body_ids
+                        geometry_row['initial_panel_pose'] = torch.cat((data.body_link_pos_w[local_row,bodies]-origins[e],data.body_link_quat_w[local_row,bodies]),-1).cpu().tolist()
+                        geometry_row['initial_hinge_q'] = data.joint_pos[local_row,group.joint_ids].cpu().tolist()
+                        geometry_row['initial_com_velocity'] = data.body_com_vel_w[local_row,bodies].cpu().tolist()
+                    geometry.append(geometry_row)
             metadata.update(designs=design_ids,dimensions=env.backend._dimensions_cpu.tolist(),
                             masses_kg=masses.cpu().tolist(),geometry=geometry,
                             robot_joint_names=list(env.backend.robot.data.joint_names),
@@ -145,6 +174,12 @@ def main():
                 record['position'] -= origins[contact['env_id']].cpu().numpy()
                 record['frame_idx'] = np.full(len(record['env_id']),len(frames),dtype=np.int32)
                 records.append(record)
+                if args.record_work:
+                    fr = friction_records(contacts)
+                    fr = {key:value.detach().cpu().numpy().copy() for key,value in fr.items()}
+                    fr['position'] -= origins[fr['env_id']].cpu().numpy()
+                    fr['frame_idx'] = np.full(len(fr['env_id']),len(frames),dtype=np.int32)
+                    friction.append(fr)
                 # Shared-crease contact coordinates can cross zero under solver error.
                 # Each plate belongs to one material half; its identity is unambiguous.
                 half = half_by_plate[contact['env_id'],contact['cloth_body']]
@@ -172,12 +207,15 @@ def main():
                     stationary_height_span=height[:,env.backend.cloth_grid.stationary_idx].amax(1)-height[:,env.backend.cloth_grid.stationary_idx].amin(1),
                     moving_mean_height=height[:,env.backend.cloth_grid.moving_idx].mean(1),
                     moving_max_height=height[:,env.backend.cloth_grid.moving_idx].amax(1))
+                if args.record_work:
+                    tensors.update(mechanical_state(env.backend,max_plates,max_joints,origins))
                 frames.append({key:value.detach().cpu().numpy().copy() for key,value in tensors.items()})
             env.scene.update = update
             terminal = []
             for step in range(args.steps):
                 with torch.no_grad():
-                    action = player.get_action(obs['policy'],deterministic=True).clamp(-1,1)
+                    action = (torch.zeros(n,27,device=dev) if player is None else
+                              player.get_action(obs['policy'],deterministic=True).clamp(-1,1))
                     recording = True
                     obs,reward,terminated,truncated,extra = env.step(action)
                     recording = False
@@ -186,7 +224,7 @@ def main():
                 for e in first.nonzero().flatten().tolist():
                     terminal.append(dict(env_id=e,step=step+1,reasons={k:bool(v[e]) for k,v in env.task._termination_reasons.items()}))
                 active &= ~done
-                if bool(done.any()):
+                if player is not None and bool(done.any()):
                     player.reset_rnn(done.nonzero().flatten())
                 if (step+1)%100 == 0:
                     raise_if_overflowed(captured(),n,f'pressing audit step{step+1}')
@@ -206,6 +244,8 @@ def main():
             np.savez_compressed(args.out_dir/'trajectory.npz',**{key:np.stack([f[key] for f in frames]) for key in frames[0]})
         if records:
             np.savez_compressed(args.out_dir/'contacts.npz',**{key:np.concatenate([r[key] for r in records]) for key in records[0]})
+        if friction:
+            np.savez_compressed(args.out_dir/'friction.npz',**{key:np.concatenate([r[key] for r in friction]) for key in friction[0]})
         (args.out_dir/'metadata.json').write_text(json.dumps(metadata,indent=2,default=str))
         contacts = None
         if env is not None:

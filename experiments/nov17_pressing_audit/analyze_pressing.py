@@ -44,6 +44,8 @@ def plate_properties(plate):
 def load_dataset(directory):
     directory = Path(directory)
     metadata = json.loads((directory/"metadata.json").read_text())
+    if metadata.get('status', 'complete') != 'complete':
+        raise ValueError(f'Capture is not complete; its NPZ files may still be writing: {directory}')
     with np.load(directory/"trajectory.npz") as archive:
         trajectory = {key: archive[key] for key in archive.files}
     with np.load(directory/"contacts.npz") as archive:
