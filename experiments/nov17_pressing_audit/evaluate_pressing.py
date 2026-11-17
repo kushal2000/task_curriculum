@@ -114,7 +114,12 @@ def main():
                         vertices,faces = extrusion_mesh(p)
                         plates.append(dict(vertices=vertices.tolist(),triangles=faces.tolist()))
                         half_by_plate[e,plate_id] = int(p.center[0] > 0)
-                    geometry.append(dict(env_id=e,design=group.design.name,plates=plates))
+                    plate_ids = {p.name:i for i,p in enumerate(spec.plates)}
+                    hinges = [dict(parent=plate_ids[h.parent],child=plate_ids[h.child],
+                                   anchor=h.anchor,axis=h.axis,
+                                   limits_deg=(cfg.rigid_cloth.hinge_limits_deg if i == spec.fold_hinge else h.limits_deg))
+                              for i,h in enumerate(spec.hinges)]
+                    geometry.append(dict(env_id=e,design=group.design.name,plates=plates,hinges=hinges))
             metadata.update(designs=design_ids,dimensions=env.backend._dimensions_cpu.tolist(),
                             masses_kg=masses.cpu().tolist(),geometry=geometry,
                             robot_joint_names=list(env.backend.robot.data.joint_names),
