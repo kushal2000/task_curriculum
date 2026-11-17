@@ -22,6 +22,14 @@ The estimator now scales its equations and handles failed rows independently;
 invalid task frames terminate their own environments even when the actor omits
 angular velocity. Physics and DR settings are unchanged.
 
+Recovery submissions are [fine-tune 710887](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_finetune_20261116_203228)
+and [scratch 710889](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20261116_203026),
+using commit `58067d5`. The regression suite passed 402 tests with two skips;
+CPU/CUDA degeneracy checks and the existing Play parity tolerances also passed.
+Both replacements reached optimizer updates after restore: fine-tune epoch 123
+and scratch epoch 240, with a new full scratch checkpoint saved. This verifies
+recovery startup, not long-run stability.
+
 Previous jobs [fine-tune 709852](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_finetune_20261116_192340)
 and [scratch 709853](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20261116_192301)
 passed initialization and reached optimizer updates, but scratch exhausted GPU
