@@ -245,3 +245,11 @@ explicit provisional targets, not calibrated real-cloth truth; if none passes,
 the report recommends none. Rerunning analysis with revised limits requires no
 simulation changes. Short smoke replays can use `--steps 12`; their shorter
 horizon keeps them separate from the full five-second benchmark.
+
+The first full stability matrix is array `722263`, using the shared fixture in
+`results/vbd_stability_20261116_native/`. An `afterany` CPU report job `722339`
+generates `report/stability.md` and `report/stability.json` even if a candidate
+fails. Native 6/12-iteration smoke replays restored identical inputs with zero
+readback error and verified 24 physics boundaries advance exactly 0.2 seconds.
+The analysis/contact regression suite passed 30 tests. The earlier development
+smokes without verified clock metadata are excluded from solver selection.

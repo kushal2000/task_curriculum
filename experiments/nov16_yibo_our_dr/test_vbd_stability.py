@@ -254,6 +254,17 @@ def test_no_limits_means_pareto_only_and_no_overall_fastest_selection():
     assert group['selection_withheld_reason'] == 'no_explicit_quality_limits'
 
 
+def test_short_valid_smokes_do_not_count_as_completed_full_matrix_protocol():
+    spec = matrix()
+    spec['steps'] = 300
+    report = analyze_runs(inputs(*batch_runs()), limits=spec)
+    assert all(r['physics_clock_audit']['verified'] for r in report['runs'])
+    group = report['all_probe_acceptance'][0]
+    assert set(group['missing_probes']) == {'settle', 'scripted', 'fold_release'}
+    assert not group['unverified_input_or_clock_probes']
+    assert not group['fastest_acceptable_candidate_ids']
+
+
 def test_duplicate_material_summary_does_not_double_count_and_bad_json_is_reported(tmp_path):
     value = run()
     (tmp_path/'base.json').write_text(json.dumps(value))

@@ -28,5 +28,10 @@ quality_limits:
     edge_stretch_ratio: 1.5
     p95_edge_stretch_ratio: 1.3
   probes:
+    settle:
+      late_particle_speed_m_s: 0.05
     scripted:
       robot_record_contact_plane_crossing_m: 0.002  # Cached-plane proxy, not exact hand-mesh SDF.
+      late_particle_speed_m_s: 0.5  # Prescribed manipulation still moves during this window.
+    fold_release:
+      late_particle_speed_m_s: 0.10

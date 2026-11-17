@@ -294,10 +294,11 @@ def all_probe_acceptance(runs, cohorts, matrix):
         missing, unverified, ambiguous, accepted = [], [], [], None
         for probe in required:
             matches = [c for c in cohorts if (c['material'], c['seed'], c['probe']) == (material, seed, probe)]
-            groups = [g for c in matches for g in c['protocol_groups'] if g['input_audit_verified']
-                      and (horizon is None or g['comparison_protocol']['max_policy_steps'] == horizon)]
+            scoped = [g for c in matches for g in c['protocol_groups']
+                      if horizon is None or g['comparison_protocol']['max_policy_steps'] == horizon]
+            groups = [g for g in scoped if g['input_audit_verified']]
             if not groups:
-                (unverified if matches else missing).append(probe)
+                (unverified if scoped else missing).append(probe)
                 continue
             if len(groups) != 1:
                 ambiguous.append(probe)
