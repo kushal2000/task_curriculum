@@ -260,3 +260,8 @@ Native 6/12-iteration checks on that same fixture each ran 120 control steps:
 zero, and all four scripted worlds registered robot contact (peak counts 59–77).
 Both checks stayed finite with no overflow. Earlier development smokes without
 verified clock metadata are also excluded from solver selection.
+
+The validated contact matrix is submitted as array `722887` on commit `e88aaa7`;
+report job `722923` runs after all candidates finish, including failed cases.
+It writes `results/vbd_stability_contact_20261116_native/report/stability.md`
+and `stability.json`. The analysis/contact regression suite passes 31 tests.
