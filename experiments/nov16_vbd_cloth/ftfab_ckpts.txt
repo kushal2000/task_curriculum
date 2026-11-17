@@ -1,0 +1,7 @@
+chiffon outputs/2026-11-08/01-28-59/0_ftfab_chiffon_28276252/nn/last_0_ftfab_chiffon_28276252_ep_2035_rew__1132.7043_.pth
+silk outputs/2026-11-08/10-04-50/0_ftfab_silk_28276252/nn/0_ftfab_silk_28276252.pth
+napkin outputs/2026-11-08/09-53-28/0_ftfab_napkin_28276252/nn/0_ftfab_napkin_28276252.pth
+cotton outputs/2026-11-08/02-50-39/0_ftfab_cotton_28276252/nn/last_0_ftfab_cotton_28276252_ep_2035_rew__1132.4281_.pth
+big_napkin outputs/2026-11-08/02-36-17/0_ftfab_big_napkin_28276252/nn/last_0_ftfab_big_napkin_28276252_ep_2035_rew__1132.6016_.pth
+towel outputs/2026-11-08/11-07-09/0_ftfab_towel_28276252/nn/0_ftfab_towel_28276252.pth
+denim outputs/2026-11-08/01-49-05/0_ftfab_denim_28276252/nn/last_0_ftfab_denim_28276252_ep_2035_rew__1134.2449_.pth
