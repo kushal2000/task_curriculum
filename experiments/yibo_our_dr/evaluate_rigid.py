@@ -41,6 +41,11 @@ CASES = {
     'historical_physics': {'rigid_cloth': {'rest_offset': .007, 'contact_offset': .012,
         'hinge_stiffness_override': 0., 'hinge_damping_override': .05, 'hinge_armature': .001,
         'randomization': {'profile': 'yibo', 'density': [2., 2.]}}},
+    'yibo_with_our_sensors': {'domain_randomization': {'use_obs_delay': True,
+        'use_action_delay': True, 'use_object_state_delay_noise': True,
+        'object_state_xyz_noise_std': .01, 'object_state_rotation_noise_degrees': 5.,
+        'joint_velocity_obs_noise_std': .1}},
+    'yibo_with_thickness_2mm': {'obs': {'yibo_contact_thickness': .002}},
     'yibo': {},
 }
 
@@ -49,6 +54,10 @@ def case_overlay(name):
     """One restored factor on the hybrid; yibo is an explicitly confounded reference."""
     import copy
     return copy.deepcopy(CASES[name])
+
+
+def case_preset(name):
+    return 'yibo' if name == 'yibo' or name.startswith('yibo_with_') else 'yibo_our_dr'
 
 
 def merge_config(base, overlay):
@@ -136,7 +145,7 @@ def main():
     from isaacsimenvs.scripts.visualization.rigid_cloth.reset import load_training_env_config
 
     cfg = ClothCfg.for_backend('rigid')
-    preset = args.preset or ('yibo' if args.case == 'yibo' else 'yibo_our_dr')
+    preset = args.preset or case_preset(args.case)
     recipe = ROOT / f'isaacsimenvs/scripts/configs/runs/{preset}.yaml'
     cfg.from_dict(merge_config(load_training_env_config(recipe), case_overlay(args.case)))
     if args.case in ('contacts_yibo', 'contacts_thickness_16mm', 'historical_physics'):

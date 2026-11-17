@@ -50,8 +50,10 @@ def summarize(directory):
         row['by_density'] = {label: cohort([i for i, value in enumerate(density) if low < value <= high])
                             for label, low, high in [('up_to_100g_m2', 0., .1),
                                 ('100_to_500g_m2', .1, .5), ('over_500g_m2', .5, float('inf'))]}
-        if baseline and data['seed'] == baseline['seed']:
-            a, b = baseline['per_env']['folded'], per['folded']
+        reference = cases.get('yibo') if name.startswith('yibo_with_') else baseline
+        if reference and data['seed'] == reference['seed']:
+            row['paired_reference'] = reference['case']
+            a, b = reference['per_env']['folded'], per['folded']
             rescued = sum(not x and y for x, y in zip(a, b))
             lost = sum(x and not y for x, y in zip(a, b))
             discordant = rescued + lost
@@ -60,7 +62,7 @@ def summarize(directory):
             for key in ('joint_pos', 'joint_vel', 'points', 'dimensions', 'density'):
                 def flatten(value):
                     return [item for child in value for item in flatten(child)] if isinstance(value, list) else [value]
-                one, two = flatten(baseline['initial'][key]), flatten(data['initial'][key])
+                one, two = flatten(reference['initial'][key]), flatten(data['initial'][key])
                 row[f'initial_max_difference_{key}'] = max(abs(x-y) for x, y in zip(one, two))
         report.append(row)
     summary = {'cases': report, 'limitations': [
@@ -72,7 +74,7 @@ def summarize(directory):
     (directory/'summary.json').write_text(json.dumps(summary, indent=2))
     lines = ['# Controlled rigid-cloth ablations', '',
         'Physical fold criterion: corner error <4 cm and footprint <0.65; full success also requires 10 cm whole-robot release.', '',
-        '| Case | Fold entries | Full release | Falls | Median best error | Rescued / lost vs hybrid |',
+        '| Case | Fold entries | Full release | Falls | Median best error | Rescued / lost vs reference |',
         '|---|---:|---:|---:|---:|---:|']
     for row in report:
         lines.append(f"| {row['case']} | {row['fold_entries']}/{row['n']} | {row['full_releases']}/{row['n']} | "

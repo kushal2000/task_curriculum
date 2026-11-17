@@ -2,7 +2,7 @@
 import pytest
 import torch
 
-from experiments.yibo_our_dr.evaluate_rigid import CASES, case_overlay, install_contact_only_profile, merge_config
+from experiments.yibo_our_dr.evaluate_rigid import CASES, case_overlay, case_preset, install_contact_only_profile, merge_config
 from isaacsimenvs.scripts.configs.tests.test_config_overlays import (
     _collect_classes, _env_problems, _experiment_loader, EXPERIMENT_TASKS,
 )
@@ -16,10 +16,13 @@ def _recipe(name):
 
 @pytest.mark.parametrize('name', list(CASES))
 def test_every_ablation_is_a_valid_config_overlay_and_retains_yibo_robot(name):
-    cfg = merge_config(_recipe('yibo' if name == 'yibo' else 'yibo_our_dr'), case_overlay(name))
+    cfg = merge_config(_recipe(case_preset(name)), case_overlay(name))
     root, modules, _ = EXPERIMENT_TASKS['Isaacsimenvs-RigidBodyCloth-Direct-v0']
     assert not _env_problems(cfg, _collect_classes(modules), root, '')
     assert cfg['robot_preset'] == 'yibo' and cfg['obs']['keypoint_mode'] == 'yibo'
+    if name.startswith('yibo_with_'):
+        assert cfg['rigid_cloth']['randomization']['profile'] == 'yibo'
+        assert cfg['rigid_cloth']['density'] == 2.
     if name == 'contacts_yibo':
         assert cfg['rigid_cloth']['density'] == _recipe('yibo_our_dr')['rigid_cloth']['density']
         assert cfg['rigid_cloth']['randomization']['density'] == [.02, .5]
