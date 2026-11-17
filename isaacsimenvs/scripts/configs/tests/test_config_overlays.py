@@ -244,6 +244,20 @@ def test_nested_yibo_runs_share_environment_and_select_distinct_initialization()
     assert finetune["env"]["scene"]["num_envs"] // init["config"]["expl_coef_block_size"] == 6
 
 
+def test_yibo_memory_budget_preserves_material_dr_and_sapg_training_shapes():
+    run = _load_experiment("yibo_our_dr")
+    canonical = _load_experiment("rigid_body_cloth")
+    env, cfg = run['env'], run['agent']['params']['config']
+    assert env['scene']['num_envs'] == 12288
+    assert env['rigid_cloth'] == canonical['env']['rigid_cloth']
+    assert env['domain_randomization'] == canonical['env']['domain_randomization']
+    assert cfg['expl_coef_block_size'] == 2048
+    assert cfg['minibatch_size'] == cfg['central_value_config']['minibatch_size'] == 24576
+    assert env['scene']['num_envs'] * 32 % cfg['minibatch_size'] == 0
+    assert cfg['periodic_save_every'] == 10 and cfg['save_best_after'] == 1
+    assert cfg['snapshot_every'] == 100
+
+
 def test_nested_recipe_bases_are_relative_to_their_source_and_reject_cycles(tmp_path):
     (tmp_path / "experiments").mkdir()
     (tmp_path / "base.yaml").write_text("env: {reset: {random_yaw: true}}\n")

@@ -6,9 +6,11 @@ Completed evaluation findings: [transfer analysis](analysis/README.md),
 ## Active training and viewer verification
 
 W&B project: [rigidClothDR](https://wandb.ai/kk837/rigidClothDR).
-Current jobs are [fine-tune 709852](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_finetune_20261116_192340)
-and [scratch 709853](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20261116_192301).
-Both passed large-scene initialization and reached optimizer updates.
+Previous jobs [fine-tune 709852](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_finetune_20261116_192340)
+and [scratch 709853](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20261116_192301)
+passed initialization and reached optimizer updates, but scratch exhausted GPU
+memory at epoch 28. Replacement submissions are pending the memory-budget fix;
+the previous runs are not evidence of stable long training.
 
 Rigid captures now export closed plate prisms with the actual 2 mm thickness,
 with one interactive viewer per design. A finished
@@ -54,8 +56,18 @@ To restart an existing run from a full periodic checkpoint, append
 `--checkpoint <run>/nn/periodic_<name>_ep_<N>.pth --checkpoint_load_mode resume`.
 Without that override the two scripts retain their original initialization choices.
 
-The inherited default is 24,576 environments on one GPU with six SAPG blocks of
-4,096 environments. Changing the number of environments requires changing
+The shared recipe now uses 12,288 environments on one GPU with six SAPG blocks of
+2,048 environments. Actor and critic minibatches remain 24,576 transitions;
+with a 32-step horizon, the 393,216-transition rollout divides into 16 minibatches.
+The wrappers default `PYTORCH_CUDA_ALLOC_CONF` to `expandable_segments:True`
+unless the caller has selected another allocator configuration.
+
+Full periodic checkpoints are saved every 10 epochs; best-model saving starts
+after epoch 1, and the inherited weight snapshots remain every 100 epochs.
+The smaller batch changes memory use, preserving the cloth physics, DR,
+observations, reset distribution and table setup.
+
+Changing the number of environments requires changing
 `agent.params.config.expl_coef_block_size` to retain six blocks for the checkpoint.
 Submitting these commands launches training; creating the recipes does not submit jobs.
 

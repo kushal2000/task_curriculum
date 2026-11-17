@@ -446,18 +446,29 @@ def main() -> None:
             }
         )
 
+    # Kit can swallow an uncaught Python exception and leave Slurm with exit 0.
+    # Report failures explicitly, then flush logs before the forced shutdown.
+    import traceback
+
+    exit_code = 0
     try:
         run()
-    finally:
-        if args_cli.wandb_activate:
-            _finish_wandb(exit_code=int(sys.exc_info()[0] is not None))
+    except BaseException:
+        traceback.print_exc()
+        exit_code = 1
+    if args_cli.wandb_activate:
+        try:
+            _finish_wandb(exit_code=exit_code)
+        except BaseException:
+            traceback.print_exc()
+            exit_code = 1
 
     # Kit shutdown can hang; force-exit instead of waiting for a clean teardown.
     if app is not None:
         del app
     sys.stdout.flush()
     sys.stderr.flush()
-    os._exit(0)
+    os._exit(exit_code)
 
 
 if __name__ == "__main__":

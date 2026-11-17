@@ -2,6 +2,8 @@
 # and DR. Keep the inherited rigid-body parameters in one canonical recipe.
 base: rigid_body_cloth
 env:
+  scene:
+    num_envs: 12288  # Memory headroom on one 48 GB GPU; six SAPG blocks.
   robot_preset: yibo
   obs:
     keypoint_mode: yibo
@@ -15,3 +17,13 @@ env:
     table_reset_xy: [0.0, 0.0]
     table_reset_z: 0.38
     table_reset_z_range: 0.0  # Keep Yibo's 33 cm tabletop height fixed.
+
+agent:
+  params:
+    config:
+      expl_coef_block_size: 2048
+      minibatch_size: 24576
+      central_value_config:
+        minibatch_size: 24576
+      periodic_save_every: 10
+      save_best_after: 1
