@@ -1,0 +1,166 @@
+{
+  "array_job": 722887,
+  "report_job": 722923,
+  "material": "base",
+  "seed": 0,
+  "all_candidates_completed": true,
+  "acceptable_candidates": [],
+  "global_optimum_established": false,
+  "scripted_probe": [
+    {
+      "candidate": "vbd6",
+      "settings": {
+        "vbd_iterations": 6,
+        "substeps": 6,
+        "coupler_iterations": 1
+      },
+      "status": "complete",
+      "robot_plane_crossing_max_mm": 13.95455189049244,
+      "table_node_penetration_max_mm": 0.0,
+      "edge_stretch_max": 1.6440004110336304,
+      "late_speed_max_m_s": 0.9072476029396057,
+      "near_ground_node_counts": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "batch_wall_seconds": 88.61424524988979,
+      "finite": true,
+      "no_overflow": true
+    },
+    {
+      "candidate": "vbd12",
+      "settings": {
+        "vbd_iterations": 12,
+        "substeps": 6,
+        "coupler_iterations": 1
+      },
+      "status": "complete",
+      "robot_plane_crossing_max_mm": 13.96825723350048,
+      "table_node_penetration_max_mm": 0.0,
+      "edge_stretch_max": 1.6435683965682983,
+      "late_speed_max_m_s": 0.9072126746177673,
+      "near_ground_node_counts": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "batch_wall_seconds": 145.3824575357139,
+      "finite": true,
+      "no_overflow": true
+    },
+    {
+      "candidate": "vbd40",
+      "settings": {
+        "vbd_iterations": 40,
+        "substeps": 6,
+        "coupler_iterations": 1
+      },
+      "status": "complete",
+      "robot_plane_crossing_max_mm": 13.968532904982567,
+      "table_node_penetration_max_mm": 0.0,
+      "edge_stretch_max": 1.6435576677322388,
+      "late_speed_max_m_s": 0.9071944952011108,
+      "near_ground_node_counts": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "batch_wall_seconds": 409.8087439350784,
+      "finite": true,
+      "no_overflow": true
+    },
+    {
+      "candidate": "vbd80",
+      "settings": {
+        "vbd_iterations": 80,
+        "substeps": 6,
+        "coupler_iterations": 1
+      },
+      "status": "complete",
+      "robot_plane_crossing_max_mm": 13.968413695693016,
+      "table_node_penetration_max_mm": 0.0,
+      "edge_stretch_max": 1.6435781717300415,
+      "late_speed_max_m_s": 0.907260537147522,
+      "near_ground_node_counts": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "batch_wall_seconds": 787.1147405374795,
+      "finite": true,
+      "no_overflow": true
+    },
+    {
+      "candidate": "substeps3",
+      "settings": {
+        "vbd_iterations": 24,
+        "substeps": 3,
+        "coupler_iterations": 1
+      },
+      "status": "complete",
+      "robot_plane_crossing_max_mm": 13.320730067789555,
+      "table_node_penetration_max_mm": 0.0,
+      "edge_stretch_max": 1.5299330949783325,
+      "late_speed_max_m_s": 0.042274195700883865,
+      "near_ground_node_counts": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "batch_wall_seconds": 143.379718773067,
+      "finite": true,
+      "no_overflow": true
+    },
+    {
+      "candidate": "substeps12",
+      "settings": {
+        "vbd_iterations": 6,
+        "substeps": 12,
+        "coupler_iterations": 1
+      },
+      "status": "complete",
+      "robot_plane_crossing_max_mm": 8.515674620866776,
+      "table_node_penetration_max_mm": 0.0,
+      "edge_stretch_max": 2.1700639724731445,
+      "late_speed_max_m_s": 0.000769045960623771,
+      "near_ground_node_counts": [
+        49.0,
+        49.0,
+        49.0,
+        49.0
+      ],
+      "batch_wall_seconds": 149.73244905751199,
+      "finite": true,
+      "no_overflow": true
+    },
+    {
+      "candidate": "coupler2",
+      "settings": {
+        "vbd_iterations": 12,
+        "substeps": 6,
+        "coupler_iterations": 2
+      },
+      "status": "complete",
+      "robot_plane_crossing_max_mm": 13.611298985779285,
+      "table_node_penetration_max_mm": 0.0,
+      "edge_stretch_max": 1.6438829898834229,
+      "late_speed_max_m_s": 0.6679211854934692,
+      "near_ground_node_counts": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "batch_wall_seconds": 275.76686389464885,
+      "finite": true,
+      "no_overflow": true
+    }
+  ],
+  "source": "results/vbd_stability_contact_20261116_native/report/stability.json"
+}

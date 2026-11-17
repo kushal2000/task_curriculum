@@ -265,3 +265,5 @@ The validated contact matrix is submitted as array `722887` on commit `e88aaa7`;
 report job `722923` runs after all candidates finish, including failed cases.
 It writes `results/vbd_stability_contact_20261116_native/report/stability.md`
 and `stability.json`. The analysis/contact regression suite passes 31 tests.
+The complete matrix finished with no candidate satisfying all provisional probe
+limits. See [the measured stability tradeoffs](analysis/vbd_stability.md).
