@@ -64,6 +64,16 @@ def test_failed_and_partial_runs_remain_visible_and_cannot_enter_frontier():
     assert not report['cohorts'][0]['protocol_groups'][0]['frontier_candidate_ids']
 
 
+def test_missing_contact_probe_is_not_reported_as_numerical_blowup():
+    data = run()
+    data.update(status='failed', error='Invalid scripted contact probe: no robot records',
+                scripted_contact_coverage_passed=False)
+    data['per_env_peak_metrics']['robot_record_count'] = [0., 0.]
+    result = normalize_run(data, 'no-contact.json')
+    assert result['status'] == 'failed'
+    assert not result['numerical_failure'] and not result['pareto_eligible']
+
+
 def test_missing_diagnostics_and_zero_records_are_not_zero_penetration():
     missing = run()
     del missing['per_env_peak_metrics']['table_box_center_depth_m']

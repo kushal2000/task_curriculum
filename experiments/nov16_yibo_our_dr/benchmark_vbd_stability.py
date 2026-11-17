@@ -161,6 +161,29 @@ def make_fixture(env, args, protocol):
     choices = torch.tensor([[0.,0.],[.025,-.02],[-.025,.02],[.02,.02]], device=env.device)
     xy = choices[variant % len(choices)]
     group = ids//group_size
+    # A recorded, independently audited physical pose places all five pads close
+    # to the tabletop. The previous home pose never contacted the falling sheet.
+    checkpoint = ROOT/'pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth'
+    source_row = 18447
+    saved = torch.load(checkpoint,map_location='cpu',weights_only=False)[0]['obs']['obs'][source_row,:134].to(env.device)
+    perm = env.controller._perm_lab_to_canon
+    lower,upper = env.controller._joint_lower_canon,env.controller._joint_upper_canon
+    q = env.backend.read_joint_pos().clone()
+    qcanon = (saved[:27]+1)*.5*(upper-lower)+lower
+    selected = (group == 1).nonzero().flatten()
+    q[selected[:,None],perm[None,:]] = qcanon
+    env.backend.robot.write_joint_state_to_sim_index(position=q,velocity=torch.zeros_like(q))
+    env.controller._prev_targets.copy_(q)
+    env.controller._cur_targets.copy_(q)
+    # Saved Play palm coordinates use the historical base position (0,.8,0).
+    from isaacsimenvs.tasks.cloth.backends.robot import PLAY_ROBOT_ROOT_POS
+    shift = torch.tensor(env.cfg.robot_root_pos,device=env.device)-torch.tensor(PLAY_ROBOT_ROOT_POS,device=env.device)
+    pads = saved[81:84]+shift+saved[92:107].reshape(5,3)
+    xy[selected] = pads[:,:2].mean(0)-torch.tensor(env.cfg.reset.table_reset_xy,device=env.device)
+    source = dict(checkpoint=str(checkpoint.relative_to(ROOT)),
+                  checkpoint_sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+                  observation_row=source_row,saved_fingertips_env_m=pads.cpu().tolist(),
+                  scripted_worlds=selected.cpu().tolist())
     angle = torch.where(group == 2, torch.pi, 0.)
     env.backend._write_cloth(ids, xy, yaw, angle)
     env.backend._randomize(ids)
@@ -190,6 +213,7 @@ def make_fixture(env, args, protocol):
                 steps=args.steps, candidate_id=args.candidate, probes=list(PROBES),
                 initial_state_sha256=array_hash(initial), action_trace_sha256=array_hash({'actions':data['actions']}),
                 physical_config_sha256=json_hash(protocol), physical_config=protocol,
+                scripted_pose_source=source,
                 action_description='Hold pose; scripted group starts gentle arm oscillation and smooth hand close/open after1s.')
     args.fixture.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.fixture.with_suffix('.tmp')
@@ -312,6 +336,16 @@ def run(args, matrix):
     started = time.perf_counter()
     env = diagnostics = data = meta = native_settings = None
     status,error = 'failed',None
+    finite_ok = overflow_ok = coverage_ok = None
+
+    def check_overflow(output, context):
+        nonlocal overflow_ok
+        try:
+            raise_if_overflowed(output,args.num_envs,context)
+        except RuntimeError:
+            overflow_ok = False
+            raise
+        overflow_ok = True
     steps_run = physics_samples = 0
     physics_seconds = diagnostics_seconds = rollout_seconds = simulated_seconds = 0.
     startup_seconds = None
@@ -327,7 +361,7 @@ def run(args, matrix):
                 native_settings = native_solver_settings(matrix['candidates'][args.candidate])
                 if args.prepare_fixture:
                     make_fixture(env,args,protocol)
-                    raise_if_overflowed(captured(),args.num_envs,'fixture initialization')
+                    check_overflow(captured(),'fixture initialization')
                     return
                 data,meta,restore_errors = restore_fixture(env,args,protocol)
                 diagnostics = Diagnostics(env,data)
@@ -355,22 +389,29 @@ def run(args, matrix):
                             physics_seconds += time.perf_counter()-tick
                             tick = time.perf_counter()
                             metrics = diagnostics.read(late=(step+1 >= 2*args.steps//3+1))
+                            finite_ok = True
                             torch.cuda.synchronize()
                             diagnostics_seconds += time.perf_counter()-tick
                             physics_samples += 1
                     steps_run = step+1
                     if steps_run%20 == 0 or steps_run == args.steps:
                         records.append(dict(step=steps_run,**{key:value.cpu().tolist() for key,value in metrics.items()}))
-                        raise_if_overflowed(captured(),args.num_envs,f'{args.candidate},step{steps_run}')
+                        check_overflow(captured(),f'{args.candidate},step{steps_run}')
                     if steps_run%60 == 0:
                         print(f'[stability] {args.candidate} {steps_run}/{args.steps}',flush=True)
                 rollout_seconds = time.perf_counter()-rollout_start
-                raise_if_overflowed(captured(),args.num_envs,'completed stability probe')
+                check_overflow(captured(),'completed stability probe')
+                counts = diagnostics.peaks['robot_record_count'][args.num_envs//3:2*args.num_envs//3]
+                coverage_ok = bool((counts > 0).all())
+                if not coverage_ok:
+                    raise RuntimeError(f'Invalid scripted contact probe: peak robot records {counts.tolist()}')
                 status = 'complete'
             finally:
                 captured()
     except BaseException as exc:
         error = f'{type(exc).__name__}: {exc}'
+        if 'nonfinite' in str(exc).lower():
+            finite_ok = False
         failure_traceback = traceback.format_exc()
         raise
     finally:
@@ -404,7 +445,8 @@ def run(args, matrix):
                         startup_seconds=startup_seconds,total_seconds=time.perf_counter()-started,
                         physics_boundary_samples=physics_samples,simulated_seconds=simulated_seconds,
                         physics_step_duration_checked=physics_samples>0,late_window_start_step=2*args.steps//3+1,
-                        finite_checks_passed=status=='complete',overflow_checks_passed=status=='complete',
+                        finite_checks_passed=finite_ok,overflow_checks_passed=overflow_ok,
+                        scripted_contact_coverage_passed=coverage_ok,
                         quality_metrics=matrix.get('quality_metrics',{}).get(probe,[]),
                         per_env_peak_metrics={key:value[sl].cpu().tolist() for key,value in diagnostics.peaks.items()} if diagnostics else {},
                         diagnostic_samples=[dict(step=row['step'],**{key:value[sl] for key,value in row.items() if key!='step'}) for row in records],
@@ -413,6 +455,7 @@ def run(args, matrix):
                         commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip())
                     if meta is not None:
                         result['initial_restore_max_errors'] = restore_errors
+                        result['scripted_pose_source'] = meta.get('scripted_pose_source')
                     if error:
                         result['traceback'] = failure_traceback
                     write_json(args.out_dir/f'{probe}.json',result)

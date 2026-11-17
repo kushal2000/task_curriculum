@@ -246,10 +246,17 @@ the report recommends none. Rerunning analysis with revised limits requires no
 simulation changes. Short smoke replays can use `--steps 12`; their shorter
 horizon keeps them separate from the full five-second benchmark.
 
-The first full stability matrix is array `722263`, using the shared fixture in
-`results/vbd_stability_20261116_native/`. An `afterany` CPU report job `722339`
-generates `report/stability.md` and `report/stability.json` even if a candidate
-fails. Native 6/12-iteration smoke replays restored identical inputs with zero
-readback error and verified 24 physics boundaries advance exactly 0.2 seconds.
-The analysis/contact regression suite passed 30 tests. The earlier development
-smokes without verified clock metadata are excluded from solver selection.
+Development array `722263` and report job `722339` were stopped when the first
+full candidate showed no hand-cloth contact in its scripted probe. Those records
+cannot establish contact quality. The revised fixture in
+`results/vbd_stability_contact_20261116_native/` initializes scripted worlds from
+checkpoint pose row 18447 and centers the cloth beneath its fingertip cluster;
+the checkpoint SHA and row are stored in the fixture metadata. Material and solver
+physics are unchanged. A probe without observed contact in every scripted world
+fails validation rather than receiving a perfect zero-penetration score.
+
+Native 6/12-iteration checks on that same fixture each ran 120 control steps:
+240 physics boundaries advanced exactly two seconds, state restore errors were
+zero, and all four scripted worlds registered robot contact (peak counts 59–77).
+Both checks stayed finite with no overflow. Earlier development smokes without
+verified clock metadata are also excluded from solver selection.
