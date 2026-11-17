@@ -324,7 +324,7 @@ def _double_sided(tris):
     return np.concatenate([tris, tris[:, ::-1]], axis=0).flatten()
 
 
-def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
+def _restrict_triangles_to_world(viewer, model, world: int, inner=None, cloth_tex=None) -> None:
     """Draw only the filmed world's deformable surface.
 
     ``set_visible_worlds`` filters *rigid shapes* only -- the viewer's ``_log_triangles`` logs
@@ -366,7 +366,8 @@ def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
     # `log_mesh` takes one colour per mesh, so distinguishing the halves means logging them as
     # separate meshes rather than colouring vertices.
     groups: dict[str, object] = {}
-    if inner is not None and hasattr(inner, "_moving_idx"):
+    # A textured sheet is one material: the half split is a diagnostic colouring, not a look.
+    if cloth_tex is None and inner is not None and hasattr(inner, "_moving_idx"):
         base = int(np.argmax(mine))  # first particle of this world; env indices are world-local
         moving = set((inner._moving_idx + base).tolist())
         stationary = set((inner._stationary_idx + base).tolist())
@@ -393,6 +394,14 @@ def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
         points = self._apply_layer_transform_to_points(state.particle_q)
         hidden = not self.show_triangles or self._layer_force_hidden()
         for name, indices in _groups.items():
+            if cloth_tex is not None:
+                # The texture is passed every frame: `MeshGL.update(texture=None)` deletes it.
+                self.log_mesh(
+                    self._qualify(f"/model/triangles_{name}"), points, indices,
+                    uvs=cloth_tex[0], texture=cloth_tex[1], hidden=hidden,
+                    backface_culling=False, roughness=0.95, metallic=0.0,
+                )
+                continue
             self.log_mesh(
                 self._qualify(f"/model/triangles_{name}"),
                 points,
@@ -566,6 +575,168 @@ def _colorize(model, args) -> None:
         )
 
 
+# ----------------------------------------------------------------------------------------------
+# Presentation mode (`--pretty`): textured cloth / table / floor, a studio backdrop, no HUD.
+# Purely the render path -- nothing here touches the model arrays the solver reads (shape flags
+# are zeroed only around `viewer.set_model` and restored before the first step).
+# ----------------------------------------------------------------------------------------------
+
+
+def _cloth_uv_tex(model, texture: str, tile_m: float):
+    """Per-particle UVs from the rest (spawn) positions, one texture repeat per ``tile_m`` metres."""
+    import numpy as np
+    import warp as wp
+
+    from textures import load
+
+    q = model.particle_q.numpy()
+    uv = (q[:, :2] / float(tile_m)).astype(np.float32)
+    return wp.array(uv, dtype=wp.vec2, device=model.particle_q.device), load(texture)
+
+
+def _box_mesh(half, tile_m: float):
+    """A box's 24 vertices (4 per face, so each face owns its UVs), indices, UVs; UVs in metres/tile."""
+    import numpy as np
+
+    hx, hy, hz = (float(v) for v in half)
+    faces = [  # (normal axis, sign) -> corners in CCW order seen from outside
+        ((0, 0, 1), [(-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz)]),
+        ((0, 0, -1), [(-hx, hy, -hz), (hx, hy, -hz), (hx, -hy, -hz), (-hx, -hy, -hz)]),
+        ((1, 0, 0), [(hx, -hy, -hz), (hx, hy, -hz), (hx, hy, hz), (hx, -hy, hz)]),
+        ((-1, 0, 0), [(-hx, hy, -hz), (-hx, -hy, -hz), (-hx, -hy, hz), (-hx, hy, hz)]),
+        ((0, 1, 0), [(hx, hy, -hz), (-hx, hy, -hz), (-hx, hy, hz), (hx, hy, hz)]),
+        ((0, -1, 0), [(-hx, -hy, -hz), (hx, -hy, -hz), (hx, -hy, hz), (-hx, -hy, hz)]),
+    ]
+    pts, uvs, idx = [], [], []
+    for n, corners in faces:
+        base = len(pts)
+        for c in corners:
+            pts.append(c)
+            # Planar projection onto the face's two tangent axes.
+            a, b = [i for i in range(3) if n[i] == 0]
+            uvs.append((c[a] / tile_m, c[b] / tile_m))
+        idx += [base, base + 1, base + 2, base, base + 2, base + 3]
+    return np.asarray(pts, np.float32), np.asarray(idx, np.int32), np.asarray(uvs, np.float32)
+
+
+class _StudioScene:
+    """Replaces the table and ground shapes with textured meshes and sets a studio backdrop."""
+
+    def __init__(self, viewer, model, inner, world: int, table_tex: str, floor_tex: str):
+        import numpy as np
+        import newton
+
+        self.viewer, self.model, self.world = viewer, model, world
+        labels = [str(x) for x in model.body_label]
+        shape_body = model.shape_body.numpy()
+        stype = model.shape_type.numpy()
+        sworld = model.shape_world.numpy() if getattr(model, "shape_world", None) is not None else None
+        box, plane = int(newton.GeoType.BOX), int(newton.GeoType.PLANE)
+        self.tables, self.hide = [], []
+        for s, b in enumerate(shape_body):
+            label = labels[b] if 0 <= b < len(labels) else ""
+            if "Table" in label and int(stype[s]) == box:
+                self.hide.append(s)
+                if sworld is None or int(sworld[s]) == world:
+                    self.tables.append(s)
+            elif int(stype[s]) == plane:
+                self.hide.append(s)
+        self.table_tex = None
+        from textures import load
+
+        self.table_img, self.floor_img = load(table_tex), load(floor_tex)
+        print(f"[pretty] textured tables {self.tables}, hidden shapes {len(self.hide)}", flush=True)
+        self._saved_flags = None
+
+    def hide_before_set_model(self):
+        import warp as wp
+
+        m = self.model
+        self._saved_flags = m.shape_flags
+        flags = m.shape_flags.numpy().copy()
+        flags[self.hide] = 0
+        m.shape_flags = wp.array(flags, dtype=m.shape_flags.dtype, device=m.shape_flags.device)
+
+    def restore_after_set_model(self):
+        if self._saved_flags is not None:
+            self.model.shape_flags = self._saved_flags
+
+    def style(self, origin):
+        r = getattr(self.viewer, "renderer", None)
+        if r is None:
+            return
+        # Soft paper-figure studio: pale warm-grey sky fading to a lighter horizon.
+        r.sky_upper = (0.86, 0.88, 0.91)
+        r.sky_lower = (0.97, 0.96, 0.94)
+        r.background_color = r.sky_upper
+        r.ambient_sky = (0.62, 0.63, 0.66)
+        r.ambient_ground = (0.36, 0.34, 0.32)
+        if hasattr(r, "shadow_radius"):
+            r.shadow_radius = 2.0
+        if hasattr(r, "shadow_extents"):
+            r.shadow_extents = 2.5
+        self.origin = origin
+
+    def log(self, state):
+        import numpy as np
+        import warp as wp
+
+        v, m = self.viewer, self.model
+        dev = m.shape_transform.device
+        body_q = state.body_q.numpy() if state.body_q is not None else None
+        st = m.shape_transform.numpy()
+        sb = m.shape_body.numpy()
+        scale = m.shape_scale.numpy()
+        for k, s in enumerate(self.tables):
+            pts, idx, uv = _box_mesh(scale[s], 0.6)
+            X = wp.transform(wp.vec3(*st[s][:3]), wp.quat(*st[s][3:]))
+            if sb[s] >= 0 and body_q is not None:
+                bq = body_q[sb[s]]
+                X = wp.transform_multiply(wp.transform(wp.vec3(*bq[:3]), wp.quat(*bq[3:])), X)
+            world_pts = np.array([wp.transform_point(X, wp.vec3(*p)) for p in pts], np.float32)
+            v.log_mesh(
+                f"/pretty/table_{k}", wp.array(world_pts, dtype=wp.vec3, device=dev),
+                wp.array(idx, dtype=wp.int32, device=dev), uvs=wp.array(uv, dtype=wp.vec2, device=dev),
+                texture=self.table_img, roughness=0.55, metallic=0.0,
+            )
+        # Floor: a large quad at z=0 around the filmed env, 1.5 m per texture repeat.
+        o = self.origin
+        R = 6.0
+        fp = np.array([[o[0] - R, o[1] - R, 0], [o[0] + R, o[1] - R, 0], [o[0] + R, o[1] + R, 0],
+                       [o[0] - R, o[1] + R, 0]], np.float32)
+        fuv = fp[:, :2] / 1.5
+        v.log_mesh(
+            "/pretty/floor", wp.array(fp, dtype=wp.vec3, device=dev),
+            wp.array([0, 1, 2, 0, 2, 3], dtype=wp.int32, device=dev),
+            uvs=wp.array(fuv.astype(np.float32), dtype=wp.vec2, device=dev),
+            texture=self.floor_img, roughness=0.8, metallic=0.0,
+        )
+
+
+def stamp_caption(image, title: str, subtitle: str = ""):
+    """A small, clean caption in the lower-left corner (paper demo style)."""
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFont
+
+    img = Image.fromarray(np.ascontiguousarray(image))
+    draw = ImageDraw.Draw(img, "RGBA")
+    s = img.height / 1080.0
+    try:
+        f1 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(34 * s))
+        f2 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", int(24 * s))
+    except OSError:
+        f1 = f2 = ImageFont.load_default()
+    x, y = int(40 * s), img.height - int((110 if subtitle else 76) * s)
+    w = max(draw.textlength(title, font=f1), draw.textlength(subtitle, font=f2) if subtitle else 0)
+    h = int((92 if subtitle else 56) * s)
+    draw.rounded_rectangle([x - 18 * s, y - 12 * s, x + w + 18 * s, y + h], radius=int(12 * s),
+                           fill=(20, 22, 28, 150))
+    draw.text((x, y), title, font=f1, fill=(255, 255, 255, 255))
+    if subtitle:
+        draw.text((x, y + int(44 * s)), subtitle, font=f2, fill=(225, 228, 235, 255))
+    return np.asarray(img)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render the policy on Newton to a video.")
     parser.add_argument("--task", default="Isaacsimenvs-Cloth-Direct-v0")
@@ -666,7 +837,20 @@ def main() -> None:
         action="store_true",
         help="additionally draw the keypoints and per-keypoint error that define success",
     )
+    parser.add_argument(
+        "--pretty", action="store_true",
+        help="presentation render: textured cloth/table/floor, studio backdrop, no HUD or goal marker",
+    )
+    parser.add_argument("--cloth_texture", default="denim", help="texture name (textures.py) or image path")
+    parser.add_argument("--cloth_tile_m", type=float, default=0.12, help="metres of cloth per texture repeat")
+    parser.add_argument("--table_texture", default="oak")
+    parser.add_argument("--floor_texture", default="floor")
+    parser.add_argument("--caption", default="", help="--pretty: caption title (lower left)")
+    parser.add_argument("--subtitle", default="", help="--pretty: caption second line")
+    parser.add_argument("--supersample", type=int, default=1, help="render at N x resolution, downsample")
     args, hydra_args = parser.parse_known_args()
+    if args.pretty:
+        args.no_goal = args.no_hud = True
     if args.out is None:
         args.out = default_video_path("render_newton")
     sys.argv = [sys.argv[0]] + hydra_args
@@ -729,7 +913,8 @@ def main() -> None:
         from isaaclab_newton.physics.newton_manager import NewtonManager
         from newton.viewer import ViewerGL
 
-        viewer = ViewerGL(width=args.width, height=args.height, headless=True)
+        ss = max(1, int(args.supersample))
+        viewer = ViewerGL(width=args.width * ss, height=args.height * ss, headless=True)
         # See the module docstring: the robot's colliders are not flagged visible.
         viewer.show_collision = True
         viewer.show_static = True
@@ -737,9 +922,20 @@ def main() -> None:
             _hide_goal_viz(NewtonManager.get_model())
         else:
             _reveal_goal_viz(NewtonManager.get_model())
+        studio = None
+        if args.pretty:
+            studio = _StudioScene(viewer, NewtonManager.get_model(), inner, args.world,
+                                  args.table_texture, args.floor_texture)
+            studio.hide_before_set_model()
         viewer.set_model(NewtonManager.get_model())
+        if studio is not None:
+            studio.restore_after_set_model()
         viewer.set_visible_worlds([args.world])
-        _restrict_triangles_to_world(viewer, NewtonManager.get_model(), args.world, inner)
+        cloth_tex = (
+            _cloth_uv_tex(NewtonManager.get_model(), args.cloth_texture, args.cloth_tile_m)
+            if args.pretty and getattr(NewtonManager.get_model(), "particle_count", 0) else None
+        )
+        _restrict_triangles_to_world(viewer, NewtonManager.get_model(), args.world, inner, cloth_tex)
 
         # AFTER `set_model`, which rebuilds renderer state and silently reverts this. Setting it
         # before printed "shadows disabled" while shadows kept rendering, so the test that was
@@ -770,6 +966,8 @@ def main() -> None:
         yaw = float(np.degrees(np.arctan2(d[1], d[0])))
         pitch = float(np.degrees(np.arctan2(d[2], np.hypot(d[0], d[1]))))
         viewer.set_camera(wp.vec3(*(float(v) for v in cam)), pitch, yaw)
+        if studio is not None:
+            studio.style(origin)
         print(
             f"[render] env_{args.world} origin {origin.round(3)} camera {cam.round(3)} "
             f"-> target {target.round(3)}  (pitch {pitch:.1f}, yaw {yaw:.1f})",
@@ -784,7 +982,7 @@ def main() -> None:
         obs, *_ = env.step(torch.zeros((inner.num_envs, inner.cfg.action_space), device=inner.device))
 
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        writer = imageio.get_writer(args.out, fps=args.fps, macro_block_size=None)
+        writer = imageio.get_writer(args.out, fps=args.fps, macro_block_size=None, quality=9 if args.pretty else 5)
         frames = 0
         # Folds are counted off the terminations, NOT read from `inner._successes`. That counter is
         # incremented and then zeroed by the reset inside one `env.step()` -- `_get_dones` scores
@@ -866,7 +1064,8 @@ def main() -> None:
                         lines = list(last_hud[0])
                         lines[-1] = f"folds     {folds_seen}"
                         end = _stamp_hud(end, lines, last_hud[1])
-                    end = stamp_outcome(end, outcome)
+                    if not args.pretty:
+                        end = stamp_outcome(end, outcome)
                     for _ in range(int(round(args.end_hold_s * args.fps))):
                         writer.append_data(end)
                         frames += 1
@@ -885,6 +1084,8 @@ def main() -> None:
 
             viewer.begin_frame(step * float(inner.step_dt))
             viewer.log_state(NewtonManager._state_0)
+            if studio is not None:
+                studio.log(NewtonManager._state_0)
             if args.goal_keypoints:
                 _goal_overlay(viewer, inner, args.world)
             viewer.end_frame()
@@ -895,6 +1096,12 @@ def main() -> None:
             # ViewerGL already returns top-down rows, so no vertical flip -- adding one puts the
             # ground plane at the top of the frame. Just drop the alpha channel.
             image = np.ascontiguousarray(image[:, :, :3])
+            if ss > 1:
+                from PIL import Image
+
+                image = np.asarray(Image.fromarray(image).resize((args.width, args.height), Image.LANCZOS))
+            if args.pretty and args.caption:
+                image = stamp_caption(image, args.caption, args.subtitle)
             hud = _hud_lines(inner, args.world, step, folds_seen) if not args.no_hud else None
             last_raw, last_hud = image, hud
             if hud is not None:
