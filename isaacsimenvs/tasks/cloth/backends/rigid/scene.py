@@ -52,12 +52,11 @@ def material_combine(cfg, asset):
     raise ValueError("rigid_cloth.randomization.profile must be 'material' or 'yibo'")
 
 
-def bind_physics_material(stage, root_path, coefficients, *, combine=FRICTION_COMBINE_MODE):
-    """Author a material and bind every collider beneath this root."""
-    from pxr import Sdf, Usd, UsdPhysics, UsdShade
+def define_physics_material(stage, path, coefficients, *, combine=FRICTION_COMBINE_MODE):
+    """Define one physical material; place shared materials outside cloned asset roots."""
+    from pxr import Sdf, UsdPhysics, UsdShade
 
-    root = stage.GetPrimAtPath(root_path)
-    material = UsdShade.Material.Define(stage, root.GetPath().AppendChild("ClothContactMaterial"))
+    material = UsdShade.Material.Define(stage, path)
     api = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
     api.CreateStaticFrictionAttr(float(coefficients[0]))
     api.CreateDynamicFrictionAttr(float(coefficients[1]))
@@ -66,20 +65,77 @@ def bind_physics_material(stage, root_path, coefficients, *, combine=FRICTION_CO
         "physxMaterial:frictionCombineMode": (Sdf.ValueTypeNames.Token, combine),
         "physxMaterial:restitutionCombineMode": (Sdf.ValueTypeNames.Token, "multiply"),
     })
-    for prim in Usd.PrimRange(root):
-        if prim.HasAPI(UsdPhysics.CollisionAPI):
-            UsdShade.MaterialBindingAPI.Apply(prim).Bind(
-                material, bindingStrength=UsdShade.Tokens.strongerThanDescendants, materialPurpose="physics"
-            )
     return material
 
 
-def _bake_contact_material(path, coefficients, *, combine=FRICTION_COMBINE_MODE):
-    from pxr import Usd
+def bind_material_roots(stage, roots, material_path):
+    """Bind a global physics material above all asset colliders in one USD edit.
+
+    The target stays outside /World/envs, so cloning an asset never clones its
+    material. Strong physics-purpose binding preserves unrelated visual materials.
+    """
+    from pxr import Sdf
+
+    layer, target = stage.GetRootLayer(), Sdf.Path(material_path)
+    with Sdf.ChangeBlock():
+        for path in roots:
+            prim = Sdf.CreatePrimInLayer(layer, path)
+            schemas = prim.GetInfo("apiSchemas") or Sdf.TokenListOp()
+            existing = list(schemas.prependedItems)
+            if "MaterialBindingAPI" not in existing and "MaterialBindingAPI" not in schemas.explicitItems:
+                if schemas.isExplicit:
+                    schemas.explicitItems = list(schemas.explicitItems) + ["MaterialBindingAPI"]
+                else:
+                    schemas.prependedItems = existing + ["MaterialBindingAPI"]
+                prim.SetInfo("apiSchemas", schemas)
+            rel = prim.relationships.get("material:binding:physics")
+            if rel is None:
+                rel = Sdf.RelationshipSpec(prim, "material:binding:physics", custom=False)
+            rel.targetPathList.explicitItems = [target]
+            rel.SetInfo("bindMaterialAs", "strongerThanDescendants")
+
+
+def bind_physics_material(stage, root_path, coefficients, *, combine=FRICTION_COMBINE_MODE):
+    """Bind a local material for a standalone asset (training uses shared roots)."""
+    from pxr import Sdf
+
+    path = Sdf.Path(root_path).AppendChild("ClothContactMaterial")
+    material = define_physics_material(stage, path, coefficients, combine=combine)
+    bind_material_roots(stage, [root_path], path)
+    return material
+
+
+def shared_contact_material(stage, cfg, asset):
+    """Only three startup materials for the whole batch, regardless of env count."""
+    path = f"/World/ClothMaterials/{asset}"
+    materials = pair_materials(cfg.table_static_friction, cfg.hand_static_friction, cfg.dynamic_friction_ratio)
+    return define_physics_material(stage, path, materials[asset], combine=material_combine(cfg, asset))
+
+
+def strip_physics_materials(path):
+    """Remove imported physics material APIs/bindings before cloning, retaining visuals.
+
+    Even unused physical material prims are imported into PhysX. Merely rebinding
+    their colliders leaves those per-environment material allocations in the stage.
+    """
+    from pxr import Usd, UsdPhysics
 
     stage = Usd.Stage.Open(path)
     root = stage.GetDefaultPrim() or next(iter(stage.GetPseudoRoot().GetChildren()))
-    bind_physics_material(stage, root.GetPath(), coefficients, combine=combine)
+    for prim in Usd.PrimRange(root):
+        is_material = prim.HasAPI(UsdPhysics.MaterialAPI) or "PhysxMaterialAPI" in prim.GetAppliedSchemas()
+        if is_material:
+            prim.RemoveAPI(UsdPhysics.MaterialAPI)
+            prim.RemoveAppliedSchema("PhysxMaterialAPI")
+            for prop in prim.GetProperties():
+                name = prop.GetName()
+                if name.startswith("physxMaterial:") or name in (
+                    "physics:staticFriction", "physics:dynamicFriction", "physics:restitution", "physics:density"
+                ):
+                    prim.RemoveProperty(name)
+        binding = prim.GetRelationship("material:binding:physics")
+        if binding:
+            binding.SetTargets([])
     stage.GetRootLayer().Save()
 
 
@@ -124,10 +180,8 @@ def build_robot_and_table(env, spec) -> None:
         articulation={"physics:articulationEnabled": False},
     )
     cloth_cfg = env.cfg.rigid_cloth
-    materials = pair_materials(cloth_cfg.table_static_friction, cloth_cfg.hand_static_friction,
-                               cloth_cfg.dynamic_friction_ratio)
-    _bake_contact_material(robot_usd, materials["robot"], combine=material_combine(cloth_cfg, "robot"))
-    _bake_contact_material(table_usd, materials["table"], combine=material_combine(cloth_cfg, "table"))
+    strip_physics_materials(robot_usd)
+    strip_physics_materials(table_usd)
     env._robot_urdf_path, env._table_urdf_path = a.robot_urdf, a.table_urdf
     env._table_size = urdf_box_size(a.table_urdf)
     env._table_half_height = 0.5 * env._table_size[2]
@@ -139,6 +193,10 @@ def build_robot_and_table(env, spec) -> None:
             stage.DefinePrim(path, "Xform")
     env.robot = Articulation(robot_cfg(robot_usd, spec, env.cfg.robot_root_pos, env.cfg.action.arm_effort_limit))
     env.table = RigidObject(RigidObjectCfg(prim_path="/World/envs/env_.*/Table", spawn=UsdFileCfg(usd_path=table_usd)))
+    for asset, root_name in (("robot", "Robot"), ("table", "Table")):
+        material = shared_contact_material(stage, cloth_cfg, asset)
+        bind_material_roots(stage, (f"{path}/{root_name}" for path in env.scene.env_prim_paths), material.GetPath())
+    _log(t0, "robot/table bound to two shared physics materials")
     spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
     light = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
     light.func("/World/Light", light)
@@ -214,7 +272,9 @@ def author_rigid_cloths(env_ids, dims, cloth_cfg, spawn_z, design, root_name) ->
     from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, Vt
 
     cfg = cloth_cfg
-    layer = get_current_stage().GetRootLayer()
+    world_stage = get_current_stage()
+    layer = world_stage.GetRootLayer()
+    shared_material = shared_contact_material(world_stage, cfg, "cloth")
     stage = Usd.Stage.CreateInMemory()
     template = f"/{root_name}"
     precision = UsdGeom.XformOp.PrecisionDouble
@@ -278,8 +338,8 @@ def author_rigid_cloths(env_ids, dims, cloth_cfg, spawn_z, design, root_name) ->
         drive.CreateTypeAttr("force")
         drive.CreateStiffnessAttr(0.0)
         drive.CreateDampingAttr(0.0)
-    bind_physics_material(stage, template, pair_materials(0., 0., 1.)["cloth"],
-                          combine=material_combine(cfg, "cloth"))
+    # Absolute external target survives Sdf.CopySpec without per-env material copies.
+    bind_material_roots(stage, [template], shared_material.GetPath())
     source = stage.GetRootLayer()
 
     def put(path, value):
