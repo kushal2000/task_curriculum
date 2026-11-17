@@ -6,11 +6,19 @@ Completed evaluation findings: [transfer analysis](analysis/README.md),
 ## Active training and viewer verification
 
 W&B project: [rigidClothDR](https://wandb.ai/kk837/rigidClothDR).
+Current memory-adjusted runs are
+[fine-tune 710318](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_finetune_20261116_194243)
+and [scratch 710319](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20261116_194220),
+each with 12,288 environments and six SAPG blocks. Both reached optimizer
+updates and saved checkpoints (fine-tune best model and scratch epoch-10 full
+checkpoint). This verifies early training, not long-run convergence or stability.
+
 Previous jobs [fine-tune 709852](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_finetune_20261116_192340)
 and [scratch 709853](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20261116_192301)
 passed initialization and reached optimizer updates, but scratch exhausted GPU
-memory at epoch 28. Replacement submissions are pending the memory-budget fix;
-the previous runs are not evidence of stable long training.
+memory at epoch 28. Neither had saved a checkpoint; they were restarted from
+their intended initializations after the memory-budget fix. The interrupted
+W&B runs are marked failed with their replacement job IDs.
 
 Rigid captures now export closed plate prisms with the actual 2 mm thickness,
 with one interactive viewer per design. A finished

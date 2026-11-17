@@ -25,6 +25,18 @@ These are zero-shot results for the same checkpoint and five current rigid desig
 
 The first six “+” rows change one group on our DR. The next two restore combinations. The final two perturb the good Yibo reference, avoiding a misleading conclusion from changes on a poorly performing baseline.
 
+### Breakdown by approximation
+
+| Design | Our DR folds | Historical physics bundle folds | Yibo reference folds |
+|---|---:|---:|---:|
+| Single hinge | 1/13 | 9/13 | 12/13 |
+| Strip 4 | 5/13 | 11/13 | 13/13 |
+| Strip 8 | 3/13 | 3/13 | 11/13 |
+| Hinge band | 4/13 | 9/13 | 12/13 |
+| Flexible corners | 2/12 | 5/12 | 10/12 |
+
+The gap is not restricted to one approximation, and the same historical physics bundle does not help every design equally. These small cohorts have different size/material realizations; they describe where episodes fail and do not establish a ranking of design fidelity or policy trainability.
+
 ## What the evidence says
 
 - **Physics changes interact.** Density alone gives 16 folds, the historical hinge settings alone 7, and historical contacts alone 24; their joint restoration gives 37. This supports a compatibility problem involving the combination of contact, mass and hinge dynamics. It does not identify a unique pairwise interaction.
