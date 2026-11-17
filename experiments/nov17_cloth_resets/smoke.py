@@ -31,6 +31,14 @@ def main():
     from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
     from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
 
+    for name in ('prior','scratch','prior_no_curriculum','scratch_no_curriculum'):
+        recipe = load_experiment(f'experiments/nov17_cloth_resets/{name}.yaml')
+        rigid, agent = recipe['env']['rigid_cloth'], recipe['agent']['params']
+        assert rigid['thickness_curriculum']['enabled'] == ('no_curriculum' not in name)
+        assert rigid['episode_checks']['outside_table'] and rigid['episode_checks']['press_driven_fold']
+        assert agent['load_checkpoint'] == name.startswith('prior')
+        assert agent['checkpoint_load_mode'] == 'weights'
+
     cfg = ClothCfg.for_backend('rigid')
     cfg.from_dict(yaml.safe_load((ROOT/'isaacsimenvs/scripts/configs/task/RigidBodyCloth.yaml').read_text()))
     cfg.from_dict(load_experiment('experiments/nov17_cloth_resets/scratch.yaml')['env'])
@@ -94,8 +102,7 @@ def main():
             ids = group.env_ids
             b._write_cloth(ids,torch.zeros(len(ids),2,device=env.device),torch.zeros(len(ids),device=env.device),
                            torch.zeros(len(ids),device=env.device))
-            # Scene-query broadphase poses refresh on a physics step, rather
-            # than on tensor pose writes / forward kinematics alone.
+            # Exercise normal physics hooks after writing the diagnostic pose.
             env.step(torch.zeros(args.num_envs,27,device=env.device))
             from isaaclab.sim.utils import get_current_stage
             from pxr import Usd, UsdGeom, Gf
@@ -119,6 +126,15 @@ def main():
                 obs,reward,done,timeout,extra = env.step(torch.zeros(args.num_envs,27,device=env.device))
                 assert torch.isfinite(obs['policy']).all() and torch.isfinite(reward).all()
             result['curriculum_rebuild_verified']=True
+            saved = env.get_env_state()
+            saved['thickness_curriculum'].update(thickness=.002,recent=[False,True],advances=22)
+            env.set_env_state(saved)
+            assert env.get_env_state() == saved
+            assert torch.allclose(env.backend._dims[:,2],torch.full((args.num_envs,),.002,device=env.device))
+            for _ in range(8):
+                obs,reward,done,timeout,extra = env.step(torch.zeros(args.num_envs,27,device=env.device))
+                assert torch.isfinite(obs['policy']).all() and torch.isfinite(reward).all()
+            result['curriculum_checkpoint_restore_verified']=True
         if args.force_outside:
             group=next(g for g in env.backend.groups if 0 in g.env_ids.tolist())
             local=int(group.local_from_global[0]);pose=group.articulation.data.root_pose_w[local:local+1].clone()

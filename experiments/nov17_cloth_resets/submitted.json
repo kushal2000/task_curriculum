@@ -1,0 +1,64 @@
+{
+  "submitted_on": "2026-11-17",
+  "training_commit": "1eae373",
+  "cancelled_previous_jobs": [
+    710887,
+    710889,
+    711271,
+    711273
+  ],
+  "runs": [
+    {
+      "job_id": 742942,
+      "initialization": "prior",
+      "curriculum": true,
+      "config": "experiments/nov17_cloth_resets/prior.yaml",
+      "node": "portal-compute-02",
+      "wandb_project": "rigidClothDR",
+      "wandb_group": "nov17_cloth_resets",
+      "wandb_name": "rigidClothDR_prior_20to2mm_curriculum_resets",
+      "wandb_url": "https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_prior_20to2mm_curriculum_resets_20261117_111751",
+      "run_directory": "debug_outputs/train_logs/nov/2026-11-17_cloth_curriculum_prior_20to2mm_742942",
+      "last_verified_epoch": 16
+    },
+    {
+      "job_id": 742943,
+      "initialization": "scratch",
+      "curriculum": true,
+      "config": "experiments/nov17_cloth_resets/scratch.yaml",
+      "node": "portal-compute-02",
+      "wandb_project": "rigidClothDR",
+      "wandb_group": "nov17_cloth_resets",
+      "wandb_name": "rigidClothDR_scratch_20to2mm_curriculum_resets",
+      "wandb_url": "https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20to2mm_curriculum_resets_20261117_111818",
+      "run_directory": "debug_outputs/train_logs/nov/2026-11-17_cloth_curriculum_scratch_20to2mm_742943",
+      "last_verified_epoch": 17
+    },
+    {
+      "job_id": 742944,
+      "initialization": "prior",
+      "curriculum": false,
+      "config": "experiments/nov17_cloth_resets/prior_no_curriculum.yaml",
+      "node": "portal-compute-03",
+      "wandb_project": "rigidClothDR",
+      "wandb_group": "nov17_cloth_resets",
+      "wandb_name": "rigidClothDR_prior_2to20mm_no_curriculum_resets",
+      "wandb_url": "https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_prior_2to20mm_no_curriculum_resets_20261117_112219",
+      "run_directory": "debug_outputs/train_logs/nov/2026-11-17_cloth_resets_prior_2to20mm_no_curriculum_742944",
+      "last_verified_epoch": 1
+    },
+    {
+      "job_id": 742945,
+      "initialization": "scratch",
+      "curriculum": false,
+      "config": "experiments/nov17_cloth_resets/scratch_no_curriculum.yaml",
+      "node": "portal-compute-04",
+      "wandb_project": "rigidClothDR",
+      "wandb_group": "nov17_cloth_resets",
+      "wandb_name": "rigidClothDR_scratch_2to20mm_no_curriculum_resets",
+      "wandb_url": "https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_2to20mm_no_curriculum_resets_20261117_112245",
+      "run_directory": "debug_outputs/train_logs/nov/2026-11-17_cloth_resets_scratch_2to20mm_no_curriculum_742945",
+      "last_verified_epoch": 1
+    }
+  ]
+}

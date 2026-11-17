@@ -18,8 +18,8 @@
   "native_curriculum": {
     "status": "complete",
     "num_envs": 64,
-    "startup_s": 11.625755853019655,
-    "step_wall_s": 1.827221455052495,
+    "startup_s": 10.643568094819784,
+    "step_wall_s": 1.677432857453823,
     "steps": 16,
     "counts": {
       "outside_table": 0,
@@ -31,6 +31,7 @@
     "torch_peak_gpu_gib": 0.011386871337890625,
     "contact_capacity": 16384,
     "curriculum_rebuild_verified": true,
+    "curriculum_checkpoint_restore_verified": true,
     "forced_outside_reset_verified": true
   },
   "checkpoint_rollout": {
@@ -51,7 +52,8 @@
     "forced_outside_reset_verified": true
   },
   "cpu_tests": {
-    "targeted": 69,
-    "note": "Cloth suite: 285 passed, 70 skipped, two fixture failures corrected and rerun."
+    "passed": 287,
+    "skipped": 70,
+    "scope": "cloth, training glue, config overlays, contact readout and lifting work"
   }
 }

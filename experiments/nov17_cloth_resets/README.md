@@ -76,3 +76,14 @@ passed at 12,288 environments without nonfinite state or a buffer overflow.
 
 Raw smoke outputs are local ignored files in `results/`; training outputs and
 checkpoints remain in `debug_outputs/train_logs/nov/`.
+
+## Submitted jobs
+
+| Variant | Initialization | Job | W&B |
+| --- | --- | --- | --- |
+| 20 → 2 mm curriculum | prior | 742942 | [run](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_prior_20to2mm_curriculum_resets_20261117_111751) |
+| 20 → 2 mm curriculum | scratch | 742943 | [run](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20to2mm_curriculum_resets_20261117_111818) |
+| 2–20 mm, no curriculum | prior | 742944 | [run](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_prior_2to20mm_no_curriculum_resets_20261117_112219) |
+| 2–20 mm, no curriculum | scratch | 742945 | [run](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_2to20mm_no_curriculum_resets_20261117_112245) |
+
+Yesterday's jobs 710887, 710889, 711271 and 711273 were cancelled at the user's request; their artifacts were retained. These runs use training commit `1eae373`.
