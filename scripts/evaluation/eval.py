@@ -154,6 +154,14 @@ def main() -> None:
         "worlds whose collision shapes differ in type), and the matched setting to use on "
         "PhysX so the two are comparable.",
     )
+    parser.add_argument(
+        "--freeze_after_touch",
+        action="store_true",
+        help="Cloth diagnostic: once an env's fold keypoints first come within cloth.keypoint_tolerance, "
+        "replace its actions with 'hold still' (zero arm velocity, hand held at its current target) until the "
+        "episode ends. With termination.success_steps=180 this asks whether the fold survives 3 s when the hand "
+        "stops moving.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--rl_device", default="cuda:0")
     parser.add_argument("--sim_device", default="cuda:0")
@@ -269,6 +277,7 @@ def main() -> None:
             capture = capture_cm.__enter__()
 
         step = 0
+        frozen = torch.zeros(num_envs, dtype=torch.bool, device=device)
         try:
           while step < args_cli.max_steps and not bool(contributed.all()):
               action = player.get_action(obs["policy"], deterministic=not args_cli.stochastic)
@@ -280,7 +289,18 @@ def main() -> None:
                       f"err {float(inner.fold_error()[0]):.6f}",
                       flush=True,
                   )
+              if args_cli.freeze_after_touch:
+                  action = action.to(device).clone()
+                  if bool(frozen.any()):
+                      hand_prev = inner._prev_targets[:, 7:]
+                      hold = 2.0 * (hand_prev - inner._hand_lower) / (inner._hand_upper - inner._hand_lower) - 1.0
+                      action[frozen, :7] = 0.0
+                      action[frozen, 7:] = hold[frozen].clamp(-1.0, 1.0)
               obs, _rew, terminated, truncated, extras = env.step(action.to(device))
+              if args_cli.freeze_after_touch:
+                  ended = (terminated | truncated).to(device)
+                  frozen |= (inner.fold_error() < float(inner.cfg.cloth.keypoint_tolerance)) & ~ended
+                  frozen &= ~ended
               scoring = ~contributed & (ep_done >= skip)
 
               # Only while the env is still on its first episode. An env that finished early keeps
