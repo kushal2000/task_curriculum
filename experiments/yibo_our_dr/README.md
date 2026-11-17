@@ -3,6 +3,24 @@
 Completed evaluation findings: [transfer analysis](analysis/README.md),
 [rigid ablations](analysis/rigid.md), and [VBD fabrics](analysis/fabrics.md).
 
+## Active training and viewer verification
+
+W&B project: [rigidClothDR](https://wandb.ai/kk837/rigidClothDR).
+Current jobs are [fine-tune 709852](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_finetune_20261116_192340)
+and [scratch 709853](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_20261116_192301).
+Both passed large-scene initialization and reached optimizer updates.
+
+Rigid captures now export closed plate prisms with the actual 2 mm thickness,
+with one interactive viewer per design. A finished
+[viewer integration check](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_viewer_check_flushed_20261116_192913)
+uploaded 15 HTML files across all five design keys; the main scratch run's first
+five viewers were also verified through the server API.
+
+Startup materials are shared across environments, avoiding PhysX's 64K material
+limit at 24,576 environments while preserving independent material DR writes.
+The trainer also flushes W&B before its forced Kit shutdown so short runs do not
+lose queued metrics or media.
+
 Both recipes inherit `isaacsimenvs/scripts/configs/runs/yibo_our_dr.yaml`, sharing the Yibo observation/robot
 interface, our current rigid designs and material/reset/sensor/action DR, and the
 physical fold-then-release objective.

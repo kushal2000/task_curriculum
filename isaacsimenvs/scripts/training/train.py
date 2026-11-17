@@ -101,12 +101,12 @@ def _checkpoint_options(args, agent_cfg: dict) -> dict:
     return {"checkpoint": checkpoint or None, "checkpoint_load_mode": mode}
 
 
-def _finish_wandb() -> None:
+def _finish_wandb(exit_code: int = 0) -> None:
     """Flush metrics and viewer uploads before Kit's forced process exit."""
     import wandb
 
     if wandb.run is not None:
-        wandb.finish()
+        wandb.finish(exit_code=exit_code)
 
 
 def main() -> None:
@@ -450,7 +450,7 @@ def main() -> None:
         run()
     finally:
         if args_cli.wandb_activate:
-            _finish_wandb()
+            _finish_wandb(exit_code=int(sys.exc_info()[0] is not None))
 
     # Kit shutdown can hang; force-exit instead of waiting for a clean teardown.
     if app is not None:
