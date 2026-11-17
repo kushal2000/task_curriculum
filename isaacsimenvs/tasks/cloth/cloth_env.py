@@ -45,6 +45,12 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         kappa = float(cfg.cloth.plastic_yield_curvature)
         self._plastic_set_curvature = float(cfg.cloth.plastic_set_curvature)
         self._plasticity = None
+        # Hinge rheology (bending_rigidity > 0) supersedes the legacy plasticity; both are installed
+        # the same way, right before the first graph capture, and reset per env the same way.
+        self._use_rheology = float(cfg.cloth.bending_rigidity) > 0.0
+        if self._use_rheology:
+            self._rheo_dt = float(cfg.sim.dt) / max(1, int(cfg.newton.num_substeps)) / max(1, int(cfg.cloth.substeps))
+            kappa = 1.0  # any > 0: "install something"
         restore = self._install_plasticity_at_capture(kappa) if kappa > 0.0 else None
         restore_sdf = self._install_full_surface_sdf(cfg) if cfg.cloth.full_surface_contact else None
         c = cfg.cloth
@@ -248,6 +254,9 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         # left every env sheet purely elastic), mirrored to the model's for refreshes and readers.
         views = [e.view for e in getattr(NewtonManager._solver, "_entries", {}).values() if e.solver is cloth_solver]
         solver_rest = views[0].edge_rest_angle if views else None
+        if getattr(self, "_use_rheology", False):
+            self._install_rheology(model, cloth_solver, views[0] if views else None)
+            return
         kappa_set = float(getattr(self, "_plastic_set_curvature", 0.0))
         plast = BendingPlasticity(model, kappa, solver_rest_angle=solver_rest, set_curvature=kappa_set)
         if kappa_set > 0.0:
@@ -267,6 +276,52 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         w = plast.hinge_width[world >= 0]
         print(f"[cloth] plasticity: yield curvature {kappa:g} /m = {np.degrees(kappa * w.max()):.1f} deg per grid "
               f"cell, {np.degrees(kappa * w.min()):.1f} deg per diagonal, {int((world >= 0).sum())} hinges", flush=True)
+
+    def _install_rheology(self, model, cloth_solver, view) -> None:
+        """Per-edge bending from ``cloth.bending_rigidity`` plus the hinge rheology
+        (``utils/hinge_rheology.py``), on the arrays the cloth solver actually reads."""
+        import numpy as np
+        import torch
+
+        from isaacsimenvs.tasks.cloth.utils.hinge_rheology import HingeRheology
+
+        c = self.cfg.cloth
+        inf = float("inf")
+        b = float(c.bending_rigidity)
+        params = dict(
+            bending_rigidity=b,
+            stiffness_scale=float(c.bending_stiffness_scale),
+            friction_ratio=float(c.friction_ratio),
+            friction_moment=float(c.friction_slip_curvature) * float(c.friction_ratio) * b,
+            yield_curvature=float(c.yield_curvature) if c.yield_curvature > 0 else inf,
+            hardening=float(c.yield_hardening),
+            creep_curvature=float(c.creep_curvature) if c.creep_curvature > 0 else inf,
+            creep_tau=float(c.creep_tau) if c.creep_tau > 0 else inf,
+            natural_curvature=float(c.natural_curvature),
+            imperfection_seed=int(c.mesh_seed),
+        )
+        if view is not None:
+            # Writing through the view's copy-on-write arrays keeps the parent model untouched for
+            # the rigid solver; read them back so the update targets exactly what VBD reads.
+            solver_rest = view._cow_array("edge_rest_angle")
+            solver_bend = view._cow_array("edge_bending_properties")
+        else:
+            solver_rest = solver_bend = None
+        rheo = HingeRheology(model, params, dt=self._rheo_dt, solver_rest_angle=solver_rest,
+                             solver_bending_properties=solver_bend)
+        rheo.wrap_solver(cloth_solver)
+        ei = model.edge_indices.numpy()
+        world = model.particle_world.numpy()[ei[:, 2]]
+        world[(ei[:, 0] < 0) | (ei[:, 1] < 0)] = -1
+        self._edge_env = torch.as_tensor(world, device=str(model.device), dtype=torch.long)
+        self._plast_resets_logged = 0
+        self._plasticity = rheo
+        kb = rheo.k_b_np[world >= 0]
+        print(f"[cloth] hinge rheology: B {b:.3e} N m x {c.bending_stiffness_scale:g}, edge_ke "
+              f"{kb.min():.4g}-{kb.max():.4g} over {int((world >= 0).sum())} hinges; friction ratio "
+              f"{c.friction_ratio:g} slip {c.friction_slip_curvature:g} /m; yield {params['yield_curvature']:g} /m; "
+              f"creep {params['creep_curvature']:g} /m tau {params['creep_tau']:g} s; dt {self._rheo_dt:.3g} s "
+              f"({'view copies' if rheo.rest_mirror is not None else 'shared with the model'})", flush=True)
 
     def _reset_idx(self, env_ids):
         super()._reset_idx(env_ids)

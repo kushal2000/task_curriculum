@@ -175,6 +175,43 @@ class ClothCfg:
     edge_kd: float = 1.0e-3
     """Bending damping. SIM1 Table 2 (was 1.0e-2 here)."""
 
+    # --- hinge rheology (utils/hinge_rheology.py); on when bending_rigidity > 0 ----------------
+    bending_rigidity: float = 0.0
+    """Measured bending rigidity B [N m] (cantilever / KES). > 0 replaces the uniform ``edge_ke`` with
+    the per-edge ``bending_stiffness_scale * B / w_e`` (``w_e = (A1 + A2) / l_e``), the same material
+    stiffness on any mesh, and turns on the hinge rheology below (which replaces the
+    ``plastic_*`` fields). 0 = the legacy uniform ``edge_ke``."""
+
+    bending_stiffness_scale: float = 1.0
+    """VBD solver calibration of ``bending_rigidity``: at the env's iteration count the solver
+    under-resolves soft bending, so the stiffness it bends against is this times the continuum
+    ``B / w_e`` (measured with the cantilever probe for the mesh in use)."""
+
+    friction_ratio: float = 0.0
+    """Internal-friction branch stiffness / elastic stiffness (Dahl, elastic-slip limit). 0 = off."""
+
+    friction_slip_curvature: float = 0.0
+    """Curvature [1/m] the friction branch takes before it slips (slip moment / its stiffness).
+    Bends smaller than this come back only part way; the bending hysteresis loop is
+    ``2 * friction_ratio * B * friction_slip_curvature`` [N m / m] high."""
+
+    yield_curvature: float = 0.0
+    """Curvature [1/m] past which a hinge creases permanently (on curvature, not hinge angle, so it
+    holds on any mesh fine enough to resolve a fold's loop). 0 = never."""
+
+    yield_hardening: float = 0.0
+    """The yield curvature grows by this times the hinge's plastic curvature."""
+
+    creep_curvature: float = 0.0
+    """Curvature [1/m] above which the rest angle creeps toward the current one. 0 = no creep."""
+
+    creep_tau: float = 0.0
+    """Creep time constant [s] (``creep_curvature`` > 0)."""
+
+    natural_curvature: float = 0.0
+    """Std [1/m] of a fixed random rest curvature per hinge (bending_rigidity > 0): real fabric never lies
+    exactly flat, and without it a flat sheet with no yield branch stays planar under compression."""
+
     plastic_yield_curvature: float = 0.0
     """Bending plasticity: yield curvature [1/m], 0 = off (purely elastic, as before).
 
