@@ -12,6 +12,32 @@ __all__ = ["RigidClothEnvCfg", "RigidClothCfg", "RigidClothRandomizationCfg"]
 
 
 @configclass
+class RigidClothEpisodeChecksCfg:
+    """Physics-rate resets; recipes enable these explicitly for new training."""
+
+    outside_table: bool = False
+    press_driven_fold: bool = False
+    table_margin: float = 0.00001  # m, floating-point tolerance only
+    minimum_lifting_work_fraction: float = 0.1
+    minimum_lift_angle_deg: float = 30.0
+    maximum_base_tilt_deg: float = 20.0
+    minimum_opposed_load: float = 0.001  # N, contact detection, not a force cap
+    contact_points_per_env: int = 128
+
+
+@configclass
+class ThicknessCurriculumCfg:
+    """One shared thickness, reduced after a fresh window of completed episodes."""
+
+    enabled: bool = False
+    start: float = 0.020
+    target: float = 0.002
+    reduction: float = 0.9
+    success_threshold: float = 0.9
+    window_episodes: int = 4096
+
+
+@configclass
 class RigidClothRandomizationCfg:
     """Material differences, re-drawn per env at EVERY reset (``randomization.py``)."""
 
@@ -115,6 +141,8 @@ class RigidClothCfg:
     Headings are conditioned on the whole sheet fitting; impossible ranges raise.
     Centers are uniform within valid bounds, or centered when position noise is off."""
     randomization: RigidClothRandomizationCfg = RigidClothRandomizationCfg()
+    episode_checks: RigidClothEpisodeChecksCfg = RigidClothEpisodeChecksCfg()
+    thickness_curriculum: ThicknessCurriculumCfg = ThicknessCurriculumCfg()
 
 
 def _sim() -> SimulationCfg:

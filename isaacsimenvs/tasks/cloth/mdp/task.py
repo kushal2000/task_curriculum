@@ -36,11 +36,15 @@ class ClothTask:
         self.reward_buf = torch.zeros(self.num_envs, device=self.device)
         self._allocate()
 
-    def evaluate(self, state, episode_length, max_episode_length, touching=None, *, robot_clearance=None) -> TaskTransition:
+    def evaluate(self, state, episode_length, max_episode_length, touching=None, *, robot_clearance=None,
+                 failures=None, success_allowed=None) -> TaskTransition:
         self.episode_length_buf = episode_length
         self.max_episode_length = max_episode_length
         self.hand_touching = touching
         self.robot_clearance = robot_clearance
+        self._external_failures = {} if failures is None else failures
+        self._success_allowed = (torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+                                 if success_allowed is None else success_allowed.clone())
         view = self.derive(state)
         terminated, truncated = self.compute_terminations(state, view)
         self.reward_buf = self.compute_reward(state, view)
@@ -86,6 +90,9 @@ class ClothTask:
 
         self._reward_terms = {}
         self._termination_reasons = {}
+        self._external_failures = {}
+        self._success_allowed = torch.ones(n, dtype=torch.bool, device=dev)
+        self._step_eligible = self._success_allowed.clone()
 
     def reset(self, ids: torch.Tensor) -> None:
         """Per-episode buffers back to their start values for ``ids``."""
@@ -108,6 +115,12 @@ class ClothTask:
         self._persist_steps[ids] = 0
         self._release_rew_step[ids] = 0.0
         self._best_clear[ids] = -1.0
+        for name, reason in self._external_failures.items():
+            current = reason.clone()
+            current[ids] = False
+            self._external_failures[name] = current
+        self._success_allowed[ids] = True
+        self._step_eligible[ids] = True
 
     def derive(self, state: SimState) -> TaskView:
         cg = self._cloth_grid
@@ -241,7 +254,11 @@ class ClothTask:
         # frame here so an invalid fit still resets its environment this step.
         frame = torch.cat((view.pos_w, view.lin_vel_w, view.ang_vel_w), dim=-1)
         nonfinite = self._nonfinite_envs | ~torch.isfinite(frame).all(dim=-1)
-        folded = self.is_folded(state, view) & ~nonfinite
+        invalid = nonfinite.clone()
+        for reason in self._external_failures.values():
+            invalid |= reason
+        self._step_eligible = self._success_allowed & ~invalid
+        folded = self.is_folded(state, view) & self._step_eligible
         self._fold_hold = torch.where(folded, self._fold_hold + 1, torch.zeros_like(self._fold_hold))
         entered = self._fold_hold >= cfg.termination.success_steps
         held = self._fold_hold >= cfg.termination.held_steps
@@ -267,6 +284,7 @@ class ClothTask:
             "nonfinite": nonfinite,
             "timeout": truncated,
         }
+        reasons.update(self._external_failures)
         if cfg.task.mode != "fold":
             u = self._unfold_env
             reasons["on_table"] = entered & self.on_table(state)
@@ -286,7 +304,7 @@ class ClothTask:
                     self._persist_fail if cfg.task.release.persist_fail_terminates else torch.zeros_like(fall)
                 )
         self._termination_reasons = reasons
-        return fall | hand_far | nonfinite | end, truncated
+        return fall | hand_far | invalid | end, truncated
 
     def guard_reward(self, reward: torch.Tensor) -> torch.Tensor:
         """Zero and flag non-finite or implausibly large rewards."""
@@ -307,13 +325,16 @@ class ClothTask:
     def compute_reward(self, state: SimState, view: TaskView) -> torch.Tensor:
         rew, rel = self.cfg.reward, self.cfg.task.release
 
-        ft_gain, self._closest_fingertip_dist = ratchet(self._closest_fingertip_dist, view.fingertip_dist, 10.0)
+        eligible = self._step_eligible
+        ft_gain, next_fingertip = ratchet(self._closest_fingertip_dist, view.fingertip_dist, 10.0)
+        self._closest_fingertip_dist = torch.where(eligible[:, None], next_fingertip, self._closest_fingertip_dist)
         fingertip = rew.distance_delta_rew_scale * ft_gain.sum(dim=-1)
 
         fold_err = view.fold_error
         # A non-finite self is being reset this step; keep the ratchet finite (no progress paid).
         fold_err = torch.where(torch.isfinite(fold_err), fold_err, self._closest_fold_err.clamp(min=0.0))
-        fold_gain, self._closest_fold_err = ratchet(self._closest_fold_err, fold_err, 100.0)
+        fold_gain, next_fold = ratchet(self._closest_fold_err, fold_err, 100.0)
+        self._closest_fold_err = torch.where(eligible, next_fold, self._closest_fold_err)
         keypoint = rew.keypoint_rew_scale * fold_gain
 
         arm = -rew.kuka_actions_penalty_scale * state.joint_vel[:, self._arm_ids].abs().sum(dim=-1)
@@ -336,6 +357,7 @@ class ClothTask:
         else:
             terms["bonus_rew"] = self._bonus_mask.float() * rew.reach_goal_bonus
 
+        terms = {name: torch.where(eligible, value, 0.) for name, value in terms.items()}
         reward = self.guard_reward(sum(terms.values()))
         terms["total_reward"] = reward
         self._reward_terms = terms

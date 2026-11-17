@@ -269,7 +269,7 @@ def author_rigid_cloths(env_ids, dims, cloth_cfg, spawn_z, design, root_name) ->
     the cloth rest origin, so the same surface offsets work for every panel.
     """
     from isaaclab.sim.utils import get_current_stage
-    from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, Vt
+    from pxr import Gf, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics, Vt
 
     cfg = cloth_cfg
     world_stage = get_current_stage()
@@ -283,6 +283,8 @@ def author_rigid_cloths(env_ids, dims, cloth_cfg, spawn_z, design, root_name) ->
         body_path = f"{template}/{plate.name}"
         body = UsdGeom.Xform.Define(stage, body_path).GetPrim()
         UsdPhysics.RigidBodyAPI.Apply(body)
+        if getattr(getattr(cfg, 'episode_checks', None), 'press_driven_fold', False):
+            PhysxSchema.PhysxContactReportAPI.Apply(body).CreateThresholdAttr(0.)
         mass = UsdPhysics.MassAPI.Apply(body)
         mass.CreateMassAttr(1.0)
         mass.CreateCenterOfMassAttr(Gf.Vec3f(0.0))
@@ -357,25 +359,55 @@ def author_rigid_cloths(env_ids, dims, cloth_cfg, spawn_z, design, root_name) ->
                 raise RuntimeError(f"Sdf.CopySpec {template} -> {root} failed")
             spec = design.resolve(*(float(value) for value in dims[row]))
             put(f"{root}.xformOp:translate", Gf.Vec3d(0.0, 0.0, float(spawn_z(env_id))))
-            for plate in spec.plates:
-                body = f"{root}/{plate.name}"
-                mass, center, inertia, principal = designs.polygon_mass_properties(plate, float(cfg.density))
-                put(f"{body}.physics:mass", float(mass))
-                put(f"{body}.physics:centerOfMass", Gf.Vec3f(*map(float, center)))
-                put(f"{body}.physics:diagonalInertia", Gf.Vec3f(*map(float, inertia)))
-                put(f"{body}.physics:principalAxes", Gf.Quatf(float(principal[0]), Gf.Vec3f(*map(float, principal[1:]))))
-                if _is_rectangle(plate):
-                    put(f"{body}/collider.xformOp:translate", Gf.Vec3d(*map(float, center)))
-                    put(f"{body}/collider.xformOp:scale", Gf.Vec3d(*(2.0 * h for h in plate.half_extents)))
-                else:
-                    vertices, _ = designs.extrusion_mesh(plate)
-                    put(f"{body}/collider.points", Vt.Vec3fArray.FromNumpy(vertices.astype("float32")))
-            for name, hinge in zip(spec.joint_names, spec.hinges):
-                anchor = Gf.Vec3f(*map(float, hinge.anchor))
-                rotation = Gf.Quatf(Gf.Rotation(Gf.Vec3d(1.0, 0.0, 0.0), Gf.Vec3d(*hinge.axis)).GetQuat())
-                for side in (0, 1):
-                    put(f"{root}/{name}.physics:localPos{side}", anchor)
-                    put(f"{root}/{name}.physics:localRot{side}", rotation)
+            _put_cloth_geometry(root, spec, cfg, put)
+
+
+def _put_cloth_geometry(root, spec, cfg, put):
+    """One source for physical plate geometry and hinge frames, initially and after adaptation."""
+    from pxr import Gf, Vt
+
+    for plate in spec.plates:
+        body = f"{root}/{plate.name}"
+        mass, center, inertia, principal = designs.polygon_mass_properties(plate, float(cfg.density))
+        put(f"{body}.physics:mass", float(mass))
+        put(f"{body}.physics:centerOfMass", Gf.Vec3f(*map(float, center)))
+        put(f"{body}.physics:diagonalInertia", Gf.Vec3f(*map(float, inertia)))
+        put(f"{body}.physics:principalAxes", Gf.Quatf(float(principal[0]), Gf.Vec3f(*map(float, principal[1:]))))
+        if _is_rectangle(plate):
+            put(f"{body}/collider.xformOp:translate", Gf.Vec3d(*map(float, center)))
+            put(f"{body}/collider.xformOp:scale", Gf.Vec3d(*(2.0 * h for h in plate.half_extents)))
+        else:
+            vertices, _ = designs.extrusion_mesh(plate)
+            put(f"{body}/collider.points", Vt.Vec3fArray.FromNumpy(vertices.astype("float32")))
+    for name, hinge in zip(spec.joint_names, spec.hinges):
+        anchor = Gf.Vec3f(*map(float, hinge.anchor))
+        rotation = Gf.Quatf(Gf.Rotation(Gf.Vec3d(1.0, 0.0, 0.0), Gf.Vec3d(*hinge.axis)).GetQuat())
+        for side in (0, 1):
+            put(f"{root}/{name}.physics:localPos{side}", anchor)
+            put(f"{root}/{name}.physics:localRot{side}", rotation)
+
+
+def update_cloth_geometry(backend):
+    """Reauthor existing shapes while stopped, retaining all topology and materials."""
+    from isaaclab.sim.utils import get_current_stage
+    from pxr import Sdf
+
+    layer = get_current_stage().GetRootLayer()
+    def put(path, value):
+        attribute = layer.GetAttributeAtPath(Sdf.Path(path))
+        if attribute is None:
+            raise RuntimeError(f'No authored cloth attribute at {path}')
+        attribute.default = value
+
+    with Sdf.ChangeBlock():
+        for group in backend.groups:
+            cache = {}
+            for env_id in group.env_ids.cpu().tolist():
+                dimensions = tuple(float(x) for x in backend._dimensions_cpu[env_id])
+                if dimensions not in cache:
+                    cache[dimensions] = group.design.resolve(*dimensions)
+                root = f'/World/envs/env_{env_id}/RigidCloth_{group.index}'
+                _put_cloth_geometry(root, cache[dimensions], backend.cfg.rigid_cloth, put)
 
 
 def rigid_cloth_articulation(cloth_cfg, spawn_z0, design, root_name):

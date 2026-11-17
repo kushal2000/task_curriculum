@@ -75,6 +75,10 @@ class RigidBackend(ClothBackend):
         ]
 
         cloth_cfg = cfg.rigid_cloth
+        curriculum = cloth_cfg.thickness_curriculum
+        if curriculum.enabled:
+            cloth_cfg.thickness_range = [float(curriculum.start)]*2
+        self.geometry_revision = 0
         sizes = designs.design_grid(
             int(cloth_cfg.design_levels), tuple(cloth_cfg.length_range),
             tuple(cloth_cfg.width_range), tuple(cloth_cfg.thickness_range),
@@ -100,6 +104,13 @@ class RigidBackend(ClothBackend):
             group.env_ids = group.env_ids.to(self.device)
             group.scene_asset = rigid_scene.ArticulationGroup(group.articulation, group.env_ids, self.num_envs)
             self.scene.articulations[f"cloth_{group.index}"] = group.scene_asset
+        if self.cfg.rigid_cloth.episode_checks.press_driven_fold:
+            import carb
+            carb.settings.get_settings().set_bool('/physics/disableContactProcessing', False)
+            self._press_audit_report_paths = tuple(
+                f'/World/envs/env_{e}/RigidCloth_{g.index}/{p.name}'
+                for g in self.groups for e in g.env_ids.cpu().tolist() for p in g.design.plates
+            )
 
     def initialize(self) -> None:
         """Bind asset row order, named bodies/joints, and normalized surface ownership."""
@@ -142,6 +153,16 @@ class RigidBackend(ClothBackend):
         randomization.rigid_init(self)
         summary = ", ".join(f"{group.design.name}: {len(group.env_ids)} envs" for group in self.groups)
         print(f"[rigid_body] {summary}; {self._num_sizes} independently assigned sizes", flush=True)
+
+    def set_thickness(self, thickness):
+        """Edit physical prisms, inertia and hinge anchors while simulation is stopped."""
+        if not self.sim.is_stopped():
+            raise RuntimeError('Changing articulation geometry requires stopping PhysX first')
+        self.cfg.rigid_cloth.thickness_range = [float(thickness)]*2
+        self._dimensions_cpu[:, 2] = float(thickness)
+        self._dims[:, 2] = float(thickness)
+        rigid_scene.update_cloth_geometry(self)
+        self.geometry_revision += 1
 
     def _spawn_z(self, env_id: int) -> float:
         table_top = float(self.cfg.reset.table_reset_z) + self._table_half_height
@@ -228,7 +249,7 @@ class RigidBackend(ClothBackend):
             triangles.append(faces + offset)
             moving.extend([plate.center[0] > 0.0] * len(faces))
             offset += len(rest)
-        shape_id = group.index * self._num_sizes + int(self._size_ids[env_id])
+        shape_id = (self.geometry_revision*len(self.groups)+group.index)*self._num_sizes + int(self._size_ids[env_id])
         return (
             shape_id, torch.cat(vertices).detach().cpu().numpy(),
             np.concatenate(triangles), np.asarray(moving, dtype=bool),

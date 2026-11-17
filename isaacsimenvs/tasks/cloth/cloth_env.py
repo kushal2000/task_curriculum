@@ -24,6 +24,11 @@ class ClothEnv(DirectRLEnv):
         if cfg.task.release.enabled and cfg.task.release.touch == "robot_clearance" and cfg.backend != "rigid":
             raise ValueError("whole-robot collision clearance currently requires the rigid cloth backend")
         self.robot_spec = robot_spec
+        self._episode_guard = None
+        self.thickness_curriculum = None
+        if cfg.backend == 'rigid' and cfg.rigid_cloth.thickness_curriculum.enabled:
+            from .mdp.thickness_curriculum import ThicknessCurriculum
+            self.thickness_curriculum = ThicknessCurriculum(cfg.rigid_cloth.thickness_curriculum)
         cfg.action_space = robot_spec.num_joints
         cfg.observation_space = obs_dim(cfg.obs.obs_list, robot_spec.num_joints)
         cfg.state_space = obs_dim(cfg.obs.state_list, robot_spec.num_joints)
@@ -41,6 +46,16 @@ class ClothEnv(DirectRLEnv):
         # Newton must install its construction hooks before Isaac creates the scene.
         with self.backend.startup():
             super().__init__(cfg, render_mode, **kwargs)
+        self._initialize_task()
+        print(
+            f"[cloth] {cfg.backend}: {self.num_envs} envs, {cfg.task.mode}, "
+            f"obs/state {cfg.observation_space}/{cfg.state_space}",
+            flush=True,
+        )
+
+    def _initialize_task(self):
+        """Bind fresh physics views and per-episode state after initial creation or geometry changes."""
+        cfg, robot_spec = self.cfg, self.robot_spec
         self.backend.initialize()
         self.controller = JointController(
             cfg, *self.backend.robot_defaults(), self.step_dt, robot_spec=robot_spec
@@ -52,15 +67,66 @@ class ClothEnv(DirectRLEnv):
         self.observations = ObservationBuilder(cfg, self.controller, self.task, robot_spec=robot_spec)
         self.reward_buf = self.task.reward_buf
         self.backend.finish_setup()
+        if cfg.backend == 'rigid':
+            checks = cfg.rigid_cloth.episode_checks
+            if checks.outside_table or checks.press_driven_fold:
+                from .backends.rigid.episode_guard import RigidClothEpisodeGuard
+                self._episode_guard = RigidClothEpisodeGuard(self.backend)
+                self._episode_guard.last_counter = self._sim_step_counter
         self._robot_cloth_clearance = None
         if cfg.task.release.enabled and cfg.task.release.touch == "robot_clearance":
             from .backends.rigid.clearance import RobotClothClearance
             self._robot_cloth_clearance = RobotClothClearance(self.backend)
-        print(
-            f"[cloth] {cfg.backend}: {self.num_envs} envs, {cfg.task.mode}, "
-            f"obs/state {cfg.observation_space}/{cfg.state_space}",
-            flush=True,
-        )
+
+    def step(self, actions):
+        observation, reward, terminated, truncated, info = super().step(actions)
+        curriculum = self.thickness_curriculum
+        if curriculum is not None:
+            done = terminated | truncated
+            successes = info['episode_final']['successes'][done] > 0
+            if curriculum.observe(successes.detach().cpu().tolist()):
+                # These rewards belong to the completed old-geometry step. End
+                # all trajectories so PPO/RNN state cannot bridge the scene reset.
+                info = dict(info)
+                info['curriculum/restarted_episodes'] = int((~done).sum())
+                observation = self._rebuild_thickness(curriculum.thickness)
+                terminated, truncated = torch.ones_like(done), torch.zeros_like(done)
+                info['time_outs'] = truncated
+            info.update(curriculum.metrics())
+        return observation, reward, terminated, truncated, info
+
+    def _rebuild_thickness(self, thickness):
+        """Stop/rebind PhysX at a task boundary; the trainer and optimizer stay alive."""
+        print(f'[curriculum] rebuilding articulation thickness to {thickness*1000:.3f} mm', flush=True)
+        counters = self.task._nonfinite_count, self.task._insane_count
+        self._episode_guard = None  # release contact tensor views before detaching physics
+        self.sim._disable_app_control_on_stop_handle = True
+        try:
+            self.sim.stop()
+            # A timeline stop can retain cached collision shapes. Force native
+            # reconstruction as well as Isaac Lab's tensor-view reinitialization.
+            from omni.physx import get_physx_interface
+            get_physx_interface().release_physics_objects()
+            self.backend.set_thickness(thickness)
+            self.sim.reset()
+        finally:
+            self.sim._disable_app_control_on_stop_handle = False
+        self._initialize_task()
+        self.task._nonfinite_count, self.task._insane_count = counters
+        return self.reset()[0]
+
+    def get_env_state(self):
+        if self.thickness_curriculum is None:
+            return None
+        # Physical trajectories are restarted on resume; only curriculum history
+        # is restored, so saved recurrent/rollout state must also be discarded.
+        return {'thickness_curriculum': self.thickness_curriculum.state_dict(), 'physics_state_restored': False}
+
+    def set_env_state(self, state):
+        if state is not None and self.thickness_curriculum is not None:
+            self.thickness_curriculum.load_state_dict(state['thickness_curriculum'])
+            if abs(float(self.backend._dimensions_cpu[0, 2])-self.thickness_curriculum.thickness) > 1e-9:
+                self._rebuild_thickness(self.thickness_curriculum.thickness)
 
     # Isaac Lab calls these hooks in this order for each policy step.
 
@@ -71,10 +137,21 @@ class ClothEnv(DirectRLEnv):
         self.controller.process(actions, self.episode_length_buf)
 
     def _apply_action(self):
+        # The previous substep's scene buffers are current here. The final
+        # substep is observed in _get_dones; the guard deduplicates counters.
+        if self._episode_guard is not None:
+            self._episode_guard.observe(self._sim_step_counter-1)
         commands = self.controller.commands(self.backend.read_joint_pos())
         self.backend.apply_joint_commands(commands)
 
     def _get_dones(self):
+        failures, success_allowed = None, None
+        if self._episode_guard is not None:
+            self._episode_guard.observe(self._sim_step_counter)
+            failures = self._episode_guard.failures()
+            success_allowed = self._episode_guard.success_allowed
+            self.task._nonfinite_envs |= self._episode_guard.nonfinite
+            self.extras['guard_ready_fraction'] = float(success_allowed.float().mean())
         release = self.cfg.task.release
         touching = self.backend.hand_cloth_touching() if release.enabled and release.touch == "contact" else None
         clearance = None
@@ -83,6 +160,7 @@ class ClothEnv(DirectRLEnv):
         self._transition = self.task.evaluate(
             self.backend.read_state(), self.episode_length_buf, self.max_episode_length, touching,
             robot_clearance=clearance,
+            failures=failures, success_allowed=success_allowed,
         )
         return self._transition.terminated, self._transition.truncated
 
@@ -101,6 +179,8 @@ class ClothEnv(DirectRLEnv):
         self.backend.reset(ids, initial)
         self.task.reset(ids)
         self.observations.reset(ids)
+        if self._episode_guard is not None:
+            self._episode_guard.reset(ids)
 
     def _get_observations(self):
         state = self.backend.read_state()

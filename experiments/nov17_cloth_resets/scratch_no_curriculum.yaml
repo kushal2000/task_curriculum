@@ -1,0 +1,10 @@
+base: scratch.yaml
+env:
+  rigid_cloth:
+    thickness_curriculum:
+      enabled: false
+    thickness_range: [0.002, 0.020]
+agent:
+  params:
+    config:
+      name: 0_cloth_resets_scratch_2to20mm_no_curriculum

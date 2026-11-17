@@ -1,0 +1,57 @@
+{
+  "full_batch_reset_checks": {
+    "status": "complete",
+    "num_envs": 12288,
+    "startup_s": 451.9904541457072,
+    "step_wall_s": 5.881518106907606,
+    "steps": 16,
+    "counts": {
+      "outside_table": 16,
+      "press_driven_fold": 7,
+      "nonfinite": 0,
+      "released": 0
+    },
+    "ready_fraction": 0.9957682490348816,
+    "torch_peak_gpu_gib": 0.5663323402404785,
+    "contact_capacity": 1572864
+  },
+  "native_curriculum": {
+    "status": "complete",
+    "num_envs": 64,
+    "startup_s": 11.625755853019655,
+    "step_wall_s": 1.827221455052495,
+    "steps": 16,
+    "counts": {
+      "outside_table": 0,
+      "press_driven_fold": 0,
+      "nonfinite": 0,
+      "released": 0
+    },
+    "ready_fraction": 0.984375,
+    "torch_peak_gpu_gib": 0.011386871337890625,
+    "contact_capacity": 16384,
+    "curriculum_rebuild_verified": true,
+    "forced_outside_reset_verified": true
+  },
+  "checkpoint_rollout": {
+    "status": "complete",
+    "num_envs": 64,
+    "startup_s": 12.013912144117057,
+    "step_wall_s": 19.243748567067087,
+    "steps": 240,
+    "counts": {
+      "outside_table": 22,
+      "press_driven_fold": 54,
+      "nonfinite": 0,
+      "released": 8
+    },
+    "ready_fraction": 0.9375,
+    "torch_peak_gpu_gib": 0.0707540512084961,
+    "contact_capacity": 16384,
+    "forced_outside_reset_verified": true
+  },
+  "cpu_tests": {
+    "targeted": 69,
+    "note": "Cloth suite: 285 passed, 70 skipped, two fixture failures corrected and rerun."
+  }
+}

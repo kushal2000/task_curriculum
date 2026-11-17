@@ -51,6 +51,7 @@ class MaterialView:
 
 def _backend(names=("single_hinge", "strip_4", "strip_8"), num_envs=None, resolution=9):
     backend = RigidBackend.__new__(RigidBackend)
+    backend.geometry_revision = 0
     backend.robot_spec = ROBOT
     backend.device, backend.num_envs = "cpu", num_envs or 2 * len(names)
     n = backend.num_envs
@@ -228,7 +229,8 @@ def test_design_list_is_validated_before_scene_construction(paths):
 def test_designs_cycle_through_global_envs_without_changing_size_assignment():
     cfg = NS(
         task=NS(release=NS(touch="origin")), scene=NS(num_envs=9),
-        rigid_cloth=NS(design_levels=2, length_range=[.1, .3], width_range=[.1, .2], thickness_range=[.002, .01]),
+        rigid_cloth=NS(design_levels=2, length_range=[.1, .3], width_range=[.1, .2], thickness_range=[.002, .01],
+                       thickness_curriculum=NS(enabled=False)),
     )
     mixed = RigidBackend(cfg, ["single_hinge.yaml", "flexible_corners.yaml", "strip_8.yaml"])
     single = RigidBackend(cfg, ["single_hinge.yaml"])

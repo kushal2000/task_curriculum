@@ -27,6 +27,10 @@ env:
 
   # Active physical DR parameters. Viser reads defaults/bounds from this block.
   rigid_cloth:
+    episode_checks:
+      outside_table: true
+      press_driven_fold: true
+      table_margin: 0.00001             # m, numerical tolerance on physical plate vertices
     designs: [single_hinge.yaml, strip_4.yaml, strip_8.yaml, hinge_band.yaml, flexible_corners.yaml]
     design_levels: 16
     length_range: [0.10, 0.30]           # m, construction-time size grid

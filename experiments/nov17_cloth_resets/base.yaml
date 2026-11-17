@@ -1,0 +1,21 @@
+# Same Yibo interface/table, material DR, delays and rewards, with physics-rate resets.
+base: ../../isaacsimenvs/scripts/configs/runs/yibo_our_dr.yaml
+env:
+  rigid_cloth:
+    thickness_range: [0.020, 0.020]  # shared starting thickness; no prebuilt thickness variants
+    thickness_curriculum:
+      enabled: true
+      start: 0.020
+      target: 0.002
+      reduction: 0.9
+      success_threshold: 0.9
+      window_episodes: 4096
+    episode_checks:
+      outside_table: true
+      press_driven_fold: true
+      table_margin: 0.00001
+      minimum_lifting_work_fraction: 0.1
+      minimum_lift_angle_deg: 30.0
+      maximum_base_tilt_deg: 20.0
+      minimum_opposed_load: 0.001
+      contact_points_per_env: 128

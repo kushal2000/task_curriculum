@@ -291,10 +291,20 @@ def register_rlgames_env(
                 return gym.spaces.Box(-self._clip_obs, self._clip_obs, spec.shape, dtype=spec.dtype)
         wrapper_cls = _DAggerRlGamesVecEnvWrapper
 
+    class StatefulGpuEnv(RlGamesGpuEnv):
+        def get_env_state(self):
+            getter = getattr(env.unwrapped, 'get_env_state', None)
+            return getter() if getter is not None else None
+
+        def set_env_state(self, state):
+            setter = getattr(env.unwrapped, 'set_env_state', None)
+            if setter is not None:
+                setter(state)
+
     wrapped = wrapper_cls(env, rl_device, clip_obs, clip_actions)
     vecenv.register(
         "IsaacRlgWrapper",
-        lambda config_name, num_actors, **kw: RlGamesGpuEnv(config_name, num_actors, **kw),
+        lambda config_name, num_actors, **kw: StatefulGpuEnv(config_name, num_actors, **kw),
     )
     env_configurations.register(
         name,

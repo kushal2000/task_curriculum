@@ -797,6 +797,9 @@ class A2CBase(BaseAlgorithm):
         # start stalls until the episode times out and the reset clears it (PhysX fold pool resume
         # smoke 169896: no episode ended for the first 17 epochs, the first ones were 0-fold timeouts).
         SKIP = SKIP or weights.get('env_state', None) is None
+        # A curriculum may restore its progress while restarting physical episodes.
+        env_state = weights.get('env_state')
+        SKIP = SKIP or (isinstance(env_state, dict) and env_state.get('physics_state_restored') is False)
         if SKIP:
             print("Skipping loading of many things in a2c_common.set_full_state_weights because the shapes don't match")
             print(f"self.num_actors = {self.num_actors}, weights['current_rewards'].shape = {weights['current_rewards'].shape if 'current_rewards' in weights else 'not in weights'}")
