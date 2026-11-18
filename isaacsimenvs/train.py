@@ -48,11 +48,8 @@ import sys
 #          (hence --capture_viewer_github_raw_base)
 #   Cloth  the robot plus the sheet and its fold target as deformable channels
 #
-# Matched by substring so the registered task ids stay the single source of truth.
+# Matched by id prefix (`Isaacsimenvs-<name>`), so `RigidCloth` (PhysX) gets no viewer, as before.
 _POSE_VIEWERS = {
-    # Cloth before Play: the cloth viewer adds the sheet and its fold target as deformable
-    # channels, which a rigid-pose viewer cannot represent. Substring matching is first-wins, and
-    # the cloth task id does not contain "Play", but keep it above for clarity.
     "Cloth": "isaacsimenvs.tasks.cloth.pose_viewer:ClothPoseViewerWrapper",
     "Play": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",
 }
@@ -60,7 +57,7 @@ _POSE_VIEWERS = {
 
 def _pose_viewer_target(task_id: str) -> str | None:
     for name, target in _POSE_VIEWERS.items():
-        if name in task_id:
+        if task_id.startswith(f"Isaacsimenvs-{name}"):
             return target
     return None
 

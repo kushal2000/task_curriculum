@@ -395,7 +395,9 @@ def main() -> None:
     args, hydra_args = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + hydra_args
     os.chdir(ROOT)
-    physx = "Physx" in args.task
+    # PhysX = the rigid backend (`RigidCloth`, or an alias of it such as `FoldPoolPhysx<robot>`). Read
+    # from the id's own spelling: the gym registry is not imported until after the app starts.
+    physx = args.task.startswith(("Isaacsimenvs-RigidCloth", "Isaacsimenvs-FoldPoolPhysx"))
     tasks = PHYSX_TASKS if physx else TASKS
     task_keys = _TASK_KEYS
     # $LIVE_VISER_TASKS: a JSON {display name: [gym task, [hydra overrides]]} that replaces the task menu.

@@ -6,12 +6,13 @@ composition pattern — a task YAML file sits between the configclass defaults
 and the Hydra CLI — so this decorator adds that middle layer.
 
 Precedence (lowest → highest):
-    1. CartpoleEnvCfg() defaults (Python)
-    2. cfg/task/Cartpole.yaml overlay (file — optional, via new gym kwarg
-       `env_cfg_yaml_entry_point`)
-    3. cfg/experiment/<name>.yaml (optional, `train.py --experiment <name>`): one run recipe's
+    1. the env configclass defaults (Python)
+    2. cfg/task/<Task>.yaml overlay (via the gym kwarg `env_cfg_yaml_entry_point`)
+    3. cfg/robot/<setup>.yaml, the robot setup (`env.robot_setup`), chosen by the command line, else
+       the run recipe, else an alias task id (see `resolve_task`)
+    4. cfg/experiment/<name>.yaml (optional, `train.py --experiment <name>`): one run recipe's
        `env:` and `agent:` overrides, so the recipe lives in the repo rather than in a launcher
-    4. Hydra CLI overrides (e.g. `env.scene.num_envs=4096`)
+    5. Hydra CLI overrides (e.g. `env.scene.num_envs=4096`)
 
 Implementation mirrors `isaaclab_tasks.utils.hydra.register_task_to_hydra` /
 `hydra_task_config`, with one inserted `env_cfg.from_dict(yaml_overlay)` step
@@ -39,6 +40,24 @@ from isaaclab.utils import replace_slices_with_strings, replace_strings_with_sli
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
 EXPERIMENT_DIR = Path(__file__).resolve().parents[1] / "cfg" / "experiment"
+ROBOT_DIR = Path(__file__).resolve().parents[1] / "cfg" / "robot"
+
+
+def resolve_task(task_id: str) -> tuple[str, str]:
+    """``(canonical task id, robot setup or "")``. An alias id (e.g.
+    ``Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0``) carries both in its gym kwargs."""
+    kwargs = gym.spec(task_id).kwargs
+    return kwargs.get("canonical_task", task_id), kwargs.get("robot_setup", "")
+
+
+def _cli_value(key: str) -> str | None:
+    """The value of a ``key=value`` hydra override on the command line, if given."""
+    import sys
+
+    for arg in sys.argv[1:]:
+        if arg.startswith(f"{key}="):
+            return arg.split("=", 1)[1]
+    return None
 
 
 def _deep_merge(base: dict, over: dict) -> dict:
@@ -100,16 +119,30 @@ def hydra_task_config_with_yaml(
                 # what our hand-rolled `apply_task_overrides` walker does, but
                 # upstream-supported.
                 env_cfg.from_dict(overlay)
-            # A robot overlay (cfg/robot/) on top, for task ids that swap the robot.
-            robot_yaml = gym.spec(short_name).kwargs.get("env_cfg_robot_yaml_entry_point")
-            if robot_yaml:
+            canonical, setup = resolve_task(short_name)
+            exp = load_experiment(experiment) if experiment else {}
+            if exp:
+                exp_canonical, exp_setup = resolve_task(exp.get("task", short_name))
+                if exp_canonical != canonical:
+                    raise ValueError(f"experiment {experiment!r} is for {exp['task']}, not {short_name}")
+                exp_setup = (exp.get("env") or {}).get("robot_setup", exp_setup)
+                if setup and exp_setup and exp_setup != setup:
+                    raise ValueError(
+                        f"experiment {experiment!r} is for robot setup {exp_setup!r}, the task id "
+                        f"{short_name} for {setup!r}; pick one (env.robot_setup=...)"
+                    )
+                setup = setup or exp_setup
+            setup = _cli_value("env.robot_setup") or setup
+            if setup:
+                robot_yaml = ROBOT_DIR / f"{setup}.yaml"
+                if not robot_yaml.exists():
+                    known = sorted(p.stem for p in ROBOT_DIR.glob("*.yaml"))
+                    raise ValueError(f"unknown robot setup {setup!r}; known: {known}")
                 with open(robot_yaml) as f:
                     env_cfg.from_dict(yaml.safe_load(f) or {})
+                env_cfg.robot_setup = setup
 
-            if experiment:
-                exp = load_experiment(experiment)
-                if exp.get("task", short_name) != short_name:
-                    raise ValueError(f"experiment {experiment!r} is for {exp['task']}, not {short_name}")
+            if exp:
                 env_cfg.from_dict(exp.get("env") or {})
                 if exp.get("agent"):
                     if isinstance(agent_cfg, dict):
@@ -117,6 +150,8 @@ def hydra_task_config_with_yaml(
                     else:
                         agent_cfg.from_dict(exp["agent"])
                 print(f"[hydra] experiment {experiment}: {EXPERIMENT_DIR / experiment}.yaml", flush=True)
+            if setup:
+                print(f"[hydra] robot setup {setup}: {ROBOT_DIR / setup}.yaml", flush=True)
 
             env_cfg = replace_env_cfg_spaces_with_strings(env_cfg)
             env_cfg_dict = env_cfg.to_dict()

@@ -595,6 +595,11 @@ class PlayEnvCfg(DirectRLEnvCfg):
     # Robot embodiment, a key of robots.ROBOT_SPECS. Fixed per registered task; assets.robot_urdf
     # must be its URDF. PlayEnv sets action_space (and the obs sizes) from it.
     robot: str = "kuka_sharpa"
+    # Robot setup: a file stem in cfg/robot/ (robot spec, URDF, self-collision, base position),
+    # applied by the config loader (utils/hydra_utils) between the task YAML and the run recipe.
+    # Set it in a recipe (`env.robot_setup`), on the command line, or through an alias task id.
+    # Empty: the task's own robot.
+    robot_setup: str = ""
     # Robot self-collision, minus robots.RobotSpec.self_collision_filter: SimToolReal's Isaac Gym
     # setup. Off here, where this port has always run (docs/phase1_baseline.md), so the Kuka eval
     # and the tasks built on Play are unchanged; the tasks that train from scratch turn it on.
