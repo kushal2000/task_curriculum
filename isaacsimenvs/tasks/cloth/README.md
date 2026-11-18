@@ -1,12 +1,48 @@
-# Cloth folding tasks
+# Cloth folding
 
-## Environments
+One fold task on two backends. The policy sees the same observation and its actions mean the same
+thing on both, so a policy trained on the rigid pool is evaluated on the VBD cloth unchanged.
 
-| Task id (`Isaacsimenvs-<name>-Direct-v0`) | Simulator | Object | Code |
+| Task id (`Isaacsimenvs-<name>-Direct-v0`) | Backend | Simulator | Manipuland |
 |---|---|---|---|
-| `Cloth` | Newton | VBD particle cloth | `cloth_env.py`, `cloth_env_cfg.py`, `cloth_cfg.py` |
-| `FoldPoolPhysx` | PhysX | pool of 7 hinged-plate fold shapes | `physx_envs.py`, `physx_env_cfg.py`, `fold_pool_cfg.py` |
+| `Cloth` | `backends/vbd` | Newton (`.venv_isaaclab3`) | VBD particle cloth |
+| `RigidCloth` | `backends/rigid` | PhysX (`.venv_isaacsim`) | pool of 7 hinged-plate fold shapes |
 
+The robot is `env.robot_setup` (a file stem in `isaacsimenvs/cfg/robot/`), set in the run recipe or on
+the command line. The older ids stay registered as aliases that carry their setup:
+`FoldPoolPhysx<Robot>` -> `RigidCloth`, `Cloth<Robot>` -> `Cloth`, e.g.
+`Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0` = `RigidCloth` + `flexiv_wuji_right_real`.
+
+## Layout
+
+```text
+cloth/
+  __init__.py         task registration (canonical ids + aliases)
+  cloth_cfg.py        ClothCfg: the sheet the task is defined on (shared by both backends)
+  mdp/                the task, simulator-independent
+    task.py           fold targets, reward, success, termination, goal marker, finite guard
+    tracker.py        tracker observation DR (TrackerMixin) and the pipeline it replays
+    tracker_cfg.py
+    geometry/         grid.py (sheet grid, keypoints, fold targets), fold_shapes.py (pool shapes)
+  backends/
+    adapter.py        ClothAsRigidObject: a cloth seen through the rigid-object reads Play makes
+    usd.py            bulk per-env USD edits; neutralise the Play tool, reshape the goal marker
+    rigid/            RigidClothEnv: env.py, config.py, scene.py, contacts.py, randomization.py,
+                      checks.py (startup proofs), physx.py, pool.py (adapter), assets.py (USD)
+    vbd/              ClothEnv: env.py, config.py, play_newton*.py (its Newton base), pierce.py,
+                      newton_support/ (Isaac Lab 3.0 compat, patches, USD cache)
+  perception/         point clouds for the point-cloud students (pointcloud, scene_pointcloud,
+                      robot_surface)
+  pose_viewer.py      training-time interactive viewer
+  tests/
+```
+
+The fold shapes are YAML designs with a PNG each in `isaacsimenvs/cfg/rigid_cloth_designs/`
+(regenerate the PNGs with `scripts/visualization/render_fold_designs.py`).
+
+Both envs still subclass the Play env (`PlayEnv` / `PlayNewtonEnv`) and reach the observation and
+action code through it; the adapter in `backends/adapter.py` presents the sheet (or the pool's active
+shape) as Play's rigid object.
 
 ## Training
 
@@ -14,7 +50,7 @@ All launchers are Slurm batch scripts. Run them from the repo root on bos14. Arr
 
 ### On PhysX (rigid plates)
 
-`scripts/cluster/bos14_physx_cloth_train.sh`: 1 GPU per seed.
+`scripts/cluster/bos14_physx_cloth_train.sh`: 1 GPU per seed (`RigidCloth`).
 
 ```bash
 REPO=$PWD EXPERIMENT=flat7RW_base TASK=pool ROBOT=FlexivWujiRightHLRL RUN_TAG=flat7RW_base WANDB=1 \
@@ -22,13 +58,13 @@ PRIOR=pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth \
 sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
 ```
 
-- `TASK=pool` -> `FoldPoolPhysx<ROBOT>`; `TASK=chain VARIANT=box3-mid` -> `RigidClothPhysx<ROBOT>`.
+- `TASK=pool` -> `FoldPoolPhysx<ROBOT>` (an alias of `RigidCloth` + that robot setup).
 - With `EXPERIMENT` set, the recipe supplies env count, epochs and minibatch. The launcher's
   `ENVS` / `EPOCHS` are ignored; override them through `EXTRA_ARGS`.
 - `LOAD_MODE=weights` (default) loads model + normalizers only. `LOAD_MODE=resume` also loads the
   optimizer and epoch counter; `max_epochs` is then the total.
 - `PRIORS="<s1> <s2> <s3>"` gives each seed its own start checkpoint.
-- Output: `outputs/<date>/<time>/0_px<pool|chain>_<RUN_TAG>_s<seed>_<job>/nn/`. Files:
+- Output: `outputs/<date>/<time>/0_pxpool_<RUN_TAG>_s<seed>_<job>/nn/`. Files:
   `snap_*_ep_<N>.pth` (every `snapshot_every` epochs), `last_*`, `best_*`.
 
 ### On VBD cloth (Newton)
