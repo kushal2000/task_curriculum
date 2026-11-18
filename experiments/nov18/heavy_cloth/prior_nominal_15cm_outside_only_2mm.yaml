@@ -1,0 +1,9 @@
+# Identical to prior_nominal_15cm_outside_only.yaml except the panel thickness: 2 mm instead of 20 mm.
+base: prior_nominal_15cm_outside_only.yaml
+env:
+  rigid_cloth:
+    thickness: 0.002
+agent:
+  params:
+    config:
+      name: 0_cloth_heavy_prior_nominal_15cm_outside_only_2mm
