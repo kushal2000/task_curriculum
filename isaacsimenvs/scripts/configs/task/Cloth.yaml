@@ -1,9 +1,8 @@
 # Isaacsimenvs-Cloth-Direct-v0: the fold task with a VBD cloth sheet, on Isaac Lab 3.0 + Newton
 # (.venv_isaaclab3). Config class: backends/vbd/config.VbdClothEnvCfg.
 #
-# The loader does a flat `yaml.safe_load` with no inheritance, so the task blocks are a full copy of
-# FoldPoolPhysx.yaml's (keep the two diffable); this file adds the Newton solver (`newton:`) and
-# `use_gravcomp`. Spawn height lives in `ClothCfg.start_height`.
+# Still a full listing of the task blocks (most equal the configclass defaults; RigidCloth.yaml lists
+# only its differences); this file adds the Newton solver (`newton:`) and `use_gravcomp`. Spawn height lives in `ClothCfg.start_height`.
 
 # -----------------------------------------------------------------------------
 # DirectRLEnvCfg top-level required fields

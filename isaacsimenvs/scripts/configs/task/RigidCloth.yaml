@@ -1,0 +1,31 @@
+# Isaacsimenvs-RigidCloth-Direct-v0 (alias FoldPoolPhysx): the fold task on the fold-shape pool of
+# hinged plates, PhysX (Isaac Sim 5.1 / Isaac Lab 2.3, .venv_isaacsim).
+#
+# Only what differs from the configclass defaults (backends/rigid/config.RigidClothEnvCfg and
+# env_cfg.ClothEnvCfg, which document every key). The robot comes from a robot setup
+# (configs/robot/, env.robot_setup); a run recipe (configs/runs/) adds the rest.
+
+sim:
+  dt: 0.00833333333                     # 1/120 to 11 digits (bit-identical to the trained runs)
+
+assets:
+  # 0.6 x 0.4 m: wider in x only -- extending the table toward the robot pins the arm's elbow.
+  table_urdf: "assets/urdf/table_fold_pool.urdf"
+
+cloth:
+  keypoint_tolerance: 0.015             # a fixed 1.5 cm at every sheet size
+
+rigid_cloth:
+  # Per-env physics randomisation, redrawn at every reset. Only the contact shell is randomised
+  # (contact_margin_offset, felt thickness 10-22 mm); every other term is pinned neutral. DR blocks
+  # (configs/dr/) turn them back on: friction, hinge_mass.
+  randomization:
+    enabled: true
+    slat_friction_scale: [1.0, 1.0]
+    fingertip_friction_scale: [1.0, 1.0]
+    hinge_damping_scale: [1.0, 1.0]
+    hinge_stiffness: [0.0, 0.0]         # [0, 0] also keeps the actuator velocity-only, as with DR off
+    mass_scale: [1.0, 1.0]
+
+fold_pool:
+  size_range: [0.10, 0.20]              # sheet side [m], per env; the arm cannot reach the far side of 30 cm

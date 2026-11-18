@@ -1,7 +1,7 @@
 """``ClothEnvCfg``: the fold task's configuration, shared by both backends.
 
-The sections mirror the task YAMLs (``configs/task/FoldPoolPhysx.yaml``, ``configs/task/Cloth.yaml``) one to
-one; a backend's config adds its own blocks (``backends/rigid/config.py``,
+The task YAMLs (``configs/task/RigidCloth.yaml``, ``configs/task/Cloth.yaml``) override these defaults
+section by section; a backend's config adds its own blocks (``backends/rigid/config.py``,
 ``backends/vbd/config.py``). The robot comes from ``robot`` (a ``RobotSpec`` name) and
 ``assets.robot_urdf``, both set by a robot setup (``configs/robot/<robot_setup>.yaml``).
 """

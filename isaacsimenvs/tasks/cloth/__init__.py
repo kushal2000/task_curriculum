@@ -18,7 +18,7 @@ from isaacsimenvs import CONFIG_DIR as _CFG_DIR
 
 _TASKS = {
     "Cloth": ("backends.vbd.env:VbdClothEnv", "backends.vbd.config:VbdClothEnvCfg", "Cloth.yaml"),
-    "RigidCloth": ("backends.rigid.env:RigidClothEnv", "backends.rigid.config:RigidClothEnvCfg", "FoldPoolPhysx.yaml"),
+    "RigidCloth": ("backends.rigid.env:RigidClothEnv", "backends.rigid.config:RigidClothEnvCfg", "RigidCloth.yaml"),
 }
 
 

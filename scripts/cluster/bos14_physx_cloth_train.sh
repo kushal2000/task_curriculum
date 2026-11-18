@@ -3,7 +3,8 @@
 #
 #   TASK=pool PRIOR=<run>.pth RUN_TAG=box3 sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
 #   TASK=pool ENVS=256 EPOCHS=3 RUN_TAG=smoke sbatch --array=0 scripts/cluster/bos14_physx_cloth_train.sh
-#   EXPERIMENT=flat7DRABC TASK=pool RUN_TAG=flat7DRABC sbatch --array=0-2 ...   (recipe: isaacsimenvs/scripts/configs/runs/)
+#   EXPERIMENT=experiments/nov11_right_wuji_dr_ablation/flat7RW_fric.yaml RUN_TAG=flat7RW_fric sbatch --array=0-2 ...
+#       (EXPERIMENT: a name in isaacsimenvs/scripts/configs/runs/ or a recipe path; configs/recipes.py)
 #   REPO=<worktree> ROBOT=FlexivWujiHumanLike PRIOR=pretrained_policy/flexiv_wuji.pth ... (another checkout / robot)
 #   PRIORS="<s1>.pth <s2>.pth <s3>.pth" TASK=pool RUN_TAG=ft sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
 #       (finetune: array index k starts from the k-th checkpoint)
@@ -77,7 +78,7 @@ if [ "${WANDB:-0}" = 1 ]; then
     WANDB_ARGS=(--wandb_activate --wandb_project fold_pool --wandb_group "px_${RUN_TAG:-run}_${JOB_TAG}" --wandb_name "$NAME")
 fi
 read -r -a EXTRA <<<"${EXTRA_ARGS:-}"
-# EXPERIMENT=<name>: the run recipe in isaacsimenvs/scripts/configs/runs/<name>.yaml supplies the env count,
+# EXPERIMENT=<name or path>: the run recipe (configs/recipes.py) supplies the env count,
 # epochs, minibatch, SAPG block and DR, so the launcher's own size overrides are left out (ENVS / EPOCHS /
 # MINIBATCH are ignored; override through EXTRA_ARGS instead).
 if [ -n "${EXPERIMENT:-}" ]; then
@@ -93,21 +94,12 @@ fi
 export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES
 if [ -n "${EXPERIMENT:-}" ]; then
     # envs / epochs as the run will use them (recipe, then EXTRA_ARGS), for run_record_sync.py's header parse
-    read -r ENVS EPOCHS < <(.venv_isaacsim/bin/python - "$EXPERIMENT" "${EXTRA_ARGS:-}" <<'PY'
-import re, sys, yaml
-from pathlib import Path
-def load(n):
-    e = yaml.safe_load(Path(f"isaacsimenvs/scripts/configs/runs/{n}.yaml").read_text())
-    b = e.pop("base", None)
-    return merge(load(b), e) if b else e
-def merge(a, o):
-    a = dict(a)
-    for k, v in o.items():
-        a[k] = merge(a[k], v) if isinstance(v, dict) and isinstance(a.get(k), dict) else v
-    return a
-e = load(sys.argv[1])
-envs = e.get("env", {}).get("scene", {}).get("num_envs", "?")
-epochs = e.get("agent", {}).get("params", {}).get("config", {}).get("max_epochs", "?")
+    read -r ENVS EPOCHS < <(PYTHONPATH=$PWD .venv_isaacsim/bin/python - "$EXPERIMENT" "${EXTRA_ARGS:-}" <<'PY'
+import re, sys
+from isaacsimenvs.scripts.configs.recipes import load_recipe
+e = load_recipe(sys.argv[1])
+envs = e["env"].get("scene", {}).get("num_envs", "?")
+epochs = e["agent"].get("params", {}).get("config", {}).get("max_epochs", "?")
 envs = (re.findall(r"env\.scene\.num_envs=(\d+)", sys.argv[2]) or [envs])[-1]
 epochs = (re.findall(r"max_epochs=(\d+)", sys.argv[2]) or [epochs])[-1]
 print(envs, epochs)
