@@ -196,7 +196,6 @@ def test_the_hammer_strings_are_a_discriminating_check():
     [
         ("isaacsimenvs.tasks.cloth.pose_viewer", "ClothPoseViewerWrapper", True),
         ("isaacsimenvs.tasks.play.pose_viewer", "PlayPoseViewerWrapper", True),
-        ("isaacsimenvs.tasks.multilink_cartpole.pose_viewer", "CartpolePoseViewerWrapper", False),
     ],
 )
 def test_network_kwargs_are_offered_by_signature_not_module_name(module_name, class_name, expected):

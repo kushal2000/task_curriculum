@@ -5,9 +5,8 @@ task package, which imports `isaaclab.envs` — and Isaac Lab's sub-namespaces o
 after `AppLauncher` has booted Kit. Booting Kit for a unit test would take minutes and a
 GPU.
 
-So the modules under test are deliberately Kit-free (`generate_cartpole`,
-`generate_bottle`, `difficulty_math`, `curriculum/schedulers`), and this helper loads
-them straight off disk so the package `__init__` never runs. If a test here starts
+So the modules under test are deliberately Kit-free (`rigid_cloth`, `fold_shapes`, ...),
+and this helper loads them straight off disk so the package `__init__` never runs. If a test here starts
 needing Kit, the module it is testing has grown a dependency it should not have.
 """
 
@@ -33,30 +32,6 @@ def load_module(rel_path: str, name: str | None = None):
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
-
-
-@pytest.fixture(scope="session")
-def gen_cartpole():
-    return load_module(
-        "isaacsimenvs/tasks/multilink_cartpole/utils/generate_cartpole.py", "gen_cartpole"
-    )
-
-
-@pytest.fixture(scope="session")
-def gen_bottle():
-    return load_module("isaacsimenvs/tasks/bottle_flip/utils/generate_bottle.py", "gen_bottle")
-
-
-@pytest.fixture(scope="session")
-def difficulty_math():
-    return load_module(
-        "isaacsimenvs/tasks/multilink_cartpole/utils/difficulty_math.py", "difficulty_math"
-    )
-
-
-@pytest.fixture(scope="session")
-def schedulers():
-    return load_module("isaacsimenvs/curriculum/schedulers.py", "schedulers")
 
 
 @pytest.fixture(scope="session")

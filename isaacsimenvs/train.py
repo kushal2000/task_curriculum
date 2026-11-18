@@ -44,15 +44,12 @@ import sys
 # (utils/interactive_viewer/index.template.html) and log it with wandb.Html; they differ
 # only in what geometry they hand the browser.
 #
-#   Play / BottleFlip  the Kuka + SHARPA robot, whose STL meshes the browser must fetch
-#                      from GitHub raw (hence --capture_viewer_github_raw_base)
-#   MultiLinkCartpole  primitives only, so the URDF is embedded and the page needs no
-#                      network at all
+#   Play   the robot, whose STL meshes the browser must fetch from GitHub raw
+#          (hence --capture_viewer_github_raw_base)
+#   Cloth  the robot plus the sheet and its fold target as deformable channels
 #
 # Matched by substring so the registered task ids stay the single source of truth.
 _POSE_VIEWERS = {
-    "MultiLinkCartpole": "isaacsimenvs.tasks.multilink_cartpole.pose_viewer:CartpolePoseViewerWrapper",
-    "BottleFlip": "isaacsimenvs.tasks.play.pose_viewer:PlayPoseViewerWrapper",
     # Cloth before Play: the cloth viewer adds the sheet and its fold target as deformable
     # channels, which a rigid-pose viewer cannot represent. Substring matching is first-wins, and
     # the cloth task id does not contain "Play", but keep it above for clarity.
@@ -105,7 +102,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Train isaacsimenvs task via rl_games.")
     # --- Task/agent selection ---
-    parser.add_argument("--task", required=True, help="Gym task id, e.g. Isaacsimenvs-Cartpole-Direct-v0")
+    parser.add_argument("--task", required=True, help="Gym task id, e.g. Isaacsimenvs-FoldPoolPhysx-Direct-v0")
     parser.add_argument(
         "--agent",
         default="rl_games_cfg_entry_point",

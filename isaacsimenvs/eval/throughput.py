@@ -35,7 +35,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--task",
-        default="Isaacsimenvs-Cable-Direct-v0",
+        required=True,
         help="gym id to benchmark. The scene, not the harness, decides what is measured.",
     )
     parser.add_argument("--num_envs", type=int, default=64)
