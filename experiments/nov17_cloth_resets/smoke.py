@@ -51,6 +51,15 @@ def main():
     try:
         start = time.perf_counter();env = ClothEnv(cfg);obs,_ = env.reset()
         result['startup_s'] = time.perf_counter()-start
+        for group in env.backend.groups:
+            view=group.articulation.root_physx_view
+            contact,rest=view.get_contact_offsets(),view.get_rest_offsets()
+            assert torch.allclose(contact,torch.full_like(contact,cfg.rigid_cloth.contact_offset))
+            expected=getattr(env.backend,'_dr_rest_offset',None)
+            expected=(torch.full_like(rest,cfg.rigid_cloth.rest_offset) if expected is None else
+                      expected[group.env_ids].cpu()[:,None].expand_as(rest))
+            assert torch.allclose(rest,expected)
+        result['cloth_offsets_verified']=dict(contact=cfg.rigid_cloth.contact_offset,rest=cfg.rigid_cloth.rest_offset)
         player = (PretrainedPlayer(ROOT/'pretrained_policy/flexiv_wuji/config.yaml',args.checkpoint,args.num_envs,
                   device=args.device,num_observations=134,num_actions=27,expl_coef=0.) if args.checkpoint else None)
         counts = dict(outside_table=0,press_driven_fold=0,nonfinite=0,released=0)

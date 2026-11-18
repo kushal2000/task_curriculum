@@ -57,3 +57,48 @@ measure penetration, jitter, tunnelling and runtime before choosing a DR interva
 Offsets near a panel width can also affect non-neighboring plates, so test every
 topology. Keep rest-offset DR tied to actual geometry uncertainty. PhysX's primary
 reference is [Tuning Shape Collision Behavior](https://nvidia-omniverse.github.io/PhysX/physx/5.1.2/docs/AdvancedCollisionDetection.html).
+
+## Results
+
+Three paired seeds, 768 first episodes per configuration; current 1.5 cm fold tolerance.
+
+| Protocol | Yibo offsets | Our offsets |
+| --- | --- | --- |
+| Checks enabled: valid fold | 302/768 (39.3%) | 399/768 (52.0%) |
+| Checks enabled: geometric fold | 323/768 (42.1%) | 399/768 (52.0%) |
+| Checks disabled: fold | 464/768 (60.4%) | 488/768 (63.5%) |
+| Checks enabled: fold + release | 1/768 (0.1%) | 0/768 (0.0%) |
+| Checks disabled: fold + release | 13/768 (1.7%) | 8/768 (1.0%) |
+
+With checks disabled, the topology breakdown is:
+
+| Design | Yibo folds | Our-offset folds |
+| --- | --- | --- |
+| single_hinge | 133/156 | 102/156 |
+| strip_4 | 122/153 | 95/153 |
+| strip_8 | 24/153 | 71/153 |
+| hinge_band | 129/153 | 111/153 |
+| flexible_corners | 56/153 | 109/153 |
+
+Changing offsets alone did not reproduce the broader our-DR performance collapse.
+The effect depends on topology: the smaller offsets improve strip-8 and flexible
+corners while hurting the single hinge and some other designs. Larger positive
+rest shells also change non-neighboring plate contacts; that is a plausible
+mechanism for this pattern, not proven by episode totals alone.
+
+Full fold-and-release remains rare for this prior, which was not trained for the
+new withdrawal objective. Guard-disabled rollouts can include edge/pressing
+strategies that the requested checks reject. The corrected check arms a valid
+flat baseline in 704/768 Yibo-offset episodes versus 765/768 with our offsets;
+non-settling/interrupted episodes are not forced to count as initialized.
+
+All matched initial states and non-offset property readbacks passed exact
+comparisons. Our zero-rest-offset outcomes with checks enabled were unchanged by
+the support-height fix: 399 geometric/valid folds before and after. No completed
+evaluation reported nonfinite state or a contact-buffer overflow.
+
+This is a checkpoint-compatibility experiment under Yibo's masses and hinge
+settings. It does not establish that 2 mm contact offsets are stable across our
+lighter material DR, nor identify an optimal contact margin for new training.
+The separate `nov17_contact_offset_20mm` experiments address the requested larger
+margin with fixed 2 mm cloth geometry and our material DR.

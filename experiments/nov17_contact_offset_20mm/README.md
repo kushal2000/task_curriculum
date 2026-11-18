@@ -23,3 +23,10 @@ experiments/nov17_contact_offset_20mm/submit_scratch.sh
 ```
 
 The four existing training runs are retained.
+
+## Jobs
+
+| Initialization | Job | W&B |
+| --- | --- | --- |
+| prior | 765823 | [run](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_prior_contact20mm_thickness2mm_resets_20261117_215416) |
+| scratch | 765824 | [run](https://wandb.ai/kk837/rigidClothDR/runs/rigidClothDR_scratch_contact20mm_thickness2mm_resets_20261117_215347) |

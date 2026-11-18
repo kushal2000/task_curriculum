@@ -1,0 +1,402 @@
+{
+  "checkpoint": "pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth",
+  "episodes_per_case": 768,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "environments_per_seed": 256,
+  "fold_tolerance_m": 0.015,
+  "max_steps": 600,
+  "protocols": {
+    "recipe_checks": {
+      "yibo": {
+        "n": 768,
+        "completed": 768,
+        "fold_entries": 323,
+        "valid_fold_entries": 302,
+        "full_releases": 1,
+        "guard_ready_envs": 704,
+        "fold_rate": 0.4205729166666667,
+        "per_seed": [
+          {
+            "seed": 0,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 117,
+            "valid_fold_entries": 112,
+            "full_releases": 0,
+            "guard_ready_envs": 240
+          },
+          {
+            "seed": 1,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 103,
+            "valid_fold_entries": 94,
+            "full_releases": 1,
+            "guard_ready_envs": 232
+          },
+          {
+            "seed": 2,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 103,
+            "valid_fold_entries": 96,
+            "full_releases": 0,
+            "guard_ready_envs": 232
+          }
+        ],
+        "termination_reasons": {
+          "fall": 0,
+          "fold": 113,
+          "fold_held": 112,
+          "hand_far": 0,
+          "nonfinite": 0,
+          "outside_table": 424,
+          "persist": 0,
+          "persist_fail": 0,
+          "press_driven_fold": 45,
+          "released": 1,
+          "timeout": 298
+        },
+        "median_best_fold_error_m": 0.017763562500476837,
+        "by_design": {
+          "single_hinge": {
+            "n": 156,
+            "completed": 156,
+            "fold_entries": 96,
+            "valid_fold_entries": 96,
+            "full_releases": 0,
+            "guard_ready_envs": 154
+          },
+          "strip_4": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 85,
+            "valid_fold_entries": 85,
+            "full_releases": 0,
+            "guard_ready_envs": 152
+          },
+          "strip_8": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 15,
+            "valid_fold_entries": 15,
+            "full_releases": 0,
+            "guard_ready_envs": 129
+          },
+          "hinge_band": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 88,
+            "valid_fold_entries": 67,
+            "full_releases": 1,
+            "guard_ready_envs": 116
+          },
+          "flexible_corners": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 39,
+            "valid_fold_entries": 39,
+            "full_releases": 0,
+            "guard_ready_envs": 153
+          }
+        }
+      },
+      "yibo_with_our_offsets": {
+        "n": 768,
+        "completed": 768,
+        "fold_entries": 399,
+        "valid_fold_entries": 399,
+        "full_releases": 0,
+        "guard_ready_envs": 765,
+        "fold_rate": 0.51953125,
+        "per_seed": [
+          {
+            "seed": 0,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 138,
+            "valid_fold_entries": 138,
+            "full_releases": 0,
+            "guard_ready_envs": 255
+          },
+          {
+            "seed": 1,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 124,
+            "valid_fold_entries": 124,
+            "full_releases": 0,
+            "guard_ready_envs": 255
+          },
+          {
+            "seed": 2,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 137,
+            "valid_fold_entries": 137,
+            "full_releases": 0,
+            "guard_ready_envs": 255
+          }
+        ],
+        "termination_reasons": {
+          "fall": 0,
+          "fold": 298,
+          "fold_held": 296,
+          "hand_far": 0,
+          "nonfinite": 0,
+          "outside_table": 224,
+          "persist": 0,
+          "persist_fail": 0,
+          "press_driven_fold": 4,
+          "released": 0,
+          "timeout": 541
+        },
+        "median_best_fold_error_m": 0.012306460179388523,
+        "by_design": {
+          "single_hinge": {
+            "n": 156,
+            "completed": 156,
+            "fold_entries": 70,
+            "valid_fold_entries": 70,
+            "full_releases": 0,
+            "guard_ready_envs": 154
+          },
+          "strip_4": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 88,
+            "valid_fold_entries": 88,
+            "full_releases": 0,
+            "guard_ready_envs": 152
+          },
+          "strip_8": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 63,
+            "valid_fold_entries": 63,
+            "full_releases": 0,
+            "guard_ready_envs": 153
+          },
+          "hinge_band": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 86,
+            "valid_fold_entries": 86,
+            "full_releases": 0,
+            "guard_ready_envs": 153
+          },
+          "flexible_corners": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 92,
+            "valid_fold_entries": 92,
+            "full_releases": 0,
+            "guard_ready_envs": 153
+          }
+        }
+      },
+      "paired": {
+        "both_fold": 220,
+        "yibo_only": 103,
+        "our_offsets_only": 179,
+        "neither": 266
+      }
+    },
+    "without_checks": {
+      "yibo": {
+        "n": 768,
+        "completed": 768,
+        "fold_entries": 464,
+        "valid_fold_entries": 464,
+        "full_releases": 13,
+        "guard_ready_envs": 768,
+        "fold_rate": 0.6041666666666666,
+        "per_seed": [
+          {
+            "seed": 0,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 151,
+            "valid_fold_entries": 151,
+            "full_releases": 4,
+            "guard_ready_envs": 256
+          },
+          {
+            "seed": 1,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 162,
+            "valid_fold_entries": 162,
+            "full_releases": 6,
+            "guard_ready_envs": 256
+          },
+          {
+            "seed": 2,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 151,
+            "valid_fold_entries": 151,
+            "full_releases": 3,
+            "guard_ready_envs": 256
+          }
+        ],
+        "termination_reasons": {
+          "fall": 117,
+          "fold": 187,
+          "fold_held": 183,
+          "hand_far": 0,
+          "nonfinite": 0,
+          "persist": 0,
+          "persist_fail": 0,
+          "released": 13,
+          "timeout": 638
+        },
+        "median_best_fold_error_m": 0.01186268450692296,
+        "by_design": {
+          "single_hinge": {
+            "n": 156,
+            "completed": 156,
+            "fold_entries": 133,
+            "valid_fold_entries": 133,
+            "full_releases": 8,
+            "guard_ready_envs": 156
+          },
+          "strip_4": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 122,
+            "valid_fold_entries": 122,
+            "full_releases": 3,
+            "guard_ready_envs": 153
+          },
+          "strip_8": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 24,
+            "valid_fold_entries": 24,
+            "full_releases": 0,
+            "guard_ready_envs": 153
+          },
+          "hinge_band": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 129,
+            "valid_fold_entries": 129,
+            "full_releases": 2,
+            "guard_ready_envs": 153
+          },
+          "flexible_corners": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 56,
+            "valid_fold_entries": 56,
+            "full_releases": 0,
+            "guard_ready_envs": 153
+          }
+        }
+      },
+      "yibo_with_our_offsets": {
+        "n": 768,
+        "completed": 768,
+        "fold_entries": 488,
+        "valid_fold_entries": 488,
+        "full_releases": 8,
+        "guard_ready_envs": 768,
+        "fold_rate": 0.6354166666666666,
+        "per_seed": [
+          {
+            "seed": 0,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 171,
+            "valid_fold_entries": 171,
+            "full_releases": 3,
+            "guard_ready_envs": 256
+          },
+          {
+            "seed": 1,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 153,
+            "valid_fold_entries": 153,
+            "full_releases": 2,
+            "guard_ready_envs": 256
+          },
+          {
+            "seed": 2,
+            "n": 256,
+            "completed": 256,
+            "fold_entries": 164,
+            "valid_fold_entries": 164,
+            "full_releases": 3,
+            "guard_ready_envs": 256
+          }
+        ],
+        "termination_reasons": {
+          "fall": 10,
+          "fold": 406,
+          "fold_held": 399,
+          "hand_far": 0,
+          "nonfinite": 0,
+          "persist": 0,
+          "persist_fail": 0,
+          "released": 8,
+          "timeout": 751
+        },
+        "median_best_fold_error_m": 0.007610327564179897,
+        "by_design": {
+          "single_hinge": {
+            "n": 156,
+            "completed": 156,
+            "fold_entries": 102,
+            "valid_fold_entries": 102,
+            "full_releases": 0,
+            "guard_ready_envs": 156
+          },
+          "strip_4": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 95,
+            "valid_fold_entries": 95,
+            "full_releases": 1,
+            "guard_ready_envs": 153
+          },
+          "strip_8": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 71,
+            "valid_fold_entries": 71,
+            "full_releases": 1,
+            "guard_ready_envs": 153
+          },
+          "hinge_band": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 111,
+            "valid_fold_entries": 111,
+            "full_releases": 4,
+            "guard_ready_envs": 153
+          },
+          "flexible_corners": {
+            "n": 153,
+            "completed": 153,
+            "fold_entries": 109,
+            "valid_fold_entries": 109,
+            "full_releases": 2,
+            "guard_ready_envs": 153
+          }
+        }
+      },
+      "paired": {
+        "both_fold": 331,
+        "yibo_only": 133,
+        "our_offsets_only": 157,
+        "neither": 147
+      }
+    }
+  }
+}

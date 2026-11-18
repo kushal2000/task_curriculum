@@ -1,0 +1,41 @@
+{
+  "full_batch_smoke": {
+    "status": "complete",
+    "num_envs": 12288,
+    "startup_s": 450.05874182097614,
+    "step_wall_s": 8.999537338502705,
+    "steps": 32,
+    "counts": {
+      "outside_table": 6,
+      "press_driven_fold": 7,
+      "nonfinite": 0,
+      "released": 0
+    },
+    "ready_fraction": 0.995849609375,
+    "torch_peak_gpu_gib": 0.5669136047363281,
+    "contact_capacity": 1572864,
+    "forced_outside_reset_verified": true
+  },
+  "cpu_tests_passed": 43,
+  "native_offsets_readback_smoke": {
+    "status": "complete",
+    "num_envs": 64,
+    "startup_s": 10.523922513239086,
+    "cloth_offsets_verified": {
+      "contact": 0.02,
+      "rest": 0.0
+    },
+    "step_wall_s": 1.6972020920366049,
+    "steps": 16,
+    "counts": {
+      "outside_table": 0,
+      "press_driven_fold": 1,
+      "nonfinite": 0,
+      "released": 0
+    },
+    "ready_fraction": 1.0,
+    "torch_peak_gpu_gib": 0.011383056640625,
+    "contact_capacity": 16384,
+    "forced_outside_reset_verified": true
+  }
+}
