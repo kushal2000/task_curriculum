@@ -489,14 +489,11 @@ def wrap_env_assets(env) -> list[str]:
 
 _PATCH_FLAG = "_quat_math_patch_installed"
 
-# Upstream modules that import quaternion helpers, and the names they bind.
+# Modules that bind quaternion helpers at import: the cloth task's one helper module, and the Play
+# scene code the cloth env still builds its scene with.
 _TARGET_MODULES = (
-    "utils.obs_utils",
-    "utils.reset_utils",
-    "utils.goal_sampling",
-    "utils.scene_utils",
-    "utils.reward_utils",
-    "utils.termination_utils",
+    "isaacsimenvs.tasks.cloth.mdp.geometry.quat",
+    "isaacsimenvs.tasks.play.utils.scene_utils",
 )
 
 # name -> (quaternion argument positions, whether the result is a quaternion)
@@ -542,14 +539,11 @@ def _wrap(fn, quat_arg_positions: tuple[int, ...], returns_quat: bool):
 
 def install_quat_math() -> list[str]:
     """Rebind quaternion helpers inside upstream modules to wxyz semantics."""
-    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
+    import importlib
 
     patched: list[str] = []
     for module_name in _TARGET_MODULES:
-        try:
-            module = compat.play_module(module_name)
-        except Exception:
-            continue
+        module = importlib.import_module(module_name)
         if getattr(module, _PATCH_FLAG, False):
             continue
 
@@ -638,73 +632,6 @@ def install_quat_convention() -> None:
 
     scene_utils.build_robot_articulation_usd_cfg = build_with_xyzw_rot
     scene_utils._quat_convention_patch_installed = True
-
-
-# ============================================================================
-# Fingertip body ordering
-# ============================================================================
-#
-# Resolve fingertip bodies in canonical order, not backend body order.
-#
-# The bug
-# -------
-# ``reset_utils`` caches the fingertip bodies with a regex::
-#
-#     FINGERTIP_BODY_REGEX = "left_(index|middle|ring|thumb|pinky)_DP"
-#     env._fingertip_body_ids = env.robot.find_bodies(FINGERTIP_BODY_REGEX)[0]
-#
-# ``find_bodies`` defaults to ``preserve_order=False``, so the result comes back sorted by **body
-# index**, which depends on how the backend ordered the articulation's bodies. Under Isaac Lab 2.3
-# that happened to coincide with the canonical order; under Newton it does not:
-#
-#     FINGERTIP_LINK_NAMES : [index, middle, ring, thumb, pinky]     canonical
-#     PhysX 2.3 resolves to: [index, middle, ring, thumb, pinky]     ids 24,25,26,28,29
-#     Newton resolves to   : [thumb, index, middle, ring, pinky]     ids 12,16,20,24,29
-#
-# The thumb lands in slot 0 instead of slot 3, so the 15-dim ``fingertip_pos_rel_palm`` block and
-# the 5-dim ``closest_fingertip_dist`` block are permuted: the policy reads the thumb's position
-# where it expects the index finger's.
-#
-# This is the same class of failure as the two quaternion bugs — an ordering convention that held
-# implicitly under 2.3 and silently changed. It degrades precise manipulation while leaving gross
-# grasping intact, which matches the observed symptom (lift rate recovered to 0.87, but goal
-# keypoint distance plateaued at ~0.09 against a 0.01 tolerance).
-#
-# The fix
-# -------
-# Re-resolve the fingertips by explicit name list with ``preserve_order=True`` so the cached ids
-# follow ``FINGERTIP_LINK_NAMES`` on any backend.
-
-def install_fingertip_order() -> None:
-    """Reorder ``env._fingertip_body_ids`` to canonical order after they are cached."""
-    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
-
-    reset_utils = compat.play_module("reset_utils")
-    if getattr(reset_utils, "_fingertip_order_patch_installed", False):
-        return
-
-    original = reset_utils.allocate_state_buffers
-
-    def allocate_state_buffers_ordered(env, *args, **kwargs):
-        result = original(env, *args, **kwargs)
-
-        canonical = list(env.robot_spec.fingertip_link_names)
-        body_names = list(env.robot.body_names)
-        ordered = [body_names.index(name) for name in canonical]
-
-        current = env._fingertip_body_ids
-        current = current.tolist() if hasattr(current, "tolist") else list(current)
-        if current != ordered:
-            env._fingertip_body_ids = ordered
-            print(
-                "[fingertip_order] reordered fingertips to canonical order: "
-                f"{[body_names[i] for i in current]} -> {canonical}",
-                flush=True,
-            )
-        return result
-
-    reset_utils.allocate_state_buffers = allocate_state_buffers_ordered
-    reset_utils._fingertip_order_patch_installed = True
 
 
 # ============================================================================
@@ -1400,139 +1327,6 @@ def _write_missing_properties(articulation) -> None:
 # natively and `apply_physx_material_properties` works as written -- so neither patch has
 # anything to fix. Recover them from isaac_newton @ beb9efb if a 3.0 PhysX backend is ever
 # added.
-# ============================================================================
-# Per-body gravity (Newton)
-# ============================================================================
-#
-# Reproduce upstream's per-body gravity setup, which Newton cannot express natively.
-#
-# The problem
-# -----------
-# Upstream disables gravity on the robot and keeps it on the manipulated object. It does this
-# through PhysX's per-body attribute (``scene_utils`` bakes ``physxRigidBody:disableGravity`` and
-# upstream's transfer invariant 7 pins *"robot gravity disabled"*). The policy was trained in that
-# regime.
-#
-# Newton has **no per-body gravity control** — no ``BodyFlags`` entry, no ``add_body(gravity=...)``
-# parameter. Global gravity applies to every dynamic body, so the PhysX attribute is silently
-# ignored and the arm and hand sag.
-#
-# That sag is not cosmetic. The hand's PD gains are tiny (stiffness 0.9-13.2, damping
-# 0.028-0.41), so gravity dominates the fingers and produces a steady-state tracking offset:
-#
-#     holding a fixed +0.20 rad target for 120 steps
-#       PhysX 2.3   hand mean |err| = 0.0517,  moved 0.160 of 0.200
-#       Newton      hand mean |err| = 0.1312,  moved 0.115 of 0.200
-#
-# The offset survived every solver knob tried (integrator, substeps, solver iterations,
-# self-collision, actuator mode, placeholder inertia), which is the signature of a constant
-# external load rather than a solver-response difference.
-#
-# The fix
-# -------
-# Zero global gravity so the robot floats as it does under PhysX, then apply gravity explicitly
-# to the bodies that should feel it — the free manipulated object. The table and goal marker are
-# kinematic and unaffected either way.
-#
-# This is a faithful reconstruction of the trained regime rather than a tuning choice.
-#
-# **Newton only.** Kit-less PhysX honours the authored per-body ``disableGravity``
-# -------------------------------------------------------------------------------
-# An earlier note here claimed both 3.0 backends ignore the attribute. That was **wrong**, and it
-# was measured while armature was being dropped and the robot's collision prims were duplicated.
-# Re-measured with those fixed, under OVPhysX with native gravity and this reconstruction off:
-#
-#     robot max joint drift over 7 zero-action steps : identical to the patched run (0.0273 ...
-#                                                       0.3587) — the arm does not sag
-#     object z(t)                                    : matches the 2.3 baseline step for step
-#     object quaternion                              : stays exactly (1, 0, 0, 0)
-#
-# So on OVPhysX the reconstruction is not merely unnecessary, it is harmful, and this module is
-# no longer installed there.
-#
-# The parasitic torque it was injecting
-# -------------------------------------
-# The manipulated tool's centre of mass is **7.55 cm** from its body origin (a hammer: the head
-# is at one end). Isaac Lab's wrench composer computes a torque *about the CoM*, but the backend
-# then applies the resulting wrench at the **link frame**, so a force meant to act at the CoM
-# leaks a moment of ``(link_origin - com) x F``. With the same starting pose the object rotated
-# about +Y from the very first tick instead of falling straight::
-#
-#     2.3      quat (1, 0, 0, 0) throughout the fall
-#     port     quat w=0.9997 -> 0.9963 -> 0.9838 -> 0.9751,  y = 0.026 -> 0.222
-#
-# which tipped the tool before the hand ever reached it. The Newton path therefore now adds the
-# explicit compensating torque; it is kept honest by the OVPhysX control above, where native
-# gravity gives the answer this reconstruction has to reproduce.
-
-GRAVITY_Z = -9.81
-
-
-def disable_global_gravity(cfg) -> None:
-    """Zero simulation gravity; per-body gravity is reapplied at runtime."""
-    cfg.sim.gravity = (0.0, 0.0, 0.0)
-
-
-def install_object_gravity() -> None:
-    """Apply object-only gravity every physics step, mirroring PhysX's per-body setup."""
-    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
-
-    action_utils = compat.play_module("action_utils")
-    if getattr(action_utils, "_gravity_patch_installed", False):
-        return
-
-    original = action_utils.apply_wrench_dr
-
-    def apply_wrench_dr_with_object_gravity(env) -> None:
-        original(env)
-
-        obj = getattr(env, "object", None)
-        if obj is None:
-            return
-
-        import torch
-
-        masses = obj.data.default_mass
-        masses = masses.torch if hasattr(masses, "torch") else masses
-        if masses.ndim > 1:
-            masses = masses.sum(dim=-1)
-
-        forces = torch.zeros((env.num_envs, 1, 3), device=env.device)
-        forces[:, 0, 2] = masses.to(env.device).reshape(-1) * GRAVITY_Z
-        torques = torch.zeros_like(forces)
-
-        # No compensating moment. An earlier version added `(com - origin) x F` here, on the
-        # theory that the backend applies this wrench at the link frame -- but both ends of the
-        # path document the force as acting at the centre of mass:
-        #
-        #   isaaclab/utils/wrench_composer.py:246-249  "If None, forces are assumed to act at
-        #       the body's CoM, independent of the `is_global` flag"
-        #   newton/_src/sim/state.py:148-153           body_f is "applied at the body's center
-        #       of mass (COM)"
-        #
-        # so the extra term was a spurious constant torque of |r x mg| ~ 0.16 N.m on the grasped
-        # tool, every step, on the one backend whose open failure mode is the tool rotating in
-        # the hand. The same function said so fifteen lines further down while contradicting
-        # itself here. `positions` stays None, which is what puts the force at the CoM.
-
-        # `is_global=True` is essential and not the default. Isaac Lab's wrench API interprets
-        # a force in the **body frame** unless told otherwise, so a constant (0, 0, -mg) vector
-        # rotates with the object: the moment the tool is tilted or reoriented, its "gravity"
-        # points sideways. That is invisible at reset (the object starts near upright and the
-        # error is a cosine) and grows precisely during goal-directed reorientation, which is
-        # the failure this port shows. Gravity is a world-frame force; say so.
-        #
-        # `positions` is left None, which the composer documents as acting at the centre of
-        # mass — correct for gravity, and not the same as the body origin for an offset-COM
-        # tool like a hammer.
-        setter = getattr(obj, "set_external_force_and_torque", None)
-        if setter is not None:
-            setter(forces, torques, is_global=True)
-
-    action_utils.apply_wrench_dr = apply_wrench_dr_with_object_gravity
-    action_utils._gravity_patch_installed = True
-
-
 # ============================================================================
 # Placeholder inertia (Newton)
 # ============================================================================

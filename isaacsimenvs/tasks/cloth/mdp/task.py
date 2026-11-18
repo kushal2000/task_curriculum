@@ -1,13 +1,14 @@
-"""ClothTaskMixin -- the fold task itself, whichever backend simulates the sheet.
+"""ClothTaskMixin -- the fold itself, whichever backend simulates the sheet.
 
-Fold targets carried on the stationary half's live frame, the fold-progress ratchet and bonus, the
-success and footprint criterion, the goal marker, the finite-value guard: ONE copy for both backends
-(``backends/vbd`` and ``backends/rigid``), so a cross-simulator difference is the physics and never
-the reward.
+The fold targets (carried on the stationary half's live frame), the fold error, the fold criterion
+(keypoints on target AND the footprint halved), and the goal marker the policy observes: ONE copy
+for both backends (``backends/vbd`` and ``backends/rigid``), so a cross-simulator difference is the
+physics and never the task. The reward and terminations built on it are ``rewards.py`` and
+``terminations.py``.
 
-A backend's ``_install_cloth`` must set ``self._cloth`` (a mesh with ``data.nodal_pos_w``),
+Reads what a backend's ``_install_cloth`` sets: ``self._cloth`` (a mesh with ``data.nodal_pos_w``),
 ``self.object`` (a ``backends.adapter.ClothAsRigidObject``), ``self._cloth_rest_local`` and
-``self._cloth_kp_idx``. Mix in BEFORE the Play env class, so these methods override Play's.
+``self._cloth_kp_idx``.
 
 Kit-free at import (torch and ``isaaclab.utils.math`` only), so both stacks can import it.
 """
@@ -27,33 +28,7 @@ __all__ = ["ClothTaskMixin"]
 
 
 class ClothTaskMixin:
-    """The fold task, independent of the simulator the Play env underneath runs on."""
-
-    def __init__(self, cfg: ClothEnvCfg, render_mode: str | None = None, **kwargs):
-        super().__init__(cfg, render_mode, **kwargs)
-        self._init_fold_targets()
-        self._fold_hold = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
-        # Envs whose state went non-finite this step; consumed by `_get_dones` to force a reset.
-        self._nonfinite_envs = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        self._nonfinite_count = 0
-        # Envs whose reward left the plausible range; counted separately from the non-finite ones
-        # because they pass every isfinite check.
-        self._insane_count = 0
-        # Best fold error seen so far this episode, for the dense progress ratchet. Kept separate
-        # from the inherited `_closest_keypoint_max_dist`, which `compute_intermediate_values`
-        # resolves against the APPROXIMATE metric inside `super()._get_dones()` -- reusing it would
-        # ratchet against a different quantity than the one being rewarded. -1 is the sentinel the
-        # task uses for "not yet observed".
-        self._closest_fold_err = torch.full(
-            (self.num_envs,), -1.0, dtype=torch.float32, device=self.device
-        )
-        # Set in `_get_dones`, consumed by `_get_rewards` in the same step: which envs earned the
-        # sparse bonus this step, under the fold criterion rather than the inherited one.
-        self._fold_bonus_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        # Fold error of a perfectly flat sheet -- the worst legitimate value. Used as the stand-in
-        # when an env's fold error is non-finite, so the substitution can never look like progress.
-        self._flat_fold_err = float(self.fold_error().nan_to_num(nan=0.0).max().item())
-        self._drive_goal_marker()
+    """The fold, independent of the simulator."""
 
     # ------------------------------------------------------------------ construction
 
@@ -267,7 +242,7 @@ class ClothTaskMixin:
         return nodal.view(self.num_envs, -1, 3)[:, self._kp_idx_t, :]
 
     def _tracked_points_w(self) -> torch.Tensor:
-        """The points ``point_dr_mode`` perturbs (obs_utils): the moving-half corners themselves,
+        """The points ``point_dr_mode`` perturbs (``observations.py``): the moving-half corners themselves,
         in keypoint order -- what a point tracker sees -- rather than the rigid reconstruction."""
         return self.cloth_keypoints_w()
 
@@ -292,9 +267,7 @@ class ClothTaskMixin:
         the policy saw where the goal centroid was and nothing about its shape. Rest offsets plus a
         real rotation keep both halves of the comparison meaningful.
         """
-        rest = self._corner_rest_offsets.unsqueeze(0).expand(self.num_envs, -1, -1)
-        self._keypoint_offsets[:] = rest
-        self._keypoint_offsets_fixed[:] = rest
+        self._keypoint_offsets[:] = self._corner_rest_offsets.unsqueeze(0).expand(self.num_envs, -1, -1)
 
     def _drive_goal_marker(self) -> None:
         """Point `goal_viz` at the fold target, so the OBSERVED goal is the fold.
@@ -343,236 +316,6 @@ class ClothTaskMixin:
         """
         return quat_from_matrix(rot)
 
-    def _get_rewards(self) -> torch.Tensor:
-        """Re-point the inherited Play reward at the fold.
-
-        Follows `PreciseAssemblyEnv._get_rewards` (play2perfect): keep `compute_rewards`, then
-        subtract the terms that fight this task and add fold-based replacements. Written as
-        `reward - term + replacement` so every inherited term stays visible in `_reward_terms` and
-        in the wandb/tensorboard breakdown.
-
-        Three substitutions:
-
-        **Lift terms out.** `lifting_rew` (x20) and `lifting_bonus` (300) pay for raising the
-        manipuland 0.15 m above its spawn height. A fold keeps the sheet on the table, so these
-        reward the opposite of the task -- exactly why play2perfect masks them for insertion, where
-        the goal pulls the peg *down*.
-
-        **The `lifted` gate off the keypoint term.** `keypoint_reward` is multiplied by
-        `lifted.float()` (`reward_utils.py:50`), and `_lifted_object` latches only on a 0.15 m rise.
-        A folding sheet never rises that far, so the inherited keypoint reward pays **exactly zero
-        for the entire episode**. Masking the lift terms without also removing this gate would leave
-        the main shaping signal dead -- it already is.
-
-        **The keypoint metric.** The inherited term ratchets on `_keypoints_max_dist`, which is
-        `max |obj_kp - goal_kp|` built from the fitted rigid frame plus rest offsets -- an
-        approximation of the fold. `fold_error()` is the exact quantity the success criterion and
-        the eval both use. Ratcheting on that makes the dense signal *fold progress*.
-
-        The bonus is likewise re-keyed: the inherited `reach_goal_bonus` fires on `_near_goal` /
-        `_is_success`, which are computed from the approximate metric against
-        `_current_success_tolerance`. `_fold_bonus_mask` is set in `_get_dones` from the same
-        `is_folded()` the criterion uses, so the +1000 pays for a fold and nothing else.
-
-        Kept unchanged: `fingertip_delta_rew` (approach shaping, helps the hand find the sheet) and
-        both joint-velocity penalties, which are play2perfect's `r_smooth` and the regularisation
-        the pretrained policy was trained under.
-        """
-        from isaacsimenvs.tasks.play.utils.logging_utils import log_step_metrics
-        from isaacsimenvs.tasks.play.utils.reward_utils import compute_rewards
-
-        reward = compute_rewards(self)
-        terms = self._reward_terms
-        rew_cfg = self.cfg.reward
-
-        # --- out: lift progress, lift bonus, and the approximate keypoint term ---------------
-        reward = reward - terms["lifting_rew"] - terms["lift_bonus_rew"] - terms["keypoint_rew"]
-        zero = torch.zeros_like(terms["lifting_rew"])
-        terms["lifting_rew"] = zero
-        terms["lift_bonus_rew"] = zero
-
-        # --- in: dense fold progress, ungated by `lifted` -------------------------------------
-        # Same ratchet as `reward_utils.keypoint_reward`: pay only for improvement on the best
-        # fold error seen so far this goal, clamped at zero so regression is free rather than
-        # punished, and monotone so it cannot be farmed by oscillating.
-        # A non-finite fold error would poison the ratchet permanently (torch.minimum with NaN
-        # propagates) and then every subsequent reward. Envs whose state has diverged are being
-        # reset this step anyway -- `_guard_finite` flagged them and `_get_dones` terminated them --
-        # so substituting the flat-sheet value costs nothing and keeps the ratchet finite.
-        fold_err = self.fold_error()
-        bad = ~torch.isfinite(fold_err)
-        if bool(bad.any()):
-            fold_err = torch.where(bad, torch.full_like(fold_err, self._flat_fold_err), fold_err)
-        sentinel = self._closest_fold_err < 0.0
-        self._closest_fold_err = torch.where(sentinel, fold_err, self._closest_fold_err)
-        delta = torch.clamp(self._closest_fold_err - fold_err, 0.0, 100.0)
-        self._closest_fold_err = torch.minimum(self._closest_fold_err, fold_err)
-        fold_kp_rew = delta * float(rew_cfg.keypoint_rew_scale)
-        reward = reward + fold_kp_rew
-        terms["keypoint_rew"] = fold_kp_rew
-
-        # --- the sparse bonus, keyed on the fold criterion ------------------------------------
-        reward = reward - terms["bonus_rew"]
-        fold_bonus = self._fold_bonus_mask.float() * float(rew_cfg.reach_goal_bonus)
-        reward = reward + fold_bonus
-        terms["bonus_rew"] = fold_bonus
-
-        # LAST LINE OF DEFENCE. `compute_rewards` reads robot state, fingertip distances and the
-        # inherited keypoint metric, any of which can be non-finite when an articulation diverges --
-        # and a NaN reward becomes a NaN advantage and then a NaN gradient, which destroys the
-        # policy rather than just losing one env. Observed in a smoke run as
-        # `shaped_rewards/iter -> nan` while `rewards/iter` still read finite.
-        nonfinite_rew = ~torch.isfinite(reward)
-        if bool(nonfinite_rew.any()):
-            n = int(nonfinite_rew.sum())
-            reward = torch.nan_to_num(reward, nan=0.0, posinf=0.0, neginf=0.0)
-            self._nonfinite_envs |= nonfinite_rew
-            print(
-                f"[cloth] non-finite REWARD in {n}/{self.num_envs} envs -- zeroed and flagged "
-                f"for reset",
-                flush=True,
-            )
-        self.extras["nonfinite_reward"] = float(nonfinite_rew.float().mean())
-
-        # MAGNITUDE, not just finiteness. Checking `isfinite` alone leaves a hole that a diverging
-        # articulation drives straight through: joint velocities and actions grow enormous BEFORE
-        # they become non-finite, the action penalties are sums of squares, and the reward reaches
-        # -1e5 to -1e11 while staying perfectly finite. `nan_to_num` does not touch it, the
-        # nonfinite counter stays at 0.0, and the value lands in the advantage and the gradient.
-        #
-        # Measured on job 197715: kuka_actions_penalty reached -784,354 for a single episode
-        # against a typical -13 to -36, total_reward reached -1.1e11, and `rewards/iter` was still
-        # reading -1.8 MILLION five hours in, with 56% of samples below -1000 from 44% of the way
-        # through the run. 199350 showed the same from 71.5% in. Both runs were compromised while
-        # every non-finite guard reported clean.
-        #
-        # The legitimate per-step maximum is the reach_goal_bonus (1000) plus shaping of order 100,
-        # so 1e4 is ~10x headroom over anything the task can pay. An env outside it is diverging by
-        # definition, so it gets the same treatment as a non-finite one: contribute nothing, and
-        # reset through the normal path.
-        insane_rew = reward.abs() > self.REWARD_SANITY_LIMIT
-        if bool(insane_rew.any()):
-            n = int(insane_rew.sum())
-            worst = float(reward[insane_rew].abs().max())
-            reward = torch.where(insane_rew, torch.zeros_like(reward), reward)
-            self._nonfinite_envs |= insane_rew
-            print(
-                f"[cloth] INSANE REWARD in {n}/{self.num_envs} envs (worst |r|={worst:.3e}, "
-                f"limit {self.REWARD_SANITY_LIMIT:.0e}) -- zeroed and flagged for reset",
-                flush=True,
-            )
-        self.extras["insane_reward"] = float(insane_rew.float().mean())
-        self._insane_count += int(insane_rew.sum())
-        self.extras["insane_total"] = float(self._insane_count)
-
-        terms["total_reward"] = reward
-        self.extras["fold_err_mean"] = float(fold_err.mean())
-        self.extras["fold_rate"] = float(self._fold_bonus_mask.float().mean())
-        log_step_metrics(self)
-        return reward
-
-    def _get_observations(self):
-        # Offsets must be current *before* the task reads them, or the observation lags the sheet
-        # by one step.
-        self._sync_observed_keypoints()
-        # The marker has to be re-driven EVERY step, not just at reset. `fold_targets_w` is defined
-        # against the sheet's *current* crease and stationary height -- that is what makes the
-        # criterion translation-invariant -- so a marker written once at reset drifts away from the
-        # target actually being scored as soon as the sheet moves. It then shows the policy (and the
-        # viewer) a goal that is not the goal.
-        self._drive_goal_marker()
-        obs = super()._get_observations()
-        self._guard_finite(obs)
-        return obs
-
-    def _guard_finite(self, obs) -> None:
-        """Keep non-finite values out of the policy, and flag the env for reset.
-
-        A NaN anywhere in the 140-dim vector reaches the policy, propagates through the network and
-        surfaces as ``normal expects all elements of std >= 0.0`` from the action sampler -- a
-        message that names the sampler and says nothing about the cloth. Guarding the *rotation fit*
-        was not enough, because that only covered one of several ways a blown-up sheet produces
-        NaN. This reports which quantity went bad first, so the next fix is aimed rather than
-        guessed.
-        """
-        # Ordered most-upstream first, so the guard names the ROOT quantity rather than the
-        # observation it poisons.
-        #
-        # **The robot is checked, not just the cloth.** 80 of the 140 policy columns are robot
-        # state (joint_pos 0-28, joint_vel 29-57, palm_pos 87-89, palm_rot 90-93,
-        # fingertip_pos_rel_palm 98-112) against 20 that are cloth-derived. The first version of
-        # this guard watched only cloth quantities and duly reported "obs bad, cloth fine" --
-        # true, and useless, because it never looked where most of the vector comes from. In a
-        # coupled solve the MJWarp articulation can diverge from a bad contact while the VBD sheet
-        # stays perfectly well behaved.
-        #
-        # `reward_buf` is deliberately NOT here: the task does feed the reward into an observation
-        # ("reward": reward_buf * 0.01, `obs_utils.py:326`) but only into `state_list`, the
-        # critic's 162-dim state. It is absent from `obs_list`, so it cannot reach `obs["policy"]`.
-        robot = self.robot.data
-        offenders = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        parts = {
-            "particles": self._particles_w(),
-            "velocities": self.object._velocities(),
-            "quat": self.object.data.root_quat_w,
-            "fold_targets": self.fold_targets_w(),
-            "robot_joint_pos": robot.joint_pos,
-            "robot_joint_vel": robot.joint_vel,
-            "robot_body_pos_w": robot.body_pos_w,
-            "robot_body_quat_w": robot.body_quat_w,
-            "obs": obs["policy"],
-        }
-        for name, tensor in parts.items():
-            if tensor is None:
-                continue
-            flat = tensor.reshape(tensor.shape[0], -1)
-            bad = ~torch.isfinite(flat).all(dim=-1)
-            if not bool(bad.any()):
-                continue
-            offenders |= bad
-            ids = torch.nonzero(bad).flatten().tolist()
-            where = ""
-            if name == "obs":
-                # Which columns, so the term can be identified against `cfg.obs.obs_list`.
-                cols = torch.nonzero(~torch.isfinite(flat[ids[0]])).flatten().tolist()
-                where = f" cols {cols[:12]}{'...' if len(cols) > 12 else ''} of {flat.shape[1]}"
-            # The OFFENDING envs' own progress, not `episode_length_buf.max()`. The max is taken
-            # over all envs, so it is only equal to the offender's step while the envs are still
-            # synchronised -- i.e. during the first episode. After that it saturates near
-            # `episode_length` and every report reads "at step 599", which looks like the failure
-            # clusters at the end of an episode when it does not. Per-env progress says when the
-            # divergence actually happened.
-            steps = self.episode_length_buf[bad].tolist()
-            msg = (
-                f"cloth: non-finite {name} in envs {ids[:8]}"
-                f"{'...' if len(ids) > 8 else ''} ({len(ids)}/{self.num_envs}) "
-                f"at env-step {steps[:8]}{'...' if len(steps) > 8 else ''}{where}"
-            )
-            if self.cfg.cloth.nan_policy == "raise":
-                raise RuntimeError(msg)
-            # `reset`: report once per occurrence and carry on. Printing every step would drown a
-            # training log, so this is deliberately not rate-limited beyond being per-detection.
-            print(f"[cloth] {msg} -- resetting those envs", flush=True)
-
-        if not bool(offenders.any()):
-            return
-
-        # NEVER let a non-finite value reach the policy. The env is flagged for reset below, but the
-        # reset only takes effect on the NEXT step, so this step's observation would still be handed
-        # to the network -- and a single NaN propagates through the LSTM into the action sampler,
-        # then into the gradient. Zeroing is not physically meaningful, but the env is being thrown
-        # away anyway; what matters is that the number entering the optimizer is finite.
-        for tensor in obs.values():
-            if torch.is_tensor(tensor):
-                torch.nan_to_num_(tensor, nan=0.0, posinf=0.0, neginf=0.0)
-
-        # Latched, and consumed by `_get_dones` on the same step so the env terminates and resets
-        # through the normal path rather than being patched in place.
-        self._nonfinite_envs |= offenders
-        self._nonfinite_count += int(offenders.sum())
-        self.extras["nonfinite_envs"] = float(offenders.float().mean())
-        self.extras["nonfinite_total"] = float(self._nonfinite_count)
-
     def footprint_ratio(self) -> torch.Tensor:
         """Sheet extent along the fold axis, as a fraction of its unfolded size.
 
@@ -607,84 +350,6 @@ class ClothTaskMixin:
         return (self.fold_error() < self.cfg.cloth.keypoint_tolerance) & (
             self.footprint_ratio() < self.cfg.cloth.max_folded_footprint
         )
-
-    #: Any |reward| above this is a diverging env, not a task outcome: the largest the task can
-    #: legitimately pay in one step is `reach_goal_bonus` (1000) plus shaping of order 100.
-    REWARD_SANITY_LIMIT = 1.0e4
-
-    #: Steps the fold criterion must hold to count as a *held* fold. Independent of
-    #: `termination.success_steps`, which the finetune recipe drives to 1 so the reward bonus fires
-    #: on first entry -- the strict criterion still has to be reported.
-    HELD_FOLD_STEPS = 10
-
-    def _get_dones(self):
-        """Terminate on a completed fold, on the sheet leaving the table, or on timeout.
-
-        The inherited test scores a *tool pose* against `goal_viz`, which is meaningless here: the
-        manipuland is a sheet and the goal is a fold. This REPLACES the success half of it while
-        keeping the task's fall/hand-far conditions.
-
-        **The inherited increment is undone, not merely added to.** `super()._get_dones()` runs
-        Play's own keypoint-success path in full, which increments `_successes`
-        (`termination_utils.py:46`) whenever `_keypoints_max_dist <= _current_success_tolerance *
-        keypoint_scale`. With `eval_success_tolerance` unset that fires at 0.075 * 1.5 = 11.25 cm,
-        against the fold criterion's 4 cm -- so `_successes` had two independent writers and every
-        "goals" number on this task was ambiguous between a fold and a loose tool-pose hit. Worse,
-        a reward keyed on `_successes` would have been farmable at 11.25 cm without ever folding.
-        Snapshot and restore so the fold is the only writer.
-        """
-        successes_before = self._successes.clone()
-        terminated, truncated = super()._get_dones()
-        self._successes.copy_(successes_before)
-
-        folded = self.is_folded()
-
-        # Two counters, deliberately. `entered` is what the reward bonus and termination key on --
-        # `termination.success_steps` is 1 under the finetune recipe, matching Play2Perfect's
-        # `success_steps=1` + `force_consecutive_near_goal_steps=True` lump sum. `held` is the
-        # strict criterion every baseline number so far used, kept so training and evaluation can be
-        # compared against the same history. The gap between them is a diagnostic: a flap that
-        # enters the target and springs back scores `entered` but not `held`.
-        self._fold_hold = torch.where(folded, self._fold_hold + 1, torch.zeros_like(self._fold_hold))
-        entered = self._fold_hold >= int(self.cfg.termination.success_steps)
-        held = self._fold_hold >= int(self.HELD_FOLD_STEPS)
-
-        # `_get_rewards` runs after `_get_dones` in the same step, so this is the mask the sparse
-        # bonus pays on. Keyed on the fold criterion, never on the inherited `_is_success`.
-        self._fold_bonus_mask.copy_(entered)
-
-        if bool(entered.any()):
-            ids = entered.nonzero(as_tuple=True)[0]
-            self._successes[ids] += 1
-
-        # NOTE: `episode_length_buf` is deliberately NOT reset here. The inherited task chains
-        # goals within an episode, but a folded sheet stays folded, so re-arming would let the
-        # criterion pay repeatedly for one fold. The episode ends on the fold instead (below),
-        # which is the analogue of Play2Perfect ending the episode on a successful retract.
-        # Terminate any env whose state went non-finite, so it resets through the normal path.
-        # `_guard_finite` has already zeroed the observation for these envs, so nothing non-finite
-        # reaches the policy or the optimizer; this is what stops one diverged env from poisoning a
-        # multi-hour run. Cleared after consumption -- the reset itself restores a valid state.
-        nonfinite = self._nonfinite_envs.clone()
-        self._nonfinite_envs.zero_()
-
-        self._termination_reasons["fold"] = entered
-        self._termination_reasons["fold_held"] = held
-        self._termination_reasons["nonfinite"] = nonfinite
-        return terminated | entered | nonfinite, truncated
-
-    def _reset_idx(self, env_ids):
-        super()._reset_idx(env_ids)
-        if hasattr(self, "_fold_hold"):
-            self._fold_hold[env_ids] = 0
-        if hasattr(self, "_closest_fold_err"):
-            # Back to the sentinel: the ratchet is per-episode, so a new episode must not inherit
-            # the previous one's best fold error (which would make all progress unrewarded).
-            self._closest_fold_err[env_ids] = -1.0
-            self._fold_bonus_mask[env_ids] = False
-        # The task re-samples `goal_viz` on reset; put it back on the fold target.
-        if hasattr(self, "_fold_targets_xy"):
-            self._drive_goal_marker()
 
     def fold_fraction(self) -> torch.Tensor:
         """Progress in ``[0, 1]``: 0 at the rest pose, 1 at the target.

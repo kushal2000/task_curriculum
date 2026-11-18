@@ -166,12 +166,12 @@ class ChecksMixin:
         edge, and two training arrays ran to completion without one fold. Nothing else fails on
         that: the sheet is placed correctly and the episodes simply time out.
         """
-        from isaacsimenvs.tasks.play.utils.reset_utils import _reset_table_pose
+        from isaacsimenvs.tasks.cloth.mdp.reset import reset_table
 
         robot = self.robot
         dt = float(self.cfg.sim.dt)
         # The table is moved to its working height only by a reset; this runs before the first one.
-        _reset_table_pose(self, torch.arange(self.num_envs, device=self.device))
+        reset_table(self, torch.arange(self.num_envs, device=self.device))
         # The sheets out of the way first, as the start-fold checks do: the placement checks above
         # leave every env's sheet at its origin, at the hand's height, and one dropping onto the
         # fingers reads as a drifting arm (7-shape pool: 0.7 deg in every run, 6 and 13 deg twice).

@@ -50,14 +50,14 @@ class StudentObs:
         from isaacsimenvs.distill.student import split_columns
         from isaacsimenvs.tasks.cloth.perception.pointcloud import ClothPointCloud, hand_capsules
         from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import LagBuffer, SceneCloudCfg
-        from isaacsimenvs.tasks.play.utils.obs_utils import compute_obs_dim
+        from isaacsimenvs.tasks.cloth.mdp.observations import obs_dim
 
         self.inner, self.device, self.n = inner, inner.device, inner.num_envs
         if inner.cfg.cloth.fold_axis != "x":
             raise ValueError("the point cloud assumes cloth.fold_axis = x")
         obs_list = list(inner.cfg.obs.obs_list)
         num_joints = int(inner.cfg.action_space)
-        sizes = {f: compute_obs_dim([f], num_joints) for f in obs_list}
+        sizes = {f: obs_dim([f], num_joints) for f in obs_list}
         if sum(sizes.values()) != int(inner.cfg.observation_space):
             raise ValueError(f"obs_list sizes {sizes} do not add up to {inner.cfg.observation_space}")
         proprio, aux = split_columns(obs_list, sizes)

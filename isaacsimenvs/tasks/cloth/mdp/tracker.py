@@ -532,7 +532,7 @@ class TrackerMixin:
         goal_quat, scale)``, env frame, the goal quaternion in the convention ``goal_viz`` reports."""
         from isaaclab.utils.math import quat_apply
 
-        from isaacsimenvs.tasks.play.utils.point_dr import _mat_to_wxyz
+        from isaacsimenvs.tasks.cloth.mdp.point_dr import _mat_to_wxyz
 
         if getattr(self, "_tracker", None) is None:
             self._init_tracker()

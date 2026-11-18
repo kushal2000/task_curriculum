@@ -1,7 +1,8 @@
-"""ClothEnv — fold half a cloth sheet onto the other half.
+"""``VbdClothEnv``: the fold task with a VBD cloth sheet, on Isaac Lab 3.0 + Newton.
 
-Subclasses :class:`PlayNewtonEnv`, so the robot, table, action space and coupled solver are the
-ones already measured on the cable task. Only the manipuland changes.
+The task is ``cloth_env.ClothEnv`` and ``mdp/``, shared with the rigid backend; this class adds the
+sheet and constructs the env on Newton (``newton_setup.py``: the patches around the scene build, and
+the coupled MJWarp robot + VBD cloth solver).
 
 The sheet is authored as a flat ``UsdGeom.Mesh`` grid before the environments are replicated --
 `DeformableObject` infers ``surface`` (cloth) from a ``UsdGeom.Mesh`` and ``volume`` from a
@@ -11,8 +12,6 @@ State is the position of a few keypoints on the moving half; the goal is their m
 the fold line. See ``mdp/geometry/grid.py`` for both, kept separate so the fold is testable
 without a simulator.
 
-The task -- fold targets, reward, success, the goal marker, the finite guard -- is
-``mdp/task.ClothTaskMixin``, shared with the rigid backend. This class adds only the VBD sheet.
 """
 
 from __future__ import annotations
@@ -22,28 +21,36 @@ from isaacsimenvs.tasks.cloth.backends.adapter import ClothAsRigidObject
 from isaacsimenvs.tasks.cloth.backends.usd import neutralise_rigid_object, reshape_goal_marker
 from isaacsimenvs.tasks.cloth.backends.vbd.config import ClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
+from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
+    install_post_construction_patches,
+    install_pre_construction_patches,
+)
+from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
 from isaacsimenvs.tasks.cloth.mdp.task import ClothTaskMixin
 from isaacsimenvs.tasks.cloth.mdp.tracker import TrackerMixin
-from isaacsimenvs.tasks.cloth.backends.vbd.play_newton import PlayNewtonEnv
+from isaacsimenvs.tasks.play.robots import get_robot_spec
 
-__all__ = ["ClothEnv"]
+__all__ = ["VbdClothEnv"]
 
 
-class ClothEnv(TrackerMixin, ClothTaskMixin, PlayNewtonEnv):
-    """Play task with a VBD cloth sheet as the manipuland."""
+class VbdClothEnv(TrackerMixin, ClothTaskMixin, ClothEnv):
+    """The fold task with a VBD cloth sheet."""
 
     cfg: ClothEnvCfg
 
-    @staticmethod
-    def build_physics_cfg(cfg: "ClothEnvCfg"):
-        """Coupled MJWarp (robot) + VBD (cloth) solve, sized for this env count."""
-        from isaacsimenvs.tasks.play.robots import get_robot_spec
+    def __init__(self, cfg: ClothEnvCfg, render_mode: str | None = None, **kwargs) -> None:
+        install_pre_construction_patches(
+            cfg,
+            # Coupled MJWarp (robot) + VBD (cloth), sized for this env count.
+            physics_cfg=cfg.cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), get_robot_spec(cfg.robot)),
+            # At the end of the scene setup, before replication -- which is also when Newton
+            # imports the stage. A mesh authored after that point is invisible to the solver.
+            pre_clone_hook=lambda env: env._install_cloth(),
+        )
+        super().__init__(cfg, render_mode, **kwargs)
 
-        return cfg.cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), get_robot_spec(cfg.robot))
-
-    #: Runs at the end of `setup_scene`, before replication -- which is also when Newton imports
-    #: the stage. A mesh authored after that point is invisible to the solver.
-    pre_clone_scene_hook = staticmethod(lambda env: env._install_cloth())
+    def _finish_backend_setup(self) -> None:
+        install_post_construction_patches(self)
 
     def _install_cloth(self) -> None:
         """Author the sheet and register it as a deformable, in place of the rigid tool."""
@@ -128,8 +135,7 @@ class ClothEnv(TrackerMixin, ClothTaskMixin, PlayNewtonEnv):
         self.scene.deformable_objects["cloth"] = cloth
         self._cloth = cloth
 
-        # `PlayEnv` holds the manipuland as `env.object` and every downstream module reads it from
-        # there. Without this the policy observes the *inert rigid tool* -- which this env has just
+        # The task reads the manipuland as `env.object` (mdp/observations, rewards, terminations). Without this the policy observes the *inert rigid tool* -- which this env has just
         # made kinematic and collision-free -- while the sheet sits in the scene as a bystander.
         area_density = c.density * c.thickness  # surface density -> sheet mass
         self.object = ClothAsRigidObject(

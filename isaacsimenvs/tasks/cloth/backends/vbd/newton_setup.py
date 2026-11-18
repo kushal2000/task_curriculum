@@ -1,16 +1,12 @@
-"""PlayNewtonEnv — the Play task constructed on Newton/MJWarp.
+"""Construct the cloth env on Isaac Lab 3.0 + Newton: the patches around ``DirectRLEnv.__init__``.
 
-Subclasses :class:`PlayEnv` and overrides nothing that defines the task. ``_pre_physics_step``,
-``_apply_action``, ``_get_dones``, ``_get_rewards`` and ``_get_observations`` are all inherited,
-so both backends run the same reward, observation and action code and a measured difference
-between them is attributable to physics rather than to two diverging copies of the task.
+The task code is the same on both backends; what differs is construction, in two windows:
 
-What differs is construction, and it happens in two windows:
-
-* **before** ``super().__init__``, which runs ``_setup_scene`` -- the patches that rewrite
-  ``scene_utils``' asset builders, the quaternion conventions, and the USD cache lookup that
-  replaces the Kit URDF converter;
-* **after** it -- the patches that need live assets, which have no ``.data`` until initialised.
+* **before** ``DirectRLEnv.__init__``, which builds the scene -- the patches that rewrite the scene
+  builders, the quaternion conventions, and the USD cache lookup that replaces the Kit URDF
+  converter (:func:`install_pre_construction_patches`);
+* **after** it -- the patches that need live assets, which have no ``.data`` until initialised
+  (:func:`install_post_construction_patches`).
 
 Getting a patch into the wrong window is a silent failure: it installs cleanly and simply never
 takes effect on the objects that were already built.
@@ -19,54 +15,12 @@ takes effect on the objects that were already built.
 from __future__ import annotations
 
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat, patches, physx_schema_shim, usd_cache
-from isaacsimenvs.tasks.play.play_env import PlayEnv
 from isaacsimenvs.tasks.play.robots import get_robot_spec
 
-from .play_newton_cfg import PlayNewtonEnvCfg
-
-__all__ = ["PlayNewtonEnv", "PlayNewtonEnvCfg"]
+__all__ = ["install_post_construction_patches", "install_pre_construction_patches"]
 
 
-class PlayNewtonEnv(PlayEnv):
-    cfg: PlayNewtonEnvCfg
-
-    def __init__(
-        self, cfg: PlayNewtonEnvCfg, render_mode: str | None = None, **kwargs
-    ) -> None:
-        _install_pre_construction_patches(
-            cfg,
-            physics_cfg=type(self).build_physics_cfg(cfg),
-            pre_clone_hook=type(self).pre_clone_scene_hook,
-        )
-        super().__init__(cfg, render_mode, **kwargs)
-        _install_post_construction_patches(self)
-
-    @staticmethod
-    def build_physics_cfg(cfg: PlayNewtonEnvCfg):
-        """The physics config this env constructs on. Override to change solver.
-
-        A hook rather than a hardcoded call because a subclass may need a *different solver
-        topology* -- the cable env replaces this single MJWarp solve with a coupled MJWarp+VBD
-        one. It is a staticmethod so it can run before ``super().__init__``, which is the only
-        point at which ``sim.physics`` can still be changed.
-        """
-        return cfg.newton.build(int(cfg.scene.num_envs))
-
-    #: Optional ``fn(env)`` run at the end of ``setup_scene``, *before* the environments are
-    #: replicated. Any asset a subclass adds must be created here rather than after
-    #: ``super()._setup_scene()``: replication is also when Newton imports the stage into its
-    #: model, so an asset added later exists as USD and is invisible to the solver.
-    pre_clone_scene_hook = None
-
-    def _setup_scene(self) -> None:
-        # scene_utils.setup_scene has been wrapped by `install_cloning`, which performs the
-        # explicit environment replication Isaac Lab 2.x did inside `clone_environments()` and
-        # 3.0 no longer does. Without it Newton builds a single world and reset indexing walks
-        # off the end of a one-element array with a CUDA illegal memory access.
-        super()._setup_scene()
-
-
-def _install_pre_construction_patches(cfg: PlayNewtonEnvCfg, *, physics_cfg, pre_clone_hook=None) -> None:
+def install_pre_construction_patches(cfg, *, physics_cfg, pre_clone_hook=None) -> None:
     """Everything that must be in place before ``_setup_scene`` runs. Idempotent.
 
     Order is not arbitrary and is easy to get subtly wrong:
@@ -112,7 +66,6 @@ def _install_pre_construction_patches(cfg: PlayNewtonEnvCfg, *, physics_cfg, pre
     patches.install_multi_asset(num_envs, prototypes_only=True)
     patches.install_quat_convention()
     patches.install_quat_math()
-    patches.install_fingertip_order()
     # Newton's USD importer needs CollisionAPI pushed down onto mesh prims (Isaac Sim's URDF
     # importer puts it on Xform wrappers, which Newton skips -- silently dropping every robot
     # collider), and its MuJoCo solver bakes actuation from USD at build time, so the drives must
@@ -135,11 +88,12 @@ def _install_pre_construction_patches(cfg: PlayNewtonEnvCfg, *, physics_cfg, pre
     patches.install_armature_writeback()
     patches.install_implicit_effort_fix()
 
-    if cfg.use_gravcomp:
-        patches.install_newton_gravcomp()
-    else:
-        patches.install_object_gravity()
-        patches.disable_global_gravity(cfg)
+    if not cfg.use_gravcomp:
+        raise ValueError(
+            "use_gravcomp: false (global gravity off, per-body gravity on the manipuland) needs a rigid "
+            "manipuland; the cloth would float. Keep use_gravcomp: true."
+        )
+    patches.install_newton_gravcomp()
 
     patches.install_newton_materials()
     patches.install_newton_condim(
@@ -155,8 +109,6 @@ def _install_pre_construction_patches(cfg: PlayNewtonEnvCfg, *, physics_cfg, pre
     from isaacsimenvs.eval import protocol
 
     protocol.reapply_single_variant_if_requested()
-
-    _rebind_play_env_globals()
 
 
 def _install_pre_clone_hook(hook) -> None:
@@ -179,41 +131,7 @@ def _install_pre_clone_hook(hook) -> None:
     scene_utils._pre_clone_hook_installed = True
 
 
-def _rebind_play_env_globals() -> None:
-    """Re-point ``play_env``'s module-level names at the patched functions.
-
-    The patches above replace attributes on the ``play.utils.*`` modules, but ``play_env.py``
-    binds the names it uses at *its* import time::
-
-        from .utils.scene_utils import apply_physx_material_properties, setup_scene
-
-    and ``play_newton_env`` imports ``PlayEnv`` before any patch is installed. Without this,
-    ``PlayEnv.__init__`` and ``_setup_scene`` keep calling the *original* functions and every
-    scene-level patch is silently inert -- ``install_cloning`` never replicates the environments,
-    ``install_newton_materials`` never runs, and the first symptom is an unrelated-looking
-    ``AttributeError: 'Articulation' object has no attribute 'root_physx_view'`` from a function
-    that was supposed to have been replaced.
-
-    Rebinding here rather than editing ``play_env.py`` keeps the task code identical between the
-    two backends, which is the property the whole comparison rests on. It syncs every name
-    ``play_env`` took from a patched module, not just the two known ones, so a future patch does
-    not have to remember to come back here.
-    """
-    import importlib
-
-    play_env = importlib.import_module("isaacsimenvs.tasks.play.play_env")
-    for module_name in ("scene_utils", "reset_utils", "obs_utils", "action_utils",
-                        "reward_utils", "termination_utils", "logging_utils"):
-        module = compat.play_module(module_name)
-        for name, current in vars(play_env).items():
-            if not callable(current):
-                continue
-            patched = getattr(module, name, None)
-            if patched is not None and patched is not current:
-                setattr(play_env, name, patched)
-
-
-def _install_post_construction_patches(env: PlayNewtonEnv) -> None:
+def install_post_construction_patches(env) -> None:
     """Everything that needs live assets. Runs before the first ``reset()``."""
     # Isaac Lab 3.0 asset data are warp-backed ProxyArrays; the task code indexes them as torch
     # tensors throughout. This is the boundary that lets `play/utils/*` stay unmodified.

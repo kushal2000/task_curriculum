@@ -12,16 +12,22 @@ import torch
 import yaml
 from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
 
-from isaacsimenvs.tasks.cloth.backends.vbd.env import ClothEnv
+from types import SimpleNamespace
 
-LIMIT = ClothEnv.REWARD_SANITY_LIMIT
+from isaacsimenvs.tasks.cloth.mdp.rewards import REWARD_SANITY_LIMIT as LIMIT
+from isaacsimenvs.tasks.cloth.mdp.rewards import _guard_reward
 
 
 def _apply_guard(reward: torch.Tensor):
-    """The guard exactly as `_get_rewards` applies it."""
-    insane = reward.abs() > LIMIT
-    guarded = torch.where(insane, torch.zeros_like(reward), reward)
-    return guarded, insane
+    """The guard exactly as `rewards.compute_reward` applies it, on a minimal env."""
+    env = SimpleNamespace(
+        num_envs=reward.numel(),
+        extras={},
+        _nonfinite_envs=torch.zeros(reward.numel(), dtype=torch.bool),
+        _insane_count=0,
+    )
+    guarded = _guard_reward(env, reward)
+    return guarded, env._nonfinite_envs
 
 
 def test_nan_to_num_does_not_catch_huge_finite_rewards():

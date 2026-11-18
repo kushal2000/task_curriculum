@@ -19,7 +19,7 @@ import gymnasium as gym
 _CFG_DIR = Path(__file__).resolve().parents[2] / "cfg"
 
 _TASKS = {
-    "Cloth": ("backends.vbd.env:ClothEnv", "backends.vbd.config:ClothEnvCfg", "Cloth.yaml"),
+    "Cloth": ("backends.vbd.env:VbdClothEnv", "backends.vbd.config:ClothEnvCfg", "Cloth.yaml"),
     "RigidCloth": ("backends.rigid.env:RigidClothEnv", "backends.rigid.config:RigidClothEnvCfg", "FoldPoolPhysx.yaml"),
 }
 

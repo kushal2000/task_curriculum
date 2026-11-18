@@ -112,8 +112,8 @@ FLEXIV_WUJI = RobotSpec(
     fingertip_body_regex="l_(thumb|index_finger|middle_finger|ring_finger|pinky)_distal",
     # The order the policy observes them in. PhysX's find_bodies(fingertip_body_regex) returns body
     # index order, which for this hand is index, middle, pinky, ring, thumb (not the Kuka's index,
-    # middle, ring, thumb, pinky); the Play prior was trained on it. Newton reorders its fingertips
-    # to this tuple (newton/patches.py install_fingertip_order), so it must list the PhysX order.
+    # middle, ring, thumb, pinky); the Play prior was trained on it. The cloth env resolves its
+    # fingertips by this tuple on both backends (cloth/mdp/robot.py), so it must list the PhysX order.
     fingertip_link_names=(
         "l_index_finger_distal", "l_middle_finger_distal", "l_pinky_distal",
         "l_ring_finger_distal", "l_thumb_distal",

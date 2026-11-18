@@ -1,8 +1,7 @@
 """``RigidClothEnv``: the fold task on the fold-shape pool of hinged plates, on PhysX.
 
-Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv_isaacsim``), on the Play task's ``PlayEnv``. The fold task
-itself (targets, reward, success, the observation through ``env.object``) is ``mdp/task.py``, shared
-with the VBD backend; this class adds the pool and its physics:
+Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv_isaacsim``). The task (``cloth_env.ClothEnv`` and ``mdp/``) is
+shared with the VBD backend; this class adds the pool and its physics:
 
     scene.py           the pool's articulations, per-env sizes, shape draws, folded starts
     contacts.py        friction materials and contact offsets (PhysX USD, see physx.py)
@@ -27,16 +26,16 @@ from isaacsimenvs.tasks.cloth.backends.rigid.contacts import ContactsMixin
 from isaacsimenvs.tasks.cloth.backends.rigid.physx import DEFAULT_MU, reorder_object_pose_writes, size_gpu_buffers
 from isaacsimenvs.tasks.cloth.backends.rigid.randomization import RandomizationMixin
 from isaacsimenvs.tasks.cloth.backends.rigid.scene import SceneMixin
+from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 from isaacsimenvs.tasks.cloth.mdp.task import ClothTaskMixin
 from isaacsimenvs.tasks.cloth.mdp.tracker import TrackerMixin
-from isaacsimenvs.tasks.play.play_env import PlayEnv
 
 __all__ = ["RigidClothEnv"]
 
 
 class RigidClothEnv(
-    SceneMixin, ContactsMixin, RandomizationMixin, ChecksMixin, TrackerMixin, ClothTaskMixin, PlayEnv
+    SceneMixin, ContactsMixin, RandomizationMixin, ChecksMixin, TrackerMixin, ClothTaskMixin, ClothEnv
 ):
     """The fold task with the fold-shape pool as the manipuland, on PhysX."""
 
@@ -74,7 +73,7 @@ class RigidClothEnv(
 
         # --- PhysX contact setup that must be in the cfg before the scene is built.
         a = cfg.assets
-        # The Play task's material pass writes every robot/table/object shape through the tensor API,
+        # The scene's material pass writes every robot/table/object shape through the tensor API,
         # which resets combine modes (see physx.py). Contacts are authored in USD instead,
         # so it must not run; the colliders it would have set to 0.5 keep PhysX's default 0.5.
         model = str(cfg.physx_chain.friction_model)
@@ -106,7 +105,7 @@ class RigidClothEnv(
                 "physx_chain.friction_model: cloth_min."
             )
         super().__init__(cfg, render_mode, **kwargs)
-        # AFTER the Play init: its material pass would overwrite plate friction written earlier.
+        # AFTER ClothEnv.__init__: its material pass would overwrite plate friction written earlier.
         self._check_contacts()
         # RC_SKIP_VERIFY=1 is for DIAGNOSING a failed verification only. Never for training or eval.
         if __import__("os").environ.get("RC_SKIP_VERIFY", "0") != "1":
@@ -255,7 +254,6 @@ class RigidClothEnv(
 
     def _sync_observed_keypoints(self) -> None:
         self._keypoint_offsets[:] = self._corner_rest_offsets
-        self._keypoint_offsets_fixed[:] = self._corner_rest_offsets
 
     def footprint_ratio(self) -> torch.Tensor:
         ax = 0 if self.cfg.cloth.fold_axis == "x" else 1

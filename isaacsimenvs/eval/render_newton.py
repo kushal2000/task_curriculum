@@ -65,7 +65,7 @@ def _goal_overlay(viewer, inner, world: int):
     """
     import warp as wp
 
-    from isaacsimenvs.tasks.play.utils.obs_utils import _keypoints_world
+    from isaacsimenvs.tasks.cloth.mdp.observations import keypoints_world
 
     # A deformable task defines its goal directly, not as a rigid pose plus fixed offsets. Ask the
     # env for the quantity it actually scores when it has one -- for the cloth that is
@@ -77,17 +77,12 @@ def _goal_overlay(viewer, inner, world: int):
         goal_kp = inner.fold_targets_w()[world]
         obj_kp = inner.cloth_keypoints_w()[world]
     else:
-        rew_cfg = inner.cfg.reward
-        offsets = (
-            inner._keypoint_offsets_fixed
-            if rew_cfg.fixed_size_keypoint_reward
-            else inner._keypoint_offsets
-        )
+        offsets = inner._keypoint_offsets
         # World frame: the viewer draws in world coordinates, `root_pos_w` is already there.
-        obj_kp = _keypoints_world(
+        obj_kp = keypoints_world(
             inner.object.data.root_pos_w, inner.object.data.root_quat_w, offsets
         )[world]
-        goal_kp = _keypoints_world(
+        goal_kp = keypoints_world(
             inner.goal_viz.data.root_pos_w, inner.goal_viz.data.root_quat_w, offsets
         )[world]
 
