@@ -499,9 +499,6 @@ class PoolAsRigidObject(ClothAsRigidObject):
     def centre_offset(self) -> torch.Tensor:
         return self._centre_offset
 
-    def set_external_force_and_torque(self, *args, **kwargs) -> None:
-        return None
-
     # The two sim writes (PhysX: wxyz in, ``env_ids`` as given).
 
     def _write_root_pose(self, art, pose_xyzw: torch.Tensor, env_ids: torch.Tensor) -> None:

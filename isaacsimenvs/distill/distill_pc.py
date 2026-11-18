@@ -269,10 +269,7 @@ def main() -> None:
     # eval protocol (as eval/episodes.py)
     p.add_argument("--num_envs", type=int, default=None)
     p.add_argument("--max_steps", type=int, default=900)
-    p.add_argument("--success_tolerance", type=float, default=0.01)
     p.add_argument("--randomize", action="store_true", help="eval: keep DR and reset noise on")
-    p.add_argument("--single_variant", action="store_true")
-    p.add_argument("--num_assets_per_type", type=int, default=1)
     p.add_argument("--allow_overflow", action="store_true")
     p.add_argument("--rl_device", default="cuda:0")
     p.add_argument("--sim_device", default="cuda:0")
@@ -291,7 +288,7 @@ def main() -> None:
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
     from isaacsimenvs.distill.student import StudentNet, TeacherNet
-    from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
+    from isaacsimenvs.eval.protocol import disable_randomization
     from isaacsimenvs.tasks.cloth.perception.pointcloud import PointCloudCfg, g3_noise_preset, noise_preset
     from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import SceneCloudCfg, scene_noise_preset
     from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
@@ -348,10 +345,8 @@ def main() -> None:
         train = args.mode == "train"
         if args.num_envs is not None:
             env_cfg.scene.num_envs = args.num_envs
-        env_cfg.assets.num_assets_per_type = args.num_assets_per_type
         env_cfg.sim.device = args.sim_device
         env_cfg.seed = args.seed
-        env_cfg.termination.eval_success_tolerance = args.success_tolerance
         if not train and not args.randomize:
             disable_randomization(env_cfg)
         from isaacsimenvs.distill.pc_rl import load_student_any
@@ -365,8 +360,6 @@ def main() -> None:
             dr.use_action_delay, dr.action_delay_max, dr.delay_mode = True, action_delay, "per_episode"
         if args.env_obs_delay > 0:
             dr.use_obs_delay, dr.obs_delay_max, dr.delay_mode = True, int(args.env_obs_delay), "per_episode"
-        if args.single_variant:
-            use_single_object_variant()
         torch.manual_seed(args.seed)
 
         env = gym.make(args.task, cfg=env_cfg)

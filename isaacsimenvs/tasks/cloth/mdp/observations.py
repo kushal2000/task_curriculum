@@ -10,7 +10,7 @@ same vector:
 * quaternions in (x, y, z, w), the Isaac Gym order (internally everything is (w, x, y, z));
 * the sheet as a rigid object: ``keypoints_rel_*`` are four keypoints built as
   ``centre + R * offsets``, from the moving half's fitted pose and the fold goal's pose
-  (``env.object`` and ``env.goal_viz``; see ``mdp/task.py``).
+  (``env.object``, and ``env._goal_pos_w`` / ``env._goal_quat``; see ``mdp/task.py``).
 
 Observation DR, at most one object regime at a time (:func:`_observed_object_and_goal`): the cloth
 tracker (``cloth.tracker``), point-level DR (``point_dr_mode``), or pose-level DR (object-state
@@ -277,8 +277,8 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     obj_linvel = env.object.data.root_lin_vel_w
     obj_angvel = env.object.data.root_ang_vel_w
     obj_vel = torch.cat([obj_linvel, obj_angvel], dim=-1)
-    goal_pos = env.goal_viz.data.root_pos_w - env_origins
-    goal_rot = env.goal_viz.data.root_quat_w
+    goal_pos = env._goal_pos_w - env_origins
+    goal_rot = env._goal_quat
 
     tracker = tracker_on(env)
     point_mode = str(dr.point_dr_mode) != "off" or tracker

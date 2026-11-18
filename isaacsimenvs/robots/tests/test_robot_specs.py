@@ -20,7 +20,7 @@ import pytest
 
 from isaacsimenvs.conftest import REPO_ROOT, load_module
 
-robots = load_module("isaacsimenvs/tasks/play/robots/__init__.py", "play_robots", package=True)
+robots = load_module("isaacsimenvs/robots/__init__.py", "robots", package=True)
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "flexiv_wuji"))
 import flexiv_wuji as fw  # noqa: E402
 

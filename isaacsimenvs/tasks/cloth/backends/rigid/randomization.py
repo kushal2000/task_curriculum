@@ -47,12 +47,11 @@ class RandomizationMixin:
     def _randomize_physics(self, env_ids) -> None:
         """Re-draw the manipuland's physics for ``env_ids``: only the ranges that are not a point."""
         rd = self.cfg.rigid_cloth.randomization
-        r, pc = self.cfg.rigid_cloth, self.cfg.physx_chain
+        r = self.cfg.rigid_cloth
         ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long).reshape(-1)
         n = int(ids.numel())
         if n == 0:
             return
-        ids_cpu = ids.to("cpu", torch.int32)
 
         def uni(lo_hi) -> torch.Tensor:
             return torch.empty(n, device=self.device).uniform_(float(lo_hi[0]), float(lo_hi[1]))

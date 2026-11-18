@@ -8,7 +8,7 @@ import torch
 
 from isaaclab.utils.math import convert_quat, quat_apply, quat_from_angle_axis, quat_mul
 
-from ..robots import KUKA_SHARPA
+from isaacsimenvs.robots import KUKA_SHARPA
 from .point_dr import push_and_read, refit_points, simple_lags
 
 

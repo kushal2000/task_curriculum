@@ -73,9 +73,8 @@ class RigidClothEnv(
 
         # --- PhysX contact setup that must be in the cfg before the scene is built.
         a = cfg.assets
-        # The scene's material pass writes every robot/table/object shape through the tensor API,
-        # which resets combine modes (see physx.py). Contacts are authored in USD instead,
-        # so it must not run; the colliders it would have set to 0.5 keep PhysX's default 0.5.
+        # Contacts are authored in USD (contacts.py): a tensor-API material write would reset the
+        # combine modes (see physx.py). Robot links and the table keep PhysX's default material.
         model = str(cfg.physx_chain.friction_model)
         if model not in ("priority", "cloth_min"):
             raise ValueError(f"physx_chain.friction_model must be priority or cloth_min, got {model!r}")
@@ -86,7 +85,6 @@ class RigidClothEnv(
                     f"table on PhysX's default material ({DEFAULT_MU}); a different value needs a "
                     f"USD material, not the tensor write"
                 )
-        a.modify_asset_frictions = False
         # A PhysX numerical requirement, not a task parameter: see PhysxChainCfg.hinge_armature. Written
         # into the task block so the actuator (and the logs) carry the value the hinges really get.
         if float(cfg.physx_chain.hinge_armature) > 0.0:
@@ -105,7 +103,6 @@ class RigidClothEnv(
                 "physx_chain.friction_model: cloth_min."
             )
         super().__init__(cfg, render_mode, **kwargs)
-        # AFTER ClothEnv.__init__: its material pass would overwrite plate friction written earlier.
         self._check_contacts()
         # RC_SKIP_VERIFY=1 is for DIAGNOSING a failed verification only. Never for training or eval.
         if __import__("os").environ.get("RC_SKIP_VERIFY", "0") != "1":
@@ -122,8 +119,7 @@ class RigidClothEnv(
     # ------------------------------------------------------------------ Isaac Lab hooks
 
     def _setup_scene(self) -> None:
-        super()._setup_scene()
-        self._install_cloth()
+        super()._setup_scene()  # ends with _install_cloth
         self._bind_contact_materials()
         reorder_object_pose_writes(self.object)
 

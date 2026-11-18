@@ -63,7 +63,7 @@ def run(env_cfg, agent_cfg) -> None:
     if args_cli.no_filter:
         import dataclasses
 
-        from isaacsimenvs.tasks.play import robots
+        from isaacsimenvs import robots
 
         robots.ROBOT_SPECS[env_cfg.robot] = dataclasses.replace(
             robots.ROBOT_SPECS[env_cfg.robot], self_collision_filter={})

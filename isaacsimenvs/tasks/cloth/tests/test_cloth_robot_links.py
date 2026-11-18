@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from isaacsimenvs.conftest import REPO_ROOT
-from isaacsimenvs.tasks.play.robots import (
+from isaacsimenvs.robots import (
     FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_RIGHT_HUMAN_LIKE, KUKA_SHARPA,
 )
 
@@ -52,9 +52,9 @@ def test_finger_segments_are_the_finger_bodies(spec):
 
 @pytest.mark.parametrize("spec", SPECS, ids=lambda s: s.name)
 def test_cloth_proxies_follow_the_robot(spec):
-    from isaacsimenvs.tasks.cloth.backends.vbd.config import ClothEnvCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
 
-    cfg = ClothEnvCfg()
+    cfg = VbdClothEnvCfg()
     physics = cfg.cloth.build_physics(cfg.newton, 32, spec)
     proxy = [re.compile(b) for p in physics.solver_cfg.proxies for b in p.bodies]
     matched = {b for b in _bodies(spec) if any(p.fullmatch(f"/World/envs/env_7/Robot/{b}") for p in proxy)}
@@ -65,9 +65,9 @@ def test_cloth_proxies_follow_the_robot(spec):
 
 def test_kuka_proxies_unchanged():
     """The Kuka's proxy patterns are the ones written out before the spec carried them."""
-    from isaacsimenvs.tasks.cloth.backends.vbd.config import ClothEnvCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
 
-    cfg = ClothEnvCfg()
+    cfg = VbdClothEnvCfg()
     physics = cfg.cloth.build_physics(cfg.newton, 32)
     proxy = [re.compile(b) for p in physics.solver_cfg.proxies for b in p.bodies]
     old = [

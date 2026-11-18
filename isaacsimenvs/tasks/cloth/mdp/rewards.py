@@ -36,8 +36,8 @@ def update_hand_and_goal_metrics(env) -> None:
     origins = env.scene.env_origins
     sheet_pos = env.object.data.root_pos_w - origins
     sheet_rot = env.object.data.root_quat_w
-    goal_pos = env.goal_viz.data.root_pos_w - origins
-    goal_rot = env.goal_viz.data.root_quat_w
+    goal_pos = env._goal_pos_w - origins
+    goal_rot = env._goal_quat
 
     fingertips = env.robot.data.body_state_w[:, env._fingertip_body_ids, :]
     fingertip_pos_w = fingertips[:, :, 0:3]

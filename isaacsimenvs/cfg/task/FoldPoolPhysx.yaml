@@ -1,8 +1,8 @@
-# Isaacsimenvs-FoldPoolPhysx-Direct-v0: the fold task on the fold-shape pool of hinged plates, PhysX
+# Isaacsimenvs-RigidCloth-Direct-v0 (alias FoldPoolPhysx): the fold task on the fold-shape pool of hinged plates, PhysX
 # (Isaac Sim 5.1 / Isaac Lab 2.3, .venv_isaacsim). Config class: backends/rigid/config.RigidClothEnvCfg.
 #
 # A full flat copy of Cloth.yaml's task blocks (the loader has no inheritance) with the Newton solver
-# blocks dropped, the Play task's PhysX solver block under `sim`, and the rigid blocks at the bottom:
+# blocks dropped, the PhysX solver block under `sim`, and the rigid blocks at the bottom:
 # `rigid_cloth` (plate physics), `fold_pool` (shapes, sizes, folded starts), `physx_chain`.
 #
 # Sanctioned differences from Cloth.yaml:
@@ -24,9 +24,8 @@
 decimation: 2
 episode_length_s: 10.0
 action_space: 29
-# observation_space / state_space are computed in PlayEnv.__init__ from
-# obs.obs_list / obs.state_list (see Phase D). Configclass defaults (140/140)
-# act only as transient placeholders before __init__ overwrites them.
+# observation_space / state_space are computed in ClothEnv.__init__ from obs.obs_list /
+# obs.state_list and the robot's joint count.
 
 # -----------------------------------------------------------------------------
 # 1) sim — SimulationCfg (60 Hz policy control, 120 Hz physics)
@@ -61,26 +60,14 @@ scene:
   clone_in_fabric: false
 
 # -----------------------------------------------------------------------------
-# 3) assets — URDFs, procedural-generation knobs, static per-material frictions
+# 3) assets — robot and table URDFs, contact frictions
 # -----------------------------------------------------------------------------
 assets:
   robot_urdf: "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
   table_urdf: "assets/urdf/table_fold_pool.urdf"   # stage 2: widened in x; see the header
 
-  object_name: "handle_head_primitives"
-  # ONE variant, and only the hammer. The cloth replaces the spawned object, so the tool pool is
-  # inert here -- but it is still built, and two things make the inherited pool wrong:
-  #   * only hammer variants are baked in the USD cache; anything else dies with a cache miss.
-  #   * Newton REQUIRES type-homogeneous collision shapes across worlds (SolverMuJoCo rejects
-  #     mixed geom types), which a 6-type pool violates. Eval enforces this with
-  #     `use_single_object_variant()`; training passes --single_variant for the same reason.
-  handle_head_types: ["hammer"]
-  num_assets_per_type: 1
-
-  modify_asset_frictions: true
   robot_friction: 0.5
   finger_tip_friction: 1.5
-  object_friction: 0.5
   table_friction: 0.5
 
 # -----------------------------------------------------------------------------
@@ -105,17 +92,12 @@ action:
   dof_speed_scale: 1.5
 
 # -----------------------------------------------------------------------------
-# 5) reward — keypoint + lifting + distance-delta + reach-goal + action penalties
+# 5) reward — fold progress + fold bonus + fingertip approach + joint-speed penalties (mdp/rewards.py)
 # -----------------------------------------------------------------------------
 reward:
   keypoint_rew_scale: 1500.0             # was 200: a perfect fold paid ~20 vs ~64 of action penalty (docs/reports/1_vbd_cloth/cloth_finetune_reward_imbalance.md)
-  keypoint_scale: 1.5
   object_base_size: 0.04
-  fixed_size: [0.141, 0.03025, 0.0271]
-  fixed_size_keypoint_reward: true
 
-  lifting_rew_scale: 20.0
-  lifting_bonus: 300.0
   lifting_bonus_threshold: 0.15
 
   distance_delta_rew_scale: 50.0
@@ -125,7 +107,7 @@ reward:
   hand_actions_penalty_scale: 0.003
 
 # -----------------------------------------------------------------------------
-# 6) reset — initial-state distribution + goal sampling
+# 6) reset — initial-state distribution
 # -----------------------------------------------------------------------------
 reset:
   # KEPT ON, unlike the domain_randomization block. This is the initial-state distribution, not
@@ -154,29 +136,14 @@ reset:
   table_reset_z_range: 0.01
   table_object_z_offset: 0.25
 
-  goal_sampling_type: delta           # "delta" | "absolute"
-  delta_goal_distance: 0.1
-  delta_rotation_degrees: 90.0
-  target_volume_mins: [-0.35, -0.2, 0.6]
-  target_volume_maxs: [0.35, 0.2, 0.95]
-  target_volume_region_scale: 1.0
-
 # -----------------------------------------------------------------------------
-# 7) termination — end-of-episode conditions + tolerance curriculum
+# 7) termination — the fold criterion's hold (mdp/terminations.py)
 # -----------------------------------------------------------------------------
 termination:
-  episode_length: 600                 # policy steps (600 * 2 * 1/120 = 10s)
-  success_tolerance: 0.04             # == target, so the tolerance curriculum is a no-op
-  target_success_tolerance: 0.04      # == start: play2perfect disables the curriculum this way
-  eval_success_tolerance: null
   success_steps: 1                    # lump-sum bonus on FIRST entry, as in the finetune launchers
-  max_consecutive_successes: 50
-  force_consecutive_near_goal_steps: true
-  tolerance_curriculum_increment: 0.9
-  tolerance_curriculum_interval: 3000
 
 # -----------------------------------------------------------------------------
-# 8) domain_randomization — sim2real essentials (delays, noise, impulses)
+# 8) domain_randomization — observation / action / robot DR (mdp/randomization.py)
 # -----------------------------------------------------------------------------
 domain_randomization:
   # ALL OFF for the finetune. play2perfect keeps DR on during assembly finetuning for sim2real
@@ -202,22 +169,6 @@ domain_randomization:
 
   # per-step obs noise
   joint_velocity_obs_noise_std: 0.0
-
-  # random force/torque impulses. Already inert for cloth regardless --
-  # `ClothAsRigidObject.set_external_force_and_torque` is a documented no-op -- but zeroed so the
-  # config states the intent rather than relying on the adapter.
-  force_scale: 0.0
-  force_prob_range: [0.0001, 0.0001]
-  force_decay: 0.0
-  force_decay_interval: 0.08
-  force_only_when_lifted: true
-
-  torque_scale: 0.0
-  torque_prob_range: [0.0001, 0.0001]
-  torque_decay: 0.0
-  torque_decay_interval: 0.08
-  torque_only_when_lifted: true
-
 
 # -----------------------------------------------------------------------------
 # Cloth. Defaults live in ClothCfg; this block only pins what a run should not
@@ -277,7 +228,6 @@ cloth:
   # (beta 0) and which silently makes rigid_contact_k_start a no-op. Most likely of these changes
   # to go the wrong way -- A/B against 0.0.
   rigid_avbd_beta: 500000.0
-
 
 # -----------------------------------------------------------------------------
 # rigid_cloth — the plates' physical parameters (RigidClothCfg). Every pool shape shares them.

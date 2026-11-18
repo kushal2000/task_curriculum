@@ -1,9 +1,9 @@
 """Configuration of the rigid backend: the fold-shape pool of hinged plates, on PhysX.
 
-Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv_isaacsim``). ``RigidClothEnvCfg`` is the Play task's
-``PlayEnvCfg`` plus four blocks: ``cloth`` (the sheet the plates stand in for, shared with the VBD
-backend), ``rigid_cloth`` (plate physics and its randomisation), ``fold_pool`` (which shapes, how big,
-folded starts) and ``physx_chain`` (how contacts are expressed in PhysX).
+Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv_isaacsim``). ``RigidClothEnvCfg`` is the task's
+``ClothEnvCfg`` (whose ``cloth`` block is the sheet the plates stand in for) plus three blocks:
+``rigid_cloth`` (plate physics and its randomisation), ``fold_pool`` (which shapes, how big, folded
+starts) and ``physx_chain`` (how contacts are expressed in PhysX).
 """
 
 from __future__ import annotations
@@ -12,9 +12,8 @@ import math
 
 from isaaclab.utils import configclass
 
-from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
-from isaacsimenvs.tasks.play.play_env_cfg import PlayEnvCfg
+from isaacsimenvs.tasks.cloth.env_cfg import ClothEnvCfg
 
 __all__ = ["FoldPoolCfg", "PhysxChainCfg", "RigidClothCfg", "RigidClothEnvCfg", "RigidClothRandomizationCfg"]
 
@@ -370,10 +369,9 @@ class FoldPoolCfg:
 
 
 @configclass
-class RigidClothEnvCfg(PlayEnvCfg):
+class RigidClothEnvCfg(ClothEnvCfg):
     """The fold task on the fold-shape pool, on PhysX."""
 
-    cloth: ClothCfg = ClothCfg()
     rigid_cloth: RigidClothCfg = RigidClothCfg()
     physx_chain: PhysxChainCfg = PhysxChainCfg()
     fold_pool: FoldPoolCfg = FoldPoolCfg()

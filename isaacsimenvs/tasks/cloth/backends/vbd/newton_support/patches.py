@@ -5,26 +5,20 @@ it and Isaac Lab 3.0: API renames, warp-backed asset data, quaternion convention
 that 2.x did implicitly, and the physics properties 3.0 accepts and then ignores.
 
 Each section keeps the finding that motivated it, because several of these look like arbitrary
-compatibility shims until you know what they cost to discover. Which patches a given backend
-applies is decided in :mod:`isaacsimenvs.tasks.cloth.backends.vbd.play_newton_cfg` -- deliberately not here, so that a
-patch written for one solver cannot leak into another.
+compatibility shims until you know what they cost to discover. Which patches are applied, and when,
+is decided in :mod:`isaacsimenvs.tasks.cloth.backends.vbd.newton_setup` -- deliberately not here.
 
 Sections in application order:
 
 * multi-asset spawning, actuator defaults, asset data proxying -- API shape
-* quaternion math and conventions, fingertip ordering -- convention
+* quaternion math and conventions -- convention
 * replication, collision geometry, USD drive gains -- scene construction
 * armature, PhysX scene tuning, gravity, inertia, friction, solver refresh -- physics fidelity
-* meshified collision geometry -- opt-in, off by default; the one section here that deliberately
-  *changes* the physics rather than preserving it, so it is only ever installed on request
 """
 
 from __future__ import annotations
 
-import hashlib
 import importlib
-import math
-from pathlib import Path
 from typing import Any
 
 
@@ -131,10 +125,10 @@ def install_multi_asset(num_envs: int, *, prototypes_only: bool = True) -> None:
         num_envs: environment count; must match ``cfg.scene.num_envs``.
         prototypes_only: spawn one prim per *variant* (True) or one per *environment* (False).
     """
-    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
+    import importlib
 
-    scene_utils = compat.play_module("scene_utils")
-    if getattr(scene_utils, "_multi_asset_patch_installed", False):
+    robot_usd = importlib.import_module("isaacsimenvs.robots.usd")
+    if getattr(robot_usd, "_multi_asset_patch_installed", False):
         return
 
     from isaaclab.assets import RigidObjectCfg
@@ -163,7 +157,7 @@ def install_multi_asset(num_envs: int, *, prototypes_only: bool = True) -> None:
             )
         return RigidObjectCfg(prim_path=prim_path, spawn=spawn)
 
-    scene_utils.build_rigid_object_cfg = build_rigid_object_cfg
+    robot_usd.build_rigid_object_cfg = build_rigid_object_cfg
 
     if prototypes_only:
         # The robot has one variant and no ``spawn_paths``, so ``AssetBase.__init__`` hands the
@@ -174,7 +168,7 @@ def install_multi_asset(num_envs: int, *, prototypes_only: bool = True) -> None:
         # with an internal reference rather than copied (``ovphysx_manager.py:746``) -- the
         # own-inertia/other-collider hybrid this project has already been bitten by. Pin it to
         # env_0 so it is a prototype like everything else.
-        original_robot_cfg = scene_utils.build_robot_articulation_usd_cfg
+        original_robot_cfg = robot_usd.build_robot_articulation_usd_cfg
 
         def build_robot_articulation_usd_cfg(usd_path: str, **kwargs):
             cfg = original_robot_cfg(usd_path, **kwargs)
@@ -182,51 +176,9 @@ def install_multi_asset(num_envs: int, *, prototypes_only: bool = True) -> None:
             cfg.spawn.spawn_path = _variant_spawn_paths(base_name, 1, num_envs)[0]
             return cfg
 
-        scene_utils.build_robot_articulation_usd_cfg = build_robot_articulation_usd_cfg
-        _install_object_scale_from_assignment(scene_utils)
+        robot_usd.build_robot_articulation_usd_cfg = build_robot_articulation_usd_cfg
 
-    scene_utils._multi_asset_patch_installed = True
-
-
-def _install_object_scale_from_assignment(scene_utils) -> None:
-    """Derive the per-env object-scale tensor from the assignment, not from spawned prims.
-
-    Upstream's ``_build_object_scale_tensor`` enumerates ``/World/envs/env_.*/Object`` and insists
-    on finding exactly ``num_envs`` prims -- true when every environment's object is authored in
-    USD, false once only the prototypes are. What it is really computing is which pool entry
-    environment *i* holds, and that is ``i % num_object_usds`` by construction, on this stack and
-    on the 2.3 reference alike (upstream reaches the same answer because ``find_matching_prims``
-    returns environments in creation order, so its ``source_idx`` *is* the environment id).
-
-    Note the pool length, not the spawned-variant count, stays the modulus. Under
-    ``--single_variant`` the pool still holds every entry while only one is spawned, so this
-    reports a different scale per environment for an object that is the same everywhere. That is
-    a real wart, and it is the 2.3 reference's wart too: reproducing it is what keeps the control
-    comparable. The guard below is sized from what was actually spawned instead.
-    """
-    import torch
-
-    def _build_object_scale_tensor(env, object_scales_normalized, num_object_usds: int) -> None:
-        from isaaclab.sim.utils import find_matching_prim_paths
-
-        spawned = getattr(getattr(env.object.cfg, "spawn", None), "usd_path", None)
-        expected = min(len(spawned) if isinstance(spawned, list) else 1, env.num_envs)
-        found = len(find_matching_prim_paths("/World/envs/env_.*/Object"))
-        if found < expected:
-            raise RuntimeError(
-                f"Expected at least {expected} Object prototype prims after spawning, got {found}."
-            )
-
-        env._object_scale_per_env = torch.zeros(env.num_envs, 3, device=env.device, dtype=torch.float32)
-        env._object_asset_index_per_env = torch.zeros(env.num_envs, device=env.device, dtype=torch.long)
-        for env_id in range(env.num_envs):
-            asset_index = env_id % num_object_usds
-            env._object_scale_per_env[env_id] = torch.tensor(
-                object_scales_normalized[asset_index], device=env.device, dtype=torch.float32,
-            )
-            env._object_asset_index_per_env[env_id] = asset_index
-
-    scene_utils._build_object_scale_tensor = _build_object_scale_tensor
+    robot_usd._multi_asset_patch_installed = True
 
 
 # ============================================================================
@@ -489,12 +441,8 @@ def wrap_env_assets(env) -> list[str]:
 
 _PATCH_FLAG = "_quat_math_patch_installed"
 
-# Modules that bind quaternion helpers at import: the cloth task's one helper module, and the Play
-# scene code the cloth env still builds its scene with.
-_TARGET_MODULES = (
-    "isaacsimenvs.tasks.cloth.mdp.geometry.quat",
-    "isaacsimenvs.tasks.play.utils.scene_utils",
-)
+# Modules that bind quaternion helpers at import: the cloth task's one helper module.
+_TARGET_MODULES = ("isaacsimenvs.tasks.cloth.mdp.geometry.quat",)
 
 # name -> (quaternion argument positions, whether the result is a quaternion)
 _WRAPPED: dict[str, tuple[tuple[int, ...], bool]] = {
@@ -608,13 +556,13 @@ def wxyz_to_xyzw(rot: tuple[float, float, float, float]) -> tuple[float, float, 
 
 def install_quat_convention() -> None:
     """Reinterpret upstream's wxyz initial rotations as xyzw for Isaac Lab 3.0."""
-    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
+    import importlib
 
-    scene_utils = compat.play_module("scene_utils")
-    if getattr(scene_utils, "_quat_convention_patch_installed", False):
+    robot_usd = importlib.import_module("isaacsimenvs.robots.usd")
+    if getattr(robot_usd, "_quat_convention_patch_installed", False):
         return
 
-    original = scene_utils.build_robot_articulation_usd_cfg
+    original = robot_usd.build_robot_articulation_usd_cfg
 
     def build_with_xyzw_rot(*args, **kwargs):
         cfg = original(*args, **kwargs)
@@ -630,8 +578,8 @@ def install_quat_convention() -> None:
                 )
         return cfg
 
-    scene_utils.build_robot_articulation_usd_cfg = build_with_xyzw_rot
-    scene_utils._quat_convention_patch_installed = True
+    robot_usd.build_robot_articulation_usd_cfg = build_with_xyzw_rot
+    robot_usd._quat_convention_patch_installed = True
 
 
 # ============================================================================
@@ -776,7 +724,7 @@ def install_cloning(
     filter_inter_env_collisions: bool = True,
     request_full_stage: bool = False,
 ) -> None:
-    """Wrap ``scene_utils.setup_scene`` so environments are replicated after asset creation.
+    """Wrap the cloth scene's ``setup_scene`` so environments are replicated after asset creation.
 
     The two USD rewrites are opt-in per backend rather than decided here. They exist to work
     around Newton's importer and MuJoCo solver, and applying them under PhysX is not neutral:
@@ -804,13 +752,12 @@ def install_cloning(
         request_full_stage: ask the ovphysx wheel to ingest every authored environment when the
             plan has more than one prototype per asset.
     """
-    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
+    from isaacsimenvs.tasks.cloth.backends import scene
 
-    scene_utils = compat.play_module("scene_utils")
-    if getattr(scene_utils, "_clone_patch_installed", False):
+    if getattr(scene, "_clone_patch_installed", False):
         return
 
-    original_setup_scene = scene_utils.setup_scene
+    original_setup_scene = scene.setup_scene
 
     def setup_scene_with_replication(env) -> None:
         original_setup_scene(env)
@@ -826,12 +773,6 @@ def install_cloning(
                     f"under {fixed} collision Xforms",
                     flush=True,
                 )
-
-            # After the push, not before: the attribute has to land on the *mesh* prims, which
-            # only carry CollisionAPI once `push_collision_api_to_meshes` has run.
-            n_convex = author_convex_hull_approximation(env.scene.stage)
-            if n_convex:
-                print(f"[cloning] marked {n_convex} object colliders convexHull", flush=True)
 
         if write_drive_gains:
             # Upstream authors zero-gain USD drives and injects gains at runtime, which PhysX
@@ -899,8 +840,8 @@ def install_cloning(
             flush=True,
         )
 
-    scene_utils.setup_scene = setup_scene_with_replication
-    scene_utils._clone_patch_installed = True
+    scene.setup_scene = setup_scene_with_replication
+    scene._clone_patch_installed = True
 
 
 # ============================================================================
@@ -943,54 +884,6 @@ def install_cloning(
 
 _CONTACT_OFFSET_ATTR = "physxCollision:contactOffset"
 _REST_OFFSET_ATTR = "physxCollision:restOffset"
-
-
-def author_convex_hull_approximation(stage, root_path: str = "/World/envs") -> int:
-    """Mark meshified object colliders as convex hulls, so Newton does not run triangle-mesh
-    collision on them.
-
-    Newton's USD importer picks a collision representation from ``physics:approximation`` on
-    ``UsdPhysicsMeshCollisionAPI`` (``import_usd.py:514-521`` maps ``"convexhull"`` ->
-    ``convex_hull``). Upstream never authors that attribute -- it has no reason to, since its
-    tools are box/capsule primitives -- so once ``--meshify`` replaces them with ``<mesh>``
-    geometry they import as ``GeoType.MESH``: a general triangle mesh.
-
-    Measured consequence: with meshify on, a *single shared object* rollout that is stable with
-    primitives diverges to NaN within one episode (the policy then samples a Normal with
-    negative std). The tools are convex by construction -- each is one box or one capsule
-    rendered as a hull -- so declaring them convex costs no fidelity and gives MuJoCo the
-    contact path it is good at.
-
-    Only the object variants are touched. The robot's collision meshes are already ``MESH`` and
-    the backend is stable with them, so changing those would be an unmeasured second change.
-
-    Args:
-        stage: USD stage to fix up in place.
-        root_path: Subtree to scan.
-
-    Returns:
-        Number of collision meshes marked.
-    """
-    from pxr import Usd, UsdPhysics
-
-    root = stage.GetPrimAtPath(root_path)
-    if not root.IsValid():
-        return 0
-
-    marked = 0
-    for prim in Usd.PrimRange(root):
-        path = prim.GetPath().pathString
-        if "/Object" not in path and "/GoalViz" not in path:
-            continue
-        if not prim.HasAPI(UsdPhysics.CollisionAPI):
-            continue
-        mesh_api = UsdPhysics.MeshCollisionAPI.Apply(prim)
-        attr = mesh_api.GetApproximationAttr()
-        if not attr:
-            attr = mesh_api.CreateApproximationAttr()
-        attr.Set(UsdPhysics.Tokens.convexHull)
-        marked += 1
-    return marked
 
 
 def push_collision_api_to_meshes(stage, root_path: str = "/World/envs") -> tuple[int, int]:
@@ -1075,7 +968,7 @@ def push_collision_api_to_meshes(stage, root_path: str = "/World/envs") -> tuple
 # ---------------------------------------
 # Upstream authors every joint's ``UsdPhysics.DriveAPI`` with **zero** stiffness and damping,
 # and supplies the real gains at runtime via ``ImplicitActuatorCfg``. The intent is documented in
-# ``scene_utils._robot_joint_drive_cfg``: *"DriveAPI prims must exist for ImplicitActuator runtime
+# ``robots.usd.robot_joint_drive_cfg``: *"DriveAPI prims must exist for ImplicitActuator runtime
 # gains to land."* PhysX honours that runtime injection.
 #
 # Newton does not work that way. ``SolverMuJoCo`` builds its ``mjModel`` from the USD-derived
@@ -1408,10 +1301,9 @@ def restore_placeholder_inertia(env, *, inertia: float = NEGLIGIBLE_INERTIA) -> 
 # Shape friction (Newton)
 # ============================================================================
 #
-# Newton replacement for upstream's PhysX-view-based friction assignment.
-#
-# ``scene_utils.apply_physx_material_properties`` writes per-shape friction through PhysX view
-# APIs that do not exist on the Newton backend::
+# The Newton counterpart of the Play task's PhysX-view friction assignment
+# (``play/utils/scene_utils.apply_physx_material_properties``), whose view APIs do not exist on
+# Newton::
 #
 #     env.robot.root_physx_view.get_material_properties() / set_material_properties()
 #     env.robot._physics_sim_view.create_rigid_body_view(link_path)
@@ -1433,94 +1325,64 @@ def restore_placeholder_inertia(env, *, inertia: float = NEGLIGIBLE_INERTIA) -> 
 # ``mu`` is exact here — no information is lost. That would not hold for a config that set them
 # differently.
 #
-# Unsupported: per-environment bucketed friction randomization
-# ------------------------------------------------------------
-# Upstream optionally quantizes fingertip/object friction into ``friction_n_buckets`` per-env
-# values. Newton's ``shape_material_mu`` is per shape and shapes are already per environment, so
-# this is implementable — but it is not implemented here, and the patch **raises** rather than
-# silently ignoring it. The M4 protocol disables domain randomization, so the ranges are
-# ``(1.0, 1.0)`` and the path is inert; a future randomized run must implement it rather than
-# discover the omission from a quiet result.
 
-def install_newton_materials() -> None:
-    """Replace ``scene_utils.apply_physx_material_properties`` with a Newton implementation."""
-    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
+def apply_newton_materials(env) -> None:
+    """Robot, table and goal-marker shape friction on the Newton model: ``assets.robot_friction``,
+    ``assets.finger_tip_friction`` on the fingertip links. Before ``notify_solver``."""
+    import warp as wp
 
-    scene_utils = compat.play_module("scene_utils")
-    if getattr(scene_utils, "_material_patch_installed", False):
-        return
+    fingertip_link_names = set(env.robot_spec.fingertip_link_names)
+    assets_cfg = env.cfg.assets
 
-    def apply_newton_material_properties(env) -> None:
-        import warp as wp
+    robot_friction = float(assets_cfg.robot_friction)
+    fingertip_friction = float(assets_cfg.finger_tip_friction)
 
-        fingertip_link_names = set(env.robot_spec.fingertip_link_names)
-        assets_cfg = env.cfg.assets
-        if not bool(getattr(assets_cfg, "apply_material_properties", True)):
-            return
+    # `sim.physics_manager` is the manager *class*, not an instance, so the `model`
+    # property is not usable here; the class-level accessor is get_model().
+    model = env.sim.physics_manager.get_model()
 
-        dr = env.cfg.domain_randomization
-        ft_range = tuple(float(v) for v in dr.fingertip_friction_scale_range)
-        obj_range = tuple(float(v) for v in dr.object_friction_scale_range)
-        if ft_range != (1.0, 1.0) or obj_range != (1.0, 1.0):
-            raise NotImplementedError(
-                "Per-env bucketed friction randomization is not implemented for the Newton "
-                f"backend (fingertip_friction_scale_range={ft_range}, "
-                f"object_friction_scale_range={obj_range}). Disable friction DR, or implement "
-                "per-shape randomization against Model.shape_material_mu."
-            )
+    # Newton names shapes generically ("shape_0", "shape_1", ...), so fingertips cannot be
+    # identified from shape_label. Map each shape to its owning body via shape_body and
+    # match against body_label, which does carry the URDF link names (left_index_DP, ...).
+    body_labels = [label.rsplit("/", 1)[-1] for label in model.body_label]
+    shape_body = model.shape_body.numpy()
 
-        robot_friction = float(assets_cfg.robot_friction)
-        fingertip_friction = float(assets_cfg.finger_tip_friction)
+    mu = model.shape_material_mu.numpy().copy()
+    restitution = model.shape_material_restitution.numpy().copy()
 
-        # `sim.physics_manager` is the manager *class*, not an instance, so the `model`
-        # property is not usable here; the class-level accessor is get_model().
-        model = env.sim.physics_manager.get_model()
+    # Every shape in the scene (robot links, table, object, goal viz) takes the base
+    # friction; fingertip shapes are then overridden. Matches upstream, which fills the
+    # whole material buffer with `default` before writing the fingertip rows.
+    mu[:] = robot_friction
+    restitution[:] = 0.0
 
-        # Newton names shapes generically ("shape_0", "shape_1", ...), so fingertips cannot be
-        # identified from shape_label. Map each shape to its owning body via shape_body and
-        # match against body_label, which does carry the URDF link names (left_index_DP, ...).
-        body_labels = [label.rsplit("/", 1)[-1] for label in model.body_label]
-        shape_body = model.shape_body.numpy()
+    n_fingertip = 0
+    for shape_idx in range(len(mu)):
+        body_idx = int(shape_body[shape_idx])
+        if body_idx < 0:
+            continue  # static/world shape (e.g. ground plane)
+        body_name = body_labels[body_idx]
+        if any(name in body_name for name in fingertip_link_names):
+            mu[shape_idx] = fingertip_friction
+            n_fingertip += 1
 
-        mu = model.shape_material_mu.numpy().copy()
-        restitution = model.shape_material_restitution.numpy().copy()
-
-        # Every shape in the scene (robot links, table, object, goal viz) takes the base
-        # friction; fingertip shapes are then overridden. Matches upstream, which fills the
-        # whole material buffer with `default` before writing the fingertip rows.
-        mu[:] = robot_friction
-        restitution[:] = 0.0
-
-        n_fingertip = 0
-        for shape_idx in range(len(mu)):
-            body_idx = int(shape_body[shape_idx])
-            if body_idx < 0:
-                continue  # static/world shape (e.g. ground plane)
-            body_name = body_labels[body_idx]
-            if any(name in body_name for name in fingertip_link_names):
-                mu[shape_idx] = fingertip_friction
-                n_fingertip += 1
-
-        if n_fingertip == 0:
-            raise RuntimeError(
-                "No fingertip shapes matched the robot's fingertip_link_names in Model.shape_label; "
-                "friction would silently stay at the robot default. "
-                f"Expected body names containing {sorted(fingertip_link_names)}."
-            )
-
-        model.shape_material_mu.assign(wp.array(mu, dtype=model.shape_material_mu.dtype))
-        model.shape_material_restitution.assign(
-            wp.array(restitution, dtype=model.shape_material_restitution.dtype)
+    if n_fingertip == 0:
+        raise RuntimeError(
+            "No fingertip shapes matched the robot's fingertip_link_names in Model.shape_label; "
+            "friction would silently stay at the robot default. "
+            f"Expected body names containing {sorted(fingertip_link_names)}."
         )
 
-        print(
-            f"[material_patch] friction set: {len(mu)} shapes at mu={robot_friction}, "
-            f"{n_fingertip} fingertip shapes at mu={fingertip_friction}",
-            flush=True,
-        )
+    model.shape_material_mu.assign(wp.array(mu, dtype=model.shape_material_mu.dtype))
+    model.shape_material_restitution.assign(
+        wp.array(restitution, dtype=model.shape_material_restitution.dtype)
+    )
 
-    scene_utils.apply_physx_material_properties = apply_newton_material_properties
-    scene_utils._material_patch_installed = True
+    print(
+        f"[material_patch] friction set: {len(mu)} shapes at mu={robot_friction}, "
+        f"{n_fingertip} fingertip shapes at mu={fingertip_friction}",
+        flush=True,
+    )
 
 
 # ============================================================================
@@ -1537,7 +1399,7 @@ def install_newton_materials() -> None:
 #
 # That interacts badly with how upstream configures the arm and hand. The robot's USD ``DriveAPI``
 # is deliberately authored with **zero** stiffness and damping — see
-# ``scene_utils._robot_joint_drive_cfg``: *"DriveAPI prims must exist for ImplicitActuator runtime
+# ``robots.usd.robot_joint_drive_cfg``: *"DriveAPI prims must exist for ImplicitActuator runtime
 # gains to land"* — and the real gains are supplied at runtime through ``ImplicitActuatorCfg``.
 # PhysX accepts that runtime injection. Under Newton the solver is built from the zero-gain USD,
 # so MuJoCo's cached actuator gains stay at zero no matter what Isaac Lab writes afterwards, and
@@ -1718,7 +1580,7 @@ def _zero_implicit_effort(articulation) -> None:
 # half of that; the cone and impratio are defaults on :class:`NewtonSolverKnobs`.
 
 
-def install_newton_condim(condim: int = 6, grasping: tuple[str, ...] | None = None) -> bool:
+def install_newton_condim(condim: int, grasping: tuple[str, ...]) -> bool:
     """Set MuJoCo contact dimensionality on the grasping shapes *before* the solver compiles.
 
     Newton exposes this as a builder custom attribute, which is the only point at which it can
@@ -1734,7 +1596,7 @@ def install_newton_condim(condim: int = 6, grasping: tuple[str, ...] | None = No
     Args:
         condim: 3 sliding only (MuJoCo default), 4 adds torsional, 6 adds rolling. The
             SimToolReal authors' own MuJoCo model uses 6 on the fingertip pads, tool and table.
-        grasping: Fingertip link names; the Kuka + Sharpa's when omitted.
+        grasping: Fingertip link names.
 
     Returns:
         Whether the hook was installed.
@@ -1746,10 +1608,6 @@ def install_newton_condim(condim: int = 6, grasping: tuple[str, ...] | None = No
     if getattr(NewtonManager, "_simtoolreal_condim_patch", False):
         return False
 
-    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
-
-    if grasping is None:
-        grasping = tuple(compat.play_module("scene_utils").FINGERTIP_LINK_NAMES)
     original = NewtonManager._prepare_builder_for_finalize
 
     def _prepare(cls_or_builder, builder=None):
@@ -1919,330 +1777,3 @@ def install_pose_write_conversion(env) -> list[str]:
         asset._simtoolreal_write_quat = True
         wrapped.append(name)
     return wrapped
-
-
-# ============================================================================
-# Meshified collision geometry (opt-in)
-# ============================================================================
-#
-# Represent each procedurally generated tool's *collision* geometry as convex triangle meshes
-# instead of the native primitives upstream authors.
-#
-# Why it exists
-# -------------
-# A tool is exactly two convex shapes on one link: a handle and a head. Upstream authors each as
-# ``<box>`` (3-tuple scale) or ``<cylinder>`` (2-tuple scale) --
-# ``isaacsimenvs/tasks/simtoolreal/utils/generate_objects.py:166-252`` -- and converts URDF -> USD
-# with ``replace_cylinders_with_capsules=True`` (``scene_utils.py:1703``), so in the simulator the
-# collision shapes are of type BOX and/or CAPSULE.
-#
-# That is what blocks per-environment asset variants under Newton. ``SolverMuJoCo`` requires every
-# world to declare the same shape *types* in the same order and raises
-#
-#     ValueError: SolverMuJoCo requires homogeneous worlds. Shape types mismatch at position 36:
-#     world 0 has type 7, but other worlds have types [7, 4, 4].
-#
-# (``newton/_src/solvers/mujoco/solver_mujoco.py:9153``; GeoType 7 = BOX, 4 = CAPSULE.) Per-world
-# mesh *data* is fine on the pipeline this port uses (``use_mujoco_contacts=False``) and the shape
-# *count* is already uniform at two per tool, so making every collision shape a MESH makes the
-# type vector uniform and removes the only remaining obstacle.
-#
-# It is off by default and it is a physics change, not a refactor: a convex hull approximating a
-# capsule has faceted ends, which is the contact behaviour capsules are chosen to avoid. Whether
-# that costs task performance is a measurement, not an argument -- hence ``--meshify`` as an A/B
-# arm rather than a new default.
-#
-# What is and is not changed
-# --------------------------
-# * Only ``<collision>`` geometry is rewritten. ``<visual>`` keeps its primitives, so renders and
-#   the goal marker are untouched.
-# * The collision ``<origin>`` (including the -pi/2 rotations that put a cylinder axis on +x/+y)
-#   is left exactly as authored, and each mesh is written in the primitive's own local frame. The
-#   collider therefore occupies the same place, to the tessellation error.
-# * ``<inertial>`` is not touched. Upstream authors an explicit ``<mass>``, ``<inertia>`` and
-#   centre-of-mass ``<origin>`` (``generate_objects.py:249-253``), rather than a ``<density>``, so
-#   mass and inertia are *inputs* to the importer and cannot be recomputed from the new geometry.
-#   This is verified against the live sim, not assumed -- see the probe table in the report.
-#
-# A cylinder is meshed as the **capsule** it becomes downstream, not as a cylinder: radius r and
-# cylindrical section of length equal to the URDF ``length``, with hemispherical caps, which is
-# what the importer's ``replace_cylinders_with_capsules`` produces (read back from a cached USD:
-# ``Capsule axis=Z height=<cylinder length> radius=<cylinder radius>``).
-#
-# Tessellation
-# ------------
-# ``_CAPSULE_SEGMENTS = 16`` azimuthal sectors and ``_CAPSULE_CAP_RINGS = 3`` latitude rings per
-# hemispherical cap. That is a uniform 22.5 deg of angular resolution in *both* directions
-# (360/16 around the axis; 90/(3+1) from equator to pole), so the maximum surface deviation is
-# isotropic at ``r * (1 - cos(11.25 deg)) = 0.0192 r``. The largest handle radius in the hammer
-# pool is 0.0148 m, giving 0.28 mm -- under 3% of the 0.01 m success tolerance. It comes to 130
-# vertices / 256 triangles, comfortably inside PhysX's 255-vertex hard limit for a convex hull.
-#
-# Caveat, stated because it is not controlled here: PhysX's default
-# ``physxConvexHullCollision:hullVertexLimit`` is 64, so the PhysX stacks may cook a reduced hull
-# from these 130 vertices. Both PhysX backends do so identically, and MuJoCo takes its own hull of
-# the same mesh; this is not authored either way.
-#
-# Boxes are meshed exactly: 8 vertices, 12 triangles, zero geometric error.
-#
-# Cache keying
-# ------------
-# The URDF -> USD cache is content-addressed on URDF *text* (:func:`usd_cache.cache_key`), which changes
-# here because the ``<geometry>`` element changes, so meshified and primitive assets land in
-# separate cache entries automatically. The text alone would not cover the mesh *files* it names
-# (:mod:`upstream` flags exactly this caveat), so each ``.obj`` is written under a filename
-# carrying a hash of its own contents. The URDF text therefore transitively addresses the meshes.
-
-#: Azimuthal sectors around the capsule axis.
-_CAPSULE_SEGMENTS = 16
-
-#: Latitude rings per hemispherical cap, excluding the equator and the pole.
-_CAPSULE_CAP_RINGS = 3
-
-
-def _box_mesh(sx: float, sy: float, sz: float):
-    """Exact triangle mesh of a URDF ``<box size="sx sy sz">``, centred on the origin."""
-    hx, hy, hz = sx / 2.0, sy / 2.0, sz / 2.0
-    verts = [
-        (-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
-        (-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz),
-    ]
-    faces = [
-        (0, 3, 2), (0, 2, 1),  # -z
-        (4, 5, 6), (4, 6, 7),  # +z
-        (0, 1, 5), (0, 5, 4),  # -y
-        (1, 2, 6), (1, 6, 5),  # +x
-        (2, 3, 7), (2, 7, 6),  # +y
-        (3, 0, 4), (3, 4, 7),  # -x
-    ]
-    return verts, faces
-
-
-def _capsule_mesh(radius: float, height: float, segments: int, cap_rings: int):
-    """Triangle mesh of a capsule on the +z axis: cylinder of ``height`` plus hemispherical caps.
-
-    Matches the shape ``replace_cylinders_with_capsules=True`` produces from
-    ``<cylinder length="height" radius="radius"/>``: total extent along z is ``height + 2*radius``.
-    """
-    half = height / 2.0
-
-    # Rings of ``segments`` vertices each, ordered bottom to top. The two equator rings are the
-    # ends of the cylindrical section; the cap rings sit on the hemispheres.
-    rings: list[tuple[float, float]] = []
-    for k in range(cap_rings, 0, -1):
-        theta = k * (math.pi / 2.0) / (cap_rings + 1)
-        rings.append((-half - radius * math.sin(theta), radius * math.cos(theta)))
-    rings.append((-half, radius))
-    rings.append((half, radius))
-    for k in range(1, cap_rings + 1):
-        theta = k * (math.pi / 2.0) / (cap_rings + 1)
-        rings.append((half + radius * math.sin(theta), radius * math.cos(theta)))
-
-    verts: list[tuple[float, float, float]] = [(0.0, 0.0, -half - radius)]
-    for z, r in rings:
-        for j in range(segments):
-            phi = 2.0 * math.pi * j / segments
-            verts.append((r * math.cos(phi), r * math.sin(phi), z))
-    verts.append((0.0, 0.0, half + radius))
-
-    top_pole = len(verts) - 1
-
-    def ring_index(ring: int, j: int) -> int:
-        return 1 + ring * segments + (j % segments)
-
-    faces: list[tuple[int, int, int]] = []
-    for j in range(segments):  # bottom fan, outward normals point down and out
-        faces.append((0, ring_index(0, j + 1), ring_index(0, j)))
-    for ring in range(len(rings) - 1):  # bands
-        for j in range(segments):
-            a, b = ring_index(ring, j), ring_index(ring, j + 1)
-            c, d = ring_index(ring + 1, j + 1), ring_index(ring + 1, j)
-            faces.append((a, b, c))
-            faces.append((a, c, d))
-    for j in range(segments):  # top fan
-        faces.append((ring_index(len(rings) - 1, j), ring_index(len(rings) - 1, j + 1), top_pole))
-    return verts, faces
-
-
-def _obj_text(verts, faces) -> str:
-    """Wavefront OBJ for a vertex/face list. ``%.17g`` so the text round-trips the floats."""
-    lines = [f"# generated by simtoolreal_newton.patches (meshify), {len(verts)} verts "
-             f"{len(faces)} tris"]
-    lines += ["v %.17g %.17g %.17g" % v for v in verts]
-    lines += ["f %d %d %d" % (a + 1, b + 1, c + 1) for a, b, c in faces]
-    return "\n".join(lines) + "\n"
-
-
-def _write_collision_mesh(out_dir: Path, kind: str, verts, faces) -> str:
-    """Write the mesh under a content-addressed name and return that name.
-
-    The hash is of the OBJ text itself, so the filename recorded in the URDF changes whenever the
-    geometry does. That is what lets :func:`usd_cache.cache_key` -- which hashes URDF text only -- stay
-    a sound cache key for assets whose collision geometry lives in separate files.
-    """
-    text = _obj_text(verts, faces)
-    name = f"col_{kind}_{hashlib.sha256(text.encode()).hexdigest()[:16]}.obj"
-    path = out_dir / name
-    if not path.is_file() or path.read_text() != text:
-        path.write_text(text)
-    return name
-
-
-def meshify_urdf(urdf_path, *, segments: int = _CAPSULE_SEGMENTS,
-                 cap_rings: int = _CAPSULE_CAP_RINGS) -> int:
-    """Rewrite one URDF's ``<collision>`` primitives as ``<mesh>`` references, in place.
-
-    Visual geometry and the ``<inertial>`` block are left untouched. Returns the number of
-    collision geometries converted.
-    """
-    import xml.etree.ElementTree as ET
-
-    urdf_path = Path(urdf_path)
-    tree = ET.parse(urdf_path)
-    root = tree.getroot()
-
-    converted = 0
-    for collision in root.findall(".//collision"):
-        geometry = collision.find("geometry")
-        if geometry is None or geometry.find("mesh") is not None:
-            continue
-
-        box = geometry.find("box")
-        cylinder = geometry.find("cylinder")
-        if box is not None:
-            sx, sy, sz = (float(v) for v in str(box.get("size")).split())
-            verts, faces = _box_mesh(sx, sy, sz)
-            kind, primitive = "box", box
-        elif cylinder is not None:
-            # Downstream turns every cylinder into a capsule, so mesh the capsule.
-            radius = float(str(cylinder.get("radius")))
-            length = float(str(cylinder.get("length")))
-            verts, faces = _capsule_mesh(radius, length, segments, cap_rings)
-            kind, primitive = "capsule", cylinder
-        else:
-            continue
-
-        name = _write_collision_mesh(urdf_path.parent, kind, verts, faces)
-        geometry.remove(primitive)
-        ET.SubElement(geometry, "mesh", {"filename": name})
-        converted += 1
-
-    if converted:
-        tree.write(urdf_path, encoding="utf-8", xml_declaration=True)
-    return converted
-
-
-def install_mesh_collisions(scene_utils, *, segments: int = _CAPSULE_SEGMENTS,
-                            cap_rings: int = _CAPSULE_CAP_RINGS) -> None:
-    """Make the object pool author convex-mesh colliders instead of box/capsule primitives.
-
-    Wraps whichever ``generate_handle_head_urdfs`` ``scene_utils`` currently holds -- it binds the
-    function by name at import (``scene_utils.py:25``), so the module attribute is what has to be
-    replaced, not the one in ``generate_objects``.
-
-    Idempotent, and a no-op unless installed: with this patch absent the generated URDFs are
-    byte-identical to upstream's.
-    """
-    current = scene_utils.generate_handle_head_urdfs
-    if getattr(current, "_meshified", False):
-        return
-
-    def meshified(*args, _current=current, **kwargs):
-        paths, scales = _current(*args, **kwargs)
-        for path in paths:
-            meshify_urdf(path, segments=segments, cap_rings=cap_rings)
-        return paths, scales
-
-    meshified._meshified = True
-    scene_utils.generate_handle_head_urdfs = meshified
-
-
-# ============================================================================
-# Cable joint damping (Newton)
-# ============================================================================
-#
-# `CableMaterialCfg` exposes stiffness but **no damping at all**, while
-# `ModelBuilder.add_joint_cable` takes eight parameters -- stretch/shear/bend/twist stiffness
-# *and* damping -- each defaulting to 0.0 when unset (newton builder.py:5223-5236). A cable
-# authored through USD therefore runs completely undamped.
-#
-# That is survivable for a 12-segment cable and not for a 2-segment one, where the whole bend
-# response is concentrated in a single hinge: measured peak speed 39.3 m/s against 4.8 m/s for
-# 12 segments at the same thickness.
-#
-# Damping is not free -- newton-physics/newton#2557 reports that high VBD cable damping visibly
-# changes a catenary's shape, i.e. it costs apparent stiffness -- so this is a knob to sweep,
-# not to max out.
-
-
-def install_cable_damping(
-    *,
-    linear_kd: float = 0.0,
-    angular_kd: float = 0.0,
-    label_pattern: str = "Cable",
-) -> bool:
-    """Set cable joint damping before the model is finalized. Idempotent.
-
-    Args:
-        linear_kd: stretch and shear damping [N.s/m].
-        angular_kd: bend and twist damping [N.m.s/rad].
-        label_pattern: substring identifying the cable's joints by label.
-
-    Returns:
-        Whether the hook was installed.
-    """
-    if linear_kd <= 0.0 and angular_kd <= 0.0:
-        return False
-    try:
-        from isaaclab_newton.physics.newton_manager import NewtonManager
-    except Exception:
-        return False
-    if getattr(NewtonManager, "_cable_damping_patch", False):
-        return False
-
-    original = NewtonManager._prepare_builder_for_finalize
-
-    def _prepare(cls_or_builder, builder=None):
-        b = builder if builder is not None else cls_or_builder
-        if builder is None:
-            original(b)
-        else:
-            original(cls_or_builder, b)
-        _apply_cable_damping(b, linear_kd, angular_kd, label_pattern)
-
-    NewtonManager._prepare_builder_for_finalize = _prepare
-    NewtonManager._cable_damping_patch = True
-    return True
-
-
-def _apply_cable_damping(builder, linear_kd: float, angular_kd: float, pattern: str) -> None:
-    """Write ``joint_target_kd`` on the cable's DOFs.
-
-    A cable joint carries its linear DOFs (stretch, then shear) before its angular ones (bend,
-    then twist), matching ``add_joint_cable``'s axis order. Reports what it touched rather than
-    failing soft -- a damping patch that silently matched nothing would look exactly like damping
-    that does not help.
-    """
-    labels = list(getattr(builder, "joint_label", []))
-    dof_dims = list(getattr(builder, "joint_dof_dim", []))
-    target_kd = builder.joint_target_kd
-
-    dof_start = 0
-    touched_lin = touched_ang = 0
-    for joint_idx, label in enumerate(labels):
-        dims = dof_dims[joint_idx] if joint_idx < len(dof_dims) else None
-        n_lin, n_ang = (dims[0], dims[1]) if dims is not None else (0, 0)
-        if pattern in str(label):
-            for k in range(n_lin):
-                target_kd[dof_start + k] = linear_kd
-                touched_lin += 1
-            for k in range(n_ang):
-                target_kd[dof_start + n_lin + k] = angular_kd
-                touched_ang += 1
-        dof_start += n_lin + n_ang
-
-    print(
-        f"[cable_damping] linear_kd={linear_kd} on {touched_lin} DOFs, "
-        f"angular_kd={angular_kd} on {touched_ang} DOFs",
-        flush=True,
-    )

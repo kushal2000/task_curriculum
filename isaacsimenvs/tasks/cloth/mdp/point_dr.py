@@ -40,7 +40,7 @@ MODES = ("off", "simple", "realistic")
 # ----------------------------------------------------------------------------
 
 
-def _mat_to_wxyz(r: torch.Tensor) -> torch.Tensor:
+def mat_to_wxyz(r: torch.Tensor) -> torch.Tensor:
     """``(N, 3, 3)`` rotation matrices to ``(N, 4)`` wxyz quaternions with w >= 0."""
     m00, m11, m22 = r[:, 0, 0], r[:, 1, 1], r[:, 2, 2]
     # Shepperd: the four candidate magnitudes; pick the largest for each row (numerically safe).
@@ -100,7 +100,7 @@ def refit_points(rest: torch.Tensor, pts: torch.Tensor) -> tuple[torch.Tensor, t
         rest = rest.unsqueeze(0).expand(pts.shape[0], -1, -1)
     c, r = kabsch(rest, pts)
     centred = rest - rest.mean(dim=1, keepdim=True)
-    return c.unsqueeze(1) + torch.einsum("nij,nkj->nki", r, centred), _mat_to_wxyz(r)
+    return c.unsqueeze(1) + torch.einsum("nij,nkj->nki", r, centred), mat_to_wxyz(r)
 
 
 # ----------------------------------------------------------------------------

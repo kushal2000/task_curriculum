@@ -40,9 +40,9 @@ def solver_kwargs():
     from isaaclab_newton.physics.newton_manager import NewtonManager
     from newton.solvers import SolverVBD
 
-    from isaacsimenvs.tasks.cloth.backends.vbd.config import ClothEnvCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
 
-    cfg = ClothEnvCfg()
+    cfg = VbdClothEnvCfg()
     cfg.from_dict(yaml.safe_load(_YAML.read_text()))
     physics = cfg.cloth.build_physics(cfg.newton, num_envs=32)
 

@@ -42,13 +42,20 @@ SCENE_FIELDS = {
 }
 
 PLAY_CFG = "isaacsimenvs/tasks/play/play_env_cfg.py"
+CLOTH_CFG = [
+    "isaacsimenvs/tasks/cloth/env_cfg.py",
+    "isaacsimenvs/tasks/cloth/cloth_cfg.py",
+    "isaacsimenvs/tasks/cloth/mdp/tracker_cfg.py",
+]
+RIGID_CLOTH_CFG = ["isaacsimenvs/tasks/cloth/backends/rigid/config.py", *CLOTH_CFG]
+VBD_CLOTH_CFG = ["isaacsimenvs/tasks/cloth/backends/vbd/config.py", *CLOTH_CFG]
 
 # (yaml, root configclass, modules). Modules are searched in order and the first
-# definition of a class name wins, so a task's own `RewardCfg` shadows play's.
+# definition of a class name wins.
 CASES = [
-    pytest.param(
-        "isaacsimenvs/cfg/task/Play.yaml", "PlayEnvCfg", [PLAY_CFG], id="Play",
-    ),
+    pytest.param("isaacsimenvs/cfg/task/Play.yaml", "PlayEnvCfg", [PLAY_CFG], id="Play"),
+    pytest.param("isaacsimenvs/cfg/task/FoldPoolPhysx.yaml", "RigidClothEnvCfg", RIGID_CLOTH_CFG, id="RigidCloth"),
+    pytest.param("isaacsimenvs/cfg/task/Cloth.yaml", "VbdClothEnvCfg", VBD_CLOTH_CFG, id="Cloth"),
 ]
 
 
@@ -131,16 +138,7 @@ def test_every_yaml_key_maps_to_a_config_field(yaml_rel, root_cls, modules):
 EXPERIMENT_DIR = REPO_ROOT / "isaacsimenvs/cfg/experiment"
 # Per task id: env root configclass, its modules, and the SAPG agent YAML.
 EXPERIMENT_TASKS = {
-    "Isaacsimenvs-FoldPoolPhysx-Direct-v0": (
-        "RigidClothEnvCfg",
-        [
-            "isaacsimenvs/tasks/cloth/backends/rigid/config.py",
-            "isaacsimenvs/tasks/cloth/cloth_cfg.py",
-            "isaacsimenvs/tasks/cloth/mdp/tracker_cfg.py",
-            PLAY_CFG,
-        ],
-        "isaacsimenvs/cfg/train/ClothSAPG.yaml",
-    ),
+    "Isaacsimenvs-FoldPoolPhysx-Direct-v0": ("RigidClothEnvCfg", RIGID_CLOTH_CFG, "isaacsimenvs/cfg/train/ClothSAPG.yaml"),
 }
 # The robot-swapped ids (tasks/cloth/__init__.py) share their base task's cfg and agent YAML.
 for _robot in ("FlexivWuji", "FlexivWujiHumanLike", "FlexivWujiHumanLikeS2R", "FlexivSharpa",
@@ -149,17 +147,7 @@ for _robot in ("FlexivWuji", "FlexivWujiHumanLike", "FlexivWujiHumanLikeS2R", "F
         "Isaacsimenvs-FoldPoolPhysx-Direct-v0"
     ]
 # The VBD cloth (Newton) recipes, VBD-direct training (vbdRW_*).
-EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"] = (
-    "ClothEnvCfg",
-    [
-        "isaacsimenvs/tasks/cloth/backends/vbd/config.py",
-        "isaacsimenvs/tasks/cloth/cloth_cfg.py",
-        "isaacsimenvs/tasks/cloth/mdp/tracker_cfg.py",
-        "isaacsimenvs/tasks/cloth/backends/vbd/play_newton_cfg.py",
-        PLAY_CFG,
-    ],
-    "isaacsimenvs/cfg/train/ClothSAPG.yaml",
-)
+EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"] = ("VbdClothEnvCfg", VBD_CLOTH_CFG, "isaacsimenvs/cfg/train/ClothSAPG.yaml")
 for _robot in ("FlexivWujiRightReal", "FlexivWujiRightS2REff", "FlexivWujiRightSharpaGain"):
     EXPERIMENT_TASKS[f"Isaacsimenvs-Cloth{_robot}-Direct-v0"] = EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"]
 

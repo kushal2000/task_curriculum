@@ -51,7 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flexiv_wuji as fw  # noqa: E402
 from hand_frames import HAND_KEYPOINTS, hand_frame, hand_points  # noqa: E402
 
-sys.path.insert(0, str(fw.REPO_ROOT / "isaacsimenvs" / "tasks" / "play"))
+sys.path.insert(0, str(fw.REPO_ROOT / "isaacsimenvs"))
 import robots  # noqa: E402  (stdlib-only; imported by path so Isaac Lab is not needed)
 
 FINGERS = ("index", "middle", "ring", "thumb", "pinky")  # both specs list their tips in this order

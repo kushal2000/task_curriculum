@@ -440,7 +440,7 @@ class ClothTracker:
 
 class TrackerMixin:
     """Env side of the tracker: the hand capsules, the per-env rest grid, and the estimate the
-    observation reads (``play/utils/obs_utils`` calls ``env._tracker_observe`` when
+    observation reads (``observations.py`` calls ``env._tracker_observe`` when
     ``cloth.tracker.enabled``). Built lazily on the first observation."""
 
     #: Flexiv + Wuji: wrist point (link7 -> flange -> mount -> wrist) and fingertip ends, in the
@@ -532,7 +532,7 @@ class TrackerMixin:
         goal_quat, scale)``, env frame, the goal quaternion in the convention ``goal_viz`` reports."""
         from isaaclab.utils.math import quat_apply
 
-        from isaacsimenvs.tasks.cloth.mdp.point_dr import _mat_to_wxyz
+        from isaacsimenvs.tasks.cloth.mdp.point_dr import mat_to_wxyz
 
         if getattr(self, "_tracker", None) is None:
             self._init_tracker()
@@ -569,4 +569,4 @@ class TrackerMixin:
             flip[:, 1, 1] = -1.0
         flip[:, 2, 2] = -1.0
         goal_quat = self._goal_quat_from_matrix(torch.bmm(r_st, flip))
-        return obj_pos, _mat_to_wxyz(r_mv), goal_pos, goal_quat, scale
+        return obj_pos, mat_to_wxyz(r_mv), goal_pos, goal_quat, scale

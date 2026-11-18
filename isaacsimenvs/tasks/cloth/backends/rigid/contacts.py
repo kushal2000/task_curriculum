@@ -87,7 +87,6 @@ class ContactsMixin:
         frictions are tensor-written once the simulator runs (``_write_cloth_min_frictions``)."""
         r, pc, a = self.cfg.rigid_cloth, self.cfg.physx_chain, self.cfg.assets
         rd = r.randomization
-        n = self.num_envs
         gen = torch.Generator().manual_seed(int(pc.friction_seed))
         s_mult, s_idx = self._draw_friction_buckets(rd.slat_friction_scale, gen)
         f_mult, f_idx = self._draw_friction_buckets(rd.fingertip_friction_scale, gen)
@@ -138,7 +137,7 @@ class ContactsMixin:
 
     def _check_cloth_min_frictions(self) -> None:
         """Read every friction back; log the pair distribution."""
-        r, pc = self.cfg.rigid_cloth, self.cfg.physx_chain
+        pc = self.cfg.physx_chain
         ids = torch.arange(self.num_envs, device=self.device)
         worst = 0.0
         for k, art in enumerate(self._manipuland_arts()):

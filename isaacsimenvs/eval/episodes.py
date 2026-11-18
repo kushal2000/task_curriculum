@@ -32,7 +32,7 @@ from isaacsimenvs.eval.contact_guard import (
     capture_fd_output,
     raise_if_overflowed,
 )
-from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
+from isaacsimenvs.eval.protocol import disable_randomization, set_present, use_single_object_variant
 
 #: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums. Both this
 #: module and its sibling print the identical line, so a render that disagrees with an evaluation
@@ -122,7 +122,7 @@ def main() -> None:
         "--success_tolerance",
         type=float,
         default=0.01,
-        help="Pins `termination.eval_success_tolerance`. Multiplied by reward.keypoint_scale "
+        help="Play task: pins `termination.eval_success_tolerance`. Multiplied by reward.keypoint_scale "
         "(1.5) inside the env, so 0.01 is a 1.5 cm keypoint threshold -- the curriculum floor "
         "the checkpoint was trained down to. Unpinned, the criterion drifts with the tolerance "
         "curriculum and the number depends on how long the process has been running.",
@@ -175,10 +175,11 @@ def main() -> None:
     @hydra_task_config_with_yaml(args_cli.task, "")
     def run(env_cfg, agent_cfg) -> None:
         env_cfg.scene.num_envs = args_cli.num_envs
-        env_cfg.assets.num_assets_per_type = args_cli.num_assets_per_type
         env_cfg.sim.device = args_cli.sim_device
         env_cfg.seed = args_cli.seed
-        env_cfg.termination.eval_success_tolerance = args_cli.success_tolerance
+        # Play task only (the cloth task has no tool pool and no goal tolerance).
+        set_present(env_cfg.assets, num_assets_per_type=args_cli.num_assets_per_type)
+        set_present(env_cfg.termination, eval_success_tolerance=args_cli.success_tolerance)
         if not args_cli.randomize:
             disable_randomization(env_cfg)
         if args_cli.single_variant:
@@ -349,14 +350,14 @@ def main() -> None:
             "checkpoint": args_cli.checkpoint,
             "sapg_expl_coef": args_cli.sapg_expl_coef,
             "success_tolerance": args_cli.success_tolerance,
-            "keypoint_scale": float(inner.cfg.reward.keypoint_scale),
+            "keypoint_scale": getattr(inner.cfg.reward, "keypoint_scale", None),
             "randomization": bool(args_cli.randomize),
             "single_variant": bool(args_cli.single_variant),
             "seed": args_cli.seed,
-            "num_assets_per_type": int(inner.cfg.assets.num_assets_per_type),
-            "handle_head_types": list(inner.cfg.assets.handle_head_types),
-            "modify_asset_frictions": bool(inner.cfg.assets.modify_asset_frictions),
-            "max_consecutive_successes": int(inner.cfg.termination.max_consecutive_successes),
+            "num_assets_per_type": getattr(inner.cfg.assets, "num_assets_per_type", None),
+            "handle_head_types": list(getattr(inner.cfg.assets, "handle_head_types", [])),
+            "modify_asset_frictions": getattr(inner.cfg.assets, "modify_asset_frictions", None),
+            "max_consecutive_successes": getattr(inner.cfg.termination, "max_consecutive_successes", None),
             "completed": _summarise(goals_l, length_l),
             "lower_bound_including_censored": _summarise(lb_goals, length_l or [0]),
             "censored": censored,

@@ -1,29 +1,20 @@
-"""Present a cloth ``DeformableObject`` through the rigid-object surface the Play task reads.
+"""The sheet as a rigid object: the pose the observation encodes, and the reset write.
 
-The Play task is written against a rigid manipuland: one position, one orientation, one velocity.
-A sheet has none of those intrinsically, so this adapter defines them from the *moving half* -- the
-part the fold is about:
+The observation encodes the manipuland as a rigid object (one position, one orientation, one
+velocity), the encoding the Play prior was trained on. A sheet has none of those intrinsically, so
+this adapter defines them from the *moving half* -- the part the fold is about:
 
-    position     centroid of the tracked keypoints
-    orientation  identity
-    velocity     mean particle velocity over the moving half
+    root_pos_w       centroid of the moving half's four corners (the tracked keypoints)
+    root_quat_w      the rotation taking those corners' rest offsets to their current ones (Kabsch)
+    root_lin_vel_w   their mean velocity
+    root_ang_vel_w   zero
 
-The same surface as the cable adapter, enumerated from the task code:
+A fold is then a rigid transform of the half (180 degrees about the crease), so the observed
+keypoints, ``centre + R * rest_offsets``, describe the fold without special cases.
 
-    reads   data.root_pos_w, data.root_quat_w, data.root_lin_vel_w, data.root_ang_vel_w,
-            data.default_mass
-    writes  write_root_pose_to_sim, write_root_velocity_to_sim, set_external_force_and_torque
-
-**Orientation is deliberately identity, not a fitted frame.** The cable adapter fitted one from the
-first-to-last span and it degenerated exactly when the cable was held (span deviation 1.1% flat vs
-16.2% bent -- see `docs/phase4_cable_env.md`); PCA fixed the estimator but never explained the
-24-segment failure. A square sheet has no principal axis at all while flat, so any fitted frame
-would be noise fed to the policy as signal. The fold is scored on keypoints, which carry the
-orientation information honestly.
-
-**The pose write is a reset, not a teleport.** ``write_root_pose_to_sim`` restores the sheet flat
-at the requested position -- the only pose the task ever asks for is the episode-reset pose, and a
-cloth cannot be rigidly moved to an arbitrary one.
+**The pose write is a reset, not a teleport.** ``write_root_pose_to_sim`` lays the sheet flat at the
+requested position and heading -- the only pose the task ever asks for is the episode's start, and
+a cloth cannot be rigidly moved to an arbitrary one.
 """
 
 from __future__ import annotations
@@ -92,7 +83,7 @@ def task_yaw(root_pose: torch.Tensor) -> torch.Tensor:
 
 
 class ClothAsRigidObject:
-    """Adapt a cloth ``DeformableObject`` to the rigid-object reads the Play task performs."""
+    """A cloth ``DeformableObject`` as the rigid-object reads and writes the task performs."""
 
     def __init__(
         self,
@@ -104,7 +95,6 @@ class ClothAsRigidObject:
         corner_idx: list[int],
         corner_rest: list,
         spawn_z: float,
-        mass: float,
         device,
         reset_offset_xy=(0.0, 0.0),
     ) -> None:
@@ -116,7 +106,6 @@ class ClothAsRigidObject:
         self._corner_idx = torch.tensor(corner_idx, device=device, dtype=torch.long)
         self._corner_rest = torch.tensor(corner_rest, device=device, dtype=torch.float32)
         self._spawn_z = float(spawn_z)
-        self._mass = float(mass)
         #: Env-frame XY added to every reset centre (``cloth.reset_offset_xy``).
         self._reset_offset = torch.tensor(
             [float(reset_offset_xy[0]), float(reset_offset_xy[1])], device=device, dtype=torch.float32
@@ -239,16 +228,6 @@ class ClothAsRigidObject:
         zeros = torch.zeros((len(env_ids), n_particles, 3), device=self._device)
         self._cloth.write_nodal_velocity_to_sim_index(zeros, env_ids)
 
-    def set_external_force_and_torque(self, *args, **kwargs) -> None:
-        """No-op.
-
-        The task applies external forces to the manipuland for domain randomisation. Spreading a
-        body force over a particle sheet is not equivalent to applying it to a rigid body, and
-        randomisation is off for every measurement taken here -- so a silent no-op is safer than a
-        wrong implementation.
-        """
-        return None
-
     def __getattr__(self, name):
         """Defer anything unlisted to the underlying cloth, so a missed read is loud."""
         return getattr(self._cloth, name)
@@ -286,12 +265,6 @@ class _ClothData:
     @property
     def root_ang_vel_w(self) -> torch.Tensor:
         return torch.zeros((self._owner._num_envs, 3), device=self._owner._device)
-
-    @property
-    def default_mass(self) -> torch.Tensor:
-        return torch.full(
-            (self._owner._num_envs, 1), self._owner._mass, device=self._owner._device
-        )
 
     def __getattr__(self, name):
         return getattr(self._owner._cloth.data, name)

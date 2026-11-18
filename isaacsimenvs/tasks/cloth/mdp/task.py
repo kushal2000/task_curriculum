@@ -18,6 +18,7 @@ from __future__ import annotations
 import torch
 from isaaclab.utils.math import quat_from_matrix
 
+from isaacsimenvs.tasks.cloth.mdp.point_dr import mat_to_wxyz
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import (
     folded_targets,
     half_indices,
@@ -33,15 +34,8 @@ class ClothTaskMixin:
     # ------------------------------------------------------------------ construction
 
     def _write_object_scale(self) -> None:
-        """Tell the task the sheet's real dimensions.
-
-        ``_object_scale_per_env`` is filled by ``setup_scene`` from the *procedural rigid tool*
-        pool and nothing updates it when the manipuland is replaced. Left alone, the policy is
-        handed a hammer's bounding box while facing a cloth, and the keypoint offsets that size the
-        reward and the success test are derived from it. The cable env had exactly this bug.
-
-        Convention: bounding box normalised by ``reward.object_base_size``.
-        """
+        """``_object_scale_per_env`` (the ``object_scales`` observation): the sheet's bounding box,
+        normalised by ``reward.object_base_size``."""
         c = self.cfg.cloth
         base = float(self.cfg.reward.object_base_size)
         bbox = torch.tensor(
@@ -269,50 +263,36 @@ class ClothTaskMixin:
         """
         self._keypoint_offsets[:] = self._corner_rest_offsets.unsqueeze(0).expand(self.num_envs, -1, -1)
 
-    def _drive_goal_marker(self) -> None:
-        """Point `goal_viz` at the fold target, so the OBSERVED goal is the fold.
+    def _update_goal(self) -> None:
+        """The fold goal as a pose -- the fold targets' centre and the folded half's orientation --
+        for the observation (``_goal_pos_w``, ``_goal_quat``), and the goal marker moved onto it.
 
-        Without this the policy is shown the inherited tool-pose goal while success is measured as
-        a fold: it would be optimising a different objective from the one being scored. The task
-        reads the goal exclusively through `goal_viz`, so moving the marker moves the goal.
+        Recomputed every step: the targets ride on the stationary half's live frame, so a goal
+        written once at reset would drift off the target being scored as soon as the sheet moves.
+
+        The orientation is the moving half's after the fold: 180 degrees about the crease (about the
+        rest y axis for ``fold_axis == "x"``), composed with the stationary half's live rotation, so
+        ``keypoints_rel_goal`` (``centre + R * offsets``) describes the fold of a sheet at any
+        heading. The observed quaternion keeps the convention every policy was trained on
+        (:meth:`_goal_quat_from_matrix`); the marker gets the true one.
         """
-        centre = self.fold_targets_w().mean(dim=1)  # (num_envs, 3)
-        pose = torch.zeros((self.num_envs, 7), device=self.device)
-        pose[:, :3] = centre
-        # Folded ORIENTATION, not just position: a fold rotates the half 180 degrees about the
-        # crease line. With the manipuland's orientation now fitted from its corners, the task's
-        # keypoint machinery turns this into the folded corner positions -- so `keypoints_rel_goal`
-        # finally describes a fold rather than a translation.
-        #
-        # The crease runs along the axis perpendicular to `fold_axis`, so a fold about an x-normal
-        # crease is a 180-degree rotation about y (and vice versa) IN THE SHEET'S REST FRAME.
-        #
-        # Composed with the stationary half's live rotation rather than written as a fixed world
-        # quaternion. The position above already tracks rotation (it comes from `fold_targets_w`),
-        # but a constant orientation does not, so a yawed sheet was shown a goal whose position was
-        # right and whose attitude was the rest one. That reaches the POLICY, not just the render:
-        # the task turns `goal_viz`'s pose into `keypoints_rel_goal`. Required before init yaw
-        # could be randomised.
-        r, _ = self._stationary_frame(self._particles_w())        # (N, 3, 3) rest -> current
-        fold_rest = torch.eye(3, device=self.device).repeat(self.num_envs, 1, 1)
-        # 180 degrees about rest y (fold_axis == "x") or about rest x.
-        if self.cfg.cloth.fold_axis == "x":
-            fold_rest[:, 0, 0] = -1.0
-            fold_rest[:, 2, 2] = -1.0
-        else:
-            fold_rest[:, 1, 1] = -1.0
-            fold_rest[:, 2, 2] = -1.0
-        pose[:, 3:7] = self._goal_quat_from_matrix(torch.bmm(r, fold_rest))
-        self.goal_viz.write_root_pose_to_sim(pose)
+        r, _ = self._stationary_frame(self._particles_w())  # (N, 3, 3) rest -> current
+        flip = torch.eye(3, device=self.device).repeat(self.num_envs, 1, 1)
+        axis = 0 if self.cfg.cloth.fold_axis == "x" else 1
+        flip[:, axis, axis] = -1.0
+        flip[:, 2, 2] = -1.0
+        folded_rot = torch.bmm(r, flip)
+        self._goal_pos_w = self.fold_targets_w().mean(dim=1)
+        self._goal_quat = self._goal_quat_from_matrix(folded_rot)
+        self.goal_viz.write_root_pose_to_sim(torch.cat([self._goal_pos_w, mat_to_wxyz(folded_rot)], dim=-1))
 
     def _goal_quat_from_matrix(self, rot: torch.Tensor) -> torch.Tensor:
-        """The quaternion ``_drive_goal_marker`` writes for the fold rotation ``rot``.
+        """The observed goal quaternion for the fold rotation ``rot``: NOT the true (w, x, y, z).
 
-        ``isaaclab.utils.math.quat_from_matrix`` as imported by this module, unpatched. Under Isaac
-        Lab 3.0 that returns (x, y, z, w), which the pose-write patch then treats as (w, x, y, z), so
-        the goal orientation the task reads back is the true one's components relabelled -- and every
-        Newton policy was trained on that. A backend whose helper is wxyz overrides this to hand the
-        task the same relabelled quaternion (see ``backends/rigid/env.py``).
+        ``isaaclab.utils.math.quat_from_matrix``, unpatched. Under Isaac Lab 3.0 it returns
+        (x, y, z, w), which the task has always read as (w, x, y, z) -- the true quaternion's
+        components relabelled -- and every policy was trained on that. A backend whose helper is
+        wxyz overrides this to return the same relabelling (``backends/rigid/env.py``).
         """
         return quat_from_matrix(rot)
 

@@ -14,7 +14,7 @@ import torch
 from isaacsimenvs.tasks.cloth.backends.rigid import assets as fsa
 from isaacsimenvs.tasks.cloth.backends.rigid.physx import author_articulation_props, prepare_collider_asset
 from isaacsimenvs.tasks.cloth.backends.rigid.pool import PoolAsClothMesh, PoolAsRigidObject
-from isaacsimenvs.tasks.cloth.backends.usd import bulk_edit_layer, neutralise_rigid_object, reshape_goal_marker
+from isaacsimenvs.tasks.cloth.backends.rigid.usd import bulk_edit_layer
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
 
@@ -124,11 +124,7 @@ class SceneMixin:
         return None
 
     def _install_cloth(self) -> None:
-        """Spawn every pool shape as its own articulation, all parked, and the pool adapter.
-
-        The Play scene's rigid tool is still spawned by ``setup_scene`` (the asset pool and the
-        ``object_scales`` observation are built around it): it is made inert, and the goal marker
-        reshaped to the folded half."""
+        """Spawn every pool shape as its own articulation, all parked, and the pool adapter."""
         from isaaclab.actuators import ImplicitActuatorCfg
         from isaaclab.assets import ArticulationCfg
 
@@ -145,8 +141,6 @@ class SceneMixin:
         verts, _indices = grid_mesh(c.size, c.resolution)
         self._cloth_rest_local = verts
         self._cloth_kp_idx = corner_indices(c.resolution, c.fold_axis)
-        neutralise_rigid_object(self)
-        reshape_goal_marker(self)
 
         # The hinge actuator is always present -- it is the only place damping and armature can be
         # set -- and built with a negligible stiffness when DR will draw one, so the position gain
@@ -221,7 +215,6 @@ class SceneMixin:
             corner_idx=self._cloth_kp_idx,
             corner_rest=[verts[i] for i in self._cloth_kp_idx],
             spawn_z=spawn_z,
-            mass=r.density * c.size * c.size,
             device=self.device,
         )
         self._write_object_scale()

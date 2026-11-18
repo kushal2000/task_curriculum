@@ -1,42 +1,16 @@
-"""Making the Play task modules importable and correct under Isaac Lab 3.0.
+"""Making the cloth task's modules importable under Isaac Lab 3.0.
 
-Two jobs, both about getting code to *load*; runtime behaviour is patched in
-:mod:`isaacsimenvs.tasks.cloth.backends.vbd.newton_support.patches`.
-
-* **Relocations.** Isaac Lab 3.0 moved several symbols the task package imports by their 2.x
-  paths, and renamed one constructor keyword. These are aliased back so `tasks/play/` stays a
-  single copy shared by both backends. That sharing is the point: if the PhysX and Newton envs
-  ran different reward, observation or action code, a measured difference between them would
-  stop being about physics.
-* **Module access.** :func:`play_module` is the one way this package reaches into the task code.
+Getting code to *load*; runtime behaviour is patched in
+:mod:`isaacsimenvs.tasks.cloth.backends.vbd.newton_support.patches`. Isaac Lab 3.0 moved several
+symbols the task imports by their 2.x paths, and renamed one constructor keyword. They are aliased
+back, so one copy of the task code runs on both backends: if the PhysX and Newton envs ran
+different reward, observation or action code, a measured difference between them would stop being
+about physics.
 
 Adapted from ``simtoolreal_newton.upstream`` in github.com/kushal2000/isaac_newton @ beb9efb.
-**Its import-hook machinery is deliberately not carried over.** That project needed stub parent
-packages -- registering fake ``__path__`` entries so leaf modules could be imported without
-running the package ``__init__`` -- because upstream's ``__init__.py`` eagerly imported the env
-classes, which pulled ``isaaclab.sim.PhysxCfg``, which 3.0 had moved, which made even the
-dependency-free math modules unimportable. Our task packages resolve their env classes lazily
-through a module ``__getattr__`` (see ``isaacsimenvs/tasks/play/__init__.py``), so
-``import isaacsimenvs`` touches no Isaac module at all and a plain ``importlib`` call is enough.
 """
 
 from __future__ import annotations
-
-import importlib
-from types import ModuleType
-
-PLAY_UTILS = "isaacsimenvs.tasks.play.utils"
-
-
-def play_module(name: str) -> ModuleType:
-    """Import a module from ``isaacsimenvs.tasks.play.utils`` by its short name.
-
-    Args:
-        name: e.g. ``"scene_utils"``, or the fully-dotted ``"utils.scene_utils"`` form the
-            vendored patches inherited from the reference implementation.
-    """
-    short = name.split(".")[-1]
-    return importlib.import_module(f"{PLAY_UTILS}.{short}")
 
 
 def install_isaaclab3_compat() -> list[str]:
@@ -71,9 +45,9 @@ def install_isaaclab3_compat() -> list[str]:
         applied.append("isaaclab.utils.configclass <- function (was shadowed by submodule)")
 
     # 3.0 renamed the backend-specific `SimulationCfg.physx` field to the backend-neutral
-    # `physics`. `play_env_cfg` passes `physx=` at class-definition time, so the module cannot be
+    # `physics`. The task config passes `physx=` at class-definition time, so the module cannot be
     # imported without accepting the old keyword. A genuine rename, so it is translated rather
-    # than aliased. The PhysX value it builds is inert under Newton: `PlayNewtonEnvCfg` replaces
+    # than aliased. The PhysX value it builds is inert under Newton: the Newton setup replaces
     # `sim.physics` with a NewtonCfg and no PhysX manager is ever constructed.
     from isaaclab.sim import SimulationCfg
 
@@ -92,4 +66,4 @@ def install_isaaclab3_compat() -> list[str]:
     return applied
 
 
-__all__ = ["PLAY_UTILS", "install_isaaclab3_compat", "play_module"]
+__all__ = ["install_isaaclab3_compat"]

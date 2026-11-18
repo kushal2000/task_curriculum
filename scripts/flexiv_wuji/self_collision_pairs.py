@@ -41,7 +41,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import flexiv_wuji as fw  # noqa: E402
 
-sys.path.insert(0, str(fw.REPO_ROOT / "isaacsimenvs" / "tasks" / "play"))
+sys.path.insert(0, str(fw.REPO_ROOT / "isaacsimenvs"))
 import robots  # noqa: E402  (stdlib-only; imported by path so Isaac Lab is not needed)
 
 URDFS = {

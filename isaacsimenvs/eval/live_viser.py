@@ -54,7 +54,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
+from isaacsimenvs.eval.protocol import disable_randomization
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -438,10 +438,8 @@ def main() -> None:
     @hydra_task_config_with_yaml(args.task, "rl_games_sapg_cfg_entry_point" if experiment else "", experiment=experiment)
     def run(env_cfg, agent_cfg) -> None:
         env_cfg.scene.num_envs = args.num_envs
-        env_cfg.assets.num_assets_per_type = 1
         env_cfg.sim.device = args.device
         env_cfg.seed = args.seed
-        env_cfg.termination.eval_success_tolerance = 0.01
         env_cfg.termination.success_steps = 10  # a fold must be HELD, as in every eval
         env_cfg.cloth.nan_policy = "reset"
         rigid = hasattr(env_cfg, "rigid_cloth")
@@ -472,7 +470,6 @@ def main() -> None:
             env_cfg.domain_randomization = dr_keep
             print("[live] LIVE_VISER_KEEP_DR=1: domain randomisation left ON", flush=True)
         reset_pin = {k: getattr(rs, k) for k in reset_rand}
-        use_single_object_variant()
 
         if args.even_sizes and hasattr(env_cfg, "fold_pool"):
             # The per-env size draw is backends/rigid/scene.SceneMixin._draw_env_sizes_raw.

@@ -1,7 +1,6 @@
 """ClothCfg -- the cloth task's own block: sheet geometry, material, the fold, and the coupling.
 
-Split out of ``cloth_env_cfg`` so the PhysX envs can share it. That module subclasses
-``PlayNewtonEnvCfg``, which only imports under Isaac Lab 3.0; this one imports nothing but
+The ``cloth`` block of ``env_cfg.ClothEnvCfg``, for both backends. It imports nothing but
 ``configclass``, so both stacks read the same definition of the task. The Newton-only methods
 (``build_physics``, ``triangle_pair_budget``) import their dependencies when called.
 """
@@ -531,7 +530,7 @@ class ClothCfg:
             NewtonShapeCfg,
         )
 
-        from isaacsimenvs.tasks.play.robots import KUKA_SHARPA
+        from isaacsimenvs.robots import KUKA_SHARPA
 
         robot_spec = robot_spec or KUKA_SHARPA
         rigid_bodies = [r"/World/envs/env_.*/Robot"]

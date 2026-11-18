@@ -11,7 +11,7 @@ import torch
 from isaaclab.envs import DirectRLEnv
 
 from .play_env_cfg import PlayEnvCfg
-from .robots import get_robot_spec
+from isaacsimenvs.robots import get_robot_spec
 from .utils.action_utils import apply_action_pipeline, apply_wrench_dr, hand_spring_effort
 from .utils.logging_utils import log_step_metrics
 from .utils.obs_utils import (

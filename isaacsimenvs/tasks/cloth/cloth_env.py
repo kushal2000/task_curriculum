@@ -12,23 +12,20 @@ to the task code in ``mdp/``:
 
 The fold itself (targets, error, criterion, goal marker) is ``mdp/task.ClothTaskMixin``. A backend
 subclasses this env and supplies the sheet: ``backends/rigid/env.RigidClothEnv`` (PhysX, hinged
-plates) and ``backends/vbd/env.VbdClothEnv`` (Newton, a VBD cloth). Its ``_install_cloth`` runs
-inside the scene setup and must set ``self._cloth``, ``self.object`` (the sheet presented as a
-rigid object, ``backends/adapter.py``), ``self._cloth_rest_local`` and ``self._cloth_kp_idx``.
-
-The robot, table and goal marker are still built by the Play task's scene code
-(``play/utils/scene_utils.setup_scene``).
+plates) and ``backends/vbd/env.VbdClothEnv`` (Newton, a VBD cloth). The scene (robot, table, goal
+marker) is ``backends/scene.py``; it ends with the backend's ``_install_cloth``, which must set
+``self._cloth``, ``self.object`` (the sheet presented as a rigid object, ``backends/adapter.py``),
+``self._cloth_rest_local`` and ``self._cloth_kp_idx``, and fill ``self._object_scale_per_env``.
 """
 
 from __future__ import annotations
 
-import importlib
-
 import torch
 from isaaclab.envs import DirectRLEnv
 
-from isaacsimenvs.tasks.play.robots import get_robot_spec
+from isaacsimenvs.robots import get_robot_spec
 
+from .backends import scene
 from .mdp.actions import process_actions
 from .mdp.observations import build_observations, guard_finite, obs_dim
 from .mdp.randomization import init_dr, reset_dr
@@ -38,11 +35,6 @@ from .mdp.robot import NUM_FINGERTIPS, init_robot, reset_robot, spring_effort
 from .mdp.terminations import compute_dones
 
 __all__ = ["ClothEnv"]
-
-
-def _scene_utils():
-    """The Play scene module, looked up at call time: the Newton backend rebinds its functions."""
-    return importlib.import_module("isaacsimenvs.tasks.play.utils.scene_utils")
 
 
 class ClothEnv(DirectRLEnv):
@@ -55,7 +47,7 @@ class ClothEnv(DirectRLEnv):
         cfg.observation_space = obs_dim(cfg.obs.obs_list, n_joints)
         cfg.state_space = obs_dim(cfg.obs.state_list, n_joints)
         super().__init__(cfg, render_mode, **kwargs)  # builds the scene
-        _scene_utils().apply_physx_material_properties(self)
+        self._check_env_order()
         init_robot(self)
         self._init_task_state()
         init_dr(self)
@@ -64,7 +56,18 @@ class ClothEnv(DirectRLEnv):
         self._sync_observed_keypoints()
         # Fold error of a flat sheet: the stand-in for a non-finite one (rewards.compute_reward).
         self._flat_fold_err = float(self.fold_error().nan_to_num(nan=0.0).max().item())
-        self._drive_goal_marker()
+        self._update_goal()
+
+    def _check_env_order(self) -> None:
+        """Row i of every PhysX asset view must be env i: Isaac Lab indexes asset data by env id."""
+        for name, asset in (("robot", self.robot), ("table", self.table), ("goal_viz", self.goal_viz)):
+            view = getattr(asset, "root_physx_view", None)
+            paths = getattr(view, "prim_paths", None)
+            if paths is None:  # Newton: environments are separate worlds, indexed by env id
+                continue
+            wrong = [(i, p) for i, p in enumerate(paths) if f"/env_{i}/" not in p]
+            if wrong:
+                raise RuntimeError(f"{name}: PhysX view rows are not in env order, e.g. row {wrong[0][0]} is {wrong[0][1]}")
 
     def _finish_backend_setup(self) -> None:
         """Backend hook: runs once the assets are live, before the task first reads the sheet."""
@@ -99,7 +102,8 @@ class ClothEnv(DirectRLEnv):
     # ------------------------------------------------------------------ Isaac Lab hooks
 
     def _setup_scene(self) -> None:
-        _scene_utils().setup_scene(self)
+        # Through the module: the Newton backend wraps it with the scene replication.
+        scene.setup_scene(self)
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         process_actions(self, actions)
@@ -129,12 +133,12 @@ class ClothEnv(DirectRLEnv):
         reset_sheet(self, ids)
         reset_task_trackers(self, ids)
         reset_dr(self, ids)
-        self._drive_goal_marker()
+        self._update_goal()
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
         # Both follow the sheet, so both are refreshed before it is observed.
         self._sync_observed_keypoints()
-        self._drive_goal_marker()
+        self._update_goal()
         obs = build_observations(self)
         guard_finite(self, obs)
         return obs

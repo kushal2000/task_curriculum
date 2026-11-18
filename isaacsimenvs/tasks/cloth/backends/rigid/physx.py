@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import torch
 
-from isaacsimenvs.tasks.cloth.backends.usd import bulk_edit_layer
+from isaacsimenvs.tasks.cloth.backends.rigid.usd import bulk_edit_layer
 
 __all__ = [
     "DEFAULT_MU",
@@ -74,7 +74,7 @@ def prepare_collider_asset(
     stage.SetEditTarget(stage.GetRootLayer())
     # Isaac Sim 5.1's URDF importer instances the collision geometry even with
     # `make_instanceable=False`, and an instance proxy cannot be edited (nor bound per env later).
-    # De-instance first, as `scene_utils._bake_usd` does; repeat until no nested instance is left.
+    # De-instance first, as `robots.usd.bake_usd` does; repeat until no nested instance is left.
     while True:
         instances = [p for p in Usd.PrimRange(root, Usd.TraverseInstanceProxies()) if p.IsInstance()]
         if not instances:
@@ -153,7 +153,7 @@ def bind_material_in_every_env(
     """Bind ``material_path`` to ``env_<i>/<asset>/<rel>`` for every env (or every env in ``env_ids``:
     a pool shape that only some envs carry).
 
-    Sdf-level, into ``usd_bulk.bulk_edit_layer``: at 24k envs this is ~10^5-10^6 specs, which the
+    Sdf-level, into ``usd.bulk_edit_layer``: at 24k envs this is ~10^5-10^6 specs, which the
     Usd API -- or Sdf edits made on Kit's root layer, O(N^2) -- take many minutes over.
     """
     envs = list(range(num_envs)) if env_ids is None else [int(i) for i in env_ids]
@@ -166,7 +166,7 @@ def bind_material_in_every_env(
 
 def bind_materials(stage, bindings, tag: str = "bind") -> int:
     """Bind each ``(prim_path, material_path)`` in ``bindings`` (physics purpose), all in ONE
-    ``usd_bulk.bulk_edit_layer``. Returns the number of bindings.
+    ``usd.bulk_edit_layer``. Returns the number of bindings.
 
     One layer per call matters: each layer is inserted into the stage's sublayers, which recomposes
     the stage, so 112 calls (7 pool shapes x 16 friction buckets) took 8.5 min at 1536 envs where

@@ -1,6 +1,6 @@
 """A kit-less stand-in for ``pxr.PhysxSchema``.
 
-``scene_utils._bake_usd`` authors PhysX-namespaced USD attributes through ``pxr.PhysxSchema``,
+``robots.usd.bake_usd`` authors PhysX-namespaced USD attributes through ``pxr.PhysxSchema``,
 which ships as an Isaac Sim plugin rather than with ``usd-core``. The Newton venv has no Isaac
 Sim, so the import fails outright and no asset can be baked.
 

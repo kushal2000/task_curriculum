@@ -26,7 +26,7 @@ import os
 import sys
 from pathlib import Path
 
-from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
+from isaacsimenvs.eval.protocol import disable_randomization
 
 #: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums. Both this
 #: module and its sibling print the identical line, so a render that disagrees with an evaluation
@@ -586,7 +586,6 @@ def main() -> None:
         "--sapg_expl_coef", type=float, default=50.0,
         help="SAPG block conditioning: 50.0 = block 0, 0.0 = last block. See eval/player.py.",
     )
-    parser.add_argument("--success_tolerance", type=float, default=0.01)
     parser.add_argument(
         "--zero_action",
         action="store_true",
@@ -625,7 +624,6 @@ def main() -> None:
         "episode's outcome. One clip = one scored episode, so clips can be picked by outcome.",
     )
     parser.add_argument("--end_hold_s", type=float, default=1.0)
-    parser.add_argument("--num_assets_per_type", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--out", type=Path, default=Path("videos/cloth.mp4"))
@@ -670,11 +668,8 @@ def main() -> None:
     @hydra_task_config_with_yaml(args.task, "")
     def run(env_cfg, agent_cfg) -> None:
         env_cfg.scene.num_envs = args.num_envs
-        env_cfg.assets.num_assets_per_type = args.num_assets_per_type
-        env_cfg.assets.handle_head_types = ("hammer",)
         env_cfg.sim.device = args.device
         env_cfg.seed = args.seed
-        env_cfg.termination.eval_success_tolerance = args.success_tolerance
         if args.randomize:
             print("[render] full randomisation KEPT, as episodes.py --randomize", flush=True)
         elif args.randomize_reset:
@@ -683,7 +678,6 @@ def main() -> None:
             dr.use_obs_delay = dr.use_action_delay = dr.use_object_state_delay_noise = False
             dr.object_scale_noise_multiplier_range = (1.0, 1.0)
             dr.joint_velocity_obs_noise_std = 0.0
-            dr.force_scale = dr.torque_scale = 0.0
             print(
                 f"[render] reset randomisation KEPT: xy noise "
                 f"+-{env_cfg.reset.reset_position_noise_x}/"
@@ -694,7 +688,6 @@ def main() -> None:
             )
         else:
             disable_randomization(env_cfg)
-        use_single_object_variant()
 
         env = gym.make(args.task, cfg=env_cfg)
         inner = env.unwrapped

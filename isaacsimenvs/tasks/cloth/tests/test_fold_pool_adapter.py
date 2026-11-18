@@ -162,7 +162,6 @@ def _obj(adapter, mesh, arts, n):
             corner_idx=kp,
             corner_rest=[grid[i].tolist() for i in kp],
             spawn_z=0.6,
-            mass=0.02,
             device=torch.device("cpu"),
         ),
         origins,
@@ -386,7 +385,6 @@ def test_per_env_size_scales_the_grid_and_reset_shifts_the_centre(pool_adapter):
         corner_idx=kp,
         corner_rest=[grid[i].tolist() for i in kp],
         spawn_z=0.6,
-        mass=0.02,
         device=torch.device("cpu"),
     )
     obj.select(torch.arange(n), torch.tensor([0, 3, 4]))

@@ -18,8 +18,7 @@ from __future__ import annotations
 
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import patches  # noqa: F401
 from isaacsimenvs.tasks.cloth.backends.adapter import ClothAsRigidObject
-from isaacsimenvs.tasks.cloth.backends.usd import neutralise_rigid_object, reshape_goal_marker
-from isaacsimenvs.tasks.cloth.backends.vbd.config import ClothEnvCfg
+from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
     install_post_construction_patches,
@@ -28,7 +27,7 @@ from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
 from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
 from isaacsimenvs.tasks.cloth.mdp.task import ClothTaskMixin
 from isaacsimenvs.tasks.cloth.mdp.tracker import TrackerMixin
-from isaacsimenvs.tasks.play.robots import get_robot_spec
+from isaacsimenvs.robots import get_robot_spec
 
 __all__ = ["VbdClothEnv"]
 
@@ -36,16 +35,13 @@ __all__ = ["VbdClothEnv"]
 class VbdClothEnv(TrackerMixin, ClothTaskMixin, ClothEnv):
     """The fold task with a VBD cloth sheet."""
 
-    cfg: ClothEnvCfg
+    cfg: VbdClothEnvCfg
 
-    def __init__(self, cfg: ClothEnvCfg, render_mode: str | None = None, **kwargs) -> None:
+    def __init__(self, cfg: VbdClothEnvCfg, render_mode: str | None = None, **kwargs) -> None:
         install_pre_construction_patches(
             cfg,
             # Coupled MJWarp (robot) + VBD (cloth), sized for this env count.
             physics_cfg=cfg.cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), get_robot_spec(cfg.robot)),
-            # At the end of the scene setup, before replication -- which is also when Newton
-            # imports the stage. A mesh authored after that point is invisible to the solver.
-            pre_clone_hook=lambda env: env._install_cloth(),
         )
         super().__init__(cfg, render_mode, **kwargs)
 
@@ -53,7 +49,10 @@ class VbdClothEnv(TrackerMixin, ClothTaskMixin, ClothEnv):
         install_post_construction_patches(self)
 
     def _install_cloth(self) -> None:
-        """Author the sheet and register it as a deformable, in place of the rigid tool."""
+        """Author the sheet and register it as a deformable.
+
+        Runs at the end of the scene setup, before replication -- which is also when Newton imports
+        the stage: a mesh authored after that point is invisible to the solver."""
         # Re-validate here, not only in `ClothCfg.__post_init__`. Hydra constructs the dataclass
         # with its DEFAULTS -- which is when `__post_init__` runs and passes -- and only then
         # assigns the CLI overrides onto the instance. So `env.cloth.thickness=0.03` walks straight
@@ -71,13 +70,6 @@ class VbdClothEnv(TrackerMixin, ClothTaskMixin, ClothEnv):
         # Corners of the moving half, not points along one edge: four points spanning an area
         # determine a rotation; four collinear points do not.
         self._cloth_kp_idx = corner_indices(c.resolution, c.fold_axis)
-
-        # The inherited rigid tool is still spawned by `setup_scene` -- the asset pipeline, USD
-        # cache and `object_scales` observation are all built around it. Make it inert, or it is a
-        # live rigid body loose in the scene. (On the cable task this was visible for hours as a
-        # hammer lying on the floor beside the table.)
-        neutralise_rigid_object(self)
-        reshape_goal_marker(self)
 
         prim_path = "/World/envs/env_.*/Cloth"
         spawn_z = float(self.cfg.reset.table_reset_z) + c.start_height
@@ -135,9 +127,7 @@ class VbdClothEnv(TrackerMixin, ClothTaskMixin, ClothEnv):
         self.scene.deformable_objects["cloth"] = cloth
         self._cloth = cloth
 
-        # The task reads the manipuland as `env.object` (mdp/observations, rewards, terminations). Without this the policy observes the *inert rigid tool* -- which this env has just
-        # made kinematic and collision-free -- while the sheet sits in the scene as a bystander.
-        area_density = c.density * c.thickness  # surface density -> sheet mass
+        # The task reads the sheet as `env.object` (mdp/observations, rewards, terminations).
         self.object = ClothAsRigidObject(
             cloth,
             num_envs=self.num_envs,
@@ -149,7 +139,6 @@ class VbdClothEnv(TrackerMixin, ClothTaskMixin, ClothEnv):
             corner_idx=self._cloth_kp_idx,
             corner_rest=[verts[i] for i in self._cloth_kp_idx],
             spawn_z=spawn_z,
-            mass=area_density * c.size * c.size,
             device=self.device,
             reset_offset_xy=c.reset_offset_xy,
         )

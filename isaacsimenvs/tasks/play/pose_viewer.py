@@ -20,7 +20,7 @@ import numpy as np
 
 from isaacsimenvs.utils.interactive_viewer import create_html, make_embedded_robot, make_url_robot
 
-from .utils.scene_utils import JOINT_NAMES_CANONICAL
+from isaacsimenvs.robots import KUKA_SHARPA
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -237,7 +237,7 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
     if hasattr(env, "_perm_lab_to_canon"):
         joint_pos = env.robot.data.joint_pos[env_id, env._perm_lab_to_canon]
         spec = getattr(env, "robot_spec", None)
-        joint_names = list(spec.joint_names_canonical if spec else JOINT_NAMES_CANONICAL)
+        joint_names = list(spec.joint_names_canonical if spec else KUKA_SHARPA.joint_names_canonical)
     else:
         joint_pos = env.robot.data.joint_pos[env_id]
         joint_names = list(env.robot.data.joint_names)

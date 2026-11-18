@@ -1,42 +1,180 @@
-"""ClothEnvCfg — fold half a cloth onto the other half.
+"""``VbdClothEnvCfg``: the fold task with a VBD cloth sheet, on Isaac Lab 3.0 + Newton.
 
-Subclasses :class:`PlayNewtonEnvCfg`, so the robot, table, action space and coupled-solver
-machinery are exactly the ones measured on the cable task. Only the manipuland changes, from a
-rigid tool to a VBD cloth sheet.
-
-**The task.** A square sheet lies flat on the table. Its *far* half (``+x``) is tracked by a
-handful of keypoints; the goal is to bring those keypoints onto the mirror image of their rest
-positions across the fold line, i.e. to fold the far half back over the near half. Success is the
-usual keypoint criterion: every tracked keypoint within tolerance, held for ``success_steps``.
-
-**Why keypoints rather than a pose.** A cloth has no rigid frame. The cable task could fake one
-from its first-to-last span, and that estimator degenerated as soon as the cable bent
-(``docs/phase4_cable_env.md``). A sheet has no meaningful single axis at all, so the state *is* the
-keypoint set -- there is nothing to reduce it to.
-
-**Coupling defaults are inherited from the cable work, not guessed.** ``proxy_mode="staggered"``,
-``cable_substeps=2``-equivalent substepping and the damping stack are what took the cable from 0 to
-~14 goals per 64 envs; `lagged` coupling pairs the hand's begin-pose with its end-velocities, an
-error that scales with hand speed and which shook the cable loose during transport. A cloth is more
-compliant than a cable, so the same defect should hurt at least as much here.
+The task's ``ClothEnvCfg`` (whose ``cloth`` block configures the sheet and the coupled MJWarp + VBD
+solve) plus the MJWarp solver settings (``newton``). ``sim.physics`` is replaced by the Newton
+config at construction (``newton_setup.py``).
 """
 
 from __future__ import annotations
 
-# IMPORT ORDER IS LOAD-BEARING, as in `cable_env_cfg`: importing `isaaclab_physx` binds
-# `isaaclab.utils.configclass` to the same-named *submodule*, shadowing the decorator. Importing
-# PlayNewtonEnvCfg first runs the compat shim that re-asserts it.
-from isaacsimenvs.tasks.cloth.backends.vbd.play_newton_cfg import PlayNewtonEnvCfg  # isort: skip
+# IMPORT ORDER IS LOAD-BEARING. `env_cfg` calls `SimulationCfg(physx=...)` and imports
+# `isaaclab.sim.PhysxCfg` at class-definition time; Isaac Lab 3.0 moved the one and renamed the
+# other, and importing `isaaclab_physx` shadows the `configclass` decorator. The compat shim
+# restores all three, so it runs first.
+from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat  # isort: skip
+
+compat.install_isaaclab3_compat()
 
 from isaaclab.utils import configclass  # noqa: E402
 
-from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg  # noqa: E402
+from isaacsimenvs.tasks.cloth.env_cfg import ClothEnvCfg  # noqa: E402
 
-__all__ = ["ClothCfg", "ClothEnvCfg"]
+__all__ = ["NewtonSolverCfg", "VbdClothEnvCfg"]
 
 
 @configclass
-class ClothEnvCfg(PlayNewtonEnvCfg):
-    """Play task with a folding cloth in place of the rigid tool."""
+class NewtonSolverCfg:
+    """MJWarp / Newton solver settings.
 
-    cloth: ClothCfg = ClothCfg()
+    Values are the reference port's (github.com/kushal2000/isaac_newton @ beb9efb), which reached
+    parity with the PhysX baseline on this exact task. **Almost none of them are library
+    defaults**, and the defaults are not merely untuned -- several fail *silently*, dropping work
+    rather than raising, which is why each carries its measured justification here.
+    """
+
+    # --- The decisive one -------------------------------------------------------------------
+    max_triangle_pairs: int | None = None
+    """Narrow-phase triangle-pair budget. ``None`` sizes it from the environment count.
+
+    The library default is ``1_000_000`` and it is a **global** budget, not per-world. This robot
+    carries 34 mesh collision prims with self-collision enabled, so demand grows linearly with
+    environment count: it crosses 1e6 somewhere between 16 and 32 envs and reaches ~1.7M at 64.
+    Past the cap the narrow phase **silently drops pairs** -- fingertip/tool contacts simply go
+    missing and the grasp cannot be held.
+
+    Measured in the reference port at 64 envs, changing only this value:
+    ``1e6 -> 0.12 goals/episode``, ``8e6 -> 14.28``. A 114x effect from a number that appears in
+    no config file.
+
+    It also explains why that project spent a day misattributing the backend: every Newton run it
+    had ever done used 64-1024 envs, i.e. was entirely inside the saturated regime, so there was
+    no working configuration to A/B against and the solver looked uniformly broken rather than
+    broken above a threshold.
+    """
+
+    per_env_triangle_pairs: int = 65_536
+    """Headroom per env when sizing automatically -- about 2.5x the ~26.6k/env measured demand.
+
+    The buffer is a GPU allocation so it is not free, but under-sizing fails silently and
+    catastrophically while over-sizing costs memory, which is visible and diagnosable.
+    """
+
+    # --- Constraint budgets, same failure mode ------------------------------------------------
+    njmax: int = 8192
+    """Max constraint rows per world. The library default of 300 is sized for a Franka/Allegro
+    lifting a simple object; this scene (22-DoF hand + tool + table) overflows it continuously
+    (``nefc overflow - please increase njmax``). Overflow is not benign -- constraints are
+    dropped and positions go wrong. The reference ran at 2400 for a long time, still overflowing
+    to 2878, and raising it to 8192 moved a "matching" score from 15.97 to 18.61."""
+
+    nconmax: int = 2048
+    """Max contact points per world; same failure mode. The reference ran 800 while the solver's
+    own message asked for 1081."""
+
+    # --- Contact model, from the task authors' own MuJoCo scene -------------------------------
+    cone: str = "elliptic"
+    """Friction cone. MuJoCo's default is ``pyramidal``, which approximates the friction limit
+    surface with a box and under combined slip lets a held tool rotate more readily. The
+    SimToolReal authors' own MuJoCo model of this robot uses elliptic."""
+
+    impratio: float = 10.0
+    """Frictional-to-normal constraint impedance. The authors use 10, not MuJoCo's default 1; a
+    higher ratio stiffens frictional constraints and stops a grasped tool creeping."""
+
+    condim: int = 6
+    """Contact dimensionality on the grasping shapes. The tool and fingertip assets already carry
+    torsional and rolling friction coefficients, but MuJoCo ignores them below condim 4 and 6
+    respectively. Set before the solver compiles -- MuJoCo Warp sizes its constraint arrays at
+    compile time, so writing it afterwards produces NaNs.
+
+    Kept on fidelity grounds (the authors' scene specifies it), **not** performance: measured
+    cleanly post-fix it is neutral (19.375 +/- 2.134 at condim 6 against 20.359 +/- 1.918 at
+    condim 3, z = 0.34), and an earlier claim that torsional friction was the missing physics was
+    retracted."""
+
+    # --- Pipeline -----------------------------------------------------------------------------
+    use_mujoco_contacts: bool = False
+    """Use Newton's own collision pipeline rather than MuJoCo's. Not a performance preference:
+    under MuJoCo's pipeline ``separate_worlds=True`` builds the MuJoCo model from world 0 only, so
+    per-env collision *meshes* are **silently ignored** -- every world simulates world 0's mesh
+    while reporting its own mass and inertia. That is a physically nonexistent hybrid that passes
+    a "do the environments differ?" check. Newton's pipeline reads per-world shape data correctly,
+    and on a mesh scene is also better conditioned (0.43 mm penetration against 6.5-9.2 mm) and
+    faster."""
+
+    solver: str = "newton"
+    integrator: str = "implicitfast"
+    iterations: int = 100
+    ls_iterations: int = 15
+    ccd_iterations: int = 35
+    update_data_interval: int = 2
+    rigid_contact_max: int = 4_000_000
+    num_substeps: int = 2
+    collision_decimation: int = 0
+    """Re-collide every N substeps; 0 = once per tick. Coupled to :attr:`num_substeps` -- raising
+    substeps without also re-colliding more often leaves the solver integrating several steps
+    against one stale collision update."""
+
+    use_cuda_graph: bool = True
+    disable_sensors: bool = True
+    """Required for ``deterministic_mode="run_to_run"``, and safe here: every observation field is
+    read through Isaac Lab's articulation and rigid-body state, never from MuJoCo sensors."""
+
+    deterministic_mode: str = "not_guaranteed"
+
+    def resolve_max_triangle_pairs(self, num_envs: int) -> int:
+        """Triangle-pair budget for ``num_envs``, honouring an explicit override."""
+        if self.max_triangle_pairs is not None:
+            return int(self.max_triangle_pairs)
+        return max(1_000_000, int(num_envs) * self.per_env_triangle_pairs)
+
+    def build(self, num_envs: int):
+        """Return an ``isaaclab_newton`` ``NewtonCfg``.
+
+        ``num_envs`` is load-bearing, not incidental -- it sizes the triangle-pair budget.
+        """
+        from isaaclab_newton.physics import (
+            MJWarpSolverCfg,
+            NewtonCfg,
+            NewtonCollisionPipelineCfg,
+            NewtonShapeCfg,
+        )
+
+        return NewtonCfg(
+            solver_cfg=MJWarpSolverCfg(
+                solver=self.solver,
+                integrator=self.integrator,
+                njmax=self.njmax,
+                nconmax=self.nconmax,
+                impratio=self.impratio,
+                cone=self.cone,
+                update_data_interval=self.update_data_interval,
+                iterations=self.iterations,
+                ls_iterations=self.ls_iterations,
+                use_mujoco_contacts=self.use_mujoco_contacts,
+                ccd_iterations=self.ccd_iterations,
+                disable_sensors=self.disable_sensors,
+            ),
+            collision_cfg=NewtonCollisionPipelineCfg(
+                rigid_contact_max=self.rigid_contact_max,
+                max_triangle_pairs=self.resolve_max_triangle_pairs(num_envs),
+            ),
+            default_shape_cfg=NewtonShapeCfg(),
+            num_substeps=self.num_substeps,
+            collision_decimation=self.collision_decimation,
+            use_cuda_graph=self.use_cuda_graph,
+            deterministic_mode=self.deterministic_mode,
+        )
+
+
+@configclass
+class VbdClothEnvCfg(ClothEnvCfg):
+    """The fold task with a VBD cloth sheet, on Newton."""
+
+    newton: NewtonSolverCfg = NewtonSolverCfg()
+
+    use_gravcomp: bool = True
+    """Express the robot's per-body ``disableGravity`` as MuJoCo gravity compensation, leaving
+    global gravity at -9.81 so the sheet falls natively (``mjc:gravcomp``, applied as
+    ``(1 - gravcomp) * g``). Required: the alternative zeroes global gravity, and the cloth would
+    float."""

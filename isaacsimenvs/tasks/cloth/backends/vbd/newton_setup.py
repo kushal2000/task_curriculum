@@ -15,12 +15,12 @@ takes effect on the objects that were already built.
 from __future__ import annotations
 
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat, patches, physx_schema_shim, usd_cache
-from isaacsimenvs.tasks.play.robots import get_robot_spec
+from isaacsimenvs.robots import get_robot_spec
 
 __all__ = ["install_post_construction_patches", "install_pre_construction_patches"]
 
 
-def install_pre_construction_patches(cfg, *, physics_cfg, pre_clone_hook=None) -> None:
+def install_pre_construction_patches(cfg, *, physics_cfg) -> None:
     """Everything that must be in place before ``_setup_scene`` runs. Idempotent.
 
     Order is not arbitrary and is easy to get subtly wrong:
@@ -35,15 +35,14 @@ def install_pre_construction_patches(cfg, *, physics_cfg, pre_clone_hook=None) -
     """
     compat.install_isaaclab3_compat()
 
-    # `scene_utils._bake_usd` authors PhysX-namespaced USD attributes through `pxr.PhysxSchema`,
+    # `robots.usd.bake_usd` authors PhysX-namespaced USD attributes through `pxr.PhysxSchema`,
     # which ships with Isaac Sim rather than usd-core. Must precede any asset bake. No-ops when
     # the genuine plugin is present, so it never shadows the real one.
     physx_schema_shim.install()
 
     # Swap PhysX out for Newton. `cfg.sim.physics` is 3.0's backend-neutral field (2.x called it
-    # `physx`); the inherited PhysxCfg from PlayEnvCfg is simply replaced, so no PhysX manager is
-    # ever constructed. Built by `build_physics_cfg`, which subclasses override -- the cable env
-    # substitutes a coupled MJWarp+VBD solver here.
+    # `physx`); the config's PhysxCfg is simply replaced, so no PhysX manager is ever constructed.
+    # The cloth's is the coupled MJWarp (robot) + VBD (cloth) solve.
     cfg.sim.physics = physics_cfg
 
     # The task authors zero-gain USD drives and supply real gains through ImplicitActuatorCfg.
@@ -74,10 +73,6 @@ def install_pre_construction_patches(cfg, *, physics_cfg, pre_clone_hook=None) -
     #
     # `filter_inter_env_collisions` is correspondingly off: the collision-API push authors its own
     # filtering, and doing both double-filters.
-    # Subclass assets go in here, between asset creation and replication.
-    if pre_clone_hook is not None:
-        _install_pre_clone_hook(pre_clone_hook)
-
     patches.install_cloning(
         push_collision_api=True,
         write_drive_gains=True,
@@ -95,46 +90,17 @@ def install_pre_construction_patches(cfg, *, physics_cfg, pre_clone_hook=None) -
         )
     patches.install_newton_gravcomp()
 
-    patches.install_newton_materials()
     patches.install_newton_condim(
         int(cfg.newton.condim), tuple(get_robot_spec(cfg.robot).fingertip_link_names)
     )
 
-    if cfg.meshify:
-        scene_utils = compat.play_module("scene_utils")
-        patches.install_mesh_collisions(scene_utils)
-
-    # `install_multi_asset` above replaced `build_rigid_object_cfg`, discarding any single-variant
-    # wrapper the harness applied before construction. Re-apply on top of ours.
-    from isaacsimenvs.eval import protocol
-
-    protocol.reapply_single_variant_if_requested()
-
-
-def _install_pre_clone_hook(hook) -> None:
-    """Run ``hook(env)`` at the end of ``setup_scene``, before ``install_cloning`` replicates.
-
-    Installed *before* `install_cloning` wraps the same function, so the resulting call order is
-    original setup -> hook -> replication. Getting that order wrong is silent: the asset appears
-    on the stage, and the solver simply never sees it.
-    """
-    scene_utils = compat.play_module("scene_utils")
-    if getattr(scene_utils, "_pre_clone_hook_installed", False):
-        return
-    original = scene_utils.setup_scene
-
-    def setup_scene_then_hook(env, _original=original):
-        _original(env)
-        hook(env)
-
-    scene_utils.setup_scene = setup_scene_then_hook
-    scene_utils._pre_clone_hook_installed = True
-
 
 def install_post_construction_patches(env) -> None:
     """Everything that needs live assets. Runs before the first ``reset()``."""
+    # Shape friction on the Newton model (before `notify_solver` below, which picks it up).
+    patches.apply_newton_materials(env)
     # Isaac Lab 3.0 asset data are warp-backed ProxyArrays; the task code indexes them as torch
-    # tensors throughout. This is the boundary that lets `play/utils/*` stay unmodified.
+    # tensors throughout.
     patches.wrap_env_assets(env)
     # Mirror of the read-side conversion: the task code writes wxyz, 3.0 stores xyzw.
     patches.install_pose_write_conversion(env)

@@ -42,7 +42,7 @@ train() {  # name envs iters <extra args...>
     [ "${NOISE:-0}" = 1 ] && args+=(--noise)
     [ "${G3_NOISE:-0}" = 1 ] && args+=(--g3_noise)
     read -r -a extra <<<"${EXTRA:-}"
-    .venv_isaacsim/bin/python -m isaacsimenvs.distill.distill_pc --mode train --headless --single_variant \
+    .venv_isaacsim/bin/python -m isaacsimenvs.distill.distill_pc --mode train --headless \
         --task "$PX_TASK" --experiment "$EXPERIMENT" --teacher "$TEACHER" --seed "${SEED:-1}" \
         --out "outputs/distill/$name" --iters "$iters" "${args[@]}" "$@" "${extra[@]}" \
         "env.scene.num_envs=$envs" "${FOLD[@]}"
@@ -55,12 +55,12 @@ evaluate() {  # sim policy student out start envs seed <extra args...>
     [ -n "$student" ] && stu=(--student "$student")
     if [ "$sim" = vbd ]; then
         scripts/newton_py -m isaacsimenvs.distill.distill_pc --mode eval --policy "$policy" "${stu[@]}" \
-            --task "$VBD_TASK" --teacher "$TEACHER" --num_envs "$envs" --seed "$seed" --single_variant \
+            --task "$VBD_TASK" --teacher "$TEACHER" --num_envs "$envs" --seed "$seed" \
             --json "$out" "${sargs[@]}" "$@" "${FOLD[@]}" "${VBD_EXTRA[@]}"
     else
         .venv_isaacsim/bin/python -m isaacsimenvs.distill.distill_pc --mode eval --headless --policy "$policy" \
             "${stu[@]}" --task "$PX_TASK" --experiment "$EXPERIMENT" --teacher "$TEACHER" --num_envs "$envs" \
-            --seed "$seed" --single_variant --json "$out" "${sargs[@]}" "$@" "${FOLD[@]}"
+            --seed "$seed" --json "$out" "${sargs[@]}" "$@" "${FOLD[@]}"
     fi
 }
 

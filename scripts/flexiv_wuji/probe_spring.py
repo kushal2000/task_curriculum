@@ -53,7 +53,7 @@ import isaacsimenvs  # noqa: E402, F401
 if args_cli.no_sleep or args_cli.vel_iters >= 0:
     import isaaclab.sim as sim_utils  # noqa: E402
 
-    from isaacsimenvs.tasks.play.utils import scene_utils as _su  # noqa: E402
+    from isaacsimenvs.robots import usd as _su  # noqa: E402
 
     _build = _su.build_robot_articulation_usd_cfg
 

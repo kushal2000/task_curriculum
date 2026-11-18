@@ -18,18 +18,28 @@ the command line. The older ids stay registered as aliases that carry their setu
 ```text
 cloth/
   __init__.py         task registration (canonical ids + aliases)
-  cloth_cfg.py        ClothCfg: the sheet the task is defined on (shared by both backends)
+  cloth_env.py        ClothEnv(DirectRLEnv): the lifecycle hooks, wired to mdp/
+  env_cfg.py          ClothEnvCfg: robot, obs, action, reward, reset, termination, DR, cloth
+  cloth_cfg.py        ClothCfg: the sheet the task is defined on
   mdp/                the task, simulator-independent
-    task.py           fold targets, reward, success, termination, goal marker, finite guard
+    task.py           the fold: targets, error, criterion, goal pose (ClothTaskMixin)
+    robot.py          joint orders and limits, reset pose, the hand's passive spring
+    actions.py        policy action -> joint targets
+    observations.py   policy and critic observations, observation DR
+    rewards.py        reward terms and the reward guard
+    terminations.py   fold, fall, hand far, divergence, timeout
+    reset.py          table, sheet and tracker resets
+    randomization.py  per-episode DR draws (delays, biases, point DR, PD gains, hand dynamics)
+    point_dr.py       point-level observation DR
     tracker.py        tracker observation DR (TrackerMixin) and the pipeline it replays
-    tracker_cfg.py
-    geometry/         grid.py (sheet grid, keypoints, fold targets), fold_shapes.py (pool shapes)
+    geometry/         grid.py (sheet grid, keypoints, fold targets), fold_shapes.py (pool shapes),
+                      quat.py (the quaternion helpers, one place for the Newton backend to wrap)
   backends/
-    adapter.py        ClothAsRigidObject: a cloth seen through the rigid-object reads Play makes
-    usd.py            bulk per-env USD edits; neutralise the Play tool, reshape the goal marker
+    scene.py          robot, table, goal marker, ground, light; then the backend's sheet
+    adapter.py        ClothAsRigidObject: the sheet as the rigid object the observation encodes
     rigid/            RigidClothEnv: env.py, config.py, scene.py, contacts.py, randomization.py,
-                      checks.py (startup proofs), physx.py, pool.py (adapter), assets.py (USD)
-    vbd/              ClothEnv: env.py, config.py, play_newton*.py (its Newton base), pierce.py,
+                      checks.py (startup proofs), physx.py, pool.py (adapter), assets.py, usd.py
+    vbd/              VbdClothEnv: env.py, config.py, newton_setup.py, pierce.py,
                       newton_support/ (Isaac Lab 3.0 compat, patches, USD cache)
   perception/         point clouds for the point-cloud students (pointcloud, scene_pointcloud,
                       robot_surface)
@@ -37,12 +47,13 @@ cloth/
   tests/
 ```
 
-The fold shapes are YAML designs with a PNG each in `isaacsimenvs/cfg/rigid_cloth_designs/`
+Robots (`RobotSpec`s and the URDF -> USD pipeline) are `isaacsimenvs/robots/`, shared with the Play
+task. The fold shapes are YAML designs with a PNG each in `isaacsimenvs/cfg/rigid_cloth_designs/`
 (regenerate the PNGs with `scripts/visualization/render_fold_designs.py`).
 
-Both envs still subclass the Play env (`PlayEnv` / `PlayNewtonEnv`) and reach the observation and
-action code through it; the adapter in `backends/adapter.py` presents the sheet (or the pool's active
-shape) as Play's rigid object.
+The observation is the encoding the Play prior was trained on: the sheet's moving half as a rigid
+object (`backends/adapter.py`), the fold goal as a pose (`ClothTaskMixin._update_goal`), so every
+cloth checkpoint, and the Play prior, reads the same vector.
 
 ## Training
 
