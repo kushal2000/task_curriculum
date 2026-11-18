@@ -1,0 +1,10 @@
+# flat7FWRHL_dB: flat7FlexivWujiRHL's setup with the hand, friction, proprio, action-delay, PD-gain and
+# object-point DR (point_dr_mode realistic). Differs from flat7FWRHL_dA only in the lag model.
+base: rigid_cloth_right_wuji
+dr: [sysid, friction, contact_shell, proprio_noise, object_points, action_delay, pd_gains]
+
+env:
+  reset:
+    table_reset_z_range: 0.015
+  cloth:
+    soft_contact_mu: 0.265

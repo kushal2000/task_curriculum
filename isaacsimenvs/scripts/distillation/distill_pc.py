@@ -2,7 +2,7 @@
 
     # train (PhysX fold pool, the teacher's own recipe)
     python -m isaacsimenvs.scripts.distillation.distill_pc --mode train --headless \
-        --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHLRL-Direct-v0 --experiment flat7RW_base \
+        --task Isaacsimenvs-RigidCloth-Direct-v0 --experiment rigid_cloth_right_wuji \
         --teacher <snap.pth> --vis cams --goal g1 --out outputs/distill/<name> \
         env.scene.num_envs=4096 env.cloth.keypoint_tolerance=0.015 env.termination.success_steps=10
 

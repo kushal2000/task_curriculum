@@ -25,11 +25,12 @@ CLI shape:
         agent.params.config.minibatch_size=16384 \
         agent.params.seed=42
 
-    A recorded run recipe instead of the overrides (isaacsimenvs/scripts/configs/runs/), e.g. flat7DRABC:
+    A run recipe instead of the overrides (a name in isaacsimenvs/scripts/configs/runs/ or a path,
+    see configs/recipes.py):
     python -m isaacsimenvs.scripts.training.train \
-        --task Isaacsimenvs-FoldPoolPhysx-Direct-v0 --agent rl_games_sapg_cfg_entry_point --headless \
-        --experiment flat7DRABC --checkpoint pretrained_policy/model.pth --checkpoint_load_mode weights \
-        agent.params.seed=1
+        --task Isaacsimenvs-RigidCloth-Direct-v0 --agent rl_games_sapg_cfg_entry_point --headless \
+        --experiment experiments/nov11_right_wuji_dr_ablation/flat7RW_fric.yaml \
+        --checkpoint <prior.pth> --checkpoint_load_mode weights agent.params.seed=1
 """
 
 from __future__ import annotations
@@ -109,8 +110,8 @@ def main() -> None:
     parser.add_argument(
         "--experiment",
         default=None,
-        help="A run recipe in isaacsimenvs/scripts/configs/runs/<name>.yaml, layered between the task YAML "
-        "and the Hydra CLI overrides, e.g. flat7DRABC.",
+        help="A run recipe: a name in isaacsimenvs/scripts/configs/runs/ (e.g. rigid_cloth_right_wuji) or a "
+        "YAML path; layered between the task YAML and the Hydra CLI overrides (configs/recipes.py).",
     )
     # --- Runtime toggles ---
     parser.add_argument("--test", action="store_true", help="Run inference (player) instead of training")

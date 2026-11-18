@@ -133,37 +133,23 @@ def test_every_yaml_key_maps_to_a_config_field(yaml_rel, root_cls, modules):
     assert not problems, f"{yaml_rel}:\n  " + "\n  ".join(problems)
 
 
-# --- configs/runs/: run recipes layered over a task YAML (train.py --experiment) ---------------
+# --- run recipes (configs/runs/, experiments/) and DR blocks (configs/dr/) ----------------------
 
-EXPERIMENT_DIR = REPO_ROOT / "isaacsimenvs/scripts/configs/runs"
+from isaacsimenvs.scripts.configs.recipes import DR_DIR, RUNS_DIR, load_recipe  # noqa: E402
+
+RECIPES = sorted(
+    [str(p.relative_to(REPO_ROOT)) for p in RUNS_DIR.glob("*.yaml")]
+    + [str(p.relative_to(REPO_ROOT)) for p in (REPO_ROOT / "experiments").rglob("*.yaml")]
+)
+_CLOTH_SAPG = "isaacsimenvs/scripts/configs/train/ClothSAPG.yaml"
 # Per task id: env root configclass, its modules, and the SAPG agent YAML.
 EXPERIMENT_TASKS = {
-    "Isaacsimenvs-FoldPoolPhysx-Direct-v0": ("RigidClothEnvCfg", RIGID_CLOTH_CFG, "isaacsimenvs/scripts/configs/train/ClothSAPG.yaml"),
+    "Isaacsimenvs-RigidCloth-Direct-v0": ("RigidClothEnvCfg", RIGID_CLOTH_CFG, _CLOTH_SAPG),
+    "Isaacsimenvs-Cloth-Direct-v0": ("VbdClothEnvCfg", VBD_CLOTH_CFG, _CLOTH_SAPG),
 }
-# The robot-swapped ids (tasks/cloth/__init__.py) share their base task's cfg and agent YAML.
-for _robot in ("FlexivWuji", "FlexivWujiHumanLike", "FlexivWujiHumanLikeS2R", "FlexivSharpa",
-               "FlexivWujiRightHumanLike", "FlexivWujiRightReal", "FlexivWujiRightHLRL"):
-    EXPERIMENT_TASKS[f"Isaacsimenvs-FoldPoolPhysx{_robot}-Direct-v0"] = EXPERIMENT_TASKS[
-        "Isaacsimenvs-FoldPoolPhysx-Direct-v0"
-    ]
-# The VBD cloth (Newton) recipes, VBD-direct training (vbdRW_*).
-EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"] = ("VbdClothEnvCfg", VBD_CLOTH_CFG, "isaacsimenvs/scripts/configs/train/ClothSAPG.yaml")
+# The robot-suffixed alias ids (tasks/cloth/__init__.py) share their canonical task's cfg and agent YAML.
 for _robot in ("FlexivWujiRightReal", "FlexivWujiRightS2REff", "FlexivWujiRightSharpaGain"):
     EXPERIMENT_TASKS[f"Isaacsimenvs-Cloth{_robot}-Direct-v0"] = EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"]
-
-
-def _load_experiment(name: str) -> dict:
-    """As `hydra_utils.load_experiment`, which needs a booted Kit to import."""
-    exp = yaml.safe_load((EXPERIMENT_DIR / f"{name}.yaml").read_text()) or {}
-    base = exp.pop("base", None)
-    if not base:
-        return exp
-
-    def merge(a, b):
-        return {**a, **{k: merge(a[k], v) if isinstance(v, dict) and isinstance(a.get(k), dict) else v
-                        for k, v in b.items()}}
-
-    return merge(_load_experiment(base), exp)
 
 
 def _env_problems(overlay: dict, classes: dict, cls: str, path: str) -> list[str]:
@@ -196,12 +182,19 @@ def _agent_problems(overlay: dict, ref: dict, path: str) -> list[str]:
     return problems
 
 
-@pytest.mark.parametrize("name", sorted(p.stem for p in EXPERIMENT_DIR.glob("*.yaml")))
-def test_every_experiment_key_maps_to_a_config_field(name):
-    exp = _load_experiment(name)
-    assert set(exp) <= {"task", "env", "agent"}, f"{name}: unknown top-level keys {set(exp)}"
+@pytest.mark.parametrize("name", RECIPES)
+def test_every_recipe_key_maps_to_a_config_field(name):
+    exp = load_recipe(name)
     assert exp.get("task") in EXPERIMENT_TASKS, f"{name}: task {exp.get('task')!r} has no checker entry"
     root_cls, modules, agent_yaml = EXPERIMENT_TASKS[exp["task"]]
-    problems = _env_problems(exp.get("env") or {}, _collect_classes(modules), root_cls, "")
-    problems += _agent_problems(exp.get("agent") or {}, yaml.safe_load((REPO_ROOT / agent_yaml).read_text()), "")
+    problems = _env_problems(exp["env"], _collect_classes(modules), root_cls, "")
+    problems += _agent_problems(exp["agent"], yaml.safe_load((REPO_ROOT / agent_yaml).read_text()), "")
     assert not problems, f"{name}:\n  " + "\n  ".join(problems)
+
+
+@pytest.mark.parametrize("block", sorted(p.stem for p in DR_DIR.glob("*.yaml")))
+def test_every_dr_block_key_maps_to_a_rigid_cloth_field(block):
+    overlay = yaml.safe_load((DR_DIR / f"{block}.yaml").read_text()) or {}
+    assert overlay, f"{block}: empty DR block"
+    problems = _env_problems(overlay, _collect_classes(RIGID_CLOTH_CFG), "RigidClothEnvCfg", "")
+    assert not problems, f"{block}:\n  " + "\n  ".join(problems)

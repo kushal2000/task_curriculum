@@ -1,0 +1,97 @@
+"""Run recipes: one YAML per kind of run, layered over the task's config.
+
+A recipe has up to five keys:
+
+    task:  Isaacsimenvs-RigidCloth-Direct-v0   # the gym id it is written for
+    base:  rigid_cloth_right_wuji              # another recipe underneath it (optional)
+    dr:    [sysid, friction]                   # DR blocks from configs/dr/, in order (optional)
+    env:   {...}                               # overrides of the env config
+    agent: {...}                               # overrides of the learner config
+
+`load_recipe` composes them as base -> each DR block -> this recipe's own `env` / `agent`, so a
+recipe's own values win. A DR block is a plain env overlay (the same keys as a recipe's `env:`).
+
+A recipe is named by a file stem in `configs/runs/` or by a path, absolute or relative to the repo
+root (e.g. `experiments/nov15_cloth_tracker/flat7RW_trkA.yaml`). A `base:` is looked up next to the
+recipe first, then in `configs/runs/`.
+
+Kit-free (plain YAML), so tests and tools can compose recipes without booting a simulator.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import yaml
+
+from isaacsimenvs import CONFIG_DIR, REPO_ROOT
+
+RUNS_DIR = CONFIG_DIR / "runs"
+DR_DIR = CONFIG_DIR / "dr"
+
+RECIPE_KEYS = {"task", "base", "dr", "env", "agent"}
+
+
+def deep_merge(base: dict, over: dict) -> dict:
+    """``over`` onto ``base``, recursing into dicts; any other value (lists included) replaces."""
+    out = dict(base)
+    for k, v in over.items():
+        out[k] = deep_merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
+def _yaml(path: Path) -> dict:
+    data = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must contain a mapping")
+    return data
+
+
+def recipe_path(name: str, near: Path | None = None) -> Path:
+    """The file a recipe name or path refers to. ``near``: the recipe naming it as its ``base``; that
+    recipe's directory is searched first (skipping the recipe itself, so ``base: x`` in ``.../x.yaml``
+    means ``configs/runs/x.yaml``)."""
+    path = Path(name).expanduser()
+    if not path.suffix:
+        path = path.with_suffix(".yaml")
+    if path.is_absolute():
+        candidates = [path]
+    else:
+        candidates = ([near.parent / path] if near else []) + [REPO_ROOT / path, RUNS_DIR / path]
+    for candidate in candidates:
+        if candidate.is_file() and (near is None or candidate.resolve() != near):
+            return candidate.resolve()
+    raise FileNotFoundError(f"run recipe {name!r} not found (looked in {[str(c) for c in candidates]})")
+
+
+def dr_block(name: str) -> dict:
+    """``configs/dr/<name>.yaml``: an env overlay."""
+    path = DR_DIR / f"{name}.yaml"
+    if not path.is_file():
+        known = sorted(p.stem for p in DR_DIR.glob("*.yaml"))
+        raise FileNotFoundError(f"unknown DR block {name!r}; known: {known}")
+    return _yaml(path)
+
+
+def load_recipe(name: str, _near: Path | None = None, _seen: frozenset = frozenset()) -> dict:
+    """The composed recipe: ``{"task", "env", "agent", "dr", "files"}``. ``dr`` lists every DR block
+    applied, base first; ``files`` every recipe file read, base first (for the log)."""
+    path = recipe_path(name, _near)
+    if path in _seen:
+        raise ValueError(f"run recipe inheritance cycle at {path}")
+    raw = _yaml(path)
+    unknown = set(raw) - RECIPE_KEYS
+    if unknown:
+        raise ValueError(f"{path}: unknown top-level keys {sorted(unknown)} (allowed: {sorted(RECIPE_KEYS)})")
+
+    base = raw.get("base")
+    out = load_recipe(base, path, _seen | {path}) if base else {"env": {}, "agent": {}, "dr": [], "files": []}
+    for block in raw.get("dr") or []:
+        out["env"] = deep_merge(out["env"], dr_block(block))
+        out["dr"] = [*out["dr"], block]
+    out["env"] = deep_merge(out["env"], raw.get("env") or {})
+    out["agent"] = deep_merge(out["agent"], raw.get("agent") or {})
+    if raw.get("task"):
+        out["task"] = raw["task"]
+    out["files"] = [*out["files"], str(path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path)]
+    return out

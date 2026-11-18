@@ -1,0 +1,8 @@
+# flat7RW_trkB (stage 13, run B): flat7RW_trkA + cloth self-occlusion.
+base: rigid_cloth_right_wuji
+dr: [proprio_noise, tracker]
+
+env:
+  cloth:
+    tracker:
+      hand_occlusion: false

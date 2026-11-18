@@ -1,0 +1,4 @@
+# flat7RW_fricSysid (stage 12, run 14, control for 13): the identified hand + hand DR and the 11-10
+# contact frictions + friction DR. No delay / noise DR.
+base: rigid_cloth_right_wuji
+dr: [sysid, friction]

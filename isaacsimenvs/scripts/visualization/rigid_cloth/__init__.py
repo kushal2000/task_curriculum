@@ -1,0 +1,1 @@
+"""Rigid cloth design diagrams."""

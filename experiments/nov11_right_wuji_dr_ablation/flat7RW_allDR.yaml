@@ -1,0 +1,11 @@
+# flat7RW_allDR (stage 12, run 6): every DR at once: flat7FWRHL_dB (identified hand, 11-10 frictions +
+# friction DR, 5 mm felt, table +-1.5 cm, realistic point DR, proprio / action delays, joint noise, PD
+# gains, hand dynamics DR) plus action noise and the plates' own dynamics (hinge_mass).
+base: rigid_cloth_right_wuji
+dr: [sysid, friction, contact_shell, proprio_noise, object_points, action_delay, pd_gains, action_noise, hinge_mass]
+
+env:
+  reset:
+    table_reset_z_range: 0.015
+  cloth:
+    soft_contact_mu: 0.265

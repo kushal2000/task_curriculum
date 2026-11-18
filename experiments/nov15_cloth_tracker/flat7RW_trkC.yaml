@@ -1,0 +1,3 @@
+# flat7RW_trkC (stage 13, run C): flat7RW_trkB + hand occlusion (the full geometric tracker block).
+base: rigid_cloth_right_wuji
+dr: [proprio_noise, tracker]

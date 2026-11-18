@@ -1,0 +1,18 @@
+# flat7FWRHL_dA: flat7FWRHL_dB with the "simple" lag model (point_dr_mode: simple): object points and
+# the goal share one lag of 2-10 steps redrawn every step, and the proprio / action delays are
+# redrawn every step too. Same noise and biases as dB.
+base: rigid_cloth_right_wuji
+dr: [sysid, friction, contact_shell, proprio_noise, action_delay, pd_gains]
+
+env:
+  reset:
+    table_reset_z_range: 0.015
+  cloth:
+    soft_contact_mu: 0.265
+  domain_randomization:
+    delay_mode: per_step
+    point_dr_mode: simple
+    point_delay_range: [2, 10]           # policy steps (1/60 s), inclusive
+    point_noise_std: 0.005
+    point_bias_xyz: [0.005, 0.005, 0.005]
+    point_common_bias_xyz: [0.015, 0.015, 0.01]

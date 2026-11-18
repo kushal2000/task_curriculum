@@ -1,0 +1,15 @@
+# DR block tracker: the cloth keypoints as the real stereo + CoTracker pipeline sees them
+# (cloth.tracker, tasks/cloth/mdp/tracker.py), with self- and hand occlusion.
+#
+# 7x7 grid inset 10%, Kabsch per half from fresh points (n_min 4, minor-axis spread >= 2 cm),
+# whole-sheet hold, goal from the stationary half's fit; per-frame noise 0.2-1 mm, re-acquisition
+# offset +-3-5 mm, calibration +-1.5/1.5/1 cm +-2 deg, a frame every 2-4 steps read 2-3 steps later,
+# assumed size x0.95-1.05. A point is hidden when the ray from either camera crosses the other half
+# (self-occlusion) or the hand (camera positions +-5 cm per episode; forearm / wrist / palm / finger
+# capsules inflated 0-1.5 cm), and fresh again the first frame it is uncovered (add
+# tracker_reacquire for re-acquisition failure).
+cloth:
+  tracker:
+    enabled: true
+    self_occlusion: true
+    hand_occlusion: true

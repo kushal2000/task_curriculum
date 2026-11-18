@@ -1,0 +1,5 @@
+# DR block action_delay: action delay 0-3 steps (*_delay_max is the queue LENGTH: lags 0 .. max-1),
+# per episode or per step as domain_randomization.delay_mode says (proprio_noise: per episode).
+domain_randomization:
+  use_action_delay: true
+  action_delay_max: 4

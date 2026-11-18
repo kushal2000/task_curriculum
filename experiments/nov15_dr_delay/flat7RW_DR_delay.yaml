@@ -1,0 +1,3 @@
+# flat7RW_DR_delay (stage 12, run 12): flat7DRABC's delay / noise DR (A and B layers, no C).
+base: rigid_cloth_right_wuji
+dr: [dr_delay]

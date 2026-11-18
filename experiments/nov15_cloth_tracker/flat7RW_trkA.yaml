@@ -1,0 +1,9 @@
+# flat7RW_trkA (stage 13, run A): the cloth tracker DR without occlusion, plus proprio delay / noise.
+base: rigid_cloth_right_wuji
+dr: [proprio_noise, tracker]
+
+env:
+  cloth:
+    tracker:
+      self_occlusion: false
+      hand_occlusion: false

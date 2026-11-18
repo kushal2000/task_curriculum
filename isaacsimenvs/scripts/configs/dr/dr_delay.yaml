@@ -1,0 +1,27 @@
+# DR block dr_delay: flat7DRABC's A and B layers (the delay / noise DR of the Kuka flat7 runs).
+#
+#   A  observation / action / object-state delays (0-2 steps; object state up to 5), object-state
+#      noise 1 cm / 5 deg, joint velocity noise 0.1
+#   B  delays fixed per episode, action noise 0.05, joint position noise 0.01, object pose bias
+#      (5/5/2 mm, 3 deg per episode), robot PD gains x0.8-1.2
+# Pose-level object DR (point_dr_mode stays off). Overlaps proprio_noise / action_delay / pd_gains /
+# action_noise with other values; use one family or the other.
+domain_randomization:
+  # A
+  use_obs_delay: true
+  obs_delay_max: 3
+  use_action_delay: true
+  action_delay_max: 3
+  use_object_state_delay_noise: true
+  object_state_delay_max: 6
+  object_state_xyz_noise_std: 0.01
+  object_state_rotation_noise_degrees: 5.0
+  joint_velocity_obs_noise_std: 0.1
+  # B
+  delay_mode: per_episode
+  action_noise_std: 0.05
+  joint_pos_obs_noise_std: 0.01
+  object_pose_bias_xyz: [0.005, 0.005, 0.002]
+  object_pose_bias_rot_degrees: 3.0
+  robot_stiffness_scale_range: [0.8, 1.2]
+  robot_damping_scale_range: [0.8, 1.2]

@@ -10,8 +10,9 @@ Precedence (lowest → highest):
     2. configs/task/<Task>.yaml overlay (via the gym kwarg `env_cfg_yaml_entry_point`)
     3. configs/robot/<setup>.yaml, the robot setup (`env.robot_setup`), chosen by the command line, else
        the run recipe, else an alias task id (see `resolve_task`)
-    4. configs/runs/<name>.yaml (optional, `train.py --experiment <name>`): one run recipe's
-       `env:` and `agent:` overrides, so the recipe lives in the repo rather than in a launcher
+    4. the run recipe (optional, `train.py --experiment <name or path>`; see recipes.py): its base
+       recipe, its DR blocks (configs/dr/), then its own `env:` and `agent:` overrides, so the recipe
+       lives in the repo rather than in a launcher
     5. Hydra CLI overrides (e.g. `env.scene.num_envs=4096`)
 
 Implementation mirrors `isaaclab_tasks.utils.hydra.register_task_to_hydra` /
@@ -39,8 +40,8 @@ from isaaclab.utils import replace_slices_with_strings, replace_strings_with_sli
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
 from isaacsimenvs import CONFIG_DIR
+from isaacsimenvs.scripts.configs.recipes import deep_merge, load_recipe
 
-EXPERIMENT_DIR = CONFIG_DIR / "runs"
 ROBOT_DIR = CONFIG_DIR / "robot"
 
 
@@ -61,22 +62,6 @@ def _cli_value(key: str) -> str | None:
     return None
 
 
-def _deep_merge(base: dict, over: dict) -> dict:
-    """``over`` onto ``base``, recursing into dicts; any other value (lists included) replaces."""
-    out = dict(base)
-    for k, v in over.items():
-        out[k] = _deep_merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
-    return out
-
-
-def load_experiment(name: str) -> dict:
-    """``configs/runs/<name>.yaml`` with its ``base:`` chain merged underneath it."""
-    with open(EXPERIMENT_DIR / f"{name}.yaml") as f:
-        exp = yaml.safe_load(f) or {}
-    base = exp.pop("base", None)
-    return _deep_merge(load_experiment(base), exp) if base else exp
-
-
 def hydra_task_config_with_yaml(
     task_name: str,
     agent_cfg_entry_point: str,
@@ -95,7 +80,7 @@ def hydra_task_config_with_yaml(
         yaml_entry_point: Key in the task's gym kwargs pointing to the task YAML
             overlay. If absent from the registered kwargs, no overlay is applied
             and behavior matches Isaac Lab's stock decorator.
-        experiment: Name of a ``configs/runs/`` YAML layered over the task YAML, or ``None``.
+        experiment: A run recipe (a name in ``configs/runs/`` or a path; see recipes.py), or ``None``.
     """
 
     def decorator(func):
@@ -121,7 +106,7 @@ def hydra_task_config_with_yaml(
                 # upstream-supported.
                 env_cfg.from_dict(overlay)
             canonical, setup = resolve_task(short_name)
-            exp = load_experiment(experiment) if experiment else {}
+            exp = load_recipe(experiment) if experiment else {}
             if exp:
                 exp_canonical, exp_setup = resolve_task(exp.get("task", short_name))
                 if exp_canonical != canonical:
@@ -147,10 +132,10 @@ def hydra_task_config_with_yaml(
                 env_cfg.from_dict(exp.get("env") or {})
                 if exp.get("agent"):
                     if isinstance(agent_cfg, dict):
-                        agent_cfg = _deep_merge(agent_cfg, exp["agent"])
+                        agent_cfg = deep_merge(agent_cfg, exp["agent"])
                     else:
                         agent_cfg.from_dict(exp["agent"])
-                print(f"[hydra] experiment {experiment}: {EXPERIMENT_DIR / experiment}.yaml", flush=True)
+                print(f"[hydra] recipe {experiment}: {' <- '.join(exp['files'])}; DR blocks {exp['dr']}", flush=True)
             if setup:
                 print(f"[hydra] robot setup {setup}: {ROBOT_DIR / setup}.yaml", flush=True)
 
