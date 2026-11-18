@@ -13,6 +13,31 @@ def cfg():
               minimum_opposed_load=.001,outside_table=True,table_margin=.00001)
 
 
+def test_flat_reference_accounts_for_each_cloths_actual_rest_shell():
+    guard=object.__new__(RigidClothEpisodeGuard)
+    guard.cfg=cfg()
+    guard.n,guard.device=3,'cpu'
+    rest=torch.tensor([0.,.004,.010])
+    guard.backend=NS(
+        cfg=NS(rigid_cloth=NS(density=.1,rest_offset=.007)),
+        _dr_density=torch.full((3,),.1), _dr_rest_offset=rest,
+        table=NS(data=NS(root_pos_w=torch.tensor([[0.,0.,.38]]).repeat(3,1))),
+        _table_half_height=.15,_dims=torch.tensor([[.2,.2,.002]]).repeat(3,1))
+    guard.base_mass=torch.full((3,2),.002)
+    guard.half=torch.tensor([[0,1]]).repeat(3,1)
+    guard.history=LiftWorkHistory(3,'cpu',guard.cfg)
+    guard.pressing=torch.zeros(3,dtype=torch.bool)
+    com=torch.zeros(3,2,3)
+    com[...,2]=(.53+.001+rest)[:,None]
+    quat=torch.zeros(3,2,4);quat[...,0]=1
+    guard._update_history(com,quat,torch.zeros(3,2,6),torch.ones(3,2),
+                          torch.zeros(3,2),torch.zeros(3,2),torch.ones(3,dtype=torch.bool))
+    assert guard.history.initialized.all()
+    torch.testing.assert_close(guard.history.reference_height,com[...,2])
+    assert not guard.pressing.any()
+    assert not guard.history.gravity.any()
+
+
 def test_bounds_use_vertices_in_table_frame_and_allow_lifting_above_table():
     q=torch.tensor([[2**-.5,0.,0.,2**-.5]])
     # Table-local x=0.29 becomes world y=0.29 after90deg yaw.

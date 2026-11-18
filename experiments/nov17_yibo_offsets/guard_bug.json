@@ -1,0 +1,196 @@
+{
+  "yibo": {
+    "n": 768,
+    "completed": 768,
+    "fold_entries": 348,
+    "valid_fold_entries": 0,
+    "full_releases": 0,
+    "guard_ready_envs": 0,
+    "fold_rate": 0.453125,
+    "per_seed": [
+      {
+        "seed": 0,
+        "n": 256,
+        "completed": 256,
+        "fold_entries": 123,
+        "valid_fold_entries": 0,
+        "full_releases": 0,
+        "guard_ready_envs": 0
+      },
+      {
+        "seed": 1,
+        "n": 256,
+        "completed": 256,
+        "fold_entries": 116,
+        "valid_fold_entries": 0,
+        "full_releases": 0,
+        "guard_ready_envs": 0
+      },
+      {
+        "seed": 2,
+        "n": 256,
+        "completed": 256,
+        "fold_entries": 109,
+        "valid_fold_entries": 0,
+        "full_releases": 0,
+        "guard_ready_envs": 0
+      }
+    ],
+    "termination_reasons": {
+      "fall": 0,
+      "fold": 0,
+      "fold_held": 0,
+      "hand_far": 0,
+      "nonfinite": 0,
+      "outside_table": 448,
+      "persist": 0,
+      "persist_fail": 0,
+      "press_driven_fold": 0,
+      "released": 0,
+      "timeout": 320
+    },
+    "median_best_fold_error_m": 0.016703319735825062,
+    "by_design": {
+      "single_hinge": {
+        "n": 156,
+        "completed": 156,
+        "fold_entries": 95,
+        "valid_fold_entries": 0,
+        "full_releases": 0,
+        "guard_ready_envs": 0
+      },
+      "strip_4": {
+        "n": 153,
+        "completed": 153,
+        "fold_entries": 93,
+        "valid_fold_entries": 0,
+        "full_releases": 0,
+        "guard_ready_envs": 0
+      },
+      "strip_8": {
+        "n": 153,
+        "completed": 153,
+        "fold_entries": 16,
+        "valid_fold_entries": 0,
+        "full_releases": 0,
+        "guard_ready_envs": 0
+      },
+      "hinge_band": {
+        "n": 153,
+        "completed": 153,
+        "fold_entries": 99,
+        "valid_fold_entries": 0,
+        "full_releases": 0,
+        "guard_ready_envs": 0
+      },
+      "flexible_corners": {
+        "n": 153,
+        "completed": 153,
+        "fold_entries": 45,
+        "valid_fold_entries": 0,
+        "full_releases": 0,
+        "guard_ready_envs": 0
+      }
+    }
+  },
+  "yibo_with_our_offsets": {
+    "n": 768,
+    "completed": 768,
+    "fold_entries": 399,
+    "valid_fold_entries": 399,
+    "full_releases": 0,
+    "guard_ready_envs": 765,
+    "fold_rate": 0.51953125,
+    "per_seed": [
+      {
+        "seed": 0,
+        "n": 256,
+        "completed": 256,
+        "fold_entries": 138,
+        "valid_fold_entries": 138,
+        "full_releases": 0,
+        "guard_ready_envs": 255
+      },
+      {
+        "seed": 1,
+        "n": 256,
+        "completed": 256,
+        "fold_entries": 124,
+        "valid_fold_entries": 124,
+        "full_releases": 0,
+        "guard_ready_envs": 255
+      },
+      {
+        "seed": 2,
+        "n": 256,
+        "completed": 256,
+        "fold_entries": 137,
+        "valid_fold_entries": 137,
+        "full_releases": 0,
+        "guard_ready_envs": 255
+      }
+    ],
+    "termination_reasons": {
+      "fall": 0,
+      "fold": 298,
+      "fold_held": 296,
+      "hand_far": 0,
+      "nonfinite": 0,
+      "outside_table": 224,
+      "persist": 0,
+      "persist_fail": 0,
+      "press_driven_fold": 4,
+      "released": 0,
+      "timeout": 541
+    },
+    "median_best_fold_error_m": 0.012306460179388523,
+    "by_design": {
+      "single_hinge": {
+        "n": 156,
+        "completed": 156,
+        "fold_entries": 70,
+        "valid_fold_entries": 70,
+        "full_releases": 0,
+        "guard_ready_envs": 154
+      },
+      "strip_4": {
+        "n": 153,
+        "completed": 153,
+        "fold_entries": 88,
+        "valid_fold_entries": 88,
+        "full_releases": 0,
+        "guard_ready_envs": 152
+      },
+      "strip_8": {
+        "n": 153,
+        "completed": 153,
+        "fold_entries": 63,
+        "valid_fold_entries": 63,
+        "full_releases": 0,
+        "guard_ready_envs": 153
+      },
+      "hinge_band": {
+        "n": 153,
+        "completed": 153,
+        "fold_entries": 86,
+        "valid_fold_entries": 86,
+        "full_releases": 0,
+        "guard_ready_envs": 153
+      },
+      "flexible_corners": {
+        "n": 153,
+        "completed": 153,
+        "fold_entries": 92,
+        "valid_fold_entries": 92,
+        "full_releases": 0,
+        "guard_ready_envs": 153
+      }
+    }
+  },
+  "paired": {
+    "both_fold": 233,
+    "yibo_only": 115,
+    "our_offsets_only": 166,
+    "neither": 254
+  }
+}

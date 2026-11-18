@@ -172,11 +172,16 @@ class RigidClothEpisodeGuard:
             maximum_spin.append(torch.where(selected, spin, 0.).amax(1))
         stack = lambda values: torch.stack(values, dim=1)
         table_top = b.table.data.root_pos_w[:, 2]+b._table_half_height
+        # Table colliders use zero rest offset. A positive cloth rest shell
+        # intentionally supports its mid-plane above the visible tabletop.
+        # Preserve actual COM heights for work/GPE, but include that gap when
+        # deciding whether a half has settled flat on its support surface.
+        support_surface = table_top+getattr(b, '_dr_rest_offset', b.cfg.rigid_cloth.rest_offset)
         new = self.history.update(
             source_work=source, height=stack(heights), weight=stack(weights), normal_up=stack(normals),
             minimum_plate_up=stack(minimum_up), maximum_linear_speed=stack(maximum_speed),
             maximum_angular_speed=stack(maximum_spin), table_up=table_up, opposed_load=opposed,
-            inside=inside, table_top=table_top, dimensions=b._dims,
+            inside=inside, table_top=support_surface, dimensions=b._dims,
         )
         self.pressing |= new
 

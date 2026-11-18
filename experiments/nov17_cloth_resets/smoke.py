@@ -21,6 +21,7 @@ def main():
     p.add_argument('--checkpoint', type=Path)
     p.add_argument('--force-outside', action='store_true')
     p.add_argument('--force-curriculum', action='store_true')
+    p.add_argument('--experiment', default='experiments/nov17_cloth_resets/scratch.yaml')
     p.add_argument('--out', type=Path, required=True)
     AppLauncher.add_app_launcher_args(p)
     args = p.parse_args();app = AppLauncher(args).app
@@ -41,7 +42,7 @@ def main():
 
     cfg = ClothCfg.for_backend('rigid')
     cfg.from_dict(yaml.safe_load((ROOT/'isaacsimenvs/scripts/configs/task/RigidBodyCloth.yaml').read_text()))
-    cfg.from_dict(load_experiment('experiments/nov17_cloth_resets/scratch.yaml')['env'])
+    cfg.from_dict(load_experiment(args.experiment)['env'])
     cfg.scene.num_envs, cfg.sim.device, cfg.seed = args.num_envs, args.device, 17
     if args.force_curriculum:
         cfg.sim.enable_scene_query_support = True

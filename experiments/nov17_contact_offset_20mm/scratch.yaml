@@ -1,0 +1,8 @@
+base: base.yaml
+agent:
+  params:
+    load_checkpoint: false
+    load_path: ''
+    checkpoint_load_mode: weights
+    config:
+      name: 0_cloth_contact20mm_scratch_thickness2mm

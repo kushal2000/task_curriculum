@@ -69,3 +69,15 @@ def test_contact_only_profile_preserves_all_modern_mass_gain_draws_and_rng(monke
             torch.testing.assert_close(getattr(a, field), getattr(b, field))
         assert bool(((b.rest >= .004) & (b.rest <= .010)).all())
     randomization.rigid_check(mixed, torch.arange(6))
+
+
+def test_yibo_our_offsets_changes_only_offsets_and_preserves_friction_dispatch():
+    base = _recipe('yibo')
+    changed = merge_config(base, case_overlay('yibo_with_our_offsets'))
+    assert case_preset('yibo_with_our_offsets') == 'yibo'
+    expected = merge_config(base, {'rigid_cloth': {'rest_offset': 0., 'contact_offset': .002,
+                                                  'randomization': {'yibo_rest_offset': [0.,0.]}}})
+    assert changed == expected
+    assert changed['rigid_cloth']['randomization']['profile'] == 'yibo'
+    assert changed['obs'] == base['obs']
+    assert changed['rigid_cloth']['randomization']['yibo_cloth_friction'] == [.7,1.5]

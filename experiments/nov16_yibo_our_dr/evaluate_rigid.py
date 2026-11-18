@@ -46,6 +46,8 @@ CASES = {
         'object_state_xyz_noise_std': .01, 'object_state_rotation_noise_degrees': 5.,
         'joint_velocity_obs_noise_std': .1}},
     'yibo_with_thickness_2mm': {'obs': {'yibo_contact_thickness': .002}},
+    'yibo_with_our_offsets': {'rigid_cloth': {'rest_offset': 0., 'contact_offset': .002,
+        'randomization': {'yibo_rest_offset': [0., 0.]}}},
     'yibo': {},
 }
 
@@ -128,6 +130,10 @@ def main():
     parser.add_argument('--expl_coef', type=float, default=0.)
     parser.add_argument('--stochastic', action='store_true')
     parser.add_argument('--pinned', action='store_true')
+    parser.add_argument('--episode_checks', choices=['recipe','off'], default='recipe',
+                        help='Use recipe checks, or disable both new checks for a matched diagnostic pair')
+    parser.add_argument('--task_yaml', type=Path,
+                        help='Apply task defaults before the recipe; omitted for legacy Nov16 reproduction')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--checkpoint', default=str(ROOT/'pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth'))
     parser.add_argument('--policy_config', default=str(ROOT/'pretrained_policy/flexiv_wuji/config.yaml'))
@@ -145,6 +151,9 @@ def main():
     from isaacsimenvs.scripts.visualization.rigid_cloth.reset import load_training_env_config
 
     cfg = ClothCfg.for_backend('rigid')
+    if args.task_yaml is not None:
+        import yaml
+        cfg.from_dict(yaml.safe_load(args.task_yaml.read_text()))
     preset = args.preset or case_preset(args.case)
     recipe = ROOT / f'isaacsimenvs/scripts/configs/runs/{preset}.yaml'
     cfg.from_dict(merge_config(load_training_env_config(recipe), case_overlay(args.case)))
@@ -153,6 +162,9 @@ def main():
     cfg.scene.num_envs = args.num_envs
     cfg.sim.device = args.device
     cfg.seed = args.seed
+    if args.episode_checks == 'off':
+        cfg.rigid_cloth.episode_checks.outside_table = False
+        cfg.rigid_cloth.episode_checks.press_driven_fold = False
     source = read_policy_cfg(args.policy_config, args.device)
     cfg.action.from_dict(source['env']['action'])
     cfg.obs.keypoint_mode = args.mode or cfg.obs.keypoint_mode
@@ -173,6 +185,8 @@ def main():
             n, dev = env.num_envs, env.device
             completed = torch.zeros(n, dtype=torch.bool, device=dev)
             ever_folded = completed.clone()
+            ever_valid_folded = completed.clone()
+            ever_guard_ready = completed.clone()
             ever_released = completed.clone()
             best_error = torch.full((n,), float('inf'), device=dev)
             best_footprint = best_error.clone()
@@ -188,14 +202,17 @@ def main():
             reasons = {}
             original_evaluate = env.task.evaluate
 
-            def evaluate(state, episode_length, max_episode_length, touching=None, *, robot_clearance=None):
+            def evaluate(state, episode_length, max_episode_length, touching=None, *, robot_clearance=None, **kwargs):
                 result = original_evaluate(state, episode_length, max_episode_length, touching,
-                                           robot_clearance=robot_clearance)
+                                           robot_clearance=robot_clearance, **kwargs)
                 view = env.task.derive(state)
                 live = ~completed
+                ready = kwargs.get('success_allowed')
+                ever_guard_ready[live] |= True if ready is None else ready[live]
                 best_error[live] = torch.minimum(best_error[live], view.fold_error[live])
                 best_footprint[live] = torch.minimum(best_footprint[live], view.footprint[live])
                 ever_folded[live] |= env.task.is_folded(state, view)[live]
+                ever_valid_folded[live] |= env.task._termination_reasons['fold'][live]
                 ever_released[live] |= env.task._released[live]
                 lengths[live] += 1
                 first = live & env.task.is_folded(state, view) & (first_fold_step < 0)
@@ -247,8 +264,20 @@ def main():
                                      ('damping', view.get_dof_dampings()),
                                      ('armature', view.get_dof_armatures()),
                                      ('rest_offsets', view.get_rest_offsets()),
+                                     ('contact_offsets', view.get_contact_offsets()),
                                      ('material', view.get_material_properties())):
                     entry[name] = values[:count].cpu().tolist()
+                rest = view.get_rest_offsets()
+                contact = view.get_contact_offsets()
+                expected_contact = torch.full_like(contact, float(cfg.rigid_cloth.contact_offset))
+                if not torch.allclose(contact, expected_contact, rtol=1e-5, atol=1e-7):
+                    raise RuntimeError('Cloth contact-offset readback does not match requested configuration')
+                if cfg.rigid_cloth.randomization.profile == 'yibo':
+                    expected_rest = env.backend._dr_rest_offset[group.env_ids].cpu()[:, None].expand_as(rest)
+                    if not torch.allclose(rest, expected_rest, rtol=1e-5, atol=1e-7):
+                        raise RuntimeError('Cloth rest-offset readback does not match reset draws')
+                entry['all_rest_offset_range'] = [float(rest.min()),float(rest.max())]
+                entry['all_contact_offset_range'] = [float(contact.min()),float(contact.max())]
                 entry['mass_kg'] = view.get_masses()[:count].sum(dim=1).cpu().tolist()
                 readback['cloth'].append(entry)
             for name, asset in (('robot', env.robot), ('table', env.table)):
@@ -261,6 +290,8 @@ def main():
                 while step < args.max_steps and not bool(completed.all()):
                     action = player.get_action(obs['policy'], deterministic=not args.stochastic)
                     obs, reward, terminated, truncated, extras = env.step(action)
+                    if not bool(torch.isfinite(obs['policy']).all() & torch.isfinite(reward).all()):
+                        raise RuntimeError('Nonfinite policy observations or rewards during evaluation')
                     ended = terminated | truncated
                     if bool(ended.any()):
                         player.reset_rnn(ended.nonzero(as_tuple=True)[0])
@@ -280,6 +311,8 @@ def main():
             count = int(mask.sum())
             return {'n': count, 'completed': int((completed & mask).sum()),
                     'fold_entries': int((ever_folded & mask).sum()),
+                    'valid_fold_entries': int((ever_valid_folded & mask).sum()),
+                    'guard_ready_envs': int((ever_guard_ready & mask).sum()),
                     'full_releases': int((ever_released & mask).sum()),
                     'successes': int(successes[mask].sum()),
                     'min_fold_error_m': float(best_error[mask].min()) if count else None,
@@ -290,6 +323,7 @@ def main():
         result = {'checkpoint': args.checkpoint, 'policy_config': args.policy_config,
                   'case': args.case, 'case_overlay': case_overlay(args.case),
                   'preset': preset, 'observation_mode': mode, 'expl_coef': args.expl_coef,
+                  'episode_checks': args.episode_checks,
                   'stochastic': args.stochastic, 'pinned': args.pinned, 'seed': args.seed,
                   'steps_run': step, 'elapsed_seconds': time.monotonic()-start,
                   'protocol': 'first episode per env; pre-autoreset physical fold/release metrics; robot/actor/materials from resolved recipe',
@@ -302,6 +336,8 @@ def main():
                   'by_design': {group.design.name: summary(torch.isin(torch.arange(n, device=dev), group.env_ids))
                                 for group in env.backend.groups},
                   'per_env': {'completed': completed.tolist(), 'folded': ever_folded.tolist(),
+                              'valid_folded': ever_valid_folded.tolist(),
+                              'guard_ready': ever_guard_ready.tolist(),
                               'released': ever_released.tolist(), 'best_error': best_error.tolist(),
                               'best_footprint': best_footprint.tolist(), 'length': lengths.tolist(),
                               'first_fold_step': first_fold_step.tolist(),
