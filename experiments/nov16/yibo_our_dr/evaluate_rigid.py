@@ -145,9 +145,9 @@ def main():
     import torch
     from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
     from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer, read_policy_cfg
-    from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
-    from isaacsimenvs.scripts.evaluation.contact_guard import capture_fd_output, raise_if_overflowed
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer, read_policy_cfg
+    from isaacsimenvs.scripts.evaluation.utils import disable_randomization
+    from isaacsimenvs.scripts.evaluation.utils import capture_fd_output, raise_if_overflowed
     from isaacsimenvs.scripts.visualization.rigid_cloth.reset import load_training_env_config
 
     cfg = ClothCfg.for_backend('rigid')

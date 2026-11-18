@@ -58,7 +58,7 @@ if [[ -n "${CKPT:-}" ]]; then
   echo "==> Loading ${CKPT} with ${POLICY_CFG:-checkpoints/config.yaml} (CPU)"
   .venv/isaaclab3/bin/python - "$CKPT" "${POLICY_CFG:-checkpoints/config.yaml}" <<'PY'
 import sys, torch
-from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
 p = PretrainedPlayer(sys.argv[2], sys.argv[1], num_envs=2, device="cpu", expl_coef=0.0)
 a = p.get_action(torch.zeros(2, 140))
 print("checkpoint LOADED, action", tuple(a.shape), "finite:", bool(torch.isfinite(a).all()))

@@ -63,7 +63,7 @@ def build_config(args):
 
     compat.install_isaaclab3_compat()
     from isaacsimenvs.tasks.cloth.backends.vbd.config import DeformableClothEnvCfg
-    from isaacsimenvs.scripts.evaluation.player import read_policy_cfg
+    from isaacsimenvs.scripts.evaluation.utils import read_policy_cfg
     from isaacsimenvs.scripts.visualization.rigid_cloth.policy import validate_policy_config
 
     saved = read_policy_cfg(args.policy_config, args.device)
@@ -135,7 +135,7 @@ class Playback:
 
     def __init__(self, args, cfg):
         from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
-        from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+        from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
 
         self.env = self.player = None
         self.episodes = self.folds = 0

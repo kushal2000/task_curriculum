@@ -1,6 +1,6 @@
 """Mean goals per episode, sampled one episode per environment.
 
-    python isaacsimenvs/scripts/evaluation/eval.py --task Isaacsimenvs-Play-Direct-v0 --num_envs 64
+    python isaacsimenvs/scripts/evaluation/eval_play.py --task Isaacsimenvs-Play-Direct-v0 --num_envs 64
 
 The metric is the number of sequential goals a policy reaches in one episode. The episode is the
 honest unit here because the deadline **resets on every goal hit**
@@ -27,12 +27,13 @@ import statistics
 import sys
 from pathlib import Path
 
-from isaacsimenvs.scripts.evaluation.contact_guard import (
+from isaacsimenvs.scripts.evaluation.utils import (
     assert_no_buffer_overflow,
     capture_fd_output,
+    disable_randomization,
     raise_if_overflowed,
+    use_single_object_variant,
 )
-from isaacsimenvs.scripts.evaluation.protocol import disable_randomization, use_single_object_variant
 
 #: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums. Both this
 #: module and its sibling print the identical line, so a render that disagrees with an evaluation
@@ -118,7 +119,7 @@ def main() -> None:
         default=50.0,
         help="SAPG block conditioning appended to the observation. 50.0 = block 0 (the released "
         "checkpoint's value), 0.0 = the last block, trained on task reward alone. See "
-        "SAPG_EXPL_COEF in eval/player.py.",
+        "SAPG_EXPL_COEF in evaluation/utils.py.",
     )
     parser.add_argument(
         "--success_tolerance",
@@ -184,7 +185,7 @@ def main() -> None:
     import torch
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
     from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
 
     @hydra_task_config_with_yaml(args_cli.task, "")

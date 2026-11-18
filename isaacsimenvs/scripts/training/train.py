@@ -219,7 +219,7 @@ def main() -> None:
     # ask: AppLauncher raises ImportError precisely when the runtime is absent. Only that specific
     # failure is tolerated -- if Isaac Sim IS installed, any launch error is real and propagates,
     # because silently falling back would train against a different asset pipeline than intended.
-    # Mirrors `isaacsimenvs/scripts/evaluation/eval.py:149`.
+    # Mirrors the same fallback in `isaacsimenvs/scripts/evaluation/eval_play.py`.
     try:
         app = AppLauncher(args_cli).app
     except ImportError as exc:
@@ -269,7 +269,7 @@ def main() -> None:
         # was hit once already in the throughput benchmark (docs/phase4_cable_env.md:664).
         import torch
 
-        from isaacsimenvs.scripts.evaluation.protocol import disable_randomization, use_single_object_variant
+        from isaacsimenvs.scripts.evaluation.utils import disable_randomization, use_single_object_variant
 
         if args_cli.single_variant:
             use_single_object_variant()

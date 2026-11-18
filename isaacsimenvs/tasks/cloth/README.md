@@ -205,7 +205,7 @@ and the current real-limits hand with identified dynamics. See
 training table dimensions, limits, and evaluation controls.
 
 Newton compatibility belongs to [backends/vbd/newton_support/](backends/vbd/newton_support/).
-Evaluation overflow reporting lives in `isaacsimenvs/scripts/evaluation/contact_guard.py`.
+Evaluation overflow reporting lives in `isaacsimenvs/scripts/evaluation/utils.py`.
 Prepare the default VBD robot/table cache under Isaac Sim with:
 
 ```sh

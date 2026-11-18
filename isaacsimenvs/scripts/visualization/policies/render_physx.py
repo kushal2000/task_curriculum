@@ -5,7 +5,7 @@
         --checkpoint <run>/nn/<name>.pth --out clip.mp4
 
 Kit renders the env's viewport camera (``env_cfg.viewer``, placed relative to the filmed env's
-origin) via ``render_mode="rgb_array"``. The rollout matches ``isaacsimenvs/scripts/evaluation/eval.py``: DR off
+origin) via ``render_mode="rgb_array"``. The rollout matches ``isaacsimenvs/scripts/evaluation/eval_play.py``: DR off
 (``disable_randomization``), deterministic actions, the given SAPG block. ``--stop_on_episode_end``
 ends the clip when the filmed env's first episode ends and writes ``<out>.json`` with its outcome.
 """
@@ -18,7 +18,7 @@ import os
 import sys
 from pathlib import Path
 
-from isaacsimenvs.scripts.evaluation.protocol import disable_randomization, use_single_object_variant
+from isaacsimenvs.scripts.evaluation.utils import disable_randomization, use_single_object_variant
 from isaacsimenvs import PRETRAINED_CONFIG
 
 
@@ -43,7 +43,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--policy_config", default=str(PRETRAINED_CONFIG))
     parser.add_argument("--sapg_expl_coef", type=float, default=0.0,
-                        help="SAPG block conditioning: 0.0 = last block (eval.py's fabric protocol).")
+                        help="SAPG block conditioning: 0.0 = last block (eval_play.py's fabric protocol).")
     parser.add_argument("--success_tolerance", type=float, default=0.01)
     parser.add_argument("--single_variant", action="store_true")
     parser.add_argument("--stop_on_episode_end", action="store_true")
@@ -61,7 +61,7 @@ def main() -> None:
     import torch
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
     from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
 
     # The agent entry point is needed only so an experiment YAML's agent: block has a config to merge into.

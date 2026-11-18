@@ -51,7 +51,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from isaacsimenvs.scripts.evaluation.protocol import disable_randomization, use_single_object_variant
+from isaacsimenvs.scripts.evaluation.utils import disable_randomization, use_single_object_variant
 
 from isaacsimenvs import REPO_ROOT as ROOT
 
@@ -149,7 +149,7 @@ _UNIT = {"hinge_stiffness": 1e-4, "contact_margin_offset": 1e-3}
 
 OUTCOMES = ("fold_held", "fold", "fall", "hand_far", "nonfinite", "timeout")
 #: Under ``cloth.release_persist`` a fold only scores once it survives the hand leaving, as in
-#: training and ``isaacsimenvs/scripts/evaluation/eval.py``; a fold still held with the hand on at the timeout is
+#: training and ``isaacsimenvs/scripts/evaluation/eval_play.py``; a fold still held with the hand on at the timeout is
 #: "fold_hand_on", NOT a success.
 RELEASE_OUTCOMES = ("persist", "persist_fail")
 
@@ -425,7 +425,7 @@ def main() -> None:
     import viser
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
     from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
 
     server = viser.ViserServer(host="0.0.0.0", port=args.port)

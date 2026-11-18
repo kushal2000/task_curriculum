@@ -575,7 +575,7 @@ def main() -> None:
                 )
 
         def selected_scene():
-            from isaacsimenvs.scripts.evaluation.player import read_policy_cfg
+            from isaacsimenvs.scripts.evaluation.utils import read_policy_cfg
             from isaacsimenvs.scripts.visualization.rigid_cloth.policy import robot_profile, table_position
             from isaacsimenvs.tasks.cloth.backends.assets import urdf_box_size
             profile = setup_labels[robot_setup.value]

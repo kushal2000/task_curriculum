@@ -30,7 +30,7 @@ def main():
     from isaacsimenvs.scripts.configs.loader import load_experiment
     from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
     from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
 
     for name in ('prior','scratch','prior_no_curriculum','scratch_no_curriculum'):
         recipe = load_experiment(f'experiments/nov17/cloth_resets/{name}.yaml')

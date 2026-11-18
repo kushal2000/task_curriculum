@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 @contextmanager
 def capture_audit_output():
-    from isaacsimenvs.scripts.evaluation.contact_guard import capture_fd_output
+    from isaacsimenvs.scripts.evaluation.utils import capture_fd_output
 
     with capture_fd_output() as read:
         try:
@@ -60,8 +60,8 @@ def main():
     from isaacsimenvs.tasks.cloth.backends.assets import urdf_box_size
     from isaacsimenvs.tasks.cloth.backends.rigid.designs import extrusion_mesh
     from isaacsimenvs.tasks.cloth.mdp.geometry import rotations
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
-    from isaacsimenvs.scripts.evaluation.contact_guard import raise_if_overflowed
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import raise_if_overflowed
     from experiments.nov17.pressing_audit.contacts import enable_contact_reporting, RigidClothContacts
     from experiments.nov17.pressing_audit.work_contacts import friction_records, material_metadata, mechanical_state
 

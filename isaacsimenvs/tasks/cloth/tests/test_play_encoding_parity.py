@@ -53,7 +53,7 @@ def _world(points, orientation, translation, math2):
 
 
 def _case(angle_deg, robot_root, explicit, math2):
-    from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
+    from isaacsimenvs.scripts.evaluation.utils import disable_randomization
     from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
 
     torch.manual_seed(871)

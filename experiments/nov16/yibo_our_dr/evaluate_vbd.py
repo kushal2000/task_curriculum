@@ -46,7 +46,7 @@ def build_config(args, material):
     from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
     compat.install_isaaclab3_compat()
     from isaacsimenvs import CONFIG_DIR
-    from isaacsimenvs.scripts.evaluation.player import read_policy_cfg
+    from isaacsimenvs.scripts.evaluation.utils import read_policy_cfg
     from isaacsimenvs.tasks.cloth.backends.vbd.config import DeformableClothEnvCfg
     from isaacsimenvs.tasks.cloth.backends.vbd import fabrics
     import yaml
@@ -119,8 +119,8 @@ def write_json(path, value):
 
 def evaluate(args):
     import torch
-    from isaacsimenvs.scripts.evaluation.contact_guard import capture_fd_output, raise_if_overflowed
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import capture_fd_output, raise_if_overflowed
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
     from isaacsimenvs.tasks.cloth.backends.vbd import fabrics
 
     started = time.perf_counter()

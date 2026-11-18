@@ -27,7 +27,7 @@ def load_network(checkpoint: Path, config: Path, expl_coef: float, num_actions: 
     Use: net.get_action(obs (1, 134) tensor, deterministic=True) -> (1, 27) actions in [-1, 1], once
     per step, in order (the LSTM remembers past steps); net.reset_rnn() clears that memory.
 
-    Built through the training repo's isaacsimenvs/eval/player.py (rl_games reads
+    Built through the training repo's isaacsimenvs/scripts/evaluation/utils.py (rl_games reads
     pretrained_policy/flexiv_wuji/config.yaml). SAPG trains several policy "blocks" that differ only in one extra
     input, the exploration coefficient; expl_coef 0.0 is the one trained on the task reward only.
     """

@@ -26,7 +26,7 @@ import os
 import sys
 from pathlib import Path
 
-from isaacsimenvs.scripts.evaluation.protocol import disable_randomization, use_single_object_variant
+from isaacsimenvs.scripts.evaluation.utils import disable_randomization, use_single_object_variant
 from isaacsimenvs import PRETRAINED_CHECKPOINT, PRETRAINED_CONFIG
 from isaacsimenvs.scripts.output import default_video_path
 
@@ -576,7 +576,7 @@ def main() -> None:
     parser.add_argument("--policy_config", default=str(PRETRAINED_CONFIG))
     parser.add_argument(
         "--sapg_expl_coef", type=float, default=50.0,
-        help="SAPG block conditioning: 50.0 = block 0, 0.0 = last block. See eval/player.py.",
+        help="SAPG block conditioning: 50.0 = block 0, 0.0 = last block. See evaluation/utils.py.",
     )
     parser.add_argument("--success_tolerance", type=float, default=0.01)
     parser.add_argument(
@@ -659,7 +659,7 @@ def main() -> None:
     import warp as wp
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
     from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
 
     @hydra_task_config_with_yaml(args.task, "")

@@ -329,7 +329,7 @@ class Diagnostics:
 def run(args, matrix):
     import torch
     from experiments.nov16.yibo_our_dr.evaluate_vbd import write_json
-    from isaacsimenvs.scripts.evaluation.contact_guard import capture_fd_output, raise_if_overflowed
+    from isaacsimenvs.scripts.evaluation.utils import capture_fd_output, raise_if_overflowed
 
     cfg, protocol = configuration(args,matrix)
     from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv

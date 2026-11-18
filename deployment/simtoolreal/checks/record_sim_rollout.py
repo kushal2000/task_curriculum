@@ -57,8 +57,8 @@ def main() -> None:
     import torch
 
     import isaacsimenvs  # noqa: F401
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
-    from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import disable_randomization
     from isaacsimenvs.tasks.play.utils.object_size_distributions import OBJECT_SIZE_DISTRIBUTIONS
     from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
 

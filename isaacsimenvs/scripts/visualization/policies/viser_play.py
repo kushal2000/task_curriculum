@@ -197,8 +197,8 @@ def main() -> None:
     from viser.extras import ViserUrdf
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
-    from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import disable_randomization
     from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
 
     sys.argv = [sys.argv[0]]

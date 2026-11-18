@@ -4,7 +4,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
+from isaacsimenvs.scripts.evaluation.utils import disable_randomization
 
 
 @pytest.mark.parametrize("kind", ["play", "rigid", "vbd"])

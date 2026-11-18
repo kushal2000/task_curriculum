@@ -2,7 +2,7 @@
 # Evaluate a checkpoint: experiments/submit.sh [sbatch options] experiments/eval.sh \
 #     --experiment_dir experiments/<day> --task <id> --checkpoint <run>/nn/<name>.pth [episodes.py args]
 #
-# Runs isaacsimenvs/scripts/evaluation/eval.py. The JSON and this job's Slurm log go to
+# Runs isaacsimenvs/scripts/evaluation/eval_play.py. The JSON and this job's Slurm log go to
 # <experiment_dir>/results/<job name>_<job id>.json and slurm_<job id>.out (or pass --out yourself).
 #
 #SBATCH --job-name=eval
@@ -31,7 +31,7 @@ fi
 [[ -n "$EXP_DIR" ]] && adopt_log "$EXP_DIR/results"
 
 gpu_log_start
-"${PY[@]}" isaacsimenvs/scripts/evaluation/eval.py "${HEADLESS[@]}" "${ARGS[@]}"
+"${PY[@]}" isaacsimenvs/scripts/evaluation/eval_play.py "${HEADLESS[@]}" "${ARGS[@]}"
 RC=$?
 gpu_log_stop
 exit $RC

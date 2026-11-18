@@ -57,7 +57,7 @@ def main():
     cfg=build_config(args,'base')
     from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
     from isaacsimenvs.tasks.cloth.backends.base import as_torch
-    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer
     from isaaclab_newton.physics import NewtonManager
     from deployment.utils import robot_model
     oldspec,adapter,oldobs,goal=load_oracles()

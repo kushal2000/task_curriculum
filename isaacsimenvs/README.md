@@ -10,8 +10,8 @@ IDs without starting a simulator.
 | `tasks/play/` | Existing rigid-object manipulation task and its robot variants |
 | `scripts/` | Run entry points, visualization tools, and YAML configurations |
 
-The policy runs outside the environments. `scripts/evaluation/player.py` loads checkpoint
-policies and `scripts/evaluation/protocol.py` sets shared evaluation conditions;
+The policy runs outside the environments. `scripts/evaluation/utils.py` loads checkpoint
+policies and sets shared evaluation conditions;
 the training scripts use rl_games. Environment observations and action
 semantics define their interface, so physics choices stay inside the task package.
 

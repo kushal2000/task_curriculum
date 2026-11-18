@@ -72,7 +72,7 @@ def build_policy_env_cfg(settings, saved: dict, profile: str, device: str, train
     """Pin geometry and noise while retaining checkpoint observation/action scaling."""
     from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
     from isaacsimenvs.tasks.cloth.backends.assets import urdf_box_size
-    from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
+    from isaacsimenvs.scripts.evaluation.utils import disable_randomization
 
     validate_policy_config(saved)
     spec, robot_urdf, table_urdf, root = robot_profile(profile)
@@ -139,7 +139,7 @@ class PolicyPhysics:
         from isaaclab.sim.utils import create_new_stage
         from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
         from isaacsimenvs.tasks.cloth.backends.assets import urdf_box_size
-        from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer, read_policy_cfg
+        from isaacsimenvs.scripts.evaluation.utils import PretrainedPlayer, read_policy_cfg
 
         self.env = self.sim = self.cloth = None
         self.player = None
