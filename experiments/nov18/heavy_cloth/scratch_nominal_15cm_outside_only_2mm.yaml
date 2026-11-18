@@ -1,0 +1,9 @@
+# Identical to prior_nominal_15cm_outside_only_2mm.yaml except trained from scratch (no prior weights).
+base: prior_nominal_15cm_outside_only_2mm.yaml
+agent:
+  params:
+    load_checkpoint: false
+    load_path: ''
+    checkpoint_load_mode: weights
+    config:
+      name: 0_cloth_heavy_scratch_nominal_15cm_outside_only_2mm
