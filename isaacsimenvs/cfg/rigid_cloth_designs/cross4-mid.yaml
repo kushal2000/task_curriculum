@@ -1,0 +1,29 @@
+# cross4-mid: cross fold (4 quadrants, 1 seam)
+#
+# Cross fold -- quadrants, creases along both axes. The fourth hinge (q3|q4, along -y of the
+# vertical crease) is a SEAM, so the sheet folds along one full line at a time. Rooted on the -x
+# side so the half fold is the stage-1 one: +x over onto -x.
+#
+# Coordinates are in units of L = size / 2 (the sheet frame is [-1, 1]^2, +z up); fold angles in
+# degrees, +180 = a full fold up and over onto the parent. Schema: fold_shapes.load_design.
+name: cross4-mid
+label: cross fold (4 quadrants, 1 seam)
+size: 0.1
+thickness: 0.002
+hinge: mid
+plates:  # first = root (the stationary piece); CCW polygons
+  q2: [[-1, 0], [0, 0], [0, 1], [-1, 1]]
+  q1: [[0, 0], [1, 0], [1, 1], [0, 1]]
+  q3: [[-1, -1], [0, -1], [0, 0], [-1, 0]]
+  q4: [[0, -1], [1, -1], [1, 0], [0, 0]]
+hinges:  # child: [parent, line start, line end]
+  q1: [q2, [0, 0], [0, 1]]
+  q3: [q2, [-1, 0], [0, 0]]
+  q4: [q1, [0, 0], [1, 0]]
+seams:  # loop closures: [plate, plate, line start, line end]
+  - [q4, q3, [0, -1], [0, 0]]
+folds:  # name: [stage, ...]; a stage turns its hinges together
+  "half: right over left": [{q1: 180}]
+  "half: bottom up": [{q3: 180, q4: 180}]
+  "quarter (bottom up, then right over)": [{q3: 180, q4: 180}, {q1: 180}]
+grasp: {plate: q4, xy: [1, -1], inset: [-1, 1]}  # viewer pinch point: xy * L + inset * 6 mm

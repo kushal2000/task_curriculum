@@ -224,3 +224,15 @@ def test_start_pose_counts(pool):
         "corners8-mid": 19, "box4-mid": 3, "star8-mid": 3,
     }
     assert "half: bottom up + corner sw" not in pool["corners8-mid"].start_poses()
+
+
+def test_the_designs_are_the_seven_flat7_shapes(fold_shapes):
+    """One YAML per pool shape, named after its file; every flat7 recipe shape is there."""
+    paths = sorted(fold_shapes.DESIGN_DIR.glob("*.yaml"))
+    assert {p.stem for p in paths} == set(fold_shapes.POOL)
+    assert set(fold_shapes.POOL) == {
+        "box2-mid", "box2diag4-mid", "box2x8-mid", "cross4-mid", "corners8-mid", "box4-mid", "star8-mid",
+    }
+    for p in paths:
+        assert p.with_suffix(".png").exists(), f"{p.name}: render its diagram (render_fold_designs.py)"
+    assert set(fold_shapes.DEFAULT_SHAPES) <= set(fold_shapes.POOL)

@@ -1,0 +1,44 @@
+# box2x8-mid: half fold + both diagonals in each half (8 triangles, 2 seams)
+#
+# As box2diag4 with BOTH diagonals in each half: an X per half, 8 triangles. Each X is a
+# 4-crease vertex at the half's centre, i.e. a loop -- one seam per half -- so a half folds along
+# one of its diagonals at a time, never both. "A" is box2diag4's diagonal (the V through (0, -L)),
+# "B" the other one (a Lambda through (0, L)); each pair mirrors across the centre crease, so after
+# the half fold either can fold through both layers (the right half then turns -180).
+#
+# Coordinates are in units of L = size / 2 (the sheet frame is [-1, 1]^2, +z up); fold angles in
+# degrees, +180 = a full fold up and over onto the parent. Schema: fold_shapes.load_design.
+name: box2x8-mid
+label: half fold + both diagonals in each half (8 triangles, 2 seams)
+size: 0.1
+thickness: 0.002
+hinge: mid
+plates:  # first = root (the stationary piece); CCW polygons
+  l_r: [[0, -1], [0, 1], [-0.5, 0]]
+  l_t: [[0, 1], [-1, 1], [-0.5, 0]]
+  l_b: [[-1, -1], [0, -1], [-0.5, 0]]
+  l_l: [[-1, 1], [-1, -1], [-0.5, 0]]
+  r_l: [[0, 1], [0, -1], [0.5, 0]]
+  r_b: [[0, -1], [1, -1], [0.5, 0]]
+  r_t: [[1, 1], [0, 1], [0.5, 0]]
+  r_r: [[1, -1], [1, 1], [0.5, 0]]
+hinges:  # child: [parent, line start, line end]
+  l_t: [l_r, [-0.5, 0], [0, 1]]
+  l_b: [l_r, [0, -1], [-0.5, 0]]
+  l_l: [l_t, [-1, 1], [-0.5, 0]]
+  r_l: [l_r, [0, -1], [0, 1]]
+  r_b: [r_l, [0, -1], [0.5, 0]]
+  r_t: [r_l, [0, 1], [0.5, 0]]
+  r_r: [r_t, [0.5, 0], [1, 1]]
+seams:  # loop closures: [plate, plate, line start, line end]
+  - [l_l, l_b, [-1, -1], [-0.5, 0]]
+  - [r_r, r_b, [1, -1], [0.5, 0]]
+folds:  # name: [stage, ...]; a stage turns its hinges together
+  "half: right over left": [{r_l: 180}]
+  "left diagonal A": [{l_b: 180, l_l: 180}]
+  "left diagonal B": [{l_t: 180}]
+  "right diagonal A": [{r_b: 180, r_r: 180}]
+  "right diagonal B": [{r_t: 180}]
+  "half, then diagonal A (both layers)": [{r_l: 180}, {l_b: 180, l_l: 180, r_b: -180, r_r: -180}]
+  "half, then diagonal B (both layers)": [{r_l: 180}, {l_t: 180, r_t: -180}]
+grasp: {plate: r_r, xy: [1, 0], inset: [-1, 0]}  # viewer pinch point: xy * L + inset * 6 mm

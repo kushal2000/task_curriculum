@@ -1,0 +1,44 @@
+# corners8-mid: corners + cross (4 diamond quarters + 4 corners, 1 seam)
+#
+# Corners + cross -- the corner ("blintz") fold with the centre diamond split by the cross into
+# four triangles, so the sheet ALSO half-folds along either axis. The diamond's quarters form the
+# same loop as cross4 (one seam); each corner triangle hangs off its own quarter. Corners touch
+# the creases only at points, so every half fold carries them along whole.
+#
+# Coordinates are in units of L = size / 2 (the sheet frame is [-1, 1]^2, +z up); fold angles in
+# degrees, +180 = a full fold up and over onto the parent. Schema: fold_shapes.load_design.
+name: corners8-mid
+label: corners + cross (4 diamond quarters + 4 corners, 1 seam)
+size: 0.1
+thickness: 0.002
+hinge: mid
+plates:  # first = root (the stationary piece); CCW polygons
+  c_nw: [[0, 0], [0, 1], [-1, 0]]
+  c_ne: [[0, 0], [1, 0], [0, 1]]
+  c_sw: [[0, 0], [-1, 0], [0, -1]]
+  c_se: [[0, 0], [0, -1], [1, 0]]
+  ne:   [[1, 0], [1, 1], [0, 1]]
+  nw:   [[0, 1], [-1, 1], [-1, 0]]
+  sw:   [[-1, 0], [-1, -1], [0, -1]]
+  se:   [[0, -1], [1, -1], [1, 0]]
+hinges:  # child: [parent, line start, line end]
+  c_ne: [c_nw, [0, 0], [0, 1]]
+  c_sw: [c_nw, [-1, 0], [0, 0]]
+  c_se: [c_ne, [0, 0], [1, 0]]
+  ne:   [c_ne, [0, 1], [1, 0]]
+  nw:   [c_nw, [-1, 0], [0, 1]]
+  sw:   [c_sw, [0, -1], [-1, 0]]
+  se:   [c_se, [1, 0], [0, -1]]
+seams:  # loop closures: [plate, plate, line start, line end]
+  - [c_se, c_sw, [0, -1], [0, 0]]
+folds:  # name: [stage, ...]; a stage turns its hinges together
+  "half: right over left": [{c_ne: 180}]
+  "half: bottom up": [{c_sw: 180, c_se: 180}]
+  "quarter (bottom up, then right over)": [{c_sw: 180, c_se: 180}, {c_ne: 180}]
+  "corner ne": [{ne: 180}]
+  "corner nw": [{nw: 180}]
+  "corner sw": [{sw: 180}]
+  "corner se": [{se: 180}]
+  "all four corners": [{ne: 180, nw: 180, sw: 180, se: 180}]
+  "corners in, then half": [{ne: 180, nw: 180, sw: 180, se: 180}, {c_ne: 180}]
+grasp: {plate: ne, xy: [1, 1], inset: [-1, -1]}  # viewer pinch point: xy * L + inset * 6 mm

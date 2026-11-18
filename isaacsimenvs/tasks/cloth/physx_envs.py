@@ -775,7 +775,7 @@ class FoldPoolPhysxEnv(FoldPoolTaskMixin, RigidClothPhysxEnv):
     def _pool_spawn(self, s: int, shape, usd_dir: Path, park_local):
         """Write one USD per distinct (size, slab) of shape ``s`` and point each env's prim at its own.
 
-        Exact physics at every size: ``fold_shapes.make_pool(size, thickness)`` is the shape itself at
+        Exact physics at every size: ``fold_shapes.sized(name, size, thickness)`` is the shape itself at
         that size, so mass, inertia, hinge and seam anchors all come out of the same construction as
         the nominal sheet. Returns ``None``: the prims exist, nothing is left for a spawner to do.
         """
@@ -790,7 +790,7 @@ class FoldPoolPhysxEnv(FoldPoolTaskMixin, RigidClothPhysxEnv):
         )
         usd_of = {}
         for size, slab in keys:
-            sized = fs.make_pool(size=float(size), thickness=float(slab), hinge=shape.hinge)[shape.name]
+            sized = fs.sized(shape.name, float(size), float(slab))
             path = usd_dir / f"{shape.name}_{size * 1e3:.2f}mm_{slab * 1e3:.2f}mm.usda"
             fsa.write_shape_usd(sized, path, density=r.density)
             prepare_collider_asset(

@@ -1,0 +1,35 @@
+# box2diag4-mid: half fold + diagonal crease in each half (4 triangles)
+#
+# Half fold + a diagonal crease in each half. The two diagonals mirror each other across the
+# centre crease (a "V" meeting at (0, -L)), so after the half fold they lie on one line and the
+# two-layer stack can fold along it. All three creases meet on the sheet's EDGE, so there is no
+# loop: a chain l_out - l_in - r_in - r_out.
+# "half, then diagonal": r_out lies UPSIDE DOWN on the stack after the half fold, so it turns -180
+# to move WITH l_out. NOT offered: "diagonals in, then half" -- a 50 x 100 mm half is not a square,
+# so its diagonal fold overhangs the centre crease by 0.6 L and the half fold would swing that
+# overhang down through the table.
+#
+# Coordinates are in units of L = size / 2 (the sheet frame is [-1, 1]^2, +z up); fold angles in
+# degrees, +180 = a full fold up and over onto the parent. Schema: fold_shapes.load_design.
+name: box2diag4-mid
+label: half fold + diagonal crease in each half (4 triangles)
+size: 0.1
+thickness: 0.002
+hinge: mid
+plates:  # first = root (the stationary piece); CCW polygons
+  l_in:  [[0, -1], [0, 1], [-1, 1]]
+  l_out: [[-1, -1], [0, -1], [-1, 1]]
+  r_in:  [[0, -1], [1, 1], [0, 1]]
+  r_out: [[0, -1], [1, -1], [1, 1]]
+hinges:  # child: [parent, line start, line end]
+  l_out: [l_in, [0, -1], [-1, 1]]
+  r_in:  [l_in, [0, -1], [0, 1]]
+  r_out: [r_in, [0, -1], [1, 1]]
+seams: []
+folds:  # name: [stage, ...]; a stage turns its hinges together
+  "half: right over left": [{r_in: 180}]
+  "left diagonal": [{l_out: 180}]
+  "right diagonal": [{r_out: 180}]
+  "both diagonals": [{l_out: 180, r_out: 180}]
+  "half, then diagonal (both layers)": [{r_in: 180}, {l_out: 180, r_out: -180}]
+grasp: {plate: r_out, xy: [1, -1], inset: [-1, 2]}  # viewer pinch point: xy * L + inset * 6 mm

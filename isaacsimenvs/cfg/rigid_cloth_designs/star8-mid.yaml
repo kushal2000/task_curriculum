@@ -1,0 +1,40 @@
+# star8-mid: plus + X creases (8 triangles, 1 seam)
+#
+# Plus + X -- creases along both axes AND both diagonals, eight triangles round the centre.
+# Wedge w<k> spans k*45 .. (k+1)*45 degrees. One degree-8 vertex = one loop: a chain round the
+# centre from the root w2 (-x side of the vertical crease), seam at the vertical crease's lower
+# half as in cross4. Each of the four full lines folds on its own.
+#
+# Coordinates are in units of L = size / 2 (the sheet frame is [-1, 1]^2, +z up); fold angles in
+# degrees, +180 = a full fold up and over onto the parent. Schema: fold_shapes.load_design.
+name: star8-mid
+label: plus + X creases (8 triangles, 1 seam)
+size: 0.1
+thickness: 0.002
+hinge: mid
+plates:  # first = root (the stationary piece); CCW polygons
+  w2: [[0, 0], [0, 1], [-1, 1]]
+  w0: [[0, 0], [1, 0], [1, 1]]
+  w1: [[0, 0], [1, 1], [0, 1]]
+  w3: [[0, 0], [-1, 1], [-1, 0]]
+  w4: [[0, 0], [-1, 0], [-1, -1]]
+  w5: [[0, 0], [-1, -1], [0, -1]]
+  w6: [[0, 0], [0, -1], [1, -1]]
+  w7: [[0, 0], [1, -1], [1, 0]]
+hinges:  # child: [parent, line start, line end]
+  w1: [w2, [0, 0], [0, 1]]
+  w0: [w1, [0, 0], [1, 1]]
+  w7: [w0, [0, 0], [1, 0]]
+  w6: [w7, [0, 0], [1, -1]]
+  w3: [w2, [0, 0], [-1, 1]]
+  w4: [w3, [0, 0], [-1, 0]]
+  w5: [w4, [0, 0], [-1, -1]]
+seams:  # loop closures: [plate, plate, line start, line end]
+  - [w6, w5, [0, -1], [0, 0]]
+folds:  # name: [stage, ...]; a stage turns its hinges together
+  "half: right over left": [{w1: 180}]
+  "half: bottom up": [{w4: 180, w7: 180}]
+  "diagonal: lower right over upper left": [{w0: 180, w5: 180}]
+  "diagonal: lower left over upper right": [{w3: 180, w6: 180}]
+  "quarter (bottom up, then right over)": [{w4: 180, w7: 180}, {w1: 180}]
+grasp: {plate: w0, xy: [1, 0.5], inset: [-1, 0]}  # viewer pinch point: xy * L + inset * 6 mm

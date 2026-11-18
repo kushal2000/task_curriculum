@@ -29,9 +29,8 @@ Without it the sheet has a slit along that line and its halves fold independentl
 four-crease vertex has the rigid-origami behaviour of a real map fold: it folds along ONE line at a
 time (horizontal OR vertical), and a fully folded sheet can then fold along the other.
 
-URDF cannot express a seam, and ``RigidClothEnv`` loads its chain from URDF, so ``box2x8``, ``star8``,
-``cross4`` and ``corners8`` need a different import path before they can enter the env. ``box2``,
-``box2diag4`` and ``box4`` are trees.
+The shapes are YAML designs in ``cfg/rigid_cloth_designs/`` (schema: ``load_design``), each with a
+PNG diagram beside it (``scripts/visualization/render_fold_designs.py``).
 
 **Every shape can do the stage-1 half fold** (``+x`` half over onto ``-x``, root on the ``-x``
 side); that is the membership rule for the pool. Shapes that only fold some other way (a diagonal,
@@ -48,8 +47,10 @@ import itertools
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
+import yaml
 
 __all__ = [
     "Plate",
@@ -59,7 +60,10 @@ __all__ = [
     "HALF_FOLD",
     "grid_plate_map",
     "plate_mass_properties",
-    "make_pool",
+    "DESIGN_DIR",
+    "load_design",
+    "load_pool",
+    "sized",
     "POOL",
     "DEFAULT_SHAPES",
     "shape",
@@ -434,252 +438,71 @@ def _rodrigues(u: np.ndarray, theta: float) -> np.ndarray:
 
 # ------------------------------------------------------------------------------------- the pool
 
-PI = math.pi
+#: The pool's designs, one YAML per shape (schema: ``load_design``).
+DESIGN_DIR = Path(__file__).resolve().parents[3] / "cfg" / "rigid_cloth_designs"
+#: Grasp-point inset unit [m]: a fingertip pinches this far inside a corner.
+GRASP_INSET = 0.006
 
 
-def make_pool(size: float = 0.10, thickness: float = 0.002, hinge: str = "mid") -> dict:
-    """The stage-2 shapes, keyed ``<shape><plates>-<hinge>``."""
-    L = size / 2.0
-    kw = {"size": size, "thickness": thickness, "hinge": hinge}
-    sfx = f"-{hinge}"
-    inset = 0.006  # grasp points sit this far inside a corner, where a fingertip would pinch
+def load_design(path: str | Path, size: float | None = None, thickness: float | None = None) -> FoldShape:
+    """A ``FoldShape`` from its YAML design, optionally at another ``size`` / ``thickness``.
+
+    Coordinates are in units of ``L = size / 2``; fold angles in degrees. ``plates`` and ``hinges`` are
+    mappings (first plate = root; a hinge is keyed by its child: ``[parent, a, b]``), ``seams`` a list of
+    ``[plate1, plate2, a, b]``, ``folds`` a mapping of name -> list of stages ``{hinge child: deg}``,
+    ``grasp`` ``{plate, xy, inset}`` = ``xy * L + inset * GRASP_INSET``. Mapping order is kept: the
+    plate order is the articulation's body order and the fold order names the folded starts.
+    """
+    d = yaml.safe_load(Path(path).read_text())
+    if size is not None:
+        d["size"] = size
+    if thickness is not None:
+        d["thickness"] = thickness
+    L = float(d["size"]) / 2.0
+
+    def pt(v) -> Point:
+        return (v[0] * L, v[1] * L)
+
+    g = d.get("grasp")
+    return FoldShape(
+        name=d["name"],
+        label=d["label"],
+        plates=tuple(Plate(k, tuple(pt(v) for v in poly)) for k, poly in d["plates"].items()),
+        hinges=tuple(Hinge(child, parent, pt(a), pt(b)) for child, (parent, a, b) in d["hinges"].items()),
+        seams=tuple(Seam(p1, p2, pt(a), pt(b)) for p1, p2, a, b in d.get("seams") or ()),
+        folds={name: tuple({k: math.radians(v) for k, v in st.items()} for st in stages)
+               for name, stages in d["folds"].items()},
+        size=float(d["size"]),
+        thickness=float(d["thickness"]),
+        hinge=d["hinge"],
+        grasp=None if g is None else (
+            g["plate"],
+            tuple(x * L + k * GRASP_INSET for x, k in zip(g["xy"], g.get("inset", (0, 0))))),
+    )
+
+
+def load_pool(design_dir: str | Path = DESIGN_DIR) -> dict[str, FoldShape]:
+    """Every design in ``design_dir``, keyed by name."""
     out = {}
-
-    # 1. Half fold -- the stage-1 task. +x half over onto -x.
-    out["box2" + sfx] = FoldShape(
-        name="box2" + sfx,
-        label="half fold (2 plates)",
-        plates=(
-            Plate("left", ((-L, -L), (0, -L), (0, L), (-L, L))),
-            Plate("right", ((0, -L), (L, -L), (L, L), (0, L))),
-        ),
-        hinges=(Hinge("right", "left", (0, -L), (0, L)),),
-        folds={HALF_FOLD: ({"right": PI},)},
-        grasp=("right", (L - inset, 0.0)),
-        **kw,
-    )
-
-    # 2. Half fold + a diagonal crease in each half. The two diagonals mirror each other across the
-    #    centre crease (a "V" meeting at (0, -L)), so after the half fold they lie on one line and
-    #    the two-layer stack can fold along it. All three creases meet on the sheet's EDGE, so
-    #    there is no loop: a chain l_out - l_in - r_in - r_out.
-    tris = {
-        "l_in": ((0, -L), (0, L), (-L, L)),  # left half, next to the centre crease (root)
-        "l_out": ((-L, -L), (0, -L), (-L, L)),
-        "r_in": ((0, -L), (L, L), (0, L)),
-        "r_out": ((0, -L), (L, -L), (L, L)),
-    }
-    out["box2diag4" + sfx] = FoldShape(
-        name="box2diag4" + sfx,
-        label="half fold + diagonal crease in each half (4 triangles)",
-        plates=tuple(Plate(k, v) for k, v in tris.items()),
-        hinges=(
-            Hinge("l_out", "l_in", (0, -L), (-L, L)),  # left diagonal
-            Hinge("r_in", "l_in", (0, -L), (0, L)),  # centre crease
-            Hinge("r_out", "r_in", (0, -L), (L, L)),  # right diagonal
-        ),
-        folds={
-            HALF_FOLD: ({"r_in": PI},),
-            "left diagonal": ({"l_out": PI},),
-            "right diagonal": ({"r_out": PI},),
-            "both diagonals": ({"l_out": PI, "r_out": PI},),
-            # r_out lies UPSIDE DOWN on the stack after the half fold, so it turns -pi to move WITH
-            # l_out; +pi swings it the other way round, 89 mm away from the layer it belongs on.
-            "half, then diagonal (both layers)": ({"r_in": PI}, {"l_out": PI, "r_out": -PI}),
-            # NOT offered: "diagonals in, then half". A 50 x 100 mm half is not a square, so its
-            # diagonal fold does not land the flap on its partner triangle -- the flap overhangs the
-            # centre crease by 0.6 L (30 mm), and a half fold would swing that overhang down
-            # through the table.
-        },
-        grasp=("r_out", (L - inset, -L + 2 * inset)),
-        **kw,
-    )
-
-    # 3. As (2) with BOTH diagonals in each half: an X per half, 8 triangles. Each X is a 4-crease
-    #    vertex at the half's centre, i.e. a loop -- one seam per half -- so a half folds along one
-    #    of its diagonals at a time, never both. "A" is box2diag4's diagonal (the V through
-    #    (0, -L)), "B" the other one (a Lambda through (0, L)); each pair mirrors across the centre
-    #    crease, so after the half fold either can fold through both layers.
-    cl, cr = (-L / 2.0, 0.0), (L / 2.0, 0.0)
-    out["box2x8" + sfx] = FoldShape(
-        name="box2x8" + sfx,
-        label="half fold + both diagonals in each half (8 triangles, 2 seams)",
-        plates=(
-            Plate("l_r", ((0, -L), (0, L), cl)),  # left half, next to the centre crease (root)
-            Plate("l_t", ((0, L), (-L, L), cl)),
-            Plate("l_b", ((-L, -L), (0, -L), cl)),
-            Plate("l_l", ((-L, L), (-L, -L), cl)),
-            Plate("r_l", ((0, L), (0, -L), cr)),
-            Plate("r_b", ((0, -L), (L, -L), cr)),
-            Plate("r_t", ((L, L), (0, L), cr)),
-            Plate("r_r", ((L, -L), (L, L), cr)),
-        ),
-        hinges=(
-            Hinge("l_t", "l_r", cl, (0, L)),  # left diagonal B, upper half
-            Hinge("l_b", "l_r", (0, -L), cl),  # left diagonal A, lower half
-            Hinge("l_l", "l_t", (-L, L), cl),  # left diagonal A, upper half
-            Hinge("r_l", "l_r", (0, -L), (0, L)),  # centre crease
-            Hinge("r_b", "r_l", (0, -L), cr),  # right diagonal A, lower half
-            Hinge("r_t", "r_l", (0, L), cr),  # right diagonal B, upper half
-            Hinge("r_r", "r_t", cr, (L, L)),  # right diagonal A, upper half
-        ),
-        seams=(
-            Seam("l_l", "l_b", (-L, -L), cl),  # left diagonal B, lower half
-            Seam("r_r", "r_b", (L, -L), cr),  # right diagonal B, lower half
-        ),
-        folds={
-            HALF_FOLD: ({"r_l": PI},),
-            "left diagonal A": ({"l_b": PI, "l_l": PI},),
-            "left diagonal B": ({"l_t": PI},),
-            "right diagonal A": ({"r_b": PI, "r_r": PI},),
-            "right diagonal B": ({"r_t": PI},),
-            # The right half lies upside down on the left after the half fold: -pi on its layer.
-            "half, then diagonal A (both layers)": (
-                {"r_l": PI},
-                {"l_b": PI, "l_l": PI, "r_b": -PI, "r_r": -PI},
-            ),
-            "half, then diagonal B (both layers)": ({"r_l": PI}, {"l_t": PI, "r_t": -PI}),
-        },
-        grasp=("r_r", (L - inset, 0.0)),
-        **kw,
-    )
-
-    # 4. Cross fold -- quadrants, creases along both axes. The fourth hinge (q3|q4, along -y of
-    #    the vertical crease) is a SEAM, so the sheet folds along one full line at a time. Rooted on
-    #    the -x side so "vertical" is the stage-1 half fold: +x over onto -x.
-    out["cross4" + sfx] = FoldShape(
-        name="cross4" + sfx,
-        label="cross fold (4 quadrants, 1 seam)",
-        plates=(
-            Plate("q2", ((-L, 0), (0, 0), (0, L), (-L, L))),  # -x +y, root
-            Plate("q1", ((0, 0), (L, 0), (L, L), (0, L))),  # +x +y
-            Plate("q3", ((-L, -L), (0, -L), (0, 0), (-L, 0))),  # -x -y
-            Plate("q4", ((0, -L), (L, -L), (L, 0), (0, 0))),  # +x -y
-        ),
-        hinges=(
-            Hinge("q1", "q2", (0, 0), (0, L)),  # vertical crease, upper half
-            Hinge("q3", "q2", (-L, 0), (0, 0)),  # horizontal crease, left half
-            Hinge("q4", "q1", (0, 0), (L, 0)),  # horizontal crease, right half
-        ),
-        seams=(Seam("q4", "q3", (0, -L), (0, 0)),),  # vertical crease, lower half
-        folds={
-            HALF_FOLD: ({"q1": PI},),
-            "half: bottom up": ({"q3": PI, "q4": PI},),
-            "quarter (bottom up, then right over)": ({"q3": PI, "q4": PI}, {"q1": PI}),
-        },
-        grasp=("q4", (L - inset, -L + inset)),
-        **kw,
-    )
-
-    # 5. Corners + cross -- the corner ("blintz") fold with the centre diamond split by the cross
-    #    into four triangles, so the sheet ALSO half-folds along either axis. The diamond's quarters
-    #    form the same loop as cross4 (one seam); each corner triangle hangs off its own quarter.
-    #    Corners touch the creases only at points, so every half fold carries them along whole.
-    quarter = {
-        "c_nw": ((0, 0), (0, L), (-L, 0)),
-        "c_ne": ((0, 0), (L, 0), (0, L)),
-        "c_sw": ((0, 0), (-L, 0), (0, -L)),
-        "c_se": ((0, 0), (0, -L), (L, 0)),
-    }
-    corner = {  # (polygon, the diamond quarter it hinges on); the hinge is polygon[2] -> [0]
-        "ne": (((L, 0), (L, L), (0, L)), "c_ne"),
-        "nw": (((0, L), (-L, L), (-L, 0)), "c_nw"),
-        "sw": (((-L, 0), (-L, -L), (0, -L)), "c_sw"),
-        "se": (((0, -L), (L, -L), (L, 0)), "c_se"),
-    }
-    right = {"c_ne": PI}
-    bottom = {"c_sw": PI, "c_se": PI}
-    corners_in = {k: PI for k in corner}
-    out["corners8" + sfx] = FoldShape(
-        name="corners8" + sfx,
-        label="corners + cross (4 diamond quarters + 4 corners, 1 seam)",
-        plates=(
-            *(Plate(k, v) for k, v in quarter.items()),
-            *(Plate(k, v[0]) for k, v in corner.items()),
-        ),
-        hinges=(
-            Hinge("c_ne", "c_nw", (0, 0), (0, L)),  # vertical crease, upper half
-            Hinge("c_sw", "c_nw", (-L, 0), (0, 0)),  # horizontal crease, left half
-            Hinge("c_se", "c_ne", (0, 0), (L, 0)),  # horizontal crease, right half
-            *(Hinge(k, parent, poly[2], poly[0]) for k, (poly, parent) in corner.items()),
-        ),
-        seams=(Seam("c_se", "c_sw", (0, -L), (0, 0)),),  # vertical crease, lower half
-        folds={
-            HALF_FOLD: (right,),
-            "half: bottom up": (bottom,),
-            "quarter (bottom up, then right over)": (bottom, right),
-            **{f"corner {k}": ({k: PI},) for k in corner},
-            "all four corners": (corners_in,),
-            "corners in, then half": (corners_in, right),
-        },
-        grasp=("ne", (L - inset, L - inset)),
-        **kw,
-    )
-
-    # 6. Four strips in a row -- three parallel creases (x = -L/2, 0, L/2), a chain like stage 1's
-    #    box3 with one more slat. Rooted next to the centre crease, so the half fold is one hinge
-    #    and each outer strip folds in on its own (a gate fold when both do).
-    xs = (-L, -L / 2.0, 0.0, L / 2.0, L)
-    strip = {f"s{k + 1}": ((xs[k], -L), (xs[k + 1], -L), (xs[k + 1], L), (xs[k], L)) for k in range(4)}
-    out["box4" + sfx] = FoldShape(
-        name="box4" + sfx,
-        label="four strips in a row (4 plates)",
-        plates=tuple(Plate(k, strip[k]) for k in ("s2", "s1", "s3", "s4")),  # s2: root
-        hinges=(
-            Hinge("s1", "s2", (-L / 2.0, -L), (-L / 2.0, L)),
-            Hinge("s3", "s2", (0, -L), (0, L)),  # centre crease
-            Hinge("s4", "s3", (L / 2.0, -L), (L / 2.0, L)),
-        ),
-        folds={
-            HALF_FOLD: ({"s3": PI},),
-            "left strip in": ({"s1": PI},),
-            "right strip in": ({"s4": PI},),
-            "gate (both outer strips in)": ({"s1": PI, "s4": PI},),
-            "gate, then half": ({"s1": PI, "s4": PI}, {"s3": PI}),
-            # s4 lies upside down on s1 after the half fold: -pi on its layer (as box2diag4).
-            "half, then outer strip (both layers)": ({"s3": PI}, {"s1": PI, "s4": -PI}),
-        },
-        grasp=("s4", (L - inset, 0.0)),
-        **kw,
-    )
-
-    # 7. Plus + X -- creases along both axes AND both diagonals, eight triangles round the centre.
-    #    Wedge w<k> spans k*45 .. (k+1)*45 degrees. One degree-8 vertex = one loop: a chain round
-    #    the centre from the root w2 (-x side of the vertical crease), seam at the vertical crease's
-    #    lower half as in cross4. Each of the four full lines folds on its own.
-    corners = [(L, 0), (L, L), (0, L), (-L, L), (-L, 0), (-L, -L), (0, -L), (L, -L)]
-    wedge = {f"w{k}": ((0, 0), corners[k], corners[(k + 1) % 8]) for k in range(8)}
-    chain = [("w1", "w2"), ("w0", "w1"), ("w7", "w0"), ("w6", "w7"),  # right side, from the root
-             ("w3", "w2"), ("w4", "w3"), ("w5", "w4")]  # left side
-    shared = lambda a, b: next(c for c in wedge[a][1:] if c in wedge[b][1:])  # noqa: E731
-    bottom = {"w4": PI, "w7": PI}
-    right = {"w1": PI}
-    out["star8" + sfx] = FoldShape(
-        name="star8" + sfx,
-        label="plus + X creases (8 triangles, 1 seam)",
-        plates=tuple(Plate(k, wedge[k]) for k in ("w2", "w0", "w1", "w3", "w4", "w5", "w6", "w7")),
-        hinges=tuple(Hinge(c, p, (0, 0), shared(c, p)) for c, p in chain),
-        seams=(Seam("w6", "w5", (0, -L), (0, 0)),),  # vertical crease, lower half
-        folds={
-            HALF_FOLD: (right,),
-            "half: bottom up": (bottom,),
-            "diagonal: lower right over upper left": ({"w0": PI, "w5": PI},),
-            "diagonal: lower left over upper right": ({"w3": PI, "w6": PI},),
-            "quarter (bottom up, then right over)": (bottom, right),
-        },
-        grasp=("w0", (L - inset, L / 2.0)),
-        **kw,
-    )
+    for path in sorted(Path(design_dir).glob("*.yaml")):
+        s = load_design(path)
+        out[s.name] = s
     return out
 
 
-POOL: dict[str, FoldShape] = make_pool()
+#: Every pool shape, loaded from ``DESIGN_DIR`` (the seven of the flat7 recipes).
+POOL: dict[str, FoldShape] = load_pool()
 
-#: The stage-2 training pool (``FoldPoolCfg.shapes`` default). ``POOL`` also holds shapes added
-#: later (``box4``, ``star8``) that a run must ask for by name.
+#: ``FoldPoolCfg.shapes`` default (five shapes; the flat7 recipes add ``box4`` and ``star8`` by name).
 DEFAULT_SHAPES: tuple[str, ...] = (
     "box2-mid", "box2diag4-mid", "box2x8-mid", "cross4-mid", "corners8-mid",
 )
+
+
+def sized(name: str, size: float, thickness: float) -> FoldShape:
+    """Pool shape ``name`` at another sheet size and plate thickness (same design, scaled)."""
+    shape(name)  # unknown names fail with the known list
+    return load_design(DESIGN_DIR / f"{name}.yaml", size=size, thickness=thickness)
 
 
 def shape(name: str) -> FoldShape:
