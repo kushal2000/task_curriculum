@@ -17,3 +17,5 @@ captures are enabled per cloth design. Existing runs are retained.
 ```bash
 experiments/nov17_yibo_prior_finetune/submit.sh
 ```
+
+Submitted job: **768528**. Queued for resources at submission.
