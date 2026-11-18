@@ -1,8 +1,7 @@
 #!/bin/bash
-# Train the rigid fold tasks on PhysX (Isaac Sim 5.1): stage 1 (one chain) or stage 2 (the shape pool).
+# Train the rigid fold task (the shape pool) on PhysX (Isaac Sim 5.1).
 #
 #   TASK=pool PRIOR=<run>.pth RUN_TAG=box3 sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
-#   TASK=chain VARIANT=box3-mid sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
 #   TASK=pool ENVS=256 EPOCHS=3 RUN_TAG=smoke sbatch --array=0 scripts/cluster/bos14_physx_cloth_train.sh
 #   EXPERIMENT=flat7DRABC TASK=pool RUN_TAG=flat7DRABC sbatch --array=0-2 ...   (recipe: isaacsimenvs/cfg/experiment/)
 #   REPO=<worktree> ROBOT=FlexivWujiHumanLike PRIOR=pretrained_policy/flexiv_wuji.pth ... (another checkout / robot)
@@ -67,9 +66,7 @@ else
 fi
 case "$TASK_KIND" in
     pool)  GYM_TASK=Isaacsimenvs-FoldPoolPhysx${ROBOT:-}-Direct-v0; TASK_ARGS=() ;;
-    chain) GYM_TASK=Isaacsimenvs-RigidClothPhysx${ROBOT:-}-Direct-v0
-           TASK_ARGS=("env.rigid_cloth.variant=${VARIANT:-box3-mid}") ;;
-    *) echo "TASK must be pool or chain, got $TASK_KIND"; exit 2 ;;
+    *) echo "TASK must be pool, got $TASK_KIND"; exit 2 ;;
 esac
 NAME="0_px${TASK_KIND}_${RUN_TAG:-run}_s${SEED}_${JOB_TAG}"
 if [ $(( ENVS * 32 % MINIBATCH )) -ne 0 ]; then

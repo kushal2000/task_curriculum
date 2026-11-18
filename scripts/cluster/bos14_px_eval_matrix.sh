@@ -64,12 +64,7 @@ POOL7=("env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corne
        env.fold_pool.one_shape_per_env=true)
 case "$T" in
     0) TARGET=physx_pool;  PY=("${PHYSX[@]}");  TASK=Isaacsimenvs-FoldPoolPhysx-Direct-v0;  ENVS=320; TARGS=() ;;
-    1) TARGET=physx_box3;  PY=("${PHYSX[@]}");  TASK=Isaacsimenvs-RigidClothPhysx-Direct-v0; ENVS=32
-       TARGS=(env.rigid_cloth.variant=box3-mid) ;;
-    2) TARGET=newton_pool; PY=("${NEWTON[@]}"); TASK=Isaacsimenvs-FoldPool-Direct-v0;       ENVS=320
-       TARGS=(env.newton.per_env_triangle_pairs=2097152) ;;
-    3) TARGET=newton_box3; PY=("${NEWTON[@]}"); TASK=Isaacsimenvs-RigidCloth-Direct-v0;     ENVS=32
-       TARGS=(env.rigid_cloth.variant=box3-mid env.newton.per_env_triangle_pairs=524288) ;;
+    1|2|3) echo "[px_mx] target $T was removed (stage-1 chain and Newton rigid envs, 2026-11-18)"; exit 2 ;;
     4) TARGET=vbd;         PY=("${NEWTON[@]}"); TASK=Isaacsimenvs-Cloth-Direct-v0;          ENVS=32; TARGS=() ;;
     5) TARGET=physx_pool7; PY=("${PHYSX[@]}");  TASK=Isaacsimenvs-FoldPoolPhysx-Direct-v0;  ENVS=448
        TARGS=("${POOL7[@]}") ;;

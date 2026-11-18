@@ -100,33 +100,7 @@ def _blocks(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
 
 
-@pytest.mark.parametrize(
-    "newton,physx",
-    [("RigidCloth.yaml", "RigidClothPhysx.yaml"), ("FoldPool.yaml", "FoldPoolPhysx.yaml")],
-)
-def test_physx_yaml_is_the_newton_task(newton, physx):
-    """Same task blocks; only the solver blocks differ."""
-    cfg_dir = REPO / "isaacsimenvs/cfg/task"
-    a, b = _blocks(cfg_dir / newton), _blocks(cfg_dir / physx)
-    newton_only = {"newton", "use_gravcomp", "meshify"}
-    physx_only = {"physx_chain"}
-    assert set(a) - newton_only == set(b) - physx_only
-    for key in set(a) - newton_only:
-        if key == "sim":
-            sim_b = dict(b["sim"])
-            assert "physx" in sim_b
-            sim_b.pop("physx")
-            assert a["sim"] == sim_b
-        elif key == "rigid_cloth":
-            # contact_ke / contact_kd are Newton-only (PhysX refuses them); 0 = Newton's default.
-            rc_a = dict(a[key])
-            assert rc_a.pop("contact_ke", 0.0) == 0.0 and rc_a.pop("contact_kd", 0.0) == 0.0
-            assert rc_a == b[key], key
-        else:
-            assert a[key] == b[key], key
-
-
 def test_physx_tasks_are_registered():
     src = (REPO / "isaacsimenvs/tasks/cloth/__init__.py").read_text()
-    for task in ("Isaacsimenvs-RigidClothPhysx-Direct-v0", "Isaacsimenvs-FoldPoolPhysx-Direct-v0"):
+    for task in ("Isaacsimenvs-FoldPoolPhysx-Direct-v0",):
         assert re.search(rf'id="{task}"', src), task

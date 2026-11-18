@@ -1,7 +1,7 @@
 """Replay the real Wuji Hand 2 sysid trials in PhysX on a Flexiv + right Wuji robot (RightReal).
 
     PYTHONPATH=$PWD OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python scripts/flexiv_wuji/sysid_replay_physx.py \
-        --task Isaacsimenvs-RigidClothPhysxFlexivWujiRightReal-Direct-v0 --headless \
+        --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --headless \
         --data_dir <dir holding sysid-2026*/> --dt 0.00833333333 --out replay_dt120.npz
 
 One env per (variant, 2 s window), windows cut exactly as aiowuji sysid_fit.py does (each starts from
@@ -35,7 +35,7 @@ from pathlib import Path
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-parser.add_argument("--task", default="Isaacsimenvs-RigidClothPhysxFlexivWujiRightReal-Direct-v0")
+parser.add_argument("--task", default="Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0")
 parser.add_argument("--data_dir", required=True)
 parser.add_argument("--fit_json", default="assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json")
 parser.add_argument("--dt", type=float, default=1.0 / 120.0)

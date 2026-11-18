@@ -30,7 +30,7 @@ export PYTHONUNBUFFERED=1
 echo "[live] node $(hostname -s) ($(hostname -I | awk '{print $1}')) port $PORT commit $(git rev-parse --short HEAD)"
 echo "[live] tunnel: ssh -N -L ${PORT}:$(hostname -s):${PORT} $USER@<bos14 login>   then http://localhost:${PORT}"
 read -r -a EXTRA <<<"${EXTRA_ARGS:-}"
-TASK="${TASK:-Isaacsimenvs-FoldPool-Direct-v0}"
+TASK="${TASK:-Isaacsimenvs-Cloth-Direct-v0}"
 # Rigid manipulands need the evaluation-sized contact buffer; the VBD cloth keeps its default
 # (the big one only slows it down). Switching task from the browser applies the same rule.
 BUF=()

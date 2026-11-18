@@ -2,7 +2,6 @@
 # Live, interactive policy viewer on PHYSX (isaacsimenvs/eval/live_viser.py, PhysX backend), port 8081.
 #
 #   sbatch scripts/cluster/bos14_live_viser_physx.sh
-#   TASK=Isaacsimenvs-RigidClothPhysx-Direct-v0 EXTRA_ARGS="env.rigid_cloth.variant=box3-mid" sbatch scripts/cluster/bos14_live_viser_physx.sh
 #   ENVS=20 POLICY="run 1: pool + folded starts (s1; cloth 56/50%)" \
 #     EXTRA_ARGS="env.fold_pool.init_fold_prob=0.8 env.rigid_cloth.joint_damping=0.02" sbatch scripts/cluster/bos14_live_viser_physx.sh
 #       (run 1's folded starts; 20 envs fit all 19 start folds of the pool, one per env)

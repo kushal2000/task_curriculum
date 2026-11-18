@@ -2,7 +2,7 @@
 # Bake a robot URDF into the USD cache for the kit-less Newton runs (VBD cloth), via a Kit-hosted
 # PhysX cloth task with the same robot overlay. The key is URDF text + fix_base / self_collision, so
 # pass the self-collision value the Newton run uses.
-#   TASK=Isaacsimenvs-RigidClothPhysxFlexivWujiRightHLRL-Direct-v0 SC=false sbatch scripts/cluster/bos14_bake_robot.sh
+#   TASK=Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHLRL-Direct-v0 SC=false sbatch scripts/cluster/bos14_bake_robot.sh
 #SBATCH --job-name=bake_robot
 #SBATCH --partition=gpu_a100
 #SBATCH --gres=gpu:rtxpro6000:1

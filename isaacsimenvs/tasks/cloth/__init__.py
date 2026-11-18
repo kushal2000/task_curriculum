@@ -18,19 +18,8 @@ import gymnasium as gym
 if TYPE_CHECKING:
     from .cloth_env import ClothEnv
     from .cloth_env_cfg import ClothEnvCfg
-    from .fold_pool_env import FoldPoolEnv
-    from .fold_pool_env_cfg import FoldPoolEnvCfg
-    from .rigid_cloth_env import RigidClothEnv
-    from .rigid_cloth_env_cfg import RigidClothEnvCfg
 
-__all__ = [
-    "ClothEnv",
-    "ClothEnvCfg",
-    "FoldPoolEnv",
-    "FoldPoolEnvCfg",
-    "RigidClothEnv",
-    "RigidClothEnvCfg",
-]
+__all__ = ["ClothEnv", "ClothEnvCfg"]
 
 _CFG_DIR = Path(__file__).resolve().parents[2] / "cfg"
 
@@ -45,22 +34,6 @@ def __getattr__(name: str):
         from .cloth_env_cfg import ClothEnvCfg
 
         return ClothEnvCfg
-    if name == "RigidClothEnv":
-        from .rigid_cloth_env import RigidClothEnv
-
-        return RigidClothEnv
-    if name == "RigidClothEnvCfg":
-        from .rigid_cloth_env_cfg import RigidClothEnvCfg
-
-        return RigidClothEnvCfg
-    if name == "FoldPoolEnv":
-        from .fold_pool_env import FoldPoolEnv
-
-        return FoldPoolEnv
-    if name == "FoldPoolEnvCfg":
-        from .fold_pool_env_cfg import FoldPoolEnvCfg
-
-        return FoldPoolEnvCfg
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -72,63 +45,6 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.cloth_env_cfg:ClothEnvCfg",
         "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "Cloth.yaml"),
-        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
-        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
-    },
-)
-
-
-# ONE id, with the approximation chosen by config rather than by a family of ids:
-#
-#     --task Isaacsimenvs-RigidCloth-Direct-v0 env.rigid_cloth.variant=box3-mid
-#
-# Five ids would need five cfg classes (the gym kwargs carry a cfg *entry point string*, so a
-# per-variant default cannot be expressed without one), which is five places for the five variants
-# to drift apart. The variant is a physical parameter of one manipuland, like its density -- and
-# density does not get its own task id either.
-#
-# Shares `ClothSAPG.yaml` with the VBD task deliberately: comparing the two manipulands is only
-# meaningful if the learner is held fixed.
-gym.register(
-    id="Isaacsimenvs-RigidCloth-Direct-v0",
-    entry_point="isaacsimenvs.tasks.cloth.rigid_cloth_env:RigidClothEnv",
-    order_enforce=False,
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.rigid_cloth_env_cfg:RigidClothEnvCfg",
-        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "RigidCloth.yaml"),
-        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
-        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
-    },
-)
-
-
-# Stage 2: the same half-fold task, with the manipuland drawn per episode from the fold-shape pool
-# (`utils/fold_shapes.POOL`). Same learner config as the chain, for the same reason.
-gym.register(
-    id="Isaacsimenvs-FoldPool-Direct-v0",
-    entry_point="isaacsimenvs.tasks.cloth.fold_pool_env:FoldPoolEnv",
-    order_enforce=False,
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.fold_pool_env_cfg:FoldPoolEnvCfg",
-        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "FoldPool.yaml"),
-        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
-        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
-    },
-)
-
-
-# The two rigid-manipuland tasks on PhysX (Isaac Sim 5.1, `.venv_isaacsim`): same task code, same
-# observation, same agent configs -- see `physx_envs.py`.
-gym.register(
-    id="Isaacsimenvs-RigidClothPhysx-Direct-v0",
-    entry_point="isaacsimenvs.tasks.cloth.physx_envs:RigidClothPhysxEnv",
-    order_enforce=False,
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.physx_env_cfg:RigidClothPhysxEnvCfg",
-        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "RigidClothPhysx.yaml"),
         "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
         "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
     },
@@ -165,7 +81,7 @@ _ROBOT_VARIANTS = {
     "FlexivWujiRightSharpaGain": "flexiv_wuji_right_sharpagain",
     "FlexivWujiRightHLRL": "flexiv_wuji_right_hl_reallimits",
 }
-for _task in ("Cloth", "RigidCloth", "FoldPool", "RigidClothPhysx", "FoldPoolPhysx"):
+for _task in ("Cloth", "FoldPoolPhysx"):
     _base = gym.spec(f"Isaacsimenvs-{_task}-Direct-v0")
     for _suffix, _robot in _ROBOT_VARIANTS.items():
         gym.register(

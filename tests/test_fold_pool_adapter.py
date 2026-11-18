@@ -349,38 +349,6 @@ def test_a_subset_articulation_must_match_its_carriers(pool_adapter):
         mesh._positions()
 
 
-def test_the_fold_pool_yaml_and_config_class_agree():
-    """``fold_pool:`` keys are exactly ``FoldPoolCfg``'s fields, and the rest of the yaml is
-    RigidCloth.yaml verbatim -- the pool changes the manipuland, nothing else."""
-    import dataclasses
-    from pathlib import Path
-
-    yaml = pytest.importorskip("yaml")
-    cfg_mod = pytest.importorskip("isaacsimenvs.tasks.cloth.fold_pool_env_cfg")
-    root = Path(__file__).resolve().parents[1]
-    loaded = yaml.safe_load((root / "isaacsimenvs/cfg/task/FoldPool.yaml").read_text())
-    assert set(loaded["fold_pool"]) == {f.name for f in dataclasses.fields(cfg_mod.FoldPoolCfg)}
-    assert loaded["fold_pool"]["shapes"] == list(fs.DEFAULT_SHAPES)
-    rigid = yaml.safe_load((root / "isaacsimenvs/cfg/task/RigidCloth.yaml").read_text())
-    # The two sanctioned stage-2 differences (see the yaml header), and nothing else.
-    assert loaded["assets"].pop("table_urdf") == "assets/urdf/table_fold_pool.urdf"
-    rigid["assets"].pop("table_urdf")
-    assert loaded["cloth"].pop("keypoint_tolerance") == 0.015
-    # Contact-shell-only DR: switched on, every other term pinned neutral.
-    rd = loaded["rigid_cloth"].pop("randomization")
-    rigid["rigid_cloth"].pop("randomization")
-    assert rd["enabled"] is True and rd["contact_margin_offset"] == [-0.003, 0.003]
-    for key in (
-        "slat_friction_scale",
-        "fingertip_friction_scale",
-        "hinge_damping_scale",
-        "mass_scale",
-    ):
-        assert rd[key] == [1.0, 1.0], key
-    assert rd["hinge_stiffness"] == [0.0, 0.0]
-    assert {k: v for k, v in loaded.items() if k != "fold_pool"} == rigid
-
-
 def test_per_env_size_scales_the_grid_and_reset_shifts_the_centre(pool_adapter):
     """Env e reads a sheet ``xy_scale[e]`` times the base grid, and resets at origin + offset."""
     n = 3
