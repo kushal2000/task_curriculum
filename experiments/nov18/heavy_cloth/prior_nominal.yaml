@@ -1,0 +1,13 @@
+# As prior.yaml, but single_hinge only and every cloth gets the recipe's nominal material
+# (density 3.0, bending 5e-5, viscosity 5e-5, frictions 0.4/0.8/0.8): material DR off.
+# Sizes (256 geometries) and sensor DR unchanged.
+base: prior.yaml
+env:
+  rigid_cloth:
+    designs: [single_hinge.yaml]
+    randomization:
+      enabled: false
+agent:
+  params:
+    config:
+      name: 0_cloth_heavy_prior_nominal_single_hinge

@@ -1,0 +1,23 @@
+# Rigid cloth that PhysX can keep a hand out of, and that can stay folded (2026-11-18).
+# Yibo checkpoint interface + our DR (yibo_our_dr), changed where the press/fold tests showed the
+# physics fails -- see experiments/nov18/press_test/EXPERIMENTS.md (E1-E8):
+# * a light rigid panel cannot stop a heavy pusher in PhysX (probe:panel mass ratio); only panel
+#   mass and solver position iterations help (dt, armature, contact shell, friction settings do not);
+# * the hinge spring opens a fold unless B < rho g L^3 / (32 pi) (strip designs; 16 pi single_hinge),
+#   i.e. B < 2.0e-4 at L = 10 cm, rho = 2.0 -- capped below with a 2x margin.
+# Not yet verified for every design: strip_8's panels are 4x smaller than single_hinge's, so they
+# need ~4x the density for the same margin; the penetration reset covers what remains.
+base: yibo_our_dr
+env:
+  sim:
+    physx:
+      max_position_iteration_count: 36   # scene cap; the cloth requests 36 below (8 -> 36: E6)
+  rigid_cloth:
+    thickness: 0.020                     # m, the thickness the press tests and E8 were run at
+    solver_position_iterations: 36
+    density: 3.0                         # kg/m^2, nominal (randomization off)
+    randomization:
+      density: [2.0, 5.0]                # log-uniform; 5.0 + 36 it: 98% of rollouts within 2 mm (E8)
+      bending_rigidity: [1.0e-6, 1.0e-4] # N m; every fold can stay at rho >= 2 (2x margin)
+    episode_checks:
+      max_robot_penetration_fraction: 0.5  # reset when a robot link is > 50% of thickness deep

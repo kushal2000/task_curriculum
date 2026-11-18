@@ -87,7 +87,7 @@ def _remove_env_boundary_from_info(infos: dict, boundary: int) -> dict:
             trimmed[key] = value
             continue
 
-        if key in {"successes", "closest_keypoint_max_dist"}:
+        if key in {"successes", "fold_success", "closest_keypoint_max_dist"}:
             block_size = len(value) - boundary
             if block_size > 0 and len(value) % block_size == 0:
                 for i in range(len(value) // block_size):

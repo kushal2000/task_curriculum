@@ -1,0 +1,10 @@
+# Yibo prior fine-tuned on the heavy rigid cloth (density 2-5, bending <= 1e-4, 36 iterations,
+# penetration reset), material DR as in the recipe.
+base: ../../../isaacsimenvs/scripts/configs/runs/rigid_cloth_heavy.yaml
+agent:
+  params:
+    load_checkpoint: true
+    load_path: pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth
+    checkpoint_load_mode: weights
+    config:
+      name: 0_cloth_heavy_prior

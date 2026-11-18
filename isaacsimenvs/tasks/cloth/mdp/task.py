@@ -69,6 +69,8 @@ class ClothTask:
         self._closest_fingertip_dist = torch.full((n, 5), -1.0, **f32)
         self._fold_hold = torch.zeros(n, dtype=torch.long, device=dev)
         self._successes = torch.zeros(n, dtype=torch.long, device=dev)
+        # The fold flag fired at least once this episode (fold success, before any release).
+        self._fold_success = torch.zeros(n, dtype=torch.bool, device=dev)
         self._prev_episode_successes = torch.zeros(n, dtype=torch.long, device=dev)
         self._bonus_mask = torch.zeros(n, dtype=torch.bool, device=dev)
         self._nonfinite_envs = torch.zeros(n, dtype=torch.bool, device=dev)
@@ -98,6 +100,7 @@ class ClothTask:
         """Per-episode buffers back to their start values for ``ids``."""
         self._prev_episode_successes[ids] = self._successes[ids]
         self._successes[ids] = 0
+        self._fold_success[ids] = False
         self._closest_fold_err[ids] = -1.0
         self._closest_fingertip_dist[ids] = -1.0
         self._fold_hold[ids] = 0
@@ -261,6 +264,7 @@ class ClothTask:
         folded = self.is_folded(state, view) & self._step_eligible
         self._fold_hold = torch.where(folded, self._fold_hold + 1, torch.zeros_like(self._fold_hold))
         entered = self._fold_hold >= cfg.termination.success_steps
+        self._fold_success |= entered
         held = self._fold_hold >= cfg.termination.held_steps
 
         release = cfg.task.release.enabled
@@ -366,7 +370,8 @@ class ClothTask:
         return reward
 
     def log_step(self) -> None:
-        final = {"successes": self._successes.float()}
+        # successes = release success (fold + release); fold_success = the fold was reached.
+        final = {"successes": self._successes.float(), "fold_success": self._fold_success.float()}
         final.update({f"done_{k}": view.float() for k, view in self._termination_reasons.items()})
         self.extras["episode_cumulative"] = self._reward_terms
         self.extras["episode_final"] = final
