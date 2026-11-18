@@ -21,7 +21,7 @@ outputs/
 wandb/
 videos/
 evals/
-runs/
+/runs/
 experiments/runs/
 
 # Downloaded artifacts

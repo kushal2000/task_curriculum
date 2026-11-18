@@ -1,0 +1,44 @@
+# Rigid cloth fold pool, Flexiv Rizon 4s + right Wuji Hand 2: THE base recipe (was flat7RW_base).
+#
+# PhysX (.venv_isaacsim). All 7 fold shapes, one shape per env, flat starts only; per-env sheet size
+# 10-20 cm and the contact shell 7 +- 3 mm per episode (RigidCloth.yaml). Robot: HAND2_DRIVE hand
+# dynamics (no sysid), the real joint limits, the real-setup geometry (flexiv_wuji_right_hl_reallimits).
+# Trained from a Play prior:
+#
+#   experiments/submit.sh experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
+#       --experiment rigid_cloth_right_wuji \
+#       --checkpoint <Play prior .pth> --checkpoint_load_mode weights \
+#       agent.params.config.name=0_<run name>
+#
+# DR is added with blocks from configs/dr/, in a recipe that has `base: rigid_cloth_right_wuji` and
+# `dr: [...]` (examples: experiments/*/). The blocks: sysid, friction, contact_shell, proprio_noise,
+# object_points, tracker, tracker_reacquire, action_delay, action_noise, pd_gains, hinge_mass, dr_delay.
+task: Isaacsimenvs-RigidCloth-Direct-v0
+
+env:
+  robot_setup: flexiv_wuji_right_hl_reallimits
+  scene:
+    num_envs: 24576
+  cloth:
+    nan_policy: reset
+    # 5 cm above the nominal table top. At 0.30 (15 cm, the Kuka setup) the sheet spawned among the
+    # fingertips of this robot (89 mm mean clearance) and 4.4% of resets threw it off the table
+    # within 1 s; at 0.20 it is 0.2%. Evals of policies trained with this recipe use the same value.
+    start_height: 0.20
+  fold_pool:
+    shapes: [box2-mid, box2diag4-mid, box2x8-mid, cross4-mid, corners8-mid, box4-mid, star8-mid]
+    one_shape_per_env: true
+    init_fold_prob: 0.0
+
+agent:
+  params:
+    config:
+      multi_gpu: false
+      max_epochs: 3052
+      minibatch_size: 24576
+      central_value_config:
+        minibatch_size: 24576
+      expl_coef_block_size: 4096     # num_envs / 6 SAPG blocks
+      best_save_min_interval_s: 60
+      periodic_save_every: 100
+      snapshot_every: 100
