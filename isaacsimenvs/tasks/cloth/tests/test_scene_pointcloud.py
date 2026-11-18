@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from conftest import load_module
+from isaacsimenvs.conftest import REPO_ROOT, load_module
 
 sp = load_module("isaacsimenvs/tasks/cloth/perception/scene_pointcloud.py", "scene_pointcloud")
 rs = load_module("isaacsimenvs/tasks/cloth/perception/robot_surface.py", "robot_surface")
@@ -154,7 +154,7 @@ def test_look_at_and_lag_buffer():
 
 
 def test_robot_surface_resolves_fixed_links():
-    urdf = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
+    urdf = REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
     data = np.load(urdf.with_suffix(".surface.npz"))
     links = [str(v) for v in data["links"]]
     assert "r_wrist" in links and "link2" not in links

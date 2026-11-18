@@ -12,7 +12,7 @@ import math
 
 import numpy as np
 import pytest
-from conftest import load_module  # noqa: E402  pytest puts tests/ on sys.path
+from isaacsimenvs.conftest import load_module  # noqa: E402
 
 L = 0.05
 

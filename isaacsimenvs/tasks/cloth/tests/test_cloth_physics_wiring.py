@@ -29,8 +29,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
 
-_YAML = Path(__file__).resolve().parents[1] / "isaacsimenvs" / "cfg" / "task" / "Cloth.yaml"
+_YAML = REPO_ROOT / "isaacsimenvs" / "cfg" / "task" / "Cloth.yaml"
 
 
 @pytest.fixture(scope="module")

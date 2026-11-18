@@ -1,4 +1,4 @@
-# Robot overlay: flexiv_wuji_human_like.yaml with Wuji's sim2real hand drive (robots.py
+# Robot overlay: flexiv_wuji_human_like.yaml with Wuji's sim2real hand drive (robots/
 # FLEXIV_WUJI_HUMAN_LIKE_S2R: HAND2_DRIVE stiffness, damping and torque limits). Same URDF.
 robot: flexiv_wuji_human_like_s2r
 robot_self_collision: true

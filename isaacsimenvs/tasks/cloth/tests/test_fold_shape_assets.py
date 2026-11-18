@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 
 import pytest
-from conftest import load_module  # noqa: E402  pytest puts tests/ on sys.path
+from isaacsimenvs.conftest import load_module  # noqa: E402
 
 np = pytest.importorskip("numpy")
 pytest.importorskip("pxr")

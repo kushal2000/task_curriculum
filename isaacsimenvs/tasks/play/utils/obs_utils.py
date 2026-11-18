@@ -17,7 +17,7 @@ from .point_dr import push_and_read, refit_points, simple_lags
 # ----------------------------------------------------------------------------
 
 
-# The Kuka + Sharpa's values (robots.py); the env reads its own robot's from env.robot_spec.
+# The Kuka + Sharpa's values (robots/); the env reads its own robot's from env.robot_spec.
 NUM_JOINTS: int = KUKA_SHARPA.num_joints
 NUM_FINGERTIPS: int = 5
 NUM_KEYPOINTS: int = 4

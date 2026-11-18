@@ -19,7 +19,7 @@ The Wuji takes its joint limits from ``flexiv_wuji.HUMAN_LIKE_URDF`` (``--wuji v
 vendor's), so its sliders cover those ranges.
 
 Fingertips are marked as the Play task defines them (``RobotSpec`` in isaacsimenvs/tasks/play/
-robots.py). A dropdown picks which point: the policy input, the pad point it observes (fingertip
+robots/). A dropdown picks which point: the policy input, the pad point it observes (fingertip
 body + ``fingertip_offset``), or the reward input, the body origin the fingertip-to-object reward
 distance is measured from (obs_utils, no offset). The readout gives each point in its own hand's
 canonical frame.

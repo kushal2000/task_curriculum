@@ -7,7 +7,7 @@ import math
 import pytest
 import torch
 
-from conftest import load_module
+from isaacsimenvs.conftest import load_module
 
 pdr = load_module("isaacsimenvs/tasks/play/utils/point_dr.py", "point_dr")
 

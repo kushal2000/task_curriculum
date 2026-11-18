@@ -59,3 +59,7 @@ dev = [
 include = [
     "isaacsimenvs*",
 ]
+
+[tool.pytest.ini_options]
+# Tests live beside the code they test (isaacsimenvs/**/tests/); the shared helpers are isaacsimenvs/conftest.py.
+testpaths = ["isaacsimenvs"]

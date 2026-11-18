@@ -18,7 +18,7 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
-from conftest import REPO_ROOT  # noqa: E402  pytest puts tests/ on sys.path
+from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
 
 # Fields DirectRLEnvCfg / SimulationCfg / InteractiveSceneCfg contribute. Listed rather
 # than parsed because they live in the installed isaaclab wheel, whose layout is not this

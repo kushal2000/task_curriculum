@@ -21,11 +21,14 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_module(rel_path: str, name: str | None = None):
-    """Import `rel_path` (relative to the repo root) as a standalone module."""
+def load_module(rel_path: str, name: str | None = None, package: bool = False):
+    """Import `rel_path` (relative to the repo root) as a standalone module; with ``package`` the
+    path is a package's ``__init__.py`` and its relative imports resolve inside that directory."""
     path = REPO_ROOT / rel_path
     name = name or path.stem
-    spec = importlib.util.spec_from_file_location(name, path)
+    spec = importlib.util.spec_from_file_location(
+        name, path, submodule_search_locations=[str(path.parent)] if package else None
+    )
     if spec is None or spec.loader is None:  # pragma: no cover - import plumbing
         raise ImportError(f"Could not load {path}")
     module = importlib.util.module_from_spec(spec)

@@ -13,10 +13,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
 
 yaml = pytest.importorskip("yaml")
 
-CFG = Path(__file__).resolve().parents[1] / "isaacsimenvs" / "cfg" / "task"
+CFG = REPO_ROOT / "isaacsimenvs" / "cfg" / "task"
 
 #: Top-level keys a Flexiv task YAML may add: the robot selector.
 ALLOWED_EXTRA = {"robot"}

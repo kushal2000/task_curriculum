@@ -4,7 +4,7 @@ Every geometric number in ``robots.FLEXIV_WUJI`` was read off the URDFs, and the
 the vendor MJCF, by hand. Nothing ties them together at runtime except the env's joint-set check,
 so a mount change or a mistyped gain would otherwise go unnoticed until a policy trained badly.
 
-Kit-free: ``robots.py`` is stdlib-only and is loaded off disk. The model files come from
+Kit-free: ``robots/`` is stdlib-only and is loaded off disk. The model files come from
 ``scripts/flexiv_wuji/fetch_assets.sh``; the tests skip if they are missing.
 """
 
@@ -18,9 +18,9 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from conftest import REPO_ROOT, load_module
+from isaacsimenvs.conftest import REPO_ROOT, load_module
 
-robots = load_module("isaacsimenvs/tasks/play/robots.py", "play_robots")
+robots = load_module("isaacsimenvs/tasks/play/robots/__init__.py", "play_robots", package=True)
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "flexiv_wuji"))
 import flexiv_wuji as fw  # noqa: E402
 
@@ -224,7 +224,7 @@ def test_human_like_spec_is_the_flexiv_wuji_but_for_its_name() -> None:
     assert dataclasses.replace(human, name=SPEC.name) == SPEC
 
 
-RIGHT_URDF = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
+RIGHT_URDF = REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
 
 
 def test_right_hand_spec_matches_its_urdf() -> None:
@@ -298,8 +298,8 @@ def test_flexiv_sharpa_filter_covers_its_derivation() -> None:
     assert pairs(derived) <= pairs(robots.FLEXIV_SHARPA.self_collision_filter)
 
 
-REAL_URDF = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
-SYSID_JSON = Path(__file__).resolve().parents[1] / "assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json"
+REAL_URDF = REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
+SYSID_JSON = REPO_ROOT / "assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json"
 
 
 def test_right_real_spec_is_the_sysid_fit() -> None:

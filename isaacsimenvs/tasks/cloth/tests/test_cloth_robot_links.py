@@ -12,11 +12,12 @@ from pathlib import Path
 
 import pytest
 
+from isaacsimenvs.conftest import REPO_ROOT
 from isaacsimenvs.tasks.play.robots import (
     FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_RIGHT_HUMAN_LIKE, KUKA_SHARPA,
 )
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = REPO_ROOT
 URDFS = {
     "kuka_sharpa": "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf",
     "flexiv_wuji": "assets/flexiv_wuji/rizon4s_left_wuji.urdf",

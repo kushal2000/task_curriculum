@@ -28,7 +28,7 @@ from .generate_objects import generate_handle_head_urdfs
 # ----------------------------------------------------------------------------
 # Joint names / regexes / body names / gains
 # ----------------------------------------------------------------------------
-# The robot lives in ``robots.py`` (one RobotSpec per embodiment, picked by ``cfg.robot``). These
+# The robot lives in ``robots/`` (one RobotSpec per embodiment, picked by ``cfg.robot``). These
 # module names are the Kuka + Sharpa's, kept because other tasks and the Newton patches read them.
 
 ARM_JOINT_REGEX = KUKA_SHARPA.arm_joint_regex

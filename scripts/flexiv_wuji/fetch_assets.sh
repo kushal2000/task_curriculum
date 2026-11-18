@@ -5,7 +5,7 @@
 #                        to urdf/Rizon4s.urdf with upstream's own create_urdf.py, and its meshes.
 #   wuji_hand2/          github.com/wuji-technology/wuji-description, hand2/hand2_beta2/body: the
 #                        vendor URDFs (with and without the wrist mount), meshes, and MJCF (the
-#                        source of the provisional hand gains in isaacsimenvs/tasks/play/robots.py,
+#                        source of the provisional hand gains in isaacsimenvs/tasks/play/robots/,
 #                        which tests/test_robot_specs.py checks against it). Beta 2
 #                        at the commit wuji-hand-teleop's wujihand_urdf was copied from, so the
 #                        hand matches assets/g1_wuji2_description/.

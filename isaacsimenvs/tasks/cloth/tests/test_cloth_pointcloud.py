@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from conftest import load_module
+from isaacsimenvs.conftest import load_module
 
 pc = load_module("isaacsimenvs/tasks/cloth/perception/pointcloud.py", "cloth_pointcloud")
 

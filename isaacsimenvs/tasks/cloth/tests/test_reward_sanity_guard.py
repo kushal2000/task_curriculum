@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import torch
 import yaml
+from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
 
 from isaacsimenvs.tasks.cloth.backends.vbd.env import ClothEnv
 
@@ -44,7 +45,7 @@ def test_guard_zeroes_the_observed_blow_ups():
 
 def test_guard_does_not_touch_legitimate_rewards():
     """A fold pays reach_goal_bonus in a single step. That must survive untouched."""
-    cfg = yaml.safe_load(open("isaacsimenvs/cfg/task/Cloth.yaml"))
+    cfg = yaml.safe_load(open(REPO_ROOT / "isaacsimenvs/cfg/task/Cloth.yaml"))
     bonus = float(cfg["reward"]["reach_goal_bonus"])
     legit = torch.tensor([0.0, -50.0, 12.5, bonus, bonus + 250.0, -bonus])
     guarded, insane = _apply_guard(legit)
@@ -53,7 +54,7 @@ def test_guard_does_not_touch_legitimate_rewards():
 
 
 def test_limit_leaves_headroom_over_anything_the_task_can_pay():
-    cfg = yaml.safe_load(open("isaacsimenvs/cfg/task/Cloth.yaml"))
+    cfg = yaml.safe_load(open(REPO_ROOT / "isaacsimenvs/cfg/task/Cloth.yaml"))
     bonus = float(cfg["reward"]["reach_goal_bonus"])
     # Bonus plus generous shaping; the limit should sit well above it but far below the blow-ups.
     plausible_max = bonus + 1000.0

@@ -2,7 +2,7 @@
 
 The robot for pretraining our own rigid-body prior with SimToolReal's recipe, in place of its
 Kuka iiwa14 + Sharpa. The task is `Isaacsimenvs-PlayFlexivWuji-Direct-v0`: the Play task with
-`robots.FLEXIV_WUJI` (`isaacsimenvs/tasks/play/robots.py`) instead of `KUKA_SHARPA`, and
+`robots.FLEXIV_WUJI` (`isaacsimenvs/tasks/play/robots/`) instead of `KUKA_SHARPA`, and
 `cfg/task/PlayFlexivWuji.yaml`, a copy of `Play.yaml` that differs only in the robot.
 
 The robot has 27 joints (7 arm + 20 hand) against the Kuka's 29, so its policy has a 134-dim

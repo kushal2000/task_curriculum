@@ -17,7 +17,9 @@ import pytest
 torch = pytest.importorskip("torch")
 yaml = pytest.importorskip("yaml")
 
-REPO = Path(__file__).resolve().parents[1]
+from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
+
+REPO = REPO_ROOT
 
 
 @pytest.fixture(scope="module")
@@ -104,7 +106,7 @@ def test_tasks_and_aliases_are_registered():
     """Canonical ids, and every old id as an alias naming its canonical task and an existing robot
     setup (cfg/robot/<setup>.yaml)."""
     gym = pytest.importorskip("gymnasium")
-    from conftest import load_module
+    from isaacsimenvs.conftest import load_module
 
     load_module("isaacsimenvs/tasks/cloth/__init__.py", "cloth_registration")
     for task in ("Isaacsimenvs-Cloth-Direct-v0", "Isaacsimenvs-RigidCloth-Direct-v0"):

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import torch
 
-from conftest import load_module
+from isaacsimenvs.conftest import load_module
 
 ct = load_module("isaacsimenvs/tasks/cloth/mdp/tracker.py", "cloth_tracker")
 
