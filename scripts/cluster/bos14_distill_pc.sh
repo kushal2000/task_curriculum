@@ -54,7 +54,7 @@ evaluate() {  # sim policy student out start envs seed <extra args...>
     [ "$start" = rand ] && sargs=(--randomize)
     [ -n "$student" ] && stu=(--student "$student")
     if [ "$sim" = vbd ]; then
-        scripts/newton_py -m isaacsimenvs.scripts.distillation.distill_pc --mode eval --policy "$policy" "${stu[@]}" \
+        experiments/newton_py -m isaacsimenvs.scripts.distillation.distill_pc --mode eval --policy "$policy" "${stu[@]}" \
             --task "$VBD_TASK" --teacher "$TEACHER" --num_envs "$envs" --seed "$seed" \
             --json "$out" "${sargs[@]}" "$@" "${FOLD[@]}" "${VBD_EXTRA[@]}"
     else

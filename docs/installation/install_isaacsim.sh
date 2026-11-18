@@ -1,5 +1,5 @@
 #!/bin/bash
-# Create .venv_isaacsim exactly as docs/isaacsim_installation.md prescribes.
+# Create .venv_isaacsim exactly as docs/installation/isaacsim_installation.md prescribes.
 # Order matters: torch before isaaclab, typing_extensions after it, repo last with
 # --no-deps so it does not re-resolve the Isaac stack.
 set -euo pipefail

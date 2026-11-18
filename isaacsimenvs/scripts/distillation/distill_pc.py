@@ -7,7 +7,7 @@
         env.scene.num_envs=4096 env.cloth.keypoint_tolerance=0.015 env.termination.success_steps=10
 
     # evaluate a student (or the teacher: --policy teacher) -- first episode of every env
-    scripts/newton_py -m isaacsimenvs.scripts.distillation.distill_pc --mode eval --policy student \
+    experiments/newton_py -m isaacsimenvs.scripts.distillation.distill_pc --mode eval --policy student \
         --task Isaacsimenvs-ClothFlexivWujiRightHLRL-Direct-v0 --teacher <snap.pth> \
         --student outputs/distill/<name>/student_last.pth --num_envs 64 --json <out.json> <overrides>
 

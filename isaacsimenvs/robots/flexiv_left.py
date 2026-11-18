@@ -63,7 +63,7 @@ _WUJI_ARMATURE = tuple(
     for name in _WUJI_JOINTS
 )
 
-# Derived by scripts/flexiv_wuji/self_collision_pairs.py (tests/test_robot_specs.py reruns it):
+# Derived by isaacsimenvs/scripts/robots/self_collision_pairs.py (tests/test_robot_specs.py reruns it):
 # each jointed pair, plus the palm (link7, into which l_wrist merges) with every finger's
 # proximal_abd -- touching at reset on the ring and pinky, and through the knuckle's range on
 # the rest, as SimToolReal filters the Sharpa's palm-to-proximal pairs.

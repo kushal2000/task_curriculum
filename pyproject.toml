@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 # NOTE: Isaac Sim / Isaac Lab and torch are installed separately into a Python 3.11
-# venv (see docs/isaacsim_installation.md). Install this package with `--no-deps`.
+# venv (see docs/installation/isaacsim_installation.md). Install this package with `--no-deps`.
 dependencies = [
     "gym==0.23.1",
     "omegaconf",

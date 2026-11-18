@@ -1,6 +1,6 @@
 """Replay the real Wuji Hand 2 sysid trials in PhysX on a Flexiv + right Wuji robot (RightReal).
 
-    PYTHONPATH=$PWD OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python scripts/flexiv_wuji/sysid_replay_physx.py \
+    PYTHONPATH=$PWD OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python isaacsimenvs/scripts/robots/sysid_replay_physx.py \
         --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --headless \
         --data_dir <dir holding sysid-2026*/> --dt 0.00833333333 --out replay_dt120.npz
 
@@ -15,7 +15,7 @@ the recorded q, qd). The SIM is stepped directly (no env actions). Per env:
     per-type friction scale, so 1 = the spec). spring=1 adds the fit's passive spring by folding it
     into the drive (stiffness kp+ks, target (kp q_cmd + ks springref)/(kp+ks); the spring is then
     clipped with the PD, which the real one is not); spring=2 applies it as the env does, a joint
-    effort ks (ref - q) from action_utils.hand_spring_effort every step, outside the PD's clip.
+    effort ks (ref - q) from cloth/mdp/robot.spring_effort every step, outside the PD's clip.
   * gravity: on for the hand links only (the robot USD disables it), the scene gravity vector set so
     that it is the recorded mount's in the vendor MJCF wrist frame (fingers-up +z, palm-down +y). The
     two mounts run as two phases. The table and the cloth chain are moved 100 m below.
@@ -54,7 +54,7 @@ import torch  # noqa: E402
 
 import isaacsimenvs  # noqa: E402, F401
 from isaacsimenvs.scripts.evaluation.protocol import disable_randomization  # noqa: E402
-from isaacsimenvs.tasks.play.utils.action_utils import hand_spring_effort  # noqa: E402
+from isaacsimenvs.tasks.cloth.mdp.robot import spring_effort as hand_spring_effort  # noqa: E402
 from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

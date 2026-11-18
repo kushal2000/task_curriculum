@@ -30,6 +30,7 @@ import viser
 import yourdfpy
 from viser.extras import ViserUrdf
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "robots"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flexiv_wuji as fw  # noqa: E402
 from viser_compare import TABLE_COLOR, TABLE_SIZE, JointSliders  # noqa: E402

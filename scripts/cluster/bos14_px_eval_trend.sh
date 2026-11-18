@@ -4,7 +4,7 @@
 # target 4 (VBD cloth): pinned and randomised starts, 4 cm and 1.5 cm cutoffs, two eval seeds.
 #
 #   LIST=<file> sbatch --array=0-$(( 2 * $(wc -l < <file>) - 1 )) scripts/cluster/bos14_px_eval_trend.sh
-#   python3 scripts/analysis/px_eval_matrix_summary.py <tag> [<tag> ...]
+#   python3 isaacsimenvs/scripts/evaluation/matrix_summary.py <tag> [<tag> ...]
 #
 # LIST: one checkpoint per line, "<tag> <seed> <checkpoint path>" or "<tag> <seed> <run name> <select>"
 # (select as find_checkpoint: best / last / ep:<N>, resolved when the task runs, so a list can be
@@ -51,7 +51,7 @@ for CUT in 0.04 0.015; do
     for ES in ${EVAL_SEEDS:-1 2}; do
         OUT="$OUTDIR/${TAG}_s${SEED}__on_vbd__${START}__${CT}_s${ES}.json"
         [ -s "$OUT" ] && { echo "[px_trend] exists: $OUT"; continue; }
-        scripts/newton_py -m isaacsimenvs.scripts.evaluation.eval --task "Isaacsimenvs-Cloth${ROBOT:-}-Direct-v0" \
+        experiments/newton_py -m isaacsimenvs.scripts.evaluation.eval --task "Isaacsimenvs-Cloth${ROBOT:-}-Direct-v0" \
             --checkpoint "$CKPT" --policy_config pretrained_policy/config.yaml \
             --sapg_expl_coef 0 --num_envs 32 --max_steps 900 --success_tolerance 0.01 \
             --num_assets_per_type 1 --single_variant "${SARGS[@]}" --seed "$ES" --out "$OUT" \

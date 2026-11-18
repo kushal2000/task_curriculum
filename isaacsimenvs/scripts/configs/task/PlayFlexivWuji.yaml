@@ -7,7 +7,7 @@
 # Intentional differences from Play.yaml (the allowlist):
 #   * `robot` — selects robots.FLEXIV_WUJI (gains, palm/fingertip bodies, joint order)
 #   * `action_space` — 27 (7 arm + 20 hand) instead of 29; PlayEnv recomputes it from the robot
-#   * `assets.robot_urdf` — composed by scripts/flexiv_wuji/fetch_assets.sh
+#   * `assets.robot_urdf` — composed by isaacsimenvs/scripts/robots/fetch_assets.sh
 robot: flexiv_wuji
 
 # -----------------------------------------------------------------------------

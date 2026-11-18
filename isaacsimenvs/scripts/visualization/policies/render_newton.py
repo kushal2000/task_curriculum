@@ -1,6 +1,6 @@
 """RGB video of the pretrained policy running on the Newton backend.
 
-    xvfb-run -a scripts/newton_py -m isaacsimenvs.scripts.visualization.policies.render_newton --steps 900
+    xvfb-run -a experiments/newton_py -m isaacsimenvs.scripts.visualization.policies.render_newton --steps 900
 
 Output defaults under ``videos/``, which is gitignored -- renders are reproducible from the
 command above, so there is no reason to carry them in history.

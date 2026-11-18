@@ -1,7 +1,7 @@
 """How many steps a fold takes: median / mean length of the FOLDED episodes in bos14_px_eval_matrix.sh
 (and bos14_px_eval_trend.sh) results.
 
-    python3 scripts/analysis/px_eval_fold_steps.py one_flat ft7lr_flat_last [--targets vbd physx_pool]
+    python3 isaacsimenvs/scripts/evaluation/fold_steps.py one_flat ft7lr_flat_last [--targets vbd physx_pool]
 
 Reads docs/results/px_matrix/<tag>_s<seed>__on_<target>__<start>__<cut>_s<es>.json, pools every
 training seed and eval seed, and keeps the episodes with a held fold (`per_env_goals` >= 1). An

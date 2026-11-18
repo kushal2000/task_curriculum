@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 
 # Minimal dependencies; the full set (incl. Isaac Sim / Isaac Lab / torch) is documented
-# in docs/isaacsim_installation.md and installed separately. See pyproject.toml.
+# in docs/installation/isaacsim_installation.md and installed separately. See pyproject.toml.
 INSTALL_REQUIRES = [
     "gym==0.23.1",
     "omegaconf",

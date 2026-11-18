@@ -1,6 +1,6 @@
 """Run a fold policy LIVE in a browser (viser), with its knobs on sliders.
 
-    scripts/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser --task Isaacsimenvs-Cloth-Direct-v0
+    experiments/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser --task Isaacsimenvs-Cloth-Direct-v0
     sbatch scripts/cluster/bos14_live_viser.sh          # on a GPU node; the log prints the tunnel
 
 The env runs on the GPU exactly as `episodes.py` runs it (same reset, same zero-action tick, same

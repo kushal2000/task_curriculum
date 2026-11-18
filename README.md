@@ -84,7 +84,7 @@ task_curriculum/
 ├── scripts/g1_wuji/          # G1 + Wuji Hand trajectory replay, MuJoCo and Isaac Sim
 ├── experiments/run_curriculum.sh
 ├── tests/                    # Kit-free unit tests
-└── docs/isaacsim_installation.md
+└── docs/installation/isaacsim_installation.md
 ```
 
 ## The curriculum API
@@ -115,7 +115,7 @@ forwards to tensorboard and wandb — no observer changes.
 
 ## Installation
 
-See [docs/isaacsim_installation.md](docs/isaacsim_installation.md): Python 3.11, `uv`,
+See [docs/installation/isaacsim_installation.md](docs/installation/isaacsim_installation.md): Python 3.11, `uv`,
 a `.venv_isaacsim/`, `isaaclab[isaacsim,all]==2.3.2.post1`, `-e ./rl_games/`, then
 `-e . --no-deps`. Keep the pins exact.
 

@@ -79,7 +79,7 @@ CKPT_ARGS=(--checkpoint "$CKPT" --checkpoint_load_mode "${LOAD_MODE:-weights}")
 [ "${NO_PRIOR:-0}" = 1 ] && CKPT_ARGS=()
 
 PORT=$(( 20000 + (JOB % 10000) * 3 + SEED ))
-scripts/newton_py -m torch.distributed.run \
+experiments/newton_py -m torch.distributed.run \
     --nnodes="$NPS" --nproc_per_node=1 --node_rank="$NODE_RANK" \
     --master_addr="$HEAD_IP" --master_port="$PORT" ${RDZV_TIMEOUT:+--rdzv_conf=timeout=$RDZV_TIMEOUT} \
     -m isaacsimenvs.scripts.training.train \

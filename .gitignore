@@ -33,7 +33,7 @@ pretrained_assembly/
 .usd_cache/
 
 # Third-party source checkouts (Isaac Lab 3.0 for the Newton backend).
-# Not a submodule by choice: the pinned SHA lives in scripts/install_isaaclab3.sh, so the
+# Not a submodule by choice: the pinned SHA lives in docs/installation/install_isaaclab3.sh, so the
 # checkout is reproducible without carrying submodule machinery in the repo.
 third_party/
 
@@ -57,7 +57,7 @@ slurm_logs/
 docs/results/
 
 # Flexiv Rizon 4s + Wuji Hand 2 models, fetched at pinned upstream SHAs by
-# scripts/flexiv_wuji/fetch_assets.sh, plus the composed arm+hand URDF it writes. Unlike
+# isaacsimenvs/scripts/robots/fetch_assets.sh, plus the composed arm+hand URDF it writes. Unlike
 # g1_wuji2_description these ARE committed: the training-time pose viewer loads the robot URDF and
 # its meshes from raw.githubusercontent.com at the run's branch. Only what the composed left-hand
 # robot and the right-hand human-like robot reference is kept; the rest of the right hand is ignored. Do not move them to LFS -- raw GitHub

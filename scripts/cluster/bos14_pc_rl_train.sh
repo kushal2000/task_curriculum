@@ -90,7 +90,7 @@ RSIM="$SIM"
 if [ "$SIM" = mix ]; then [ "$NODE_RANK" -lt $(( NPS / 2 )) ] && RSIM=physx || RSIM=vbd; fi
 echo "[pc_rl] rank $NODE_RANK simulator: $RSIM"
 if [ "$RSIM" = vbd ]; then
-    PY=(scripts/newton_py)
+    PY=(experiments/newton_py)
     TASK_ARGS=(--task "Isaacsimenvs-Cloth${ROBOT:-FlexivWujiRightHLRL}-Direct-v0" env.newton.njmax=32768
                env.cloth.start_height=0.20 env.robot_self_collision=false env.newton.num_substeps=6 env.cloth.substeps=2
                env.cloth.keypoint_tolerance=0.015

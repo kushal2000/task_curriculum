@@ -670,7 +670,7 @@ class PlayFlexivWujiEnvCfg(PlayEnvCfg):
 
     The same task as ``PlayEnvCfg`` except the robot, and robot self-collision, which is on (as for
     its Kuka control, ``PlaySelfCollisionEnvCfg``). The URDF is composed by
-    ``scripts/flexiv_wuji/fetch_assets.sh``. Note ``student_obs.raycast_dynamic_prim_exprs``
+    ``isaacsimenvs/scripts/robots/fetch_assets.sh``. Note ``student_obs.raycast_dynamic_prim_exprs``
     still names the Kuka's links, so the raycaster student camera does not see this robot yet.
     """
 

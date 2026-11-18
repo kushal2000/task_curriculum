@@ -8,7 +8,7 @@ The spawn-time ejection that blocked this is **fixed** — see below. It was our
 
 ```bash
 # the cable now settles; the policy has not been scored on it yet
-scripts/newton_py -m isaacsimenvs.scripts.evaluation.eval \
+experiments/newton_py -m isaacsimenvs.scripts.evaluation.eval \
   --task Isaacsimenvs-Cable-Direct-v0 --num_envs 64 --single_variant
 ```
 
@@ -665,7 +665,7 @@ for real RL.
   from a config file puts *every* rank on `cuda:0`; here that surfaced as
   `Failed to allocate 3221225472 bytes on device 'cuda:0'`, which reads as an out-of-memory
   problem rather than a binding one. `throughput.py` now honours `LOCAL_RANK` and logs the bind.
-* **`torchrun` is not on `PATH`** (it lives in the venv) and must run *through* `scripts/newton_py`
+* **`torchrun` is not on `PATH`** (it lives in the venv) and must run *through* `experiments/newton_py`
   so workers inherit its `LD_PRELOAD`. Invoking it bare gives exit 127.
 
 ### Projection for this cluster

@@ -5,7 +5,7 @@ the vendor MJCF, by hand. Nothing ties them together at runtime except the env's
 so a mount change or a mistyped gain would otherwise go unnoticed until a policy trained badly.
 
 Kit-free: ``robots/`` is stdlib-only and is loaded off disk. The model files come from
-``scripts/flexiv_wuji/fetch_assets.sh``; the tests skip if they are missing.
+``isaacsimenvs/scripts/robots/fetch_assets.sh``; the tests skip if they are missing.
 """
 
 from __future__ import annotations
@@ -21,14 +21,14 @@ import pytest
 from isaacsimenvs.conftest import REPO_ROOT, load_module
 
 robots = load_module("isaacsimenvs/robots/__init__.py", "robots", package=True)
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "flexiv_wuji"))
+sys.path.insert(0, str(REPO_ROOT / "isaacsimenvs" / "scripts" / "robots"))
 import flexiv_wuji as fw  # noqa: E402
 
 SPEC = robots.FLEXIV_WUJI
 WUJI_MJCF = fw.ASSET_DIR / "wuji_hand2" / "mjcf" / "left.xml"
 
 needs_assets = pytest.mark.skipif(
-    not fw.COMPOSED_URDF.is_file(), reason="run scripts/flexiv_wuji/fetch_assets.sh"
+    not fw.COMPOSED_URDF.is_file(), reason="run isaacsimenvs/scripts/robots/fetch_assets.sh"
 )
 
 
@@ -187,7 +187,7 @@ def test_wuji_filter_matches_its_derivation(robot) -> None:
     }
 
 
-@pytest.mark.skipif(not fw.HUMAN_LIKE_URDF.is_file(), reason="run scripts/flexiv_wuji/fetch_assets.sh")
+@pytest.mark.skipif(not fw.HUMAN_LIKE_URDF.is_file(), reason="run isaacsimenvs/scripts/robots/fetch_assets.sh")
 def test_human_like_urdf_differs_only_in_its_table_of_limits() -> None:
     """Regenerated from flexiv_wuji.HUMAN_LIKE_LIMITS_DEG: every bound the table leaves as None,
     every joint it does not list, and everything that is not a limit is the vendor's; every range
@@ -252,7 +252,7 @@ def test_right_hand_spec_matches_its_urdf() -> None:
 
 
 needs_flexiv_sharpa = pytest.mark.skipif(
-    not fw.FLEXIV_SHARPA_URDF.is_file(), reason="run scripts/flexiv_wuji/flexiv_wuji.py"
+    not fw.FLEXIV_SHARPA_URDF.is_file(), reason="run isaacsimenvs/scripts/robots/flexiv_wuji.py"
 )
 
 

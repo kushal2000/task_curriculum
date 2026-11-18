@@ -76,7 +76,7 @@ uv pip install --python "${PY}" -e "${ROOT}" --no-deps
 # The Kit-free suite must pass under *both* interpreters -- that is what demonstrates the shared
 # task modules are genuinely shared rather than accidentally 3.11-only.
 uv pip install --python "${PY}" pytest
-# viser's URDF loader; Isaac Lab brings viser but not yourdfpy. Used by scripts/flexiv_wuji/.
+# viser's URDF loader; Isaac Lab brings viser but not yourdfpy. Used by isaacsimenvs/scripts/robots/.
 uv pip install --python "${PY}" yourdfpy
 
 echo "==> Verifying"

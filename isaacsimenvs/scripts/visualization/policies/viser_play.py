@@ -43,7 +43,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[4]
 OUTPUTS = REPO / "outputs"
-# isaacsim-kernel pins websockets==12.0 and viser needs >=13.1. scripts/install_isaacsim.sh
+# isaacsim-kernel pins websockets==12.0 and viser needs >=13.1. docs/installation/install_isaacsim.sh
 # installs a newer one here, outside the training venv; it must be first on the path before Kit
 # or viser import websockets.
 _WEBSOCKETS = REPO / "third_party" / "viser_websockets"

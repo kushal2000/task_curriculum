@@ -1,6 +1,6 @@
 """Score sysid_replay_physx.py rollouts against the real Wuji Hand 2 recordings (numpy + matplotlib).
 
-    .venv_isaacsim/bin/python scripts/flexiv_wuji/sysid_replay_report.py --data_dir <dir with sysid-2026*/> \
+    .venv_isaacsim/bin/python isaacsimenvs/scripts/robots/sysid_replay_report.py --data_dir <dir with sysid-2026*/> \
         --replay docs/results/flexiv_right_sysid_replay/replay_dt120.npz [--replay ..._dt1000.npz] \
         --out docs/results/flexiv_right_sysid_replay
 

@@ -35,7 +35,7 @@ TASK="${TASK:-Isaacsimenvs-Cloth-Direct-v0}"
 # (the big one only slows it down). Switching task from the browser applies the same rule.
 BUF=()
 [[ "$TASK" != Isaacsimenvs-Cloth*-Direct-v0 ]] && BUF=("env.newton.per_env_triangle_pairs=2097152")
-exec scripts/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser \
+exec experiments/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser \
     --task "$TASK" \
     --num_envs "${ENVS:-8}" \
     --port "$PORT" \

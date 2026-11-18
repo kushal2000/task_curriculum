@@ -4,7 +4,7 @@
 #
 #   KIND=pool  TRAIN_JOB=<id> RUN_TAG=<tag> sbatch --array=0-41 scripts/cluster/bos14_px_eval_matrix.sh
 #   KIND=chain TRAIN_JOB=<id> RUN_TAG=<tag> sbatch --array=0-41 scripts/cluster/bos14_px_eval_matrix.sh
-#   python3 scripts/analysis/px_eval_matrix_summary.py <tag> [<tag> ...]
+#   python3 isaacsimenvs/scripts/evaluation/matrix_summary.py <tag> [<tag> ...]
 #
 # Checkpoint: CKPT_SEL=best (default) takes nn/<name>.pth, the BEST-reward checkpoint, which is not
 # necessarily the trained policy (the 10-07 ft7lr finetunes wrote it once at epoch ~10). CKPT_SEL=last
@@ -59,7 +59,7 @@ fi
 [ -n "$CKPT" ] && [ -f "$CKPT" ] || { echo "[px_mx] no checkpoint for $NAME" >&2; exit 1; }
 
 PHYSX=(.venv_isaacsim/bin/python -m isaacsimenvs.scripts.evaluation.eval --headless)
-NEWTON=(scripts/newton_py -m isaacsimenvs.scripts.evaluation.eval)
+NEWTON=(experiments/newton_py -m isaacsimenvs.scripts.evaluation.eval)
 POOL7=("env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]"
        env.fold_pool.one_shape_per_env=true)
 case "$T" in

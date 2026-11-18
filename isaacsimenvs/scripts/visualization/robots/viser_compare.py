@@ -47,6 +47,7 @@ from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 from viser.extras import ViserUrdf
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "robots"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flexiv_wuji as fw  # noqa: E402
 from hand_frames import HAND_KEYPOINTS, hand_frame, hand_points  # noqa: E402
