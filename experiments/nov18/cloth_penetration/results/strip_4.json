@@ -1,0 +1,228 @@
+{
+  "design": "strip_4",
+  "num_envs": 64,
+  "thickness_m": 0.02,
+  "plates": [
+    "panel_0",
+    "panel_1",
+    "panel_2",
+    "panel_3"
+  ],
+  "pairs": {
+    "neighbour": [
+      "panel_0-panel_1",
+      "panel_0-panel_2",
+      "panel_1-panel_3"
+    ],
+    "non_neighbour": [
+      "panel_0-panel_3",
+      "panel_1-panel_2",
+      "panel_2-panel_3"
+    ]
+  },
+  "success_rate": 0.640625,
+  "worst_per_env_episode": {
+    "neighbour": {
+      "median_mm": 20.0,
+      "p90_mm": 20.0,
+      "max_mm": 22.46,
+      "envs_over_5mm": 62,
+      "envs_over_10mm": 60
+    },
+    "non_neighbour": {
+      "median_mm": 0.96,
+      "p90_mm": 16.06,
+      "max_mm": 28.08,
+      "envs_over_5mm": 16,
+      "envs_over_10mm": 10
+    },
+    "table": {
+      "median_mm": 1.19,
+      "p90_mm": 6.14,
+      "max_mm": 12.34,
+      "envs_over_5mm": 7,
+      "envs_over_10mm": 2
+    },
+    "robot": {
+      "median_mm": 23.4,
+      "p90_mm": 26.41,
+      "max_mm": 33.52,
+      "envs_over_5mm": 62,
+      "envs_over_10mm": 61
+    }
+  },
+  "envs_with_panel_fully_below_table_top": 0,
+  "hinge_angle_deg": {
+    "min": -116.9,
+    "max": 182.6,
+    "envs_bent_below_minus_30": 60
+  },
+  "top_events": [
+    {
+      "depth_mm": 33.5,
+      "kind": "robot",
+      "env": 61,
+      "step": 360,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 33.4,
+      "kind": "robot",
+      "env": 61,
+      "step": 359,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 32.7,
+      "kind": "robot",
+      "env": 61,
+      "step": 358,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 32.6,
+      "kind": "robot",
+      "env": 61,
+      "step": 357,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 32.6,
+      "kind": "robot",
+      "env": 61,
+      "step": 356,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 32.4,
+      "kind": "robot",
+      "env": 61,
+      "step": 355,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 32.4,
+      "kind": "robot",
+      "env": 61,
+      "step": 361,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 32.0,
+      "kind": "robot",
+      "env": 61,
+      "step": 354,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 31.5,
+      "kind": "robot",
+      "env": 61,
+      "step": 353,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 31.4,
+      "kind": "robot",
+      "env": 61,
+      "step": 362,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 30.8,
+      "kind": "robot",
+      "env": 61,
+      "step": 363,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 30.8,
+      "kind": "robot",
+      "env": 12,
+      "step": 473,
+      "design_dims_m": [
+        0.1133333370089531,
+        0.18000000715255737,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 30.8,
+      "kind": "robot",
+      "env": 12,
+      "step": 474,
+      "design_dims_m": [
+        0.1133333370089531,
+        0.18000000715255737,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 30.7,
+      "kind": "robot",
+      "env": 61,
+      "step": 352,
+      "design_dims_m": [
+        0.12666666507720947,
+        0.23333333432674408,
+        0.019999999552965164
+      ]
+    },
+    {
+      "depth_mm": 30.7,
+      "kind": "robot",
+      "env": 12,
+      "step": 471,
+      "design_dims_m": [
+        0.1133333370089531,
+        0.18000000715255737,
+        0.019999999552965164
+      ]
+    }
+  ],
+  "robot_contacts_measured": true
+}

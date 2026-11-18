@@ -1,0 +1,159 @@
+{
+  "config": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/resolved/.hydra/config.yaml",
+  "overrides": [],
+  "design": "hinge_band",
+  "size_m": [
+    0.3,
+    0.3
+  ],
+  "thickness_m": 0.002,
+  "density_kg_m2": 0.02,
+  "probe_radius_m": 0.008,
+  "probe_mass_kg": 0.5,
+  "ramp_s": 0.5,
+  "hold_s": 2.0,
+  "physics_dt": 0.008333333333333333,
+  "robot_cloth_contact_force_N_at_end": 0.0,
+  "per_env": [
+    {
+      "site": "centre panel_0",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.12,
+      "max_depth_mm": 2.12,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.12,
+      "max_depth_mm": 2.12,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.03,
+      "max_depth_mm": 2.08,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.46,
+      "hinge_limit_excess_deg": 2.6
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.01,
+      "max_depth_mm": 2.09,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.32,
+      "hinge_limit_excess_deg": 2.9
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": 1.85,
+      "max_depth_mm": 1.91,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.35,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": 1.85,
+      "max_depth_mm": 1.91,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.35,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": 1.86,
+      "max_depth_mm": 1.86,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 1.44,
+      "hinge_limit_excess_deg": 2.5
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": 1.86,
+      "max_depth_mm": 1.87,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 1.39,
+      "hinge_limit_excess_deg": 2.3
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 0.68,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 0.16,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.17,
+      "max_depth_mm": 2.17,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.16,
+      "max_depth_mm": 2.18,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 2.53,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 1.23,
+      "hinge_limit_excess_deg": 1.8
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 2.03,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 1.08,
+      "hinge_limit_excess_deg": 0.9
+    }
+  ]
+}

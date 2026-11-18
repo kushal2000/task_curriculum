@@ -1,0 +1,319 @@
+{
+  "config": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/resolved/.hydra/config.yaml",
+  "overrides": [],
+  "design": "strip_8",
+  "size_m": [
+    0.1,
+    0.1
+  ],
+  "thickness_m": 0.002,
+  "density_kg_m2": 0.02,
+  "probe_radius_m": 0.008,
+  "probe_mass_kg": 0.5,
+  "ramp_s": 0.5,
+  "hold_s": 2.0,
+  "physics_dt": 0.008333333333333333,
+  "robot_cloth_contact_force_N_at_end": 0.0,
+  "per_env": [
+    {
+      "site": "centre panel_0",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.1,
+      "max_depth_mm": 2.1,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.06,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.09,
+      "max_depth_mm": 2.1,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.06,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.07,
+      "max_depth_mm": 2.08,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.14,
+      "hinge_limit_excess_deg": 4.7
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.07,
+      "max_depth_mm": 2.09,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.18,
+      "hinge_limit_excess_deg": 4.7
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.11,
+      "max_depth_mm": 2.14,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.11,
+      "hinge_limit_excess_deg": 0.1
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.11,
+      "max_depth_mm": 2.13,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.15,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.02,
+      "max_depth_mm": 2.07,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.26,
+      "hinge_limit_excess_deg": 5.8
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.01,
+      "max_depth_mm": 2.11,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.06,
+      "hinge_limit_excess_deg": 6.7
+    },
+    {
+      "site": "centre panel_4",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.12,
+      "max_depth_mm": 2.12,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.59,
+      "hinge_limit_excess_deg": 7.2
+    },
+    {
+      "site": "centre panel_4",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.07,
+      "max_depth_mm": 2.14,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.58,
+      "hinge_limit_excess_deg": 8.4
+    },
+    {
+      "site": "centre panel_5",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.04,
+      "max_depth_mm": 2.19,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.23,
+      "hinge_limit_excess_deg": 13.2
+    },
+    {
+      "site": "centre panel_5",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.03,
+      "max_depth_mm": 2.43,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.41,
+      "hinge_limit_excess_deg": 15.1
+    },
+    {
+      "site": "centre panel_6",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.12,
+      "max_depth_mm": 2.19,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.19,
+      "hinge_limit_excess_deg": 5.7
+    },
+    {
+      "site": "centre panel_6",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.11,
+      "max_depth_mm": 2.16,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.13,
+      "hinge_limit_excess_deg": 5.1
+    },
+    {
+      "site": "centre panel_7",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.1,
+      "max_depth_mm": 2.25,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.96,
+      "hinge_limit_excess_deg": 5.7
+    },
+    {
+      "site": "centre panel_7",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.03,
+      "max_depth_mm": 2.14,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.75,
+      "hinge_limit_excess_deg": 8.4
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.21,
+      "max_depth_mm": 2.22,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.04,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.21,
+      "max_depth_mm": 2.23,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.2,
+      "max_depth_mm": 2.21,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.2,
+      "max_depth_mm": 2.23,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.08,
+      "max_depth_mm": 2.08,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.92,
+      "hinge_limit_excess_deg": 5.3
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.08,
+      "max_depth_mm": 2.09,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.85,
+      "hinge_limit_excess_deg": 5.4
+    },
+    {
+      "site": "hinge panel_2|panel_4",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.18,
+      "max_depth_mm": 2.87,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.86,
+      "hinge_limit_excess_deg": 12.7
+    },
+    {
+      "site": "hinge panel_2|panel_4",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.21,
+      "max_depth_mm": 2.94,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.68,
+      "hinge_limit_excess_deg": 13.1
+    },
+    {
+      "site": "hinge panel_3|panel_5",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.23,
+      "max_depth_mm": 2.65,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.82,
+      "hinge_limit_excess_deg": 13.6
+    },
+    {
+      "site": "hinge panel_3|panel_5",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.24,
+      "max_depth_mm": 2.91,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.62,
+      "hinge_limit_excess_deg": 12.8
+    },
+    {
+      "site": "hinge panel_4|panel_6",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.19,
+      "max_depth_mm": 2.37,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.05,
+      "hinge_limit_excess_deg": 13.2
+    },
+    {
+      "site": "hinge panel_4|panel_6",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.23,
+      "max_depth_mm": 2.66,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.36,
+      "hinge_limit_excess_deg": 13.9
+    },
+    {
+      "site": "hinge panel_5|panel_7",
+      "force_N": 20.0,
+      "steady_depth_mm": 2.23,
+      "max_depth_mm": 2.51,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.12,
+      "hinge_limit_excess_deg": 12.5
+    },
+    {
+      "site": "hinge panel_5|panel_7",
+      "force_N": 50.0,
+      "steady_depth_mm": 2.26,
+      "max_depth_mm": 3.18,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.44,
+      "hinge_limit_excess_deg": 13.3
+    }
+  ]
+}

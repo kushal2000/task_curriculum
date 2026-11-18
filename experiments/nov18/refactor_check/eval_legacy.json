@@ -1,0 +1,1053 @@
+{
+  "task": "Isaacsimenvs-RigidBodyCloth-Direct-v0",
+  "config": "debug_outputs/train_logs/nov/2026-11-17_cloth_curriculum_prior_20to2mm_742942/.hydra/config.yaml",
+  "checkpoint": "debug_outputs/train_logs/nov/2026-11-17_cloth_curriculum_prior_20to2mm_742942/nn/0_cloth_curriculum_prior_20to2mm.pth",
+  "overrides": [],
+  "num_envs": 64,
+  "expl_coef": 0.0,
+  "stochastic": false,
+  "seed": 42,
+  "thickness_m": 0.02,
+  "steps_run": 600,
+  "censored": 0,
+  "all": {
+    "fold": {
+      "n": 64,
+      "successes": 55,
+      "success_rate": 0.8594,
+      "sem": 0.0435
+    },
+    "release": {
+      "n": 64,
+      "successes": 45,
+      "success_rate": 0.7031,
+      "sem": 0.0571
+    },
+    "penetration": {
+      "median_max_mm": 21.22,
+      "p90_max_mm": 26.9,
+      "max_mm": 37.79,
+      "episodes_over_10mm": 0.7812,
+      "deep_contact_step_fraction": 0.3886
+    }
+  },
+  "by_design": {
+    "single_hinge": {
+      "fold": {
+        "n": 13,
+        "successes": 10,
+        "success_rate": 0.7692,
+        "sem": 0.1169
+      },
+      "release": {
+        "n": 13,
+        "successes": 9,
+        "success_rate": 0.6923,
+        "sem": 0.128
+      },
+      "penetration": {
+        "median_max_mm": 13.03,
+        "p90_max_mm": 25.07,
+        "max_mm": 26.6,
+        "episodes_over_10mm": 0.5385,
+        "deep_contact_step_fraction": 0.3448
+      }
+    },
+    "strip_4": {
+      "fold": {
+        "n": 13,
+        "successes": 13,
+        "success_rate": 1.0,
+        "sem": 0.0
+      },
+      "release": {
+        "n": 13,
+        "successes": 11,
+        "success_rate": 0.8462,
+        "sem": 0.1001
+      },
+      "penetration": {
+        "median_max_mm": 24.14,
+        "p90_max_mm": 35.02,
+        "max_mm": 37.79,
+        "episodes_over_10mm": 0.9231,
+        "deep_contact_step_fraction": 0.4832
+      }
+    },
+    "strip_8": {
+      "fold": {
+        "n": 13,
+        "successes": 12,
+        "success_rate": 0.9231,
+        "sem": 0.0739
+      },
+      "release": {
+        "n": 13,
+        "successes": 10,
+        "success_rate": 0.7692,
+        "sem": 0.1169
+      },
+      "penetration": {
+        "median_max_mm": 21.21,
+        "p90_max_mm": 26.6,
+        "max_mm": 27.91,
+        "episodes_over_10mm": 0.9231,
+        "deep_contact_step_fraction": 0.432
+      }
+    },
+    "hinge_band": {
+      "fold": {
+        "n": 13,
+        "successes": 10,
+        "success_rate": 0.7692,
+        "sem": 0.1169
+      },
+      "release": {
+        "n": 13,
+        "successes": 8,
+        "success_rate": 0.6154,
+        "sem": 0.1349
+      },
+      "penetration": {
+        "median_max_mm": 20.79,
+        "p90_max_mm": 25.88,
+        "max_mm": 31.05,
+        "episodes_over_10mm": 0.6154,
+        "deep_contact_step_fraction": 0.3263
+      }
+    },
+    "flexible_corners": {
+      "fold": {
+        "n": 12,
+        "successes": 10,
+        "success_rate": 0.8333,
+        "sem": 0.1076
+      },
+      "release": {
+        "n": 12,
+        "successes": 7,
+        "success_rate": 0.5833,
+        "sem": 0.1423
+      },
+      "penetration": {
+        "median_max_mm": 20.36,
+        "p90_max_mm": 25.0,
+        "max_mm": 29.12,
+        "episodes_over_10mm": 0.9167,
+        "deep_contact_step_fraction": 0.3544
+      }
+    }
+  },
+  "termination_reasons": {
+    "fall": 0,
+    "fold": 45,
+    "fold_held": 35,
+    "hand_far": 0,
+    "nonfinite": 0,
+    "outside_table": 11,
+    "persist": 0,
+    "persist_fail": 0,
+    "press_driven_fold": 4,
+    "released": 45,
+    "timeout": 4
+  },
+  "mean_episode_length": 262.8,
+  "per_env": [
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.22739233076572418,
+        0.27550578117370605,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": false,
+      "release_success": false,
+      "max_penetration_mm": 20.04,
+      "deep_contact_step_fraction": 0.3125,
+      "length": 89
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.22739233076572418,
+        0.27550578117370605,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 27.42,
+      "deep_contact_step_fraction": 0.4416,
+      "length": 283
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.22739233076572418,
+        0.27550578117370605,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 24.92,
+      "deep_contact_step_fraction": 0.604,
+      "length": 213
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.22739233076572418,
+        0.27550578117370605,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": false,
+      "release_success": false,
+      "max_penetration_mm": 20.79,
+      "deep_contact_step_fraction": 0.8462,
+      "length": 75
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.22739233076572418,
+        0.27550578117370605,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 10.04,
+      "deep_contact_step_fraction": 0.1702,
+      "length": 220
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.153957337141037,
+        0.11736297607421875,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 24.19,
+      "deep_contact_step_fraction": 0.3836,
+      "length": 347
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.153957337141037,
+        0.11736297607421875,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 23.54,
+      "deep_contact_step_fraction": 0.6939,
+      "length": 164
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.153957337141037,
+        0.11736297607421875,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 22.52,
+      "deep_contact_step_fraction": 0.2847,
+      "length": 488
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.153957337141037,
+        0.11736297607421875,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 1.65,
+      "deep_contact_step_fraction": 0.0,
+      "length": 153
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.153957337141037,
+        0.11736297607421875,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 21.22,
+      "deep_contact_step_fraction": 0.3472,
+      "length": 491
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.10819470137357712,
+        0.2416837513446808,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 26.6,
+      "deep_contact_step_fraction": 0.5149,
+      "length": 576
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.10819470137357712,
+        0.2416837513446808,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 23.49,
+      "deep_contact_step_fraction": 0.6897,
+      "length": 490
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.10819470137357712,
+        0.2416837513446808,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 18.92,
+      "deep_contact_step_fraction": 0.3684,
+      "length": 149
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.10819470137357712,
+        0.2416837513446808,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 31.05,
+      "deep_contact_step_fraction": 0.4987,
+      "length": 558
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.10819470137357712,
+        0.2416837513446808,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 14.68,
+      "deep_contact_step_fraction": 0.525,
+      "length": 141
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.10330552607774734,
+        0.2578309178352356,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": false,
+      "release_success": false,
+      "max_penetration_mm": 13.03,
+      "deep_contact_step_fraction": 0.75,
+      "length": 96
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.10330552607774734,
+        0.2578309178352356,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 24.14,
+      "deep_contact_step_fraction": 0.878,
+      "length": 164
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.10330552607774734,
+        0.2578309178352356,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 20.89,
+      "deep_contact_step_fraction": 0.537,
+      "length": 549
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.10330552607774734,
+        0.2578309178352356,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 21.74,
+      "deep_contact_step_fraction": 0.4571,
+      "length": 282
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.10330552607774734,
+        0.2578309178352356,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 29.12,
+      "deep_contact_step_fraction": 0.8329,
+      "length": 416
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.26265403628349304,
+        0.25983926653862,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 8.66,
+      "deep_contact_step_fraction": 0.1624,
+      "length": 325
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.26265403628349304,
+        0.25983926653862,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 21.96,
+      "deep_contact_step_fraction": 0.3516,
+      "length": 280
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.26265403628349304,
+        0.25983926653862,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 27.02,
+      "deep_contact_step_fraction": 0.2045,
+      "length": 222
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.26265403628349304,
+        0.25983926653862,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 5.67,
+      "deep_contact_step_fraction": 0.0364,
+      "length": 128
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.26265403628349304,
+        0.25983926653862,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 25.02,
+      "deep_contact_step_fraction": 0.2812,
+      "length": 232
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.282551109790802,
+        0.16445735096931458,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 7.17,
+      "deep_contact_step_fraction": 0.0857,
+      "length": 199
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.282551109790802,
+        0.16445735096931458,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 1.81,
+      "deep_contact_step_fraction": 0.0,
+      "length": 165
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.282551109790802,
+        0.16445735096931458,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 20.18,
+      "deep_contact_step_fraction": 0.2826,
+      "length": 203
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.282551109790802,
+        0.16445735096931458,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": false,
+      "release_success": false,
+      "max_penetration_mm": 6.31,
+      "deep_contact_step_fraction": 0.3158,
+      "length": 98
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.282551109790802,
+        0.16445735096931458,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 8.93,
+      "deep_contact_step_fraction": 0.2857,
+      "length": 154
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.22132715582847595,
+        0.25932782888412476,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 6.78,
+      "deep_contact_step_fraction": 0.2391,
+      "length": 191
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.22132715582847595,
+        0.25932782888412476,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 24.65,
+      "deep_contact_step_fraction": 0.4717,
+      "length": 165
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.22132715582847595,
+        0.25932782888412476,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 21.21,
+      "deep_contact_step_fraction": 0.5345,
+      "length": 209
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.22132715582847595,
+        0.25932782888412476,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 21.56,
+      "deep_contact_step_fraction": 0.253,
+      "length": 166
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.22132715582847595,
+        0.25932782888412476,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": false,
+      "release_success": false,
+      "max_penetration_mm": 13.14,
+      "deep_contact_step_fraction": 0.0819,
+      "length": 460
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.24589930474758148,
+        0.14506569504737854,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 20.62,
+      "deep_contact_step_fraction": 0.3902,
+      "length": 252
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.24589930474758148,
+        0.14506569504737854,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 37.79,
+      "deep_contact_step_fraction": 0.6071,
+      "length": 237
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.24589930474758148,
+        0.14506569504737854,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 22.49,
+      "deep_contact_step_fraction": 0.3514,
+      "length": 227
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.24589930474758148,
+        0.14506569504737854,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 8.98,
+      "deep_contact_step_fraction": 0.0847,
+      "length": 152
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.24589930474758148,
+        0.14506569504737854,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 20.36,
+      "deep_contact_step_fraction": 0.3804,
+      "length": 224
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.2087250053882599,
+        0.1724615842103958,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": false,
+      "release_success": false,
+      "max_penetration_mm": 19.64,
+      "deep_contact_step_fraction": 0.9231,
+      "length": 54
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.2087250053882599,
+        0.1724615842103958,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 25.58,
+      "deep_contact_step_fraction": 0.4151,
+      "length": 600
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.2087250053882599,
+        0.1724615842103958,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 22.95,
+      "deep_contact_step_fraction": 0.3636,
+      "length": 180
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.2087250053882599,
+        0.1724615842103958,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 24.28,
+      "deep_contact_step_fraction": 0.3208,
+      "length": 178
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.2087250053882599,
+        0.1724615842103958,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 24.63,
+      "deep_contact_step_fraction": 0.3115,
+      "length": 254
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.2870144844055176,
+        0.1834896206855774,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 6.51,
+      "deep_contact_step_fraction": 0.0204,
+      "length": 183
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.2870144844055176,
+        0.1834896206855774,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 36.92,
+      "deep_contact_step_fraction": 0.2442,
+      "length": 193
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.2870144844055176,
+        0.1834896206855774,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": false,
+      "release_success": false,
+      "max_penetration_mm": 27.91,
+      "deep_contact_step_fraction": 0.8679,
+      "length": 208
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.2870144844055176,
+        0.1834896206855774,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": false,
+      "release_success": false,
+      "max_penetration_mm": 20.29,
+      "deep_contact_step_fraction": 0.6786,
+      "length": 137
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.2870144844055176,
+        0.1834896206855774,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 13.26,
+      "deep_contact_step_fraction": 0.2031,
+      "length": 155
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.2631707191467285,
+        0.2082819938659668,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 5.43,
+      "deep_contact_step_fraction": 0.0408,
+      "length": 179
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.2631707191467285,
+        0.2082819938659668,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 23.73,
+      "deep_contact_step_fraction": 0.3725,
+      "length": 158
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.2631707191467285,
+        0.2082819938659668,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 2.26,
+      "deep_contact_step_fraction": 0.0,
+      "length": 186
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.2631707191467285,
+        0.2082819938659668,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 21.58,
+      "deep_contact_step_fraction": 0.1237,
+      "length": 600
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.2631707191467285,
+        0.2082819938659668,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": false,
+      "release_success": false,
+      "max_penetration_mm": 21.97,
+      "deep_contact_step_fraction": 0.3377,
+      "length": 600
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.10054770112037659,
+        0.122522734105587,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 25.29,
+      "deep_contact_step_fraction": 0.6377,
+      "length": 219
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.10054770112037659,
+        0.122522734105587,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 24.33,
+      "deep_contact_step_fraction": 0.5128,
+      "length": 134
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.10054770112037659,
+        0.122522734105587,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 20.86,
+      "deep_contact_step_fraction": 0.8864,
+      "length": 287
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.10054770112037659,
+        0.122522734105587,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 26.28,
+      "deep_contact_step_fraction": 0.5873,
+      "length": 356
+    },
+    {
+      "design": "flexible_corners",
+      "dims_m": [
+        0.10054770112037659,
+        0.122522734105587,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 24.74,
+      "deep_contact_step_fraction": 0.4959,
+      "length": 600
+    },
+    {
+      "design": "single_hinge",
+      "dims_m": [
+        0.27148085832595825,
+        0.18138955533504486,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 5.38,
+      "deep_contact_step_fraction": 0.0217,
+      "length": 132
+    },
+    {
+      "design": "strip_4",
+      "dims_m": [
+        0.27148085832595825,
+        0.18138955533504486,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 22.72,
+      "deep_contact_step_fraction": 0.6029,
+      "length": 217
+    },
+    {
+      "design": "strip_8",
+      "dims_m": [
+        0.27148085832595825,
+        0.18138955533504486,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": true,
+      "max_penetration_mm": 17.23,
+      "deep_contact_step_fraction": 0.3305,
+      "length": 249
+    },
+    {
+      "design": "hinge_band",
+      "dims_m": [
+        0.27148085832595825,
+        0.18138955533504486,
+        0.019999999552965164
+      ],
+      "scored": true,
+      "fold_success": true,
+      "release_success": false,
+      "max_penetration_mm": 6.59,
+      "deep_contact_step_fraction": 0.0395,
+      "length": 525
+    }
+  ]
+}

@@ -1,0 +1,232 @@
+{
+ "test": "press",
+ "config": "debug_outputs/train_logs/nov/2026-11-17_cloth_curriculum_prior_20to2mm_742942/.hydra/config.yaml",
+ "overrides": [
+  "env.rigid_cloth.solver_position_iterations=36",
+  "env.sim.physx.max_position_iteration_count=36"
+ ],
+ "design": "single_hinge",
+ "thickness_m": 0.02,
+ "dr_ranges": {
+  "bending_rigidity": [
+   1e-06,
+   0.00025
+  ],
+  "bending_viscosity": [
+   1e-06,
+   0.00015
+  ],
+  "density": [
+   0.02,
+   0.5
+  ],
+  "table_static_friction": [
+   0.1,
+   0.8
+  ],
+  "hand_static_friction": [
+   0.3,
+   1.2
+  ],
+  "dynamic_friction_ratio": [
+   0.6,
+   1.0
+  ],
+  "armature_scale": [
+   0.0,
+   0.0
+  ]
+ },
+ "dr_random": null,
+ "probe_radius_m": 0.008,
+ "probe_mass_kg": 0.5,
+ "forces_N": [
+  20.0,
+  50.0
+ ],
+ "max_depth_mm": 2.0,
+ "physics_dt": 0.008333333333333333,
+ "num_envs": 6,
+ "failed_envs": 6,
+ "failed_corner_envs": 0,
+ "failed_random_envs": 0,
+ "random_envs": 0,
+ "failing_ranges": {},
+ "worst_env": {
+  "env": 5,
+  "site": "hinge minus|plus",
+  "force_N": 50.0,
+  "kind": "fixed",
+  "material_index": 0,
+  "material": {
+   "bending_rigidity": 5e-05,
+   "bending_viscosity": 5e-05,
+   "density": 0.2,
+   "table_static_friction": 0.4,
+   "hand_static_friction": 0.8,
+   "dynamic_friction_ratio": 0.8,
+   "armature_scale": 0.0
+  },
+  "length": 0.10000000149011612,
+  "width": 0.10000000149011612,
+  "steady_depth_mm": NaN,
+  "max_depth_mm": 479.44,
+  "through": true,
+  "slid_off": true,
+  "failed": true,
+  "panel_below_table_mm": 530.39,
+  "hinge_limit_excess_deg": 0.0
+ },
+ "per_env": [
+  {
+   "env": 0,
+   "site": "centre minus",
+   "force_N": 20.0,
+   "kind": "fixed",
+   "material_index": 0,
+   "material": {
+    "bending_rigidity": 5e-05,
+    "bending_viscosity": 5e-05,
+    "density": 0.2,
+    "table_static_friction": 0.4,
+    "hand_static_friction": 0.8,
+    "dynamic_friction_ratio": 0.8,
+    "armature_scale": 0.0
+   },
+   "length": 0.10000000149011612,
+   "width": 0.10000000149011612,
+   "steady_depth_mm": 36.0,
+   "max_depth_mm": 73.21,
+   "through": true,
+   "slid_off": false,
+   "failed": true,
+   "panel_below_table_mm": 0.26,
+   "hinge_limit_excess_deg": 0.0
+  },
+  {
+   "env": 1,
+   "site": "centre minus",
+   "force_N": 50.0,
+   "kind": "fixed",
+   "material_index": 0,
+   "material": {
+    "bending_rigidity": 5e-05,
+    "bending_viscosity": 5e-05,
+    "density": 0.2,
+    "table_static_friction": 0.4,
+    "hand_static_friction": 0.8,
+    "dynamic_friction_ratio": 0.8,
+    "armature_scale": 0.0
+   },
+   "length": 0.10000000149011612,
+   "width": 0.10000000149011612,
+   "steady_depth_mm": 36.0,
+   "max_depth_mm": 78.15,
+   "through": true,
+   "slid_off": false,
+   "failed": true,
+   "panel_below_table_mm": 0.27,
+   "hinge_limit_excess_deg": 0.0
+  },
+  {
+   "env": 2,
+   "site": "centre plus",
+   "force_N": 20.0,
+   "kind": "fixed",
+   "material_index": 0,
+   "material": {
+    "bending_rigidity": 5e-05,
+    "bending_viscosity": 5e-05,
+    "density": 0.2,
+    "table_static_friction": 0.4,
+    "hand_static_friction": 0.8,
+    "dynamic_friction_ratio": 0.8,
+    "armature_scale": 0.0
+   },
+   "length": 0.10000000149011612,
+   "width": 0.10000000149011612,
+   "steady_depth_mm": 36.0,
+   "max_depth_mm": 72.91,
+   "through": true,
+   "slid_off": false,
+   "failed": true,
+   "panel_below_table_mm": 0.04,
+   "hinge_limit_excess_deg": 0.0
+  },
+  {
+   "env": 3,
+   "site": "centre plus",
+   "force_N": 50.0,
+   "kind": "fixed",
+   "material_index": 0,
+   "material": {
+    "bending_rigidity": 5e-05,
+    "bending_viscosity": 5e-05,
+    "density": 0.2,
+    "table_static_friction": 0.4,
+    "hand_static_friction": 0.8,
+    "dynamic_friction_ratio": 0.8,
+    "armature_scale": 0.0
+   },
+   "length": 0.10000000149011612,
+   "width": 0.10000000149011612,
+   "steady_depth_mm": 36.0,
+   "max_depth_mm": 77.56,
+   "through": true,
+   "slid_off": false,
+   "failed": true,
+   "panel_below_table_mm": 0.04,
+   "hinge_limit_excess_deg": 0.0
+  },
+  {
+   "env": 4,
+   "site": "hinge minus|plus",
+   "force_N": 20.0,
+   "kind": "fixed",
+   "material_index": 0,
+   "material": {
+    "bending_rigidity": 5e-05,
+    "bending_viscosity": 5e-05,
+    "density": 0.2,
+    "table_static_friction": 0.4,
+    "hand_static_friction": 0.8,
+    "dynamic_friction_ratio": 0.8,
+    "armature_scale": 0.0
+   },
+   "length": 0.10000000149011612,
+   "width": 0.10000000149011612,
+   "steady_depth_mm": NaN,
+   "max_depth_mm": 35.11,
+   "through": true,
+   "slid_off": true,
+   "failed": true,
+   "panel_below_table_mm": 0.28,
+   "hinge_limit_excess_deg": 0.0
+  },
+  {
+   "env": 5,
+   "site": "hinge minus|plus",
+   "force_N": 50.0,
+   "kind": "fixed",
+   "material_index": 0,
+   "material": {
+    "bending_rigidity": 5e-05,
+    "bending_viscosity": 5e-05,
+    "density": 0.2,
+    "table_static_friction": 0.4,
+    "hand_static_friction": 0.8,
+    "dynamic_friction_ratio": 0.8,
+    "armature_scale": 0.0
+   },
+   "length": 0.10000000149011612,
+   "width": 0.10000000149011612,
+   "steady_depth_mm": NaN,
+   "max_depth_mm": 479.44,
+   "through": true,
+   "slid_off": true,
+   "failed": true,
+   "panel_below_table_mm": 530.39,
+   "hinge_limit_excess_deg": 0.0
+  }
+ ]
+}

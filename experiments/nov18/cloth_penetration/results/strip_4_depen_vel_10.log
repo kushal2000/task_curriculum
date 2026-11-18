@@ -1,0 +1,207 @@
+[INFO][AppLauncher]: Using device: cuda:0
+[INFO][AppLauncher]: Loading experience file: /share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaaclab/apps/isaaclab.python.headless.kit
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.cloth.backends.rigid.config:RigidClothEnvCfg
+[eval_cloth] thickness frozen at 20.00 mm (from checkpoint)
+
+[36m=========================================================================================================[0m
+[36m[1m[INFO][IsaacLab]: Logging to file: /share/portal/kk837/tmp/isaaclab/logs/isaaclab_2026-11-18_11-49-04.log[0m
+[36m=========================================================================================================[0m
+
+[33m11:49:04 [simulation_context.py] WARNING: The `enable_external_forces_every_iteration` parameter in the PhysxCfg is set to False. If you are experiencing noisy velocities, consider enabling this flag. You may need to slightly increase the number of velocity iterations (setting it to 1 or 2 rather than 0), together with this flag, to improve the accuracy of velocity updates.[0m
+Loading user config located at: '/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaacsim/kit/data/Kit/Isaac-Sim/5.1/user.config.json'
+[Info] [carb] Logging to file: /share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaacsim/kit/logs/Kit/Isaac-Sim/5.1/kit_20261118_114855.log
+2026-11-18T16:48:56Z [725ms] [Warning] [omni.usd_config.extension] Enable omni.materialx.libs extension to use MaterialX
+2026-11-18T16:48:57Z [1,276ms] [Warning] [omni.platforminfo.plugin] failed to open the default display.  Can't verify X Server version.
+2026-11-18T16:48:57Z [1,639ms] [Warning] [carb] Acquiring non optional plugin interface which is not listed as dependency: [omni::physx::IPhysxBenchmarks v1.0] (plugin: <default plugin>), by client: omni.physics.physx.plugin. Add it to CARB_PLUGIN_IMPL_DEPS() macro of a client.
+2026-11-18T16:48:57Z [1,657ms] [Warning] [omni.isaac.dynamic_control] omni.isaac.dynamic_control is deprecated as of Isaac Sim 4.5. No action is needed from end-users.
+2026-11-18T16:49:02Z [6,870ms] [Warning] [carb.cudainterop.plugin] CUDA_VISIBLE_DEVICES environment variable is set.
+2026-11-18T16:49:02Z [6,870ms] [Warning] [carb.cudainterop.plugin] Note CUDA device enumeration and Omniverse device enumeration are different.
+2026-11-18T16:49:02Z [6,895ms] [Warning] [carb.cudainterop.plugin] Setting CUDA_VISIBLE_DEVICES can lead to undesired behavior or crashes.
+
+|---------------------------------------------------------------------------------------------|
+| Driver Version: 570.124.06    | Graphics API: Vulkan
+|=============================================================================================|
+| GPU | Name                             | Active | LDA | GPU Memory | Vendor-ID | LUID       |
+|     |                                  |        |     |            | Device-ID | UUID       |
+|     |                                  |        |     |            | Bus-ID    |            |
+|---------------------------------------------------------------------------------------------|
+| 0   | NVIDIA RTX 6000 Ada Generation   | Yes: 0 |     | 49386   MB | 10de      | 0          |
+|     |                                  |        |     |            | 26b1      | c9826a3a.. |
+|     |                                  |        |     |            | 30        |            |
+|=============================================================================================|
+| OS: 24.04.4 LTS (Noble Numbat) ubuntu, Version: 24.04.4, Kernel: 6.8.0-138-generic
+| Processor: Intel(R) Xeon(R) Gold 6448Y
+| Cores: 64 | Logical Cores: 64
+|---------------------------------------------------------------------------------------------|
+| Total Memory (MB): 1031757 | Free Memory: 910967
+| Total Page/Swap (MB): 4095 | Free Page/Swap: 2381
+|---------------------------------------------------------------------------------------------|
+2026-11-18T16:49:03Z [7,697ms] [Warning] [gpu.foundation.plugin] CPU performance profile is set to conservative. This profile gradually sets the CPU frequency based on the current load and may not deliver best performance.
+2026-11-18T16:49:03Z [7,708ms] [Warning] [gpu.foundation.plugin] IOMMU is enabled.
+2026-11-18T16:49:03Z [7,748ms] [Warning] [omni.kvdb.plugin] Disabling key-value database because another kit process is locking it
+2026-11-18T16:49:04Z [8,797ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-18T16:49:04Z [8,797ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+
+|---------------------------------------------------------------------------------------------|
+| Driver Version: 570.124.06    | Graphics API: Vulkan
+|=============================================================================================|
+| GPU | Name                             | Active | LDA | GPU Memory | Vendor-ID | LUID       |
+|     |                                  |        |     |            | Device-ID | UUID       |
+|     |                                  |        |     |            | Bus-ID    |            |
+|---------------------------------------------------------------------------------------------|
+| 0   | NVIDIA RTX 6000 Ada Generation   | Yes: 0 |     | 49386   MB | 10de      | 0          |
+|     |                                  |        |     |            | 26b1      | c9826a3a.. |
+|     |                                  |        |     |            | 30        |            |
+|=============================================================================================|
+| OS: 24.04.4 LTS (Noble Numbat) ubuntu, Version: 24.04.4, Kernel: 6.8.0-138-generic
+| Processor: Intel(R) Xeon(R) Gold 6448Y
+| Cores: 64 | Logical Cores: 64
+|---------------------------------------------------------------------------------------------|
+| Total Memory (MB): 1031757 | Free Memory: 909532
+| Total Page/Swap (MB): 4095 | Free Page/Swap: 2381
+|---------------------------------------------------------------------------------------------|
+2026-11-18T16:49:05Z [9,276ms] [Warning] [gpu.foundation.plugin] CPU performance profile is set to conservative. This profile gradually sets the CPU frequency based on the current load and may not deliver best performance.
+2026-11-18T16:49:05Z [9,278ms] [Warning] [gpu.foundation.plugin] IOMMU is enabled.
+2026-11-18T16:49:06Z [10,821ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-18T16:49:06Z [10,821ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-18T16:49:06Z [10,848ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-18T16:49:06Z [10,848ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-18T16:49:06Z [10,865ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-18T16:49:06Z [10,865ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-18T16:49:06Z [10,886ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-18T16:49:06Z [10,886ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-18T16:49:06Z [10,890ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-18T16:49:06Z [10,890ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-18T16:49:06Z [10,893ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-18T16:49:06Z [10,893ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-18T16:49:07Z [11,825ms] [Warning] [omni.graph.visualization.nodes._impl.extension] No Viewport Window to add omni.graph.visualization.nodes-2.1.3 scene to
+2026-11-18T16:49:07Z [11,993ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,993ms] [Warning] [isaacsim.asset.importer.urdf] link r_index_finger_tip has body properties (mass, inertia, or collisions) and is being merged into r_index_finger_distal
+2026-11-18T16:49:07Z [11,993ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,993ms] [Warning] [isaacsim.asset.importer.urdf] link r_index_finger_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_index_finger_distal
+[INFO]: Base environment:
+	Environment device    : cuda:0
+	Environment seed      : 42
+	Physics step-size     : 0.008333333333333333
+	Rendering step-size   : 0.016666666666666666
+	Environment step-size : 0.016666666666666666
+[scene]     5.8s  robot + table USDs baked
+[scene]     6.4s  robot/table bound to two shared physics materials
+[scene]     6.8s  robot + table spawned
+[INFO]: Time taken for scene creation : 7.040566 seconds
+[INFO]: Scene manager:  <class InteractiveScene>
+	Number of environments: 64
+	Environment spacing   : 1.2
+	Source prim name      : /World/envs/env_0
+	Global prim paths     : []
+	Replicate physics     : False
+[INFO]: Starting the simulation. This may take a few seconds. Please wait...
+[INFO]: Time taken for simulation start : 2.891892 seconds
+[INFO]: Completed setting up the environment...
+[rigid_body] material DR on: B logU[1e-06, 0.00025] N m, C logU[1e-06, 0.00015] N m s; density logU[0.02, 0.5] kg/m²; effective table/hand static friction U[0.1, 0.8]/U[0.3, 1.2], dynamic ratio U[0.6, 1.0]; multiply combine
+[rigid_body] strip_4: 64 envs; 4096 independently assigned sizes
+[cloth] release clearance: 35 robot collision bounds against every cloth plate
+[cloth] rigid: 64 envs, fold, obs/state 134/156
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+self.seed = 42
+[BasePlayer] Creating regular env:  rlgpu
+{'observation_space': Box(-inf, inf, (134,), float32), 'action_space': Box(-1.0, 1.0, (27,), float32), 'agents': 1, 'value_size': 1}
+build mlp: 1024
+RunningMeanStd:  (1,)
+RunningMeanStd:  (134,)
+=> loading checkpoint 'debug_outputs/train_logs/nov/2026-11-17_cloth_curriculum_prior_20to2mm_742942/nn/0_cloth_curriculum_prior_20to2mm.pth'
+{
+  "design": "strip_4",
+  "success_rate": 0.28125,
+  "worst_per_env_episode": {
+    "neighbour": {
+      "median_mm": 20.0,
+      "p90_mm": 21.27,
+      "max_mm": 28.37,
+      "envs_over_5mm": 58,
+      "envs_over_10mm": 55
+    },
+    "non_neighbour": {
+      "median_mm": 0.14,
+      "p90_mm": 13.63,
+      "max_mm": 32.08,
+      "envs_over_5mm": 15,
+      "envs_over_10mm": 10
+    },
+    "table": {
+      "median_mm": 2.09,
+      "p90_mm": 14.34,
+      "max_mm": 39.56,
+      "envs_over_5mm": 25,
+      "envs_over_10mm": 12
+    },
+    "robot": {
+      "median_mm": 21.18,
+      "p90_mm": 26.49,
+      "max_mm": 32.47,
+      "envs_over_5mm": 55,
+      "envs_over_10mm": 45
+    }
+  },
+  "envs_with_panel_fully_below_table_top": 0,
+  "hinge_angle_deg": {
+    "min": -176.2,
+    "max": 186.4,
+    "envs_bent_below_minus_30": 54
+  }
+}
+{
+ "steps_with_any_robot_contact": 7169,
+ "fraction_of_contact_steps_near_hinge": 0.589,
+ "fraction_of_deep_steps_near_hinge": 0.703,
+ "deep_steps_(>5mm)": 3672,
+ "deep_steps_contact_below_midplane": 1795,
+ "deep_links": {
+  "link7": 148,
+  "r_index_finger_proximal": 22,
+  "r_middle_finger_proximal": 4,
+  "r_ring_finger_proximal": 4,
+  "r_thumb_proximal": 108,
+  "r_index_finger_proximal_abd": 46,
+  "r_middle_finger_proximal_abd": 9,
+  "r_pinky_proximal_abd": 15,
+  "r_ring_finger_proximal_abd": 36,
+  "r_thumb_proximal_abd": 458,
+  "r_index_finger_middle": 150,
+  "r_middle_finger_middle": 59,
+  "r_pinky_middle": 54,
+  "r_ring_finger_middle": 63,
+  "r_thumb_middle": 715,
+  "r_index_finger_distal": 395,
+  "r_middle_finger_distal": 142,
+  "r_pinky_distal": 138,
+  "r_ring_finger_distal": 162,
+  "r_thumb_distal": 944
+ },
+ "near_hinge_threshold_m": 0.02
+}
+top events: [{"depth_mm": 39.6, "kind": "table", "env": 20, "step": 223, "design_dims_m": [0.25999999046325684, 0.273333340883255, 0.019999999552965164]}, {"depth_mm": 33.9, "kind": "table", "env": 3, "step": 151, "design_dims_m": [0.14000000059604645, 0.20666666328907013, 0.019999999552965164]}, {"depth_mm": 33.4, "kind": "table", "env": 38, "step": 128, "design_dims_m": [0.18000000715255737, 0.30000001192092896, 0.019999999552965164]}, {"depth_mm": 32.5, "kind": "robot", "env": 18, "step": 236, "design_dims_m": [0.18000000715255737, 0.273333340883255, 0.019999999552965164]}, {"depth_mm": 32.4, "kind": "robot", "env": 18, "step": 237, "design_dims_m": [0.18000000715255737, 0.273333340883255, 0.019999999552965164]}, {"depth_mm": 32.2, "kind": "robot", "env": 18, "step": 238, "design_dims_m": [0.18000000715255737, 0.273333340883255, 0.019999999552965164]}, {"depth_mm": 32.2, "kind": "robot", "env": 18, "step": 235, "design_dims_m": [0.18000000715255737, 0.273333340883255, 0.019999999552965164]}, {"depth_mm": 32.1, "kind": "robot", "env": 18, "step": 283, "design_dims_m": [0.18000000715255737, 0.273333340883255, 0.019999999552965164]}]
+2026-11-18T16:49:07Z [11,993ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,993ms] [Warning] [isaacsim.asset.importer.urdf] link r_middle_finger_tip has body properties (mass, inertia, or collisions) and is being merged into r_middle_finger_distal
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link r_middle_finger_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_middle_finger_distal
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link r_pinky_tip has body properties (mass, inertia, or collisions) and is being merged into r_pinky_distal
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link r_pinky_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_pinky_distal
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link r_ring_finger_tip has body properties (mass, inertia, or collisions) and is being merged into r_ring_finger_distal
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link r_ring_finger_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_ring_finger_distal
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link r_thumb_tip has body properties (mass, inertia, or collisions) and is being merged into r_thumb_distal
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link r_thumb_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_thumb_distal
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link r_wrist has body properties (mass, inertia, or collisions) and is being merged into r_mount
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link r_mount has body properties (mass, inertia, or collisions) and is being merged into flange
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-18T16:49:07Z [11,994ms] [Warning] [isaacsim.asset.importer.urdf] link flange has body properties (mass, inertia, or collisions) and is being merged into link7

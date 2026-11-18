@@ -1,0 +1,18 @@
+[preflight] resolving the training config ...
+[preflight] 10 press cases at density 0.02 kg/m^2, thickness 2.0 mm, probe 0.5 kg at (20.0, 50.0) N
+[preflight] submitted 10 jobs: 783900,783901,783902,783903,783904,783905,783906,783907,783908,783909; waiting ...
+
+====================================================================================================
+preflight  experiments/nov17/cloth_resets/prior.yaml  density 0.02 kg/m^2  thickness 2.0 mm  fail if depth > 2.0 mm or through
+  FAIL  single_hinge          10x10 cm  3 failing; worst centre plus @ 50 N: THROUGH
+  FAIL  single_hinge          30x30 cm  1 failing; worst hinge minus|plus @ 50 N: THROUGH
+  FAIL  strip_4               10x10 cm  12 failing; worst hinge panel_1|panel_3 @ 20 N: THROUGH
+  FAIL  strip_4               30x30 cm  12 failing; worst centre panel_3 @ 50 N: THROUGH
+  FAIL  strip_8               10x10 cm  30 failing; worst hinge panel_5|panel_7 @ 50 N: THROUGH
+  FAIL  strip_8               30x30 cm  30 failing; worst centre panel_6 @ 50 N: THROUGH
+  FAIL  hinge_band            10x10 cm  10 failing; worst centre panel_3 @ 50 N: THROUGH
+  FAIL  hinge_band            30x30 cm  8 failing; worst hinge panel_1|panel_3 @ 20 N: THROUGH
+  ERROR flexible_corners      10x10 cm  no result (see its log)
+  ERROR flexible_corners      30x30 cm  no result (see its log)
+FAILED: 10/10 cases failed
+====================================================================================================

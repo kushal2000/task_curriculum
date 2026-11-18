@@ -1,0 +1,439 @@
+{
+  "config": "debug_outputs/train_logs/nov/2026-11-17_cloth_curriculum_prior_20to2mm_742942/.hydra/config.yaml",
+  "overrides": [],
+  "design": "strip_4",
+  "size_m": [
+    0.2,
+    0.2
+  ],
+  "thickness_m": 0.02,
+  "density_kg_m2": 0.1,
+  "probe_radius_m": 0.008,
+  "probe_mass_kg": 0.05,
+  "ramp_s": 0.5,
+  "hold_s": 2.0,
+  "physics_dt": 0.008333333333333333,
+  "robot_cloth_contact_force_N_at_end": 0.0,
+  "per_env": [
+    {
+      "site": "centre panel_0",
+      "force_N": 1.0,
+      "steady_depth_mm": 0.82,
+      "max_depth_mm": 0.83,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 2.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 67.4,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.08,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 5.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 65.64,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.08,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 10.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 67.6,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.08,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 20.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 57.29,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.05,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 62.46,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 551.42,
+      "hinge_limit_excess_deg": 0.3
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 1.0,
+      "steady_depth_mm": 0.83,
+      "max_depth_mm": 0.84,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 2.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 64.4,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.09,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 5.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 65.01,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.08,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 10.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 66.54,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 1.35,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 57.03,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.08,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 2367.07,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 559.14,
+      "hinge_limit_excess_deg": 0.2
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 1.0,
+      "steady_depth_mm": 1.23,
+      "max_depth_mm": 1.24,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.2,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 2.0,
+      "steady_depth_mm": 35.99,
+      "max_depth_mm": 58.46,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.32,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 5.0,
+      "steady_depth_mm": 35.99,
+      "max_depth_mm": 58.77,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.38,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 10.0,
+      "steady_depth_mm": 35.99,
+      "max_depth_mm": 62.03,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.3,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 65.11,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.45,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 58.62,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 534.61,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 1.0,
+      "steady_depth_mm": 1.26,
+      "max_depth_mm": 1.29,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.32,
+      "hinge_limit_excess_deg": 0.9
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 2.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 52.13,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.41,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 5.0,
+      "steady_depth_mm": 35.99,
+      "max_depth_mm": 76.35,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.88,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 10.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 79.39,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.61,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 74.89,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.1,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 66.85,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.13,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 1.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 17.57,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.6,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 2.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 56.35,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.38,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 5.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 21.55,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 2.53,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 10.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 22.01,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 2.2,
+      "hinge_limit_excess_deg": 0.2
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 21.73,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 4.92,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 163.48,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.18,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 1.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 71.47,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.1,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 2.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 38.54,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 537.75,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 5.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 281.14,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 530.36,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 10.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 21.43,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.37,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 21.37,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 1.93,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 69.58,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 1.69,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 1.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 20.94,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.77,
+      "hinge_limit_excess_deg": 0.3
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 2.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 101.37,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.76,
+      "hinge_limit_excess_deg": 2.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 5.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 2032.65,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.84,
+      "hinge_limit_excess_deg": 0.3
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 10.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 154.29,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 1.28,
+      "hinge_limit_excess_deg": 0.8
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 290.35,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 530.55,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 440.8,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 533.74,
+      "hinge_limit_excess_deg": 0.0
+    }
+  ]
+}

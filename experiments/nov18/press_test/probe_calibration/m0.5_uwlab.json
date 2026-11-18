@@ -1,0 +1,305 @@
+{
+  "config": "debug_outputs/train_logs/nov/2026-11-17_cloth_curriculum_prior_20to2mm_742942/.hydra/config.yaml",
+  "overrides": [
+    "env.rigid_cloth.solver_position_iterations=36",
+    "env.sim.physx.max_position_iteration_count=36",
+    "env.sim.physx.friction_correlation_distance=0.0005",
+    "env.sim.physx.friction_offset_threshold=0.01",
+    "env.sim.physx.bounce_threshold_velocity=0.02"
+  ],
+  "design": "strip_4",
+  "size_m": [
+    0.2,
+    0.2
+  ],
+  "thickness_m": 0.02,
+  "density_kg_m2": 2.0,
+  "probe_radius_m": 0.008,
+  "probe_mass_kg": 0.5,
+  "ramp_s": 0.5,
+  "hold_s": 2.0,
+  "physics_dt": 0.008333333333333333,
+  "robot_cloth_contact_force_N_at_end": 0.0,
+  "per_env": [
+    {
+      "site": "centre panel_0",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.01,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.02,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 20.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.07,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 50.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.2,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.01,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.02,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.07,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.18,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.02,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.05,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.08,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.2,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.05,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.06,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.12,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.16,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.35,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.11,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.05,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.0,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.0,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 0.1,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.02,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.06,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.0,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.0,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.71,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 0.05,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.07,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 10.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 0.0,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.11,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 0.0,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": 0.0,
+      "max_depth_mm": 1.04,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    }
+  ]
+}

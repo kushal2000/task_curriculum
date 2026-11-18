@@ -1,0 +1,299 @@
+{
+  "config": "debug_outputs/train_logs/nov/2026-11-17_cloth_curriculum_prior_20to2mm_742942/.hydra/config.yaml",
+  "overrides": [],
+  "design": "strip_4",
+  "size_m": [
+    0.2,
+    0.2
+  ],
+  "thickness_m": 0.02,
+  "density_kg_m2": 2.0,
+  "probe_radius_m": 0.008,
+  "probe_mass_kg": 2.0,
+  "ramp_s": 0.5,
+  "hold_s": 2.0,
+  "physics_dt": 0.008333333333333333,
+  "robot_cloth_contact_force_N_at_end": 0.0,
+  "per_env": [
+    {
+      "site": "centre panel_0",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.23,
+      "max_depth_mm": 0.3,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.44,
+      "max_depth_mm": 0.46,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 20.0,
+      "steady_depth_mm": 0.87,
+      "max_depth_mm": 0.89,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_0",
+      "force_N": 50.0,
+      "steady_depth_mm": 42.36,
+      "max_depth_mm": 57.73,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.09,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.23,
+      "max_depth_mm": 0.3,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.45,
+      "max_depth_mm": 0.46,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": 0.87,
+      "max_depth_mm": 0.89,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.0,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": 40.29,
+      "max_depth_mm": 56.4,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.11,
+      "hinge_limit_excess_deg": 0.1
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.33,
+      "max_depth_mm": 0.39,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.64,
+      "max_depth_mm": 0.68,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": 1.28,
+      "max_depth_mm": 1.33,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 57.95,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.06,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.33,
+      "max_depth_mm": 0.39,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 10.0,
+      "steady_depth_mm": 0.65,
+      "max_depth_mm": 0.68,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": 1.27,
+      "max_depth_mm": 1.32,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.04,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "centre panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 58.54,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.07,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 5.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 0.58,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 10.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 0.54,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.05,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 20.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 888.65,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 534.99,
+      "hinge_limit_excess_deg": 0.5
+    },
+    {
+      "site": "hinge panel_0|panel_1",
+      "force_N": 50.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 19.9,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 6.78,
+      "hinge_limit_excess_deg": 0.3
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.55,
+      "max_depth_mm": 0.66,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.01,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 10.0,
+      "steady_depth_mm": 1.07,
+      "max_depth_mm": 1.14,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.03,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 20.0,
+      "steady_depth_mm": 36.0,
+      "max_depth_mm": 57.96,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.48,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_0|panel_2",
+      "force_N": 50.0,
+      "steady_depth_mm": 36.81,
+      "max_depth_mm": 55.4,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.39,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 5.0,
+      "steady_depth_mm": 0.54,
+      "max_depth_mm": 0.55,
+      "through": false,
+      "slid_off": true,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 10.0,
+      "steady_depth_mm": 1.07,
+      "max_depth_mm": 1.14,
+      "through": false,
+      "slid_off": false,
+      "panel_below_table_mm": 0.02,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 20.0,
+      "steady_depth_mm": NaN,
+      "max_depth_mm": 61.63,
+      "through": true,
+      "slid_off": true,
+      "panel_below_table_mm": 0.68,
+      "hinge_limit_excess_deg": 0.0
+    },
+    {
+      "site": "hinge panel_1|panel_3",
+      "force_N": 50.0,
+      "steady_depth_mm": 36.73,
+      "max_depth_mm": 53.97,
+      "through": true,
+      "slid_off": false,
+      "panel_below_table_mm": 0.37,
+      "hinge_limit_excess_deg": 0.0
+    }
+  ]
+}

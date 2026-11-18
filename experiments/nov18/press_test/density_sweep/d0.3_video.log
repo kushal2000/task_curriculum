@@ -1,0 +1,2 @@
+xcb_connection_has_error() returned true
+Failed to create secure directory (/run/user/1643542/pulse): No such file or directory

@@ -1,0 +1,252 @@
+{
+  "task": "Isaacsimenvs-RigidBodyCloth-Direct-v0",
+  "experiment": "experiments/nov17/cloth_resets/prior.yaml",
+  "overrides": [],
+  "worst_material": {
+    "density": 0.02,
+    "thickness": 0.002
+  },
+  "probe": {
+    "mass_kg": 0.5,
+    "forces_N": [
+      20.0,
+      50.0
+    ]
+  },
+  "max_depth_mm": 2.0,
+  "cases": [
+    {
+      "design": "single_hinge",
+      "size_label": "smallest",
+      "size": [
+        0.1,
+        0.1
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_single_hinge_smallest.json",
+      "status": "FAIL",
+      "failing_sites": [
+        "centre plus @ 20 N",
+        "centre plus @ 50 N",
+        "hinge minus|plus @ 50 N"
+      ],
+      "worst": "centre plus @ 50 N: THROUGH"
+    },
+    {
+      "design": "single_hinge",
+      "size_label": "largest",
+      "size": [
+        0.3,
+        0.3
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_single_hinge_largest.json",
+      "status": "FAIL",
+      "failing_sites": [
+        "hinge minus|plus @ 50 N"
+      ],
+      "worst": "hinge minus|plus @ 50 N: THROUGH"
+    },
+    {
+      "design": "strip_4",
+      "size_label": "smallest",
+      "size": [
+        0.1,
+        0.1
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_strip_4_smallest.json",
+      "status": "FAIL",
+      "failing_sites": [
+        "centre panel_0 @ 20 N",
+        "centre panel_0 @ 50 N",
+        "centre panel_1 @ 20 N",
+        "centre panel_1 @ 50 N",
+        "centre panel_2 @ 20 N",
+        "centre panel_2 @ 50 N",
+        "centre panel_3 @ 20 N",
+        "centre panel_3 @ 50 N",
+        "hinge panel_0|panel_2 @ 20 N",
+        "hinge panel_0|panel_2 @ 50 N",
+        "hinge panel_1|panel_3 @ 20 N",
+        "hinge panel_1|panel_3 @ 50 N"
+      ],
+      "worst": "hinge panel_1|panel_3 @ 20 N: THROUGH"
+    },
+    {
+      "design": "strip_4",
+      "size_label": "largest",
+      "size": [
+        0.3,
+        0.3
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_strip_4_largest.json",
+      "status": "FAIL",
+      "failing_sites": [
+        "centre panel_0 @ 20 N",
+        "centre panel_0 @ 50 N",
+        "centre panel_1 @ 20 N",
+        "centre panel_1 @ 50 N",
+        "centre panel_2 @ 20 N",
+        "centre panel_2 @ 50 N",
+        "centre panel_3 @ 20 N",
+        "centre panel_3 @ 50 N",
+        "hinge panel_0|panel_2 @ 20 N",
+        "hinge panel_0|panel_2 @ 50 N",
+        "hinge panel_1|panel_3 @ 20 N",
+        "hinge panel_1|panel_3 @ 50 N"
+      ],
+      "worst": "centre panel_3 @ 50 N: THROUGH"
+    },
+    {
+      "design": "strip_8",
+      "size_label": "smallest",
+      "size": [
+        0.1,
+        0.1
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_strip_8_smallest.json",
+      "status": "FAIL",
+      "failing_sites": [
+        "centre panel_0 @ 20 N",
+        "centre panel_0 @ 50 N",
+        "centre panel_1 @ 20 N",
+        "centre panel_1 @ 50 N",
+        "centre panel_2 @ 20 N",
+        "centre panel_2 @ 50 N",
+        "centre panel_3 @ 20 N",
+        "centre panel_3 @ 50 N",
+        "centre panel_4 @ 20 N",
+        "centre panel_4 @ 50 N",
+        "centre panel_5 @ 20 N",
+        "centre panel_5 @ 50 N",
+        "centre panel_6 @ 20 N",
+        "centre panel_6 @ 50 N",
+        "centre panel_7 @ 20 N",
+        "centre panel_7 @ 50 N",
+        "hinge panel_0|panel_1 @ 20 N",
+        "hinge panel_0|panel_1 @ 50 N",
+        "hinge panel_0|panel_2 @ 20 N",
+        "hinge panel_0|panel_2 @ 50 N",
+        "hinge panel_1|panel_3 @ 20 N",
+        "hinge panel_1|panel_3 @ 50 N",
+        "hinge panel_2|panel_4 @ 20 N",
+        "hinge panel_2|panel_4 @ 50 N",
+        "hinge panel_3|panel_5 @ 20 N",
+        "hinge panel_3|panel_5 @ 50 N",
+        "hinge panel_4|panel_6 @ 20 N",
+        "hinge panel_4|panel_6 @ 50 N",
+        "hinge panel_5|panel_7 @ 20 N",
+        "hinge panel_5|panel_7 @ 50 N"
+      ],
+      "worst": "hinge panel_5|panel_7 @ 50 N: THROUGH"
+    },
+    {
+      "design": "strip_8",
+      "size_label": "largest",
+      "size": [
+        0.3,
+        0.3
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_strip_8_largest.json",
+      "status": "FAIL",
+      "failing_sites": [
+        "centre panel_0 @ 20 N",
+        "centre panel_0 @ 50 N",
+        "centre panel_1 @ 20 N",
+        "centre panel_1 @ 50 N",
+        "centre panel_2 @ 20 N",
+        "centre panel_2 @ 50 N",
+        "centre panel_3 @ 20 N",
+        "centre panel_3 @ 50 N",
+        "centre panel_4 @ 20 N",
+        "centre panel_4 @ 50 N",
+        "centre panel_5 @ 20 N",
+        "centre panel_5 @ 50 N",
+        "centre panel_6 @ 20 N",
+        "centre panel_6 @ 50 N",
+        "centre panel_7 @ 20 N",
+        "centre panel_7 @ 50 N",
+        "hinge panel_0|panel_1 @ 20 N",
+        "hinge panel_0|panel_1 @ 50 N",
+        "hinge panel_0|panel_2 @ 20 N",
+        "hinge panel_0|panel_2 @ 50 N",
+        "hinge panel_1|panel_3 @ 20 N",
+        "hinge panel_1|panel_3 @ 50 N",
+        "hinge panel_2|panel_4 @ 20 N",
+        "hinge panel_2|panel_4 @ 50 N",
+        "hinge panel_3|panel_5 @ 20 N",
+        "hinge panel_3|panel_5 @ 50 N",
+        "hinge panel_4|panel_6 @ 20 N",
+        "hinge panel_4|panel_6 @ 50 N",
+        "hinge panel_5|panel_7 @ 20 N",
+        "hinge panel_5|panel_7 @ 50 N"
+      ],
+      "worst": "centre panel_6 @ 50 N: THROUGH"
+    },
+    {
+      "design": "hinge_band",
+      "size_label": "smallest",
+      "size": [
+        0.1,
+        0.1
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_hinge_band_smallest.json",
+      "status": "FAIL",
+      "failing_sites": [
+        "centre panel_0 @ 20 N",
+        "centre panel_0 @ 50 N",
+        "centre panel_1 @ 20 N",
+        "centre panel_1 @ 50 N",
+        "centre panel_3 @ 20 N",
+        "centre panel_3 @ 50 N",
+        "hinge panel_0|panel_2 @ 20 N",
+        "hinge panel_0|panel_2 @ 50 N",
+        "hinge panel_1|panel_3 @ 20 N",
+        "hinge panel_1|panel_3 @ 50 N"
+      ],
+      "worst": "centre panel_3 @ 50 N: THROUGH"
+    },
+    {
+      "design": "hinge_band",
+      "size_label": "largest",
+      "size": [
+        0.3,
+        0.3
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_hinge_band_largest.json",
+      "status": "FAIL",
+      "failing_sites": [
+        "centre panel_0 @ 20 N",
+        "centre panel_0 @ 50 N",
+        "centre panel_1 @ 20 N",
+        "centre panel_1 @ 50 N",
+        "hinge panel_0|panel_2 @ 20 N",
+        "hinge panel_0|panel_2 @ 50 N",
+        "hinge panel_1|panel_3 @ 20 N",
+        "hinge panel_1|panel_3 @ 50 N"
+      ],
+      "worst": "hinge panel_1|panel_3 @ 20 N: THROUGH"
+    },
+    {
+      "design": "flexible_corners",
+      "size_label": "smallest",
+      "size": [
+        0.1,
+        0.1
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_flexible_corners_smallest.json",
+      "status": "ERROR",
+      "detail": "no result (see its log)"
+    },
+    {
+      "design": "flexible_corners",
+      "size_label": "largest",
+      "size": [
+        0.3,
+        0.3
+      ],
+      "json": "/share/portal/kk837/task_curriculum/experiments/nov18/preflight/prior_recipe/press_flexible_corners_largest.json",
+      "status": "ERROR",
+      "detail": "no result (see its log)"
+    }
+  ],
+  "passed": false
+}
