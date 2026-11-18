@@ -1,0 +1,39 @@
+{
+ "task": "Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0",
+ "palm_body": "link7",
+ "fingertip_bodies_obs_order": [
+  "l_index_finger_distal",
+  "l_middle_finger_distal",
+  "l_pinky_distal",
+  "l_ring_finger_distal",
+  "l_thumb_distal"
+ ],
+ "fingertip_offsets_by_position": [
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.019
+  ],
+  [
+   0.0,
+   0.0,
+   -0.0229
+  ],
+  [
+   0.0,
+   0.0,
+   -0.019
+  ]
+ ],
+ "source": "training branch scripts/flexiv_wuji/check_joint_mapping.py on the left task (PhysX body order), 2026-11-18"
+}
