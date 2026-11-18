@@ -1,0 +1,11 @@
+{
+ "overrides": [
+  "env.task.release.touch=origin"
+ ],
+ "num_envs": 12288,
+ "steps": 300,
+ "fps_full": 32424,
+ "fps_env_step": 32905,
+ "ms_per_step_full": 378.98,
+ "ms_per_step_env": 373.44
+}

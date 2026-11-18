@@ -1,0 +1,37 @@
+[WARN][AppLauncher]: There are no arguments attached to the ArgumentParser object. If you have your own arguments, please load your own arguments before calling the `AppLauncher.add_app_launcher_args` method. This allows the method to check the validity of the arguments and perform checks for argument names.
+[INFO][AppLauncher]: Using device: cuda:0
+[INFO][AppLauncher]: Loading experience file: /share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaaclab/apps/isaaclab.python.headless.kit
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.cloth.backends.rigid.config:RigidClothEnvCfg
+[INFO]: Parsing configuration from: /share/portal/kk837/task_curriculum/isaacsimenvs/scripts/configs/train/ClothSAPG.yaml
+[hydra] experiment rigid_cloth_heavy
+[preflight] resolved config written to experiments/nov18/refactor_check/heavy_resolve/resolved/.hydra/config.yaml
+Loading user config located at: '/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaacsim/kit/data/Kit/Isaac-Sim/5.1/user.config.json'
+[Info] [carb] Logging to file: /share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaacsim/kit/logs/Kit/Isaac-Sim/5.1/kit_20261118_153718.log
+2026-11-18T20:37:18Z [724ms] [Warning] [omni.usd_config.extension] Enable omni.materialx.libs extension to use MaterialX
+2026-11-18T20:37:19Z [1,360ms] [Warning] [omni.platforminfo.plugin] failed to open the default display.  Can't verify X Server version.
+2026-11-18T20:37:19Z [1,719ms] [Warning] [carb] Acquiring non optional plugin interface which is not listed as dependency: [omni::physx::IPhysxBenchmarks v1.0] (plugin: <default plugin>), by client: omni.physics.physx.plugin. Add it to CARB_PLUGIN_IMPL_DEPS() macro of a client.
+2026-11-18T20:37:19Z [1,738ms] [Warning] [omni.isaac.dynamic_control] omni.isaac.dynamic_control is deprecated as of Isaac Sim 4.5. No action is needed from end-users.
+2026-11-18T20:37:25Z [7,380ms] [Warning] [carb.cudainterop.plugin] CUDA_VISIBLE_DEVICES environment variable is set.
+2026-11-18T20:37:25Z [7,380ms] [Warning] [carb.cudainterop.plugin] Note CUDA device enumeration and Omniverse device enumeration are different.
+2026-11-18T20:37:25Z [7,380ms] [Warning] [carb.cudainterop.plugin] Setting CUDA_VISIBLE_DEVICES can lead to undesired behavior or crashes.
+
+|---------------------------------------------------------------------------------------------|
+| Driver Version: 570.124.06    | Graphics API: Vulkan
+|=============================================================================================|
+| GPU | Name                             | Active | LDA | GPU Memory | Vendor-ID | LUID       |
+|     |                                  |        |     |            | Device-ID | UUID       |
+|     |                                  |        |     |            | Bus-ID    |            |
+|---------------------------------------------------------------------------------------------|
+| 0   | NVIDIA RTX 6000 Ada Generation   | Yes: 0 |     | 49386   MB | 10de      | 0          |
+|     |                                  |        |     |            | 26b1      | c9826a3a.. |
+|     |                                  |        |     |            | 30        |            |
+|=============================================================================================|
+| OS: 24.04.4 LTS (Noble Numbat) ubuntu, Version: 24.04.4, Kernel: 6.8.0-138-generic
+| Processor: Intel(R) Xeon(R) Gold 6448Y
+| Cores: 64 | Logical Cores: 64
+|---------------------------------------------------------------------------------------------|
+| Total Memory (MB): 1031757 | Free Memory: 951305
+| Total Page/Swap (MB): 4095 | Free Page/Swap: 2411
+|---------------------------------------------------------------------------------------------|
+2026-11-18T20:37:26Z [8,199ms] [Warning] [gpu.foundation.plugin] CPU performance profile is set to conservative. This profile gradually sets the CPU frequency based on the current load and may not deliver best performance.
+2026-11-18T20:37:26Z [8,210ms] [Warning] [gpu.foundation.plugin] IOMMU is enabled.

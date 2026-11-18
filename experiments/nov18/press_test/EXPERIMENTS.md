@@ -215,3 +215,31 @@ deepest robot-cloth contact per episode (PhysX separation).
 iteration count -- worth inspecting. Release success rises (0.67 -> 0.75) because the heavy folded half
 no longer springs open (fold = release); fold success drops a little (0.83 -> 0.75), consistent with a
 policy trained on light cloth handling heavy cloth. Price: 5 kg/m^2 is 10-50x heavier than real fabric.
+
+## E9 -- Press thresholds at 2 mm thickness
+**Question:** E5/E6 found the density thresholds at 20 mm. What holds at the 2 mm the base recipe uses?
+**Setup:** standard case but `--thickness 0.002`; 36 iterations at density 1 / 2 / 5 / 10, and 192 iterations
+at density 2. "Through" = deeper than 2 mm (the probe reached the table through the panel).
+**Results** (`e9_2mm/`; centre sites / hinge site):
+
+| iterations, density | 20 N | 50 N |
+|---|---|---|
+| 36, 1.0 | centres hold (0.4 mm); hinge through | centres 1.9 mm (all but through); hinge through |
+| 36, 2.0 | holds (0.0 mm) | centre- 1.9 mm, centre+ 0.5 mm; hinge through |
+| 36, **5.0** | **holds (<= 0.1 mm)** | **holds (<= 0.1 mm)** |
+| 36, 10.0 | holds | holds |
+| 192, 2.0 | holds (<= 0.2 mm) | holds (<= 0.6 mm) |
+
+**Takeaway:** at 2 mm, with 36 iterations, 20 N needs density ~2 and 50 N ~5 -- about the same as 20 mm
+(1.0 / 5.0), one step stricter at 20 N. But the margin is thin: where it fails, the probe sinks the full
+1.9-2.0 mm, i.e. it touches the table through the panel. The hinge site fails first. 192 iterations hold
+50 N already at density 2.
+
+## E10 -- Policy check at 2 mm (density 5, 36 iterations)
+**Setup:** as E8 (best checkpoint, 1024 single_hinge episodes, nominal material, density 5.0, 36 iterations)
+but `thickness=0.002`.
+**Results** (`../eval/density5_2mm/it36.json`): penetration per episode median 0.47 / p90 0.97 / max 23.5 mm;
+episodes > 1 mm 9%, > 2 mm (through the panel) **1.3%**, > 10 mm 0.5%. Fold 0.11, release 0.10.
+**Takeaway:** density 5 + 36 iterations keeps rollouts nearly penetration-free at 2 mm as well (98.7% never
+go through). The low success is expected: this checkpoint trained at 20 mm, and 2 mm changes the folded
+geometry (ply gap / fold targets) it learned.

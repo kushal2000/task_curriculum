@@ -57,6 +57,13 @@ class RigidClothEpisodeGuard:
         self.history = LiftWorkHistory(self.n, self.device, self.cfg)
         self.contacts = (RigidClothContacts(backend, capacity=max(16384, self.n*self.cfg.contact_points_per_env))
                          if contacts_needed(self.cfg) else None)
+        # Centre-of-mass offsets in each body's own frame are constant (set once when the scene is
+        # authored; nothing calls set_coms). Isaac Lab's body_com_pos_w re-reads them from PhysX as a
+        # CPU tensor every physics step, which cost ~115 ms per policy step here; cache them once and
+        # compose COM_world = link_pos + R(link_quat) * COM_body on the GPU instead (_com_w).
+        self._com_b = {'robot': backend.robot.data.body_com_pos_b.clone()}
+        for group in backend.groups:
+            self._com_b[group.index] = group.articulation.data.body_com_pos_b[:, group.body_ids].clone()
         fraction = float(getattr(self.cfg, 'max_robot_penetration_fraction', 0.0))
         if fraction < 0:
             raise ValueError('max_robot_penetration_fraction must be >= 0')
@@ -93,12 +100,20 @@ class RigidClothEpisodeGuard:
         com, velocity = torch.zeros_like(pos), torch.zeros(self.n, self.p, 6, device=self.device)
         for group in self.backend.groups:
             ids, bodies, data = group.env_ids, group.body_ids, group.articulation.data
-            pos[ids, :len(bodies)] = data.body_link_pos_w[:, bodies]
-            quat[ids, :len(bodies)] = data.body_link_quat_w[:, bodies]
+            link_pos, link_quat = data.body_link_pos_w[:, bodies], data.body_link_quat_w[:, bodies]
+            pos[ids, :len(bodies)] = link_pos
+            quat[ids, :len(bodies)] = link_quat
             if self.contacts is not None:
-                com[ids, :len(bodies)] = data.body_com_pos_w[:, bodies]
+                com[ids, :len(bodies)] = self._com_w(group.index, link_pos, link_quat, data, bodies)
                 velocity[ids, :len(bodies)] = data.body_com_vel_w[:, bodies]
         return pos, quat, com, velocity
+
+    def _com_w(self, key, link_pos, link_quat, data, bodies=slice(None)):
+        """World COM positions from link poses and the cached body-frame COM offsets."""
+        com_b = getattr(self, '_com_b', {}).get(key)
+        if com_b is None:  # guards built without __init__ (tests) read Isaac Lab's own value
+            return data.body_com_pos_w[:, bodies]
+        return link_pos+rotations.apply(link_quat, com_b)
 
     def observe(self, completed_counter):
         """Latch failures once per COMPLETED physics step, including intermediate substeps."""
@@ -126,8 +141,8 @@ class RigidClothEpisodeGuard:
             return
 
         robot = b.robot.data
-        current = (robot.body_link_pos_w, robot.body_link_quat_w,
-                   robot.body_com_pos_w, robot.body_com_vel_w)
+        link_pos, link_quat = robot.body_link_pos_w, robot.body_link_quat_w
+        current = (link_pos, link_quat, self._com_w('robot', link_pos, link_quat, robot), robot.body_com_vel_w)
         if self.previous_robot is None:
             self.previous_robot = tuple(value.clone() for value in current)
         for previous, value in zip(self.previous_robot, current, strict=True):

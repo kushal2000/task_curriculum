@@ -1,0 +1,35 @@
+{
+ "overrides": [],
+ "num_envs": 12288,
+ "steps": 150,
+ "fps_full": 30876,
+ "fps_env_step": 31354,
+ "ms_per_step_full": 397.98,
+ "ms_per_step_env": 391.92,
+ "guard_ms_per_policy_step": {
+  "guard.observe (total)": {
+   "calls_per_step": 3.0,
+   "ms": 106.45
+  },
+  "guard._plate_state": {
+   "calls_per_step": 2.0,
+   "ms": 18.75
+  },
+  "contacts.robot_penetration": {
+   "calls_per_step": 2.0,
+   "ms": 3.07
+  },
+  "contacts.raw (readout)": {
+   "calls_per_step": 2.0,
+   "ms": 2.97
+  },
+  "guard._robot_work": {
+   "calls_per_step": 2.0,
+   "ms": 2.24
+  },
+  "guard._update_history": {
+   "calls_per_step": 2.0,
+   "ms": 2.75
+  }
+ }
+}

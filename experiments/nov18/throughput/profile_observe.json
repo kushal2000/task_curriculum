@@ -1,0 +1,63 @@
+{
+ "overrides": [],
+ "num_envs": 12288,
+ "steps": 150,
+ "fps_full": 27831,
+ "fps_env_step": 28242,
+ "ms_per_step_full": 441.52,
+ "ms_per_step_env": 435.1,
+ "guard_ms_per_policy_step": {
+  "a plate_state": {
+   "calls_per_step": 2.0,
+   "ms": 22.0
+  },
+  "b vertices+table_excursion": {
+   "calls_per_step": 2.0,
+   "ms": 1.64
+  },
+  "c finite+outside latch": {
+   "calls_per_step": 2.0,
+   "ms": 0.64
+  },
+  "d penetration query": {
+   "calls_per_step": 2.0,
+   "ms": 3.31
+  },
+  "e robot state read": {
+   "calls_per_step": 2.0,
+   "ms": 94.53
+  },
+  "f previous[fresh] masked update": {
+   "calls_per_step": 2.0,
+   "ms": 0.96
+  },
+  "g robot finite checks": {
+   "calls_per_step": 2.0,
+   "ms": 0.59
+  },
+  "h contacts.raw": {
+   "calls_per_step": 2.0,
+   "ms": 3.32
+  },
+  "i contact post-processing": {
+   "calls_per_step": 2.0,
+   "ms": 0.65
+  },
+  "j robot_work": {
+   "calls_per_step": 2.0,
+   "ms": 2.59
+  },
+  "k force sums": {
+   "calls_per_step": 2.0,
+   "ms": 1.05
+  },
+  "l update_history": {
+   "calls_per_step": 2.0,
+   "ms": 3.22
+  },
+  "m previous copy": {
+   "calls_per_step": 2.0,
+   "ms": 0.18
+  }
+ }
+}

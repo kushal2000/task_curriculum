@@ -1,0 +1,12 @@
+{
+ "overrides": [
+  "env.rigid_cloth.solver_position_iterations=8",
+  "env.sim.physx.max_position_iteration_count=8"
+ ],
+ "num_envs": 12288,
+ "steps": 300,
+ "fps_full": 48692,
+ "fps_env_step": 49881,
+ "ms_per_step_full": 252.36,
+ "ms_per_step_env": 246.35
+}

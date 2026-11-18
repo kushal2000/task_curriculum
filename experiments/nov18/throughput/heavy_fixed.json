@@ -1,0 +1,19 @@
+{
+ "overrides": [],
+ "num_envs": 12288,
+ "steps": 300,
+ "com_max_abs_diff_m": {
+  "robot": 0.0,
+  "cloth_0": 0.0
+ },
+ "fps_full": 38212,
+ "fps_env_step": 38951,
+ "ms_per_step_full": 321.58,
+ "ms_per_step_env": 315.47,
+ "guard_ms_per_policy_step": {
+  "com_check": {
+   "calls_per_step": 0.0,
+   "ms": 0.0
+  }
+ }
+}

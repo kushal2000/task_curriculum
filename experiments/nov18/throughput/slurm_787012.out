@@ -1,0 +1,12 @@
+[slurm] task=Isaacsimenvs-RigidBodyCloth-Direct-v0 backend=physx python=.venv/isaacsim/bin/python
+[slurm] host=portal-compute-02 job=787012 commit=6d4a228 dirty=YES
+NVIDIA RTX 6000 Ada Generation, 49140 MiB
+[INFO][AppLauncher]: Using device: cuda:0
+[INFO][AppLauncher]: Loading experience file: /share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaaclab/apps/isaaclab.python.headless.kit
+Loading user config located at: '/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaacsim/kit/data/Kit/Isaac-Sim/5.1/user.config.json'
+[Info] [carb] Logging to file: /share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaacsim/kit/logs/Kit/Isaac-Sim/5.1/kit_20261118_162835.log
+2026-11-18T21:28:37Z [1,506ms] [Warning] [omni.usd_config.extension] Enable omni.materialx.libs extension to use MaterialX
+2026-11-18T21:28:37Z [2,018ms] [Warning] [omni.platforminfo.plugin] failed to open the default display.  Can't verify X Server version.
+2026-11-18T21:28:37Z [2,419ms] [Warning] [carb] Acquiring non optional plugin interface which is not listed as dependency: [omni::physx::IPhysxBenchmarks v1.0] (plugin: <default plugin>), by client: omni.physics.physx.plugin. Add it to CARB_PLUGIN_IMPL_DEPS() macro of a client.
+2026-11-18T21:28:37Z [2,438ms] [Warning] [omni.isaac.dynamic_control] omni.isaac.dynamic_control is deprecated as of Isaac Sim 4.5. No action is needed from end-users.
+[2026-11-18T16:28:38.830] error: *** JOB 787012 ON portal-compute-02 CANCELLED AT 2026-11-18T16:28:38 DUE to SIGNAL Terminated ***

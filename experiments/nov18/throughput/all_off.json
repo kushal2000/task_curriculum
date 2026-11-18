@@ -1,0 +1,16 @@
+{
+ "overrides": [
+  "env.rigid_cloth.solver_position_iterations=8",
+  "env.sim.physx.max_position_iteration_count=8",
+  "env.rigid_cloth.episode_checks.outside_table=false",
+  "env.rigid_cloth.episode_checks.press_driven_fold=false",
+  "env.rigid_cloth.episode_checks.max_robot_penetration_fraction=0.0",
+  "env.task.release.touch=origin"
+ ],
+ "num_envs": 12288,
+ "steps": 300,
+ "fps_full": 78383,
+ "fps_env_step": 81726,
+ "ms_per_step_full": 156.77,
+ "ms_per_step_env": 150.36
+}
