@@ -446,6 +446,8 @@ class PretrainedPlayer:
         from rl_games.common import env_configurations
         from rl_games.torch_runner import Runner
 
+        import isaacsimenvs.scripts.training.pointnet  # noqa: F401  registers the point-cloud network/model
+
         self.device = device
         self.num_observations = num_observations
         self.num_actions = num_actions

@@ -29,6 +29,10 @@ class ClothEnv(DirectRLEnv):
         num_points = int(getattr(cfg.obs, "num_points", 0) or 0)
         if num_points > 0 and cfg.backend != "rigid":
             raise ValueError("obs.num_points (the top-face point cloud) currently requires the rigid cloth backend")
+        policy_points = [f for f in cfg.obs.obs_list if f in ("cloth_points", "goal_points")]
+        if policy_points and tuple(cfg.obs.obs_list[-2:]) != ("cloth_points", "goal_points"):
+            # The PointNet network (scripts/training/pointnet.py) cuts them off the end of the observation.
+            raise ValueError("obs_list must end with cloth_points, goal_points (in that order)")
         cfg.observation_space = obs_dim(cfg.obs.obs_list, robot_spec.num_joints, num_points)
         cfg.state_space = obs_dim(cfg.obs.state_list, robot_spec.num_joints, num_points)
         if cfg.backend == "rigid":

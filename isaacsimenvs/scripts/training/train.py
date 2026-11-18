@@ -233,6 +233,7 @@ def main() -> None:
     from rl_games.torch_runner import Runner
 
     import isaacsimenvs  # noqa: F401  triggers gym.register side effects
+    import isaacsimenvs.scripts.training.pointnet  # noqa: F401  registers the point-cloud network/model
     from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
     from isaacsimenvs.scripts.training.rlgames import (
         EnvStatsAlgoObserver,

@@ -1,0 +1,31 @@
+# Point-cloud policy, from scratch: the 2 mm from-scratch run (heavy_cloth/
+# scratch_nominal_15cm_outside_only_2mm.yaml, job 789017) with the cloth perceived only as points.
+#   actor:  robot state + 64 top-face cloth points + their 64 world-frame goals, PointNet-encoded
+#           (scripts/training/pointnet.py); no cloth pose, corner keypoints or scales.
+#   critic: unchanged exact state, plus the current and best matched point distance.
+#   reward: point-distance progress replaces corner-keypoint progress (same 1500 / m scale);
+#           fold / release bonuses and success are unchanged (still judged on the corners).
+base: ../heavy_cloth/scratch_nominal_15cm_outside_only_2mm.yaml
+env:
+  obs:
+    num_points: 64
+    obs_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot, fingertip_pos_rel_palm,
+               cloth_points, goal_points]
+    state_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot, palm_vel, object_rot,
+                 object_vel, fingertip_pos_rel_palm, keypoints_rel_palm, keypoints_rel_goal, object_scales,
+                 closest_keypoint_max_dist, closest_fingertip_dist, lifted_object, progress, successes,
+                 reward, point_dist, closest_point_dist]
+  reward:
+    keypoint_rew_scale: 0.0
+    point_rew_scale: 1500.0
+agent:
+  params:
+    model:
+      name: pointnet_a2c_logstd
+    network:
+      name: pointnet_actor_critic
+      pointnet:
+        num_points: 64
+        units: [64, 128, 256]
+    config:
+      name: 0_cloth_pointnet_scratch_15cm_2mm

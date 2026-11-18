@@ -58,6 +58,9 @@ FIELD_SIZES: dict[str, int] = {
     "progress": 1,
     "successes": 1,
     "reward": 1,
+    # Point-cloud reward state for the critic (obs.num_points > 0): current and best matched distance.
+    "point_dist": 1,
+    "closest_point_dist": 1,
 }
 PER_JOINT_FIELDS = ("joint_pos", "joint_vel", "prev_action_targets")
 # The top-face point cloud (obs.num_points = P): P x 3 each, world frame relative to the env origin.
@@ -66,8 +69,9 @@ PER_POINT_FIELDS = ("cloth_points", "goal_points")
 
 def obs_dim(fields, num_joints: int, num_points: int = 0) -> int:
     fields = tuple(fields)
-    if num_points <= 0 and any(f in PER_POINT_FIELDS for f in fields):
-        raise ValueError(f"observation fields {PER_POINT_FIELDS} need obs.num_points > 0")
+    needs_points = PER_POINT_FIELDS + ("point_dist", "closest_point_dist")
+    if num_points <= 0 and any(f in needs_points for f in fields):
+        raise ValueError(f"observation fields {needs_points} need obs.num_points > 0")
     return sum(num_joints if f in PER_JOINT_FIELDS else 3 * num_points if f in PER_POINT_FIELDS
                else FIELD_SIZES[f] for f in fields)
 
@@ -227,9 +231,13 @@ class ObservationBuilder:
             "reward": (self.task.reward_buf * 0.01).unsqueeze(-1),
         }
         if state.surface_points_w is not None:
-            # Exact (clean) for actor and critic alike; no delay or noise model yet.
-            clean["cloth_points"] = state.surface_points_w - origins.unsqueeze(1)
-            clean["goal_points"] = self.task._goal_points - origins.unsqueeze(1)
+            # Exact (clean) for actor and critic alike; no delay or noise model yet. Same frame as
+            # palm_pos (env frame, base shifted to Play's position), so palm and cloth line up.
+            shift = (origins + self._palm_obs_shift).unsqueeze(1)
+            clean["cloth_points"] = state.surface_points_w - shift
+            clean["goal_points"] = self.task._goal_points - shift
+            clean["point_dist"] = view.point_dist.unsqueeze(-1)
+            clean["closest_point_dist"] = self.task._closest_point_dist.unsqueeze(-1)
         noisy = dict(clean)
         noisy["object_rot"] = rotations.to_xyzw(o_rot)
         noisy["object_vel"] = o_vel
