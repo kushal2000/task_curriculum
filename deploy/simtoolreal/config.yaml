@@ -1,4 +1,5 @@
-# Deploy settings for the SimToolReal Play policy on Flexiv Rizon 4s + right Wuji Hand 2.
+# Deploy settings for the SimToolReal Play policy on Flexiv Rizon 4s + a right or left Wuji Hand 2
+# (robot.side picks the spec; the left policy is trained on Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0).
 #
 # Two kinds of numbers:
 #   - this file: choices you make when deploying (which robot, gains, safety limits, ...). Edit freely.
@@ -14,7 +15,8 @@
 # Frames: "env" = the training env's frame. Robot base at (0, 0.8, 0), table top at z = 0.28 m.
 # Lengths in metres, angles in degrees unless the name says otherwise.
 
-spec_path: deploy/simtoolreal/spec/spec_flexiv_wuji_right_hl.json   # robot URDF next to it
+# Follows robot.side (spec_flexiv_wuji_right_hl.json | spec_flexiv_wuji_left_hl.json); robot URDF next to it.
+spec_path: deploy/simtoolreal/spec/spec_flexiv_wuji_${robot.side}_hl.json
 
 # ------------------------------------------------------------------------------------------- bus
 # The processes talk over ZMQ (deploy/utils/link.py). Each publisher binds its own port; anyone may subscribe.
@@ -49,6 +51,10 @@ robot:
   arm: mujoco               # robot serial number | mujoco (aioflexiv's MuJoCo Rizon)
   hand: fake                # hand serial number | auto | dry_run (connected, never enabled) | fake (no hand)
   hand_sn: null             # serial for hand: dry_run
+  side: right               # right | left: which hand is on the flange. Picks spec_path (joint names, URDF,
+                            #   palm / fingertip geometry); robot.py refuses a hand whose firmware reports
+                            #   the other side. Both hands use the same joint order and sign (+ = flexion).
+  check_side: true          # false: skip that check (a hand whose firmware does not report its side)
   mujoco_viewer: false
 
   arm_gain_scale: 1.0       # real arm kp, kd = sim kp, kd x this
@@ -56,7 +62,8 @@ robot:
   #   kp_A = kp_Nm / (hand_kp_scale * Kt),  kd_A = kd_Nm / (hand_kd_scale * Kt)
   # Kt (N m/A, per joint) and the scales come from the aiowuji sysid fit of this hand (WH2KA01260825022,
   # firmware 2.10.0, fingers-up + palm-down runs, --fit-gear): wuji_hand2_sysid_data_2026-10-14.zip,
-  # reference/mujoco_fit_params.json.
+  # reference/mujoco_fit_params.json. No left hand has been fitted: with robot.side=left these right-hand
+  # values are used (same motors and gearing), and robot.py says so. Override them here once it is.
   hand_kp_scale: 1.9662     # firmware_law.kp_scale
   hand_kd_scale: 1.9438     # firmware_law.kd_scale
   hand_kt:                  # N m/A, aiowuji names

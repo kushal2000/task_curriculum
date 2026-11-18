@@ -1,4 +1,4 @@
-"""The robot node: Flexiv Rizon 4s arm (aioflexiv) + right Wuji Hand 2 (aiowuji). Usually started by
+"""The robot node: Flexiv Rizon 4s arm (aioflexiv) + a right or left Wuji Hand 2 (aiowuji). Usually started by
 a task's run.py (deploy/utils/runner.py); deploy/simtoolreal/README.md has the details.
 
 robot.arm   serial number | mujoco (aioflexiv's MuJoCo Rizon, same code path)
@@ -23,6 +23,10 @@ limp. The Flexiv E-stop stops only the arm; this node then stops the hand.
 Gains: the arm runs aioflexiv's joint impedance, tau = kp (q* - q) - kd dq (Flexiv adds gravity),
 with the sim's kp, kd (Nm/rad). The Wuji firmware takes A/rad: kp, kd = sim / (hand_kp/kd_scale x Kt),
 Kt per joint from the aiowuji sysid (robot.hand_kt).
+
+Side: the spec's hand joint names (r_* / l_*) say which hand the policy was trained for. Both hands
+take the same 20 targets in the same order and sign (aiowuji thumb_S1 ... pinky_S4, + = flexion), so
+the mapping stays positional; check_side refuses a hand whose firmware reports the other side.
 """
 
 import asyncio
@@ -79,9 +83,36 @@ def open_hand(cfg, spec, never_enable: bool = False):
     if set(hand_kt) != set(JOINT_NAMES):
         raise SystemExit(f"[robot] robot.hand_kt needs exactly the aiowuji joints {JOINT_NAMES}; got {sorted(hand_kt)}")
     kt = np.array([float(hand_kt[n]) for n in JOINT_NAMES])     # N m/A
+    if spec_side(spec) == "left":
+        print("[robot] left hand: using robot.hand_kt as configured (the right hand's sysid unless "
+              "overridden; no left fit yet)", flush=True)
     return WujiController(serial, kp=spec["stiffness"][HAND] / (cfg.hand_kp_scale * kt),
                           kd=spec["damping"][HAND] / (cfg.hand_kd_scale * kt), effort_limit=effort,
                           dry_run=cfg.hand == "dry_run" or never_enable)
+
+
+def spec_side(spec) -> str:
+    """'right' or 'left', from the spec's first hand joint name (r_thumb_cmc_flex / l_thumb_cmc_flex)."""
+    prefix = spec["joint_names"][HAND.start][:2]
+    if prefix not in ("r_", "l_"):
+        raise SystemExit(f"[robot] spec hand joint {spec['joint_names'][HAND.start]!r}: no r_ / l_ prefix")
+    return "right" if prefix == "r_" else "left"
+
+
+def check_side(rc, spec, hand) -> None:
+    """Refuse a real hand whose firmware reports the other side than the spec's (and robot.side, if set).
+    Call right after hand.start(), before any move."""
+    want = spec_side(spec)
+    if rc.get("side") not in (None, want):
+        raise SystemExit(f"[robot] robot.side={rc.side} but the spec ({spec['urdf_path'].name}) is for the {want} hand")
+    if isinstance(hand, FakeHand) or not rc.get("check_side", True):
+        return
+    got = str(hand.hand.handedness().get()).lower()
+    side = "left" if "left" in got else "right" if "right" in got else None
+    if side != want:
+        raise SystemExit(f"[robot] hand {hand.hand.serial_number} reports side {got!r}, the policy is for the "
+                         f"{want} hand (robot.check_side=false skips this check)")
+    print(f"[robot] hand {hand.hand.serial_number}: {side} hand, matches the spec", flush=True)
 
 
 def read_q(arm, hand) -> np.ndarray | None:
@@ -406,6 +437,7 @@ async def watch(cfg, spec) -> None:
     hand = open_hand(rc, spec, never_enable=True)
     await hand.start()
     try:
+        check_side(rc, spec, hand)
         far = home_errors(rc, spec, read_q(arm, hand), check_hand=not hand.dry_run)
         print(f"[robot] watch (nothing enabled); arm {rc.arm}, hand {rc.hand}; "
               f"{'at home' if not far else 'away from home: ' + ', '.join(far)}", flush=True)
@@ -432,7 +464,13 @@ async def main() -> None:
     hand = open_hand(rc, spec, never_enable=rc.mode == "free_drive")
     await arm.start()                     # holds where it is
     set_arm_gains(arm, rc, spec)
-    await hand.start()
+    try:
+        await hand.start()
+        check_side(rc, spec, hand)
+    except BaseException:
+        await hand.stop()
+        await arm.stop()
+        raise
     status = {}
     publisher = asyncio.create_task(publish_joint_state(cfg, spec, arm, hand, status))
     reason = "?"

@@ -129,7 +129,7 @@ def spec_fields(ref: str, commit: str, task: str, robot_name: str, spec, cfg: di
         "robot": robot_name,
         "robot_urdf": Path(urdf_rel).name,
         "robot_urdf_in_source": urdf_rel,
-        # --- joints, policy (canonical) order: Rizon joint1-7, then r_ Wuji joints thumb..pinky ---
+        # --- joints, policy (canonical) order: Rizon joint1-7, then the Wuji joints (r_ or l_) thumb..pinky ---
         "joint_names": names,
         "num_arm_joints": len(arm),
         "joint_lower": lower,

@@ -16,6 +16,14 @@ was made with:
 
     .venv_deploy/bin/python deploy/simtoolreal/checks/export_spec.py \
         --rollout_meta docs/results/simtoolreal/rec1/rollout_meta.json
+
+--side left exports the left-hand twin from the same branch: Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0
+(robot flexiv_wuji_human_like, rizon4s_left_wuji_human_like_joint_limits.urdf; the task YAML is the
+right's apart from robot and URDF) into spec_flexiv_wuji_left_hl.json. The left spec in spec/ was made with
+the fingertip order from the left env (scripts/flexiv_wuji/check_joint_mapping.py on the training branch):
+
+    .venv_deploy/bin/python deploy/simtoolreal/checks/export_spec.py --side left \
+        --rollout_meta deploy/simtoolreal/spec/left_fingertip_meta.json
 """
 
 from __future__ import annotations
@@ -33,9 +41,14 @@ sys.path.insert(0, str(HERE.parents[2]))   # repo root, for deploy.*
 from deploy.utils.spec_export import ROBOT_ROOT_POS, ROBOTS_PY, git_show, rev_parse, spec_fields, table_box   # noqa: E402
 
 DEFAULT_REF = "origin/kushal/2026-10-30_pretraining_real"
-TASK = "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0"
-TASK_YAML = "isaacsimenvs/cfg/task/PlayFlexivWujiRightHumanLike.yaml"
-ROBOT_NAME = "flexiv_wuji_right_human_like"
+# side -> (gym task id, task YAML, robots.ROBOT_SPECS key), all on DEFAULT_REF
+SIDES = {
+    "right": ("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0",
+              "isaacsimenvs/cfg/task/PlayFlexivWujiRightHumanLike.yaml", "flexiv_wuji_right_human_like"),
+    "left": ("Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0",
+             "isaacsimenvs/cfg/task/PlayFlexivWujiHumanLike.yaml", "flexiv_wuji_human_like"),
+}
+TASK, TASK_YAML, ROBOT_NAME = SIDES["right"]
 
 
 def load_robot_spec(ref: str):
@@ -49,11 +62,16 @@ def load_robot_spec(ref: str):
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--ref", default=DEFAULT_REF, help="git ref of the training branch")
-    p.add_argument("--out", type=Path, default=HERE.parent / "spec" / "spec_flexiv_wuji_right_hl.json")
+    p.add_argument("--side", choices=sorted(SIDES), default="right", help="which Wuji hand")
+    p.add_argument("--out", type=Path, default=None, help="default: spec/spec_flexiv_wuji_<side>_hl.json")
     p.add_argument("--rollout_meta", type=Path, default=None,
                    help="rollout_meta.json from record_sim_rollout.py: adds the fingertip order the "
                         "observation really uses (PhysX body order) and the offset applied at each position")
     args = p.parse_args()
+    global TASK, TASK_YAML, ROBOT_NAME
+    TASK, TASK_YAML, ROBOT_NAME = SIDES[args.side]
+    if args.out is None:
+        args.out = HERE.parent / "spec" / f"spec_flexiv_wuji_{args.side}_hl.json"
 
     commit = rev_parse(args.ref)
     spec = load_robot_spec(args.ref)

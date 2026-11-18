@@ -61,7 +61,7 @@ import sys
 import time
 from pathlib import Path
 
-TASK = "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0"
+DEFAULT_TASK = "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0"   # --task: the left hand's is Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0
 DEPLOY_REPO = Path(__file__).resolve().parents[3]   # deploy/simtoolreal/checks -> repo root
 MESH = DEPLOY_REPO / "deploy" / "simtoolreal" / "objects" / "flat_eraser" / "flat_eraser.obj"
 TABLE_TOP_Z = 0.28           # the env's default table top (spec table_top_z_env); --table_top moves it
@@ -99,6 +99,7 @@ def main() -> None:
 
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--checkpoint", required=True)
+    p.add_argument("--task", default=DEFAULT_TASK)
     p.add_argument("--policy_config", default=str(DEPLOY_REPO / "pretrained_policy" / "config.yaml"))
     p.add_argument("--out", required=True)
     p.add_argument("--num_envs", type=int, default=64)
@@ -147,6 +148,7 @@ def main() -> None:
     from isaacsimenvs.tasks.play.utils import object_size_distributions as osd
     from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
 
+    TASK = args.task
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     n = args.num_envs

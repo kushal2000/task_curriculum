@@ -1,4 +1,4 @@
-# SimToolReal deploy: Flexiv Rizon 4s + right Wuji Hand 2
+# SimToolReal deploy: Flexiv Rizon 4s + right (or left) Wuji Hand 2
 
 Runs the SimToolReal Play policy (`pretrained_policy/nov6_dr.pth`: move a tool to a goal pose) on the
 real robot. Trained on branch `kushal/2026-10-30_pretraining_real`, task
@@ -130,6 +130,38 @@ the hand is connected but never enabled.
 The nodes can also run one by one, each in its own terminal (`deploy/nodes/robot.py $C robot.mode=...`,
 `deploy/nodes/viewer.py $C`, `policy.py`, `deploy/nodes/recorder.py $C record.name=...`): that is all
 run.py does.
+
+## Left hand
+
+Same arm, left Wuji Hand 2 on the flange instead of the right. `robot.side=left` switches to
+`spec/spec_flexiv_wuji_left_hl.json` (and its URDF): joint names `l_*`, the left palm and fingertip
+geometry. The policy must be one trained on the left env, `Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0`
+(branch kushal/2026-10-30_pretraining_real; the task YAML is the right's apart from robot and URDF).
+Everything else is unchanged:
+
+- Joint order and sign are the same on both hands (aiowuji `thumb_S1 ... pinky_S4`, + = flexion; the
+  left URDF flips the flexion axes to make it so), so the 20 hand targets map positionally as for the right.
+- Home pose is the right's: at joint 7 = 120 deg the left palm also faces the table (checked with the
+  URDF FK and in the sim).
+- robot.py reads the hand's side from its firmware and refuses a mismatch (`robot.check_side=false` skips it).
+- Hand gains: no left sysid yet, so the right hand's `robot.hand_kt` is used (same motors and gearing).
+
+```bash
+PY=.venv_deploy/bin/python; D=deploy/simtoolreal; R=docs/results/simtoolreal/<left goals dir>
+ARM="robot.side=left robot.arm=<ROBOT_SN> robot.hand=<LEFT_HAND_SN>"   # aiowuji status <SN> shows Side: left
+
+# 0. once per hand: one finger, slowly -- + must flex it
+python third_party/aiowuji/examples/00_move.py <LEFT_HAND_SN> --delta 0.3 --max-velocity 0.5 --cycles 1
+
+$PY $D/run.py robot.mode=home $ARM
+~/miniconda3/envs/foundationpose/bin/python $D/perception.py
+$PY $D/run.py $ARM policy.checkpoint=pretrained_policy/<left>.pth \
+    goals.from_rollout=$R/openloop.npz goals.timeout_steps=1200
+```
+
+Without hardware: `$PY $D/run.py robot.side=left robot.arm=mujoco robot.hand=fake policy.checkpoint=<left>.pth`.
+The goals file for the left policy comes from `checks/record_lift.py --task Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0 --goals train`.
+The left spec comes from `checks/export_spec.py --side left` (its docstring has the command).
 
 ## robot modes
 
