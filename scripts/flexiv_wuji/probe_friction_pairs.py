@@ -50,7 +50,7 @@ import torch  # noqa: E402
 
 import isaacsimenvs  # noqa: E402, F401
 from isaacsimenvs.robots import usd as scene_utils  # noqa: E402
-from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml  # noqa: E402
+from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml  # noqa: E402
 from isaaclab.utils.math import quat_apply  # noqa: E402
 
 # Contact reports on every robot rigid body (only the probe's robot).

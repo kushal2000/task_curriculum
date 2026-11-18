@@ -165,7 +165,7 @@ def main() -> None:
     import gymnasium as gym
 
     import isaacsimenvs  # noqa: F401
-    from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
+    from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
 
     install_writer(args.cache_dir)
 

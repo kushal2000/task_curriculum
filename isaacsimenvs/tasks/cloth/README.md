@@ -8,7 +8,7 @@ thing on both, so a policy trained on the rigid pool is evaluated on the VBD clo
 | `Cloth` | `backends/vbd` | Newton (`.venv_isaaclab3`) | VBD particle cloth |
 | `RigidCloth` | `backends/rigid` | PhysX (`.venv_isaacsim`) | pool of 7 hinged-plate fold shapes |
 
-The robot is `env.robot_setup` (a file stem in `isaacsimenvs/cfg/robot/`), set in the run recipe or on
+The robot is `env.robot_setup` (a file stem in `isaacsimenvs/scripts/configs/robot/`), set in the run recipe or on
 the command line. The older ids stay registered as aliases that carry their setup:
 `FoldPoolPhysx<Robot>` -> `RigidCloth`, `Cloth<Robot>` -> `Cloth`, e.g.
 `Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0` = `RigidCloth` + `flexiv_wuji_right_real`.
@@ -48,8 +48,8 @@ cloth/
 ```
 
 Robots (`RobotSpec`s and the URDF -> USD pipeline) are `isaacsimenvs/robots/`, shared with the Play
-task. The fold shapes are YAML designs with a PNG each in `isaacsimenvs/cfg/rigid_cloth_designs/`
-(regenerate the PNGs with `scripts/visualization/render_fold_designs.py`).
+task. The fold shapes are YAML designs with a PNG each in `isaacsimenvs/scripts/configs/rigid_cloth_designs/`
+(regenerate the PNGs with `isaacsimenvs/scripts/visualization/rigid_cloth/render_designs.py`).
 
 The observation is the encoding the Play prior was trained on: the sheet's moving half as a rigid
 object (`backends/adapter.py`), the fold goal as a pose (`ClothTaskMixin._update_goal`), so every
@@ -120,7 +120,7 @@ sbatch --array=0-$(( 2 * $(wc -l < my_list.txt) - 1 )) scripts/cluster/bos14_px_
 ```
 
 - Each array task is one line x one start: index = 2 x line + start.
-- Each task runs `isaacsimenvs.eval.episodes` on `Isaacsimenvs-Cloth<ROBOT>-Direct-v0` for both
+- Each task runs `isaacsimenvs.scripts.evaluation.eval` on `Isaacsimenvs-Cloth<ROBOT>-Direct-v0` for both
   cutoffs and both eval seeds.
 - Output: `docs/results/px_matrix/<tag>_s<seed>__on_vbd__<pinned|rand>__<4cm|1p5cm>_s<es>.json`.
 - `EVAL_SEEDS="3 4 5 6 7 8"` re-tests a picked checkpoint on fresh seeds.

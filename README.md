@@ -47,7 +47,7 @@ the 29-dim action pipeline, and the observation layout **byte-identical**. That 
 lets a play2perfect checkpoint initialise a bottle-flip run:
 
 ```bash
-isaacsimenvs/train.py --task Isaacsimenvs-BottleFlip-Direct-v0 \
+isaacsimenvs/scripts/training/train.py --task Isaacsimenvs-BottleFlip-Direct-v0 \
   --checkpoint <play2perfect.pth> --checkpoint_load_mode weights
 ```
 
@@ -127,12 +127,12 @@ export OMNI_KIT_ACCEPT_EULA=YES
 
 ```bash
 # Cartpole
-.venv_isaacsim/bin/python isaacsimenvs/train.py \
+.venv_isaacsim/bin/python isaacsimenvs/scripts/training/train.py \
   --task Isaacsimenvs-MultiLinkCartpole-Direct-v0 --headless \
   env.scene.num_envs=4096 agent.params.config.max_epochs=1000
 
 # Bottle flip (SAPG)
-.venv_isaacsim/bin/python isaacsimenvs/train.py \
+.venv_isaacsim/bin/python isaacsimenvs/scripts/training/train.py \
   --task Isaacsimenvs-BottleFlip-Direct-v0 \
   --agent rl_games_sapg_cfg_entry_point --headless \
   env.scene.num_envs=8192
@@ -142,7 +142,7 @@ Smoke test at small scale — note that `num_actors * horizon_length` must be di
 `minibatch_size`, so shrink both together:
 
 ```bash
-.venv_isaacsim/bin/python isaacsimenvs/train.py \
+.venv_isaacsim/bin/python isaacsimenvs/scripts/training/train.py \
   --task Isaacsimenvs-MultiLinkCartpole-Direct-v0 --headless \
   env.scene.num_envs=64 \
   agent.params.config.minibatch_size=256 \

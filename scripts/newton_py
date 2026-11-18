@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the Newton venv's Python with the C++ runtime it needs.
 #
-#   scripts/newton_py -m isaacsimenvs.eval.episodes --task Isaacsimenvs-PlayNewton-Direct-v0 ...
+#   scripts/newton_py -m isaacsimenvs.scripts.evaluation.eval --task Isaacsimenvs-PlayNewton-Direct-v0 ...
 #
 # WHY THIS EXISTS
 #

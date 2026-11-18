@@ -31,7 +31,7 @@ import pytest
 import yaml
 from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
 
-_YAML = REPO_ROOT / "isaacsimenvs" / "cfg" / "task" / "Cloth.yaml"
+_YAML = REPO_ROOT / "isaacsimenvs" / "scripts" / "configs" / "task" / "Cloth.yaml"
 
 
 @pytest.fixture(scope="module")

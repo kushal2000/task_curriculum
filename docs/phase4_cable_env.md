@@ -8,7 +8,7 @@ The spawn-time ejection that blocked this is **fixed** — see below. It was our
 
 ```bash
 # the cable now settles; the policy has not been scored on it yet
-scripts/newton_py -m isaacsimenvs.eval.episodes \
+scripts/newton_py -m isaacsimenvs.scripts.evaluation.eval \
   --task Isaacsimenvs-Cable-Direct-v0 --num_envs 64 --single_variant
 ```
 
@@ -25,7 +25,7 @@ solve.
 | `tasks/cable/cable_env.py` | the env; spawns the cable, installs the adapter |
 | `tasks/cable/cable_env_cfg.py` | `CableCfg` (geometry, material, coupling) + the coupled `NewtonCfg` |
 | `tasks/cable/utils/cable_adapter.py` | presents the cable as a rigid object |
-| `cfg/task/Cable.yaml` | overlay |
+| `configs/task/Cable.yaml` | overlay |
 
 ### The adapter is the load-bearing idea
 
@@ -484,7 +484,7 @@ also strongly positive, which is the same mechanism showing up twice.
     proxy_mode=staggered   cable_substeps=2      linear_damping=10
     angular_damping=20     vbd_iterations=80     bend_stiffness_scale=10.0
 
-These are now the defaults, in **both** `CableCfg` and `cfg/task/Cable.yaml`. The YAML shadows the
+These are now the defaults, in **both** `CableCfg` and `configs/task/Cable.yaml`. The YAML shadows the
 dataclass, so editing `CableCfg` alone silently changes nothing: the first attempt did exactly that
 and scored 0 goals where the sweep scored 16. Verified end to end with no overrides -- 13 goals,
 max 4 per episode, lift 38/64, 13 falls.
@@ -682,7 +682,7 @@ would hold ~5,300 envs/GPU.
 
 ## Throughput: linear to 2048 envs, then memory-bound
 
-`isaacsimenvs/eval/throughput.py`, one job per env count under `scripts/cluster/throughput/`.
+`isaacsimenvs/scripts/evaluation/throughput.py`, one job per env count under `scripts/cluster/throughput/`.
 RTX 6000 Ada, sim only (zero actions), warm-up excluded, CUDA synchronised, **overflow asserted**.
 
 | envs | ms/step | env-steps/s | GPU GB | CPU GB |
@@ -753,7 +753,7 @@ protocol.
 
 Peak speed was used as a stability metric here for a long time against a badly chosen anchor --
 4.81 m/s, which was itself a *cable* measurement. The right reference is a rigid manipuland that the
-policy actually succeeds with. `isaacsimenvs/eval/velocity_stats` measures the distribution, 16 envs
+policy actually succeeds with. `isaacsimenvs/scripts/evaluation/velocity_stats` measures the distribution, 16 envs
 x 600 steps:
 
 | object | mean | p50 | p90 | p99 | **max** | goals |
@@ -1002,7 +1002,7 @@ observation are all built around that object, so it is a larger change than it l
 
 ### Staged bring-up: the cable and its contacts are fine; the coupled solve is not
 
-`isaacsimenvs/eval/cable_stages.py` builds the scene up one element at a time, using the task's own
+`isaacsimenvs/scripts/evaluation/cable_stages.py` builds the scene up one element at a time, using the task's own
 `CableCfg` so a difference between a stage and the env is the *scene* rather than the cable.
 
 | stage | scene | at rest after 120 steps | step-1 speed |

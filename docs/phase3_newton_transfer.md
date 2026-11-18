@@ -16,12 +16,12 @@ Raw: `docs/results/phase3_{newton,physx}_64env_single.json`.
 
 ```bash
 # Newton (kit-less; scripts/newton_py supplies the LD_PRELOAD the venv needs)
-scripts/newton_py -m isaacsimenvs.eval.episodes \
+scripts/newton_py -m isaacsimenvs.scripts.evaluation.eval \
   --task Isaacsimenvs-PlayNewton-Direct-v0 --num_envs 64 --num_assets_per_type 1 \
   --single_variant --max_steps 12000 'env.assets.handle_head_types=[hammer]'
 
 # PhysX, identical protocol
-.venv_isaacsim/bin/python -m isaacsimenvs.eval.episodes \
+.venv_isaacsim/bin/python -m isaacsimenvs.scripts.evaluation.eval \
   --task Isaacsimenvs-Play-Direct-v0 --num_envs 64 --num_assets_per_type 1 \
   --single_variant --max_steps 12000 --headless 'env.assets.handle_head_types=[hammer]'
 ```

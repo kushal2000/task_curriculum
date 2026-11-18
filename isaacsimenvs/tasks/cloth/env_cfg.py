@@ -1,9 +1,9 @@
 """``ClothEnvCfg``: the fold task's configuration, shared by both backends.
 
-The sections mirror the task YAMLs (``cfg/task/FoldPoolPhysx.yaml``, ``cfg/task/Cloth.yaml``) one to
+The sections mirror the task YAMLs (``configs/task/FoldPoolPhysx.yaml``, ``configs/task/Cloth.yaml``) one to
 one; a backend's config adds its own blocks (``backends/rigid/config.py``,
 ``backends/vbd/config.py``). The robot comes from ``robot`` (a ``RobotSpec`` name) and
-``assets.robot_urdf``, both set by a robot setup (``cfg/robot/<robot_setup>.yaml``).
+``assets.robot_urdf``, both set by a robot setup (``configs/robot/<robot_setup>.yaml``).
 """
 
 from __future__ import annotations
@@ -194,8 +194,8 @@ class ClothEnvCfg(DirectRLEnvCfg):
     robot: str = "kuka_sharpa"
     """A key of ``isaacsimenvs.robots.ROBOT_SPECS``; ``assets.robot_urdf`` must be its URDF."""
     robot_setup: str = ""
-    """A file stem in ``cfg/robot/`` (robot, URDF, self-collision, base position), applied by the
-    config loader (``utils/hydra_utils``) between the task YAML and the recipe. Empty: the task's."""
+    """A file stem in ``configs/robot/`` (robot, URDF, self-collision, base position), applied by the
+    config loader (``scripts/configs/loader``) between the task YAML and the recipe. Empty: the task's."""
     robot_self_collision: bool = False
     """Robot self-collision, minus ``RobotSpec.self_collision_filter``."""
     robot_self_collision_scope: str = "all"

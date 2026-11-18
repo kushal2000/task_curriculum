@@ -46,7 +46,7 @@ import isaacsimenvs  # noqa: E402, F401
 from isaacsimenvs.tasks.play.utils import obs_utils as new_obs  # noqa: E402
 from isaacsimenvs.tasks.play.utils import reset_utils  # noqa: E402
 from isaacsimenvs.tasks.play.utils.obs_utils import OBS_FIELD_SIZES, _PER_JOINT_FIELDS  # noqa: E402
-from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml  # noqa: E402
+from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml  # noqa: E402
 
 print(f"[probe] obs_utils from {new_obs.__file__}", flush=True)
 

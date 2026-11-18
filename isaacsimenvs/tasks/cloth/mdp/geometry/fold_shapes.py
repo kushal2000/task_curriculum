@@ -29,8 +29,8 @@ Without it the sheet has a slit along that line and its halves fold independentl
 four-crease vertex has the rigid-origami behaviour of a real map fold: it folds along ONE line at a
 time (horizontal OR vertical), and a fully folded sheet can then fold along the other.
 
-The shapes are YAML designs in ``cfg/rigid_cloth_designs/`` (schema: ``load_design``), each with a
-PNG diagram beside it (``scripts/visualization/render_fold_designs.py``).
+The shapes are YAML designs in ``configs/rigid_cloth_designs/`` (schema: ``load_design``), each with a
+PNG diagram beside it (``isaacsimenvs/scripts/visualization/rigid_cloth/render_designs.py``).
 
 **Every shape can do the stage-1 half fold** (``+x`` half over onto ``-x``, root on the ``-x``
 side); that is the membership rule for the pool. Shapes that only fold some other way (a diagonal,
@@ -439,7 +439,7 @@ def _rodrigues(u: np.ndarray, theta: float) -> np.ndarray:
 # ------------------------------------------------------------------------------------- the pool
 
 #: The pool's designs, one YAML per shape (schema: ``load_design``).
-DESIGN_DIR = Path(__file__).resolve().parents[4] / "cfg" / "rigid_cloth_designs"
+DESIGN_DIR = Path(__file__).resolve().parents[4] / "scripts" / "configs" / "rigid_cloth_designs"
 #: Grasp-point inset unit [m]: a fingertip pinches this far inside a corner.
 GRASP_INSET = 0.006
 

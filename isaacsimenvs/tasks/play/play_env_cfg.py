@@ -1,7 +1,7 @@
 """PlayEnvCfg — typed defaults for the Play goal-pose-reaching task.
 
 Organized into sectioned sub-configclasses that mirror the YAML overlay
-in cfg/task/Play.yaml 1:1:
+in configs/task/Play.yaml 1:1:
 
     sim                     → isaaclab.sim.SimulationCfg (+ PhysxCfg)
     scene                   → PlaySceneCfg(InteractiveSceneCfg)
@@ -588,15 +588,15 @@ def _default_sim_cfg() -> SimulationCfg:
 class PlayEnvCfg(DirectRLEnvCfg):
     """Top-level configclass for the Play goal-pose-reaching env.
 
-    Structure mirrors ``cfg/task/Play.yaml`` exactly — YAML overlay
+    Structure mirrors ``configs/task/Play.yaml`` exactly — YAML overlay
     key paths resolve to these fields via ``configclass.from_dict``.
     """
 
     # Robot embodiment, a key of robots.ROBOT_SPECS. Fixed per registered task; assets.robot_urdf
     # must be its URDF. PlayEnv sets action_space (and the obs sizes) from it.
     robot: str = "kuka_sharpa"
-    # Robot setup: a file stem in cfg/robot/ (robot spec, URDF, self-collision, base position),
-    # applied by the config loader (utils/hydra_utils) between the task YAML and the run recipe.
+    # Robot setup: a file stem in configs/robot/ (robot spec, URDF, self-collision, base position),
+    # applied by the config loader (scripts/configs/loader) between the task YAML and the run recipe.
     # Set it in a recipe (`env.robot_setup`), on the command line, or through an alias task id.
     # Empty: the task's own robot.
     robot_setup: str = ""

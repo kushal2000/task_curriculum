@@ -3,20 +3,18 @@
     Isaacsimenvs-Cloth-Direct-v0       VBD cloth sheet, Newton (``.venv_isaaclab3``)
     Isaacsimenvs-RigidCloth-Direct-v0  fold-shape pool of hinged plates, PhysX (``.venv_isaacsim``)
 
-The robot is a config field, ``env.robot_setup`` (a file stem in ``cfg/robot/``), set in the run
+The robot is a config field, ``env.robot_setup`` (a file stem in ``configs/robot/``), set in the run
 recipe or on the command line. The older ids -- ``FoldPoolPhysx`` and one per robot, e.g.
 ``Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0`` -- stay registered as aliases: each
-names its canonical task and robot setup (``utils/hydra_utils.resolve_task``). Start with
+names its canonical task and robot setup (``scripts/configs/loader.resolve_task``). Start with
 ``README.md``.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import gymnasium as gym
 
-_CFG_DIR = Path(__file__).resolve().parents[2] / "cfg"
+from isaacsimenvs import CONFIG_DIR as _CFG_DIR
 
 _TASKS = {
     "Cloth": ("backends.vbd.env:VbdClothEnv", "backends.vbd.config:VbdClothEnvCfg", "Cloth.yaml"),

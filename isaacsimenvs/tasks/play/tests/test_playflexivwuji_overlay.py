@@ -17,7 +17,7 @@ from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
 
 yaml = pytest.importorskip("yaml")
 
-CFG = REPO_ROOT / "isaacsimenvs" / "cfg" / "task"
+CFG = REPO_ROOT / "isaacsimenvs" / "scripts" / "configs" / "task"
 
 #: Top-level keys a Flexiv task YAML may add: the robot selector.
 ALLOWED_EXTRA = {"robot"}

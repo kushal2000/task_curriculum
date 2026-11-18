@@ -68,7 +68,7 @@ if args_cli.no_sleep or args_cli.vel_iters >= 0:
         return cfg
 
     _su.build_robot_articulation_usd_cfg = _no_sleep_build
-from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml  # noqa: E402
+from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml  # noqa: E402
 
 
 def _t(x):

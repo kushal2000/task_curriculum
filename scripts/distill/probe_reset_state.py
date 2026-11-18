@@ -13,9 +13,9 @@ except ImportError:
     app = None
 import gymnasium as gym, torch, os
 import isaacsimenvs  # noqa
-from isaacsimenvs.distill.student import TeacherNet
-from isaacsimenvs.eval.protocol import use_single_object_variant
-from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
+from isaacsimenvs.scripts.distillation.student import TeacherNet
+from isaacsimenvs.scripts.evaluation.protocol import use_single_object_variant
+from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
 
 @hydra_task_config_with_yaml(args.task, "rl_games_sapg_cfg_entry_point", experiment=args.experiment)
 def run(env_cfg, _a):

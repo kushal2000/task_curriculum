@@ -1,6 +1,6 @@
 # flat7FlexivWujiRHL: the flat7 recipe (flat7.yaml) on the Flexiv Rizon 4s + RIGHT Wuji Hand 2 as the
 # real robot is: real-setup geometry, the hand's identified joint dynamics and torque limits, the
-# real joint limits (cfg/robot/flexiv_wuji_right_real.yaml, robots.FLEXIV_WUJI_RIGHT_REAL). Until
+# real joint limits (configs/robot/flexiv_wuji_right_real.yaml, robots.FLEXIV_WUJI_RIGHT_REAL). Until
 # 2026-11-10 this ran on ...RightHumanLike (HAND2_DRIVE armature, no friction, the spec's limits).
 base: flat7
 task: Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0

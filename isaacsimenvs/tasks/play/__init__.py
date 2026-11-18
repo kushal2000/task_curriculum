@@ -14,17 +14,18 @@ another branch):
 
 Entry points:
 - ``env_cfg_entry_point``           → PlayEnvCfg (typed defaults in code)
-- ``env_cfg_yaml_entry_point``      → cfg/task/Play.yaml overlay
-- ``rl_games_cfg_entry_point``      → cfg/train/PlayPPO.yaml (baseline)
-- ``rl_games_sapg_cfg_entry_point`` → cfg/train/PlaySAPG.yaml (default)
+- ``env_cfg_yaml_entry_point``      → configs/task/Play.yaml overlay
+- ``rl_games_cfg_entry_point``      → configs/train/PlayPPO.yaml (baseline)
+- ``rl_games_sapg_cfg_entry_point`` → configs/train/PlaySAPG.yaml (default)
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import gymnasium as gym
+
+from isaacsimenvs import CONFIG_DIR as _CFG_DIR
 
 if TYPE_CHECKING:
     from .play_env import PlayEnv
@@ -52,8 +53,6 @@ def __getattr__(name: str):
 
         return PlayEnvCfg
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-_CFG_DIR = Path(__file__).resolve().parents[2] / "cfg"
 
 
 def _register(task_id: str, cfg_class: str, task_yaml: str) -> None:

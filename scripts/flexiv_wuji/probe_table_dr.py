@@ -42,7 +42,7 @@ import torch  # noqa: E402
 
 import isaacsimenvs  # noqa: E402, F401
 from isaacsimenvs.tasks.play.utils.obs_utils import OBS_FIELD_SIZES, _PER_JOINT_FIELDS  # noqa: E402
-from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml  # noqa: E402
+from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml  # noqa: E402
 from isaaclab.utils.math import quat_apply  # noqa: E402
 
 TABLE_HALF = 0.15

@@ -3,7 +3,7 @@
 # .venv_isaacsim rather than replacing it.
 #
 # Isaac Lab 2.3 needs Python 3.11 and Isaac Lab 3.0 needs 3.12, so the two cannot share an
-# interpreter. Both venvs editable-install this same source tree, so `isaacsimenvs.eval`,
+# interpreter. Both venvs editable-install this same source tree, so `isaacsimenvs.scripts.evaluation`,
 # `isaacsimenvs.tasks.play.utils.*` and `rl_games` resolve to one copy of the code from either
 # one -- which is what makes a phase-1 number and a phase-3 number comparable.
 #

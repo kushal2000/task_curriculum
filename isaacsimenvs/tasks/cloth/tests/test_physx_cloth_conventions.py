@@ -104,7 +104,7 @@ def _blocks(path: Path) -> dict:
 
 def test_tasks_and_aliases_are_registered():
     """Canonical ids, and every old id as an alias naming its canonical task and an existing robot
-    setup (cfg/robot/<setup>.yaml)."""
+    setup (configs/robot/<setup>.yaml)."""
     gym = pytest.importorskip("gymnasium")
     from isaacsimenvs.conftest import load_module
 
@@ -117,7 +117,7 @@ def test_tasks_and_aliases_are_registered():
         kw = gym.spec(f"Isaacsimenvs-{old}FlexivWujiRightReal-Direct-v0").kwargs
         assert kw["canonical_task"] == f"Isaacsimenvs-{base}-Direct-v0"
         assert kw["robot_setup"] == "flexiv_wuji_right_real"
-    setups = {p.stem for p in (REPO / "isaacsimenvs/cfg/robot").glob("*.yaml")}
+    setups = {p.stem for p in (REPO / "isaacsimenvs/scripts/configs/robot").glob("*.yaml")}
     for spec in gym.registry.values():
         if spec.id.startswith("Isaacsimenvs-") and "robot_setup" in spec.kwargs:
             assert spec.kwargs["robot_setup"] in setups, spec.id

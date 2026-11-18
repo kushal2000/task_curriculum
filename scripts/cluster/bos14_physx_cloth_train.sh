@@ -3,7 +3,7 @@
 #
 #   TASK=pool PRIOR=<run>.pth RUN_TAG=box3 sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
 #   TASK=pool ENVS=256 EPOCHS=3 RUN_TAG=smoke sbatch --array=0 scripts/cluster/bos14_physx_cloth_train.sh
-#   EXPERIMENT=flat7DRABC TASK=pool RUN_TAG=flat7DRABC sbatch --array=0-2 ...   (recipe: isaacsimenvs/cfg/experiment/)
+#   EXPERIMENT=flat7DRABC TASK=pool RUN_TAG=flat7DRABC sbatch --array=0-2 ...   (recipe: isaacsimenvs/scripts/configs/runs/)
 #   REPO=<worktree> ROBOT=FlexivWujiHumanLike PRIOR=pretrained_policy/flexiv_wuji.pth ... (another checkout / robot)
 #   PRIORS="<s1>.pth <s2>.pth <s3>.pth" TASK=pool RUN_TAG=ft sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
 #       (finetune: array index k starts from the k-th checkpoint)
@@ -77,7 +77,7 @@ if [ "${WANDB:-0}" = 1 ]; then
     WANDB_ARGS=(--wandb_activate --wandb_project fold_pool --wandb_group "px_${RUN_TAG:-run}_${JOB_TAG}" --wandb_name "$NAME")
 fi
 read -r -a EXTRA <<<"${EXTRA_ARGS:-}"
-# EXPERIMENT=<name>: the run recipe in isaacsimenvs/cfg/experiment/<name>.yaml supplies the env count,
+# EXPERIMENT=<name>: the run recipe in isaacsimenvs/scripts/configs/runs/<name>.yaml supplies the env count,
 # epochs, minibatch, SAPG block and DR, so the launcher's own size overrides are left out (ENVS / EPOCHS /
 # MINIBATCH are ignored; override through EXTRA_ARGS instead).
 if [ -n "${EXPERIMENT:-}" ]; then
@@ -97,7 +97,7 @@ if [ -n "${EXPERIMENT:-}" ]; then
 import re, sys, yaml
 from pathlib import Path
 def load(n):
-    e = yaml.safe_load(Path(f"isaacsimenvs/cfg/experiment/{n}.yaml").read_text())
+    e = yaml.safe_load(Path(f"isaacsimenvs/scripts/configs/runs/{n}.yaml").read_text())
     b = e.pop("base", None)
     return merge(load(b), e) if b else e
 def merge(a, o):
@@ -141,7 +141,7 @@ RC=1
 for TRY in $(seq 1 "${PX_TRIES:-3}"); do
     ALOG="slurm_logs/${NAME}.try${TRY}.log"
     setsid \
-    .venv_isaacsim/bin/python -m isaacsimenvs.train \
+    .venv_isaacsim/bin/python -m isaacsimenvs.scripts.training.train \
         --task "$GYM_TASK" \
         --agent rl_games_sapg_cfg_entry_point \
         --headless \

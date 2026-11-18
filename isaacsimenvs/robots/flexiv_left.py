@@ -106,7 +106,7 @@ FLEXIV_WUJI = RobotSpec(
     # The importer merges flange, l_mount and l_wrist into link7.
     palm_body_name="link7",
     # The Kuka's palm centre carried over through the canonical hand frame (middle MCP origin,
-    # knuckle-defined axes; scripts/flexiv_wuji/viser_compare.py): same spot relative to the
+    # knuckle-defined axes; isaacsimenvs/scripts/visualization/robots/viser_compare.py): same spot relative to the
     # knuckles. Depends on flexiv_wuji.MOUNT_*; tests/test_robot_specs.py recomputes it.
     palm_center_offset=(-0.0018, -0.015, 0.1948),
     fingertip_body_regex="l_(thumb|index_finger|middle_finger|ring_finger|pinky)_distal",

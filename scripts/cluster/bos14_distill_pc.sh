@@ -1,5 +1,5 @@
 #!/bin/bash
-# Point-cloud student distillation (isaacsimenvs/distill/distill_pc.py) on the PhysX fold pool, or an
+# Point-cloud student distillation (isaacsimenvs/scripts/distillation/distill_pc.py) on the PhysX fold pool, or an
 # evaluation of a student / the teacher on PhysX or the VBD cloth (Newton).
 #   NAME=B_g1 VIS=cams GOAL=g1 sbatch scripts/cluster/bos14_distill_pc.sh                 (train)
 #   MODE=eval SIM=vbd POLICY=student STUDENT=<pth> TAG=<tag> START=rand sbatch ...          (eval)
@@ -42,7 +42,7 @@ train() {  # name envs iters <extra args...>
     [ "${NOISE:-0}" = 1 ] && args+=(--noise)
     [ "${G3_NOISE:-0}" = 1 ] && args+=(--g3_noise)
     read -r -a extra <<<"${EXTRA:-}"
-    .venv_isaacsim/bin/python -m isaacsimenvs.distill.distill_pc --mode train --headless \
+    .venv_isaacsim/bin/python -m isaacsimenvs.scripts.distillation.distill_pc --mode train --headless \
         --task "$PX_TASK" --experiment "$EXPERIMENT" --teacher "$TEACHER" --seed "${SEED:-1}" \
         --out "outputs/distill/$name" --iters "$iters" "${args[@]}" "$@" "${extra[@]}" \
         "env.scene.num_envs=$envs" "${FOLD[@]}"
@@ -54,11 +54,11 @@ evaluate() {  # sim policy student out start envs seed <extra args...>
     [ "$start" = rand ] && sargs=(--randomize)
     [ -n "$student" ] && stu=(--student "$student")
     if [ "$sim" = vbd ]; then
-        scripts/newton_py -m isaacsimenvs.distill.distill_pc --mode eval --policy "$policy" "${stu[@]}" \
+        scripts/newton_py -m isaacsimenvs.scripts.distillation.distill_pc --mode eval --policy "$policy" "${stu[@]}" \
             --task "$VBD_TASK" --teacher "$TEACHER" --num_envs "$envs" --seed "$seed" \
             --json "$out" "${sargs[@]}" "$@" "${FOLD[@]}" "${VBD_EXTRA[@]}"
     else
-        .venv_isaacsim/bin/python -m isaacsimenvs.distill.distill_pc --mode eval --headless --policy "$policy" \
+        .venv_isaacsim/bin/python -m isaacsimenvs.scripts.distillation.distill_pc --mode eval --headless --policy "$policy" \
             "${stu[@]}" --task "$PX_TASK" --experiment "$EXPERIMENT" --teacher "$TEACHER" --num_envs "$envs" \
             --seed "$seed" --json "$out" "${sargs[@]}" "$@" "${FOLD[@]}"
     fi

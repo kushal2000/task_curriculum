@@ -17,7 +17,7 @@ cd /home/yiboc/mit/task_curriculum_flexiv
 export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES PYTHONPATH=$PWD
 EXP="${EXPERIMENT:-flat7FlexivWujiRHL}"; ENVS="${ENVS:-1536}"
 echo "[smoke] experiment=$EXP envs=$ENVS host=$(hostname -s)"
-.venv_isaacsim/bin/python -m isaacsimenvs.train \
+.venv_isaacsim/bin/python -m isaacsimenvs.scripts.training.train \
     --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --experiment "$EXP" \
     --agent rl_games_sapg_cfg_entry_point --headless --single_variant \
     --checkpoint pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth --checkpoint_load_mode weights \

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Live, interactive policy viewer on PHYSX (isaacsimenvs/eval/live_viser.py, PhysX backend), port 8081.
+# Live, interactive policy viewer on PHYSX (isaacsimenvs/scripts/visualization/policies/live_viser.py, PhysX backend), port 8081.
 #
 #   sbatch scripts/cluster/bos14_live_viser_physx.sh
 #   ENVS=20 POLICY="run 1: pool + folded starts (s1; cloth 56/50%)" \
@@ -36,7 +36,7 @@ export PYTHONPATH="$PWD/.venv_isaacsim/viser_overlay${PYTHONPATH:+:$PYTHONPATH}"
 echo "[live] node $(hostname -s) ($(hostname -I | awk '{print $1}')) port $PORT commit $(git rev-parse --short HEAD)"
 echo "[live] tunnel: ssh -N -L ${PORT}:$(hostname -s):${PORT} $USER@<bos14 login>   then http://localhost:${PORT}"
 read -r -a EXTRA <<<"${EXTRA_ARGS:-}"
-exec .venv_isaacsim/bin/python -m isaacsimenvs.eval.live_viser \
+exec .venv_isaacsim/bin/python -m isaacsimenvs.scripts.visualization.policies.live_viser \
     --task "${TASK:-Isaacsimenvs-FoldPoolPhysx-Direct-v0}" \
     --num_envs "${ENVS:-8}" \
     --port "$PORT" \

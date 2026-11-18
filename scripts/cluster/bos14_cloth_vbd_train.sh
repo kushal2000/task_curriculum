@@ -82,7 +82,7 @@ PORT=$(( 20000 + (JOB % 10000) * 3 + SEED ))
 scripts/newton_py -m torch.distributed.run \
     --nnodes="$NPS" --nproc_per_node=1 --node_rank="$NODE_RANK" \
     --master_addr="$HEAD_IP" --master_port="$PORT" ${RDZV_TIMEOUT:+--rdzv_conf=timeout=$RDZV_TIMEOUT} \
-    -m isaacsimenvs.train \
+    -m isaacsimenvs.scripts.training.train \
     --task "Isaacsimenvs-Cloth${ROBOT:-}-Direct-v0" \
     --agent rl_games_sapg_cfg_entry_point \
     "${CKPT_ARGS[@]}" \

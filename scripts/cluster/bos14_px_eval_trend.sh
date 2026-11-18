@@ -51,7 +51,7 @@ for CUT in 0.04 0.015; do
     for ES in ${EVAL_SEEDS:-1 2}; do
         OUT="$OUTDIR/${TAG}_s${SEED}__on_vbd__${START}__${CT}_s${ES}.json"
         [ -s "$OUT" ] && { echo "[px_trend] exists: $OUT"; continue; }
-        scripts/newton_py -m isaacsimenvs.eval.episodes --task "Isaacsimenvs-Cloth${ROBOT:-}-Direct-v0" \
+        scripts/newton_py -m isaacsimenvs.scripts.evaluation.eval --task "Isaacsimenvs-Cloth${ROBOT:-}-Direct-v0" \
             --checkpoint "$CKPT" --policy_config pretrained_policy/config.yaml \
             --sapg_expl_coef 0 --num_envs 32 --max_steps 900 --success_tolerance 0.01 \
             --num_assets_per_type 1 --single_variant "${SARGS[@]}" --seed "$ES" --out "$OUT" \

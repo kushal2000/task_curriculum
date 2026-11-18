@@ -1,5 +1,5 @@
 #!/bin/bash
-# SAPG with the point-cloud student as the actor (isaacsimenvs/distill/pc_rl.py), NPS nodes per seed in
+# SAPG with the point-cloud student as the actor (isaacsimenvs/scripts/distillation/pc_rl.py), NPS nodes per seed in
 # ONE array job: array index i -> seed i/NPS + 1, node rank i%NPS. Launch mechanics as
 # bos14_cloth_vbd_train.sh (no srun / ssh, static torchrun rendezvous over a file).
 #
@@ -105,7 +105,7 @@ fi
 "${PY[@]}" -m torch.distributed.run \
     --nnodes="$NPS" --nproc_per_node=1 --node_rank="$NODE_RANK" \
     --master_addr="$HEAD_IP" --master_port="$PORT" ${RDZV_TIMEOUT:+--rdzv_conf=timeout=$RDZV_TIMEOUT} \
-    -m isaacsimenvs.train \
+    -m isaacsimenvs.scripts.training.train \
     --agent rl_games_sapg_cfg_entry_point \
     "${CKPT_ARGS[@]}" \
     --distributed \

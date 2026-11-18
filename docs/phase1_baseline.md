@@ -7,7 +7,7 @@ Raw: `docs/results/phase1_play_physx_64env{,_s1,_s2}.json`.
 ```bash
 export OMNI_KIT_ACCEPT_EULA=YES
 for s in 0 1 2; do
-  .venv_isaacsim/bin/python isaacsimenvs/eval/episodes.py \
+  .venv_isaacsim/bin/python isaacsimenvs/scripts/evaluation/eval.py \
     --task Isaacsimenvs-Play-Direct-v0 --num_envs 64 --num_assets_per_type 4 \
     --max_steps 12000 --seed $s --headless \
     --out docs/results/phase1_play_physx_64env_s$s.json
@@ -43,7 +43,7 @@ repeatedly while the good episodes were still running; one episode per environme
 
 **Pool size is part of the task, not a speed knob.** `generate_handle_head_urdfs` shuffles the
 whole pool under a fixed seed before round-robin assignment, so changing
-`num_assets_per_type` changes *which* objects envs 0–63 receive. `cfg/task/Play.yaml` ships 100
+`num_assets_per_type` changes *which* objects envs 0–63 receive. `configs/task/Play.yaml` ships 100
 for training; evaluation uses 4 to match the reference. As a side effect startup converts 48
 URDFs instead of 1200.
 

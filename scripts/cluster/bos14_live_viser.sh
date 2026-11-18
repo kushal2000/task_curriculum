@@ -1,5 +1,5 @@
 #!/bin/bash
-# Live, interactive policy viewer (isaacsimenvs/eval/live_viser.py) on a GPU node.
+# Live, interactive policy viewer (isaacsimenvs/scripts/visualization/policies/live_viser.py) on a GPU node.
 #
 #   sbatch scripts/cluster/bos14_live_viser.sh
 #   TASK=Isaacsimenvs-Cloth-Direct-v0 ENVS=4 sbatch scripts/cluster/bos14_live_viser.sh
@@ -35,7 +35,7 @@ TASK="${TASK:-Isaacsimenvs-Cloth-Direct-v0}"
 # (the big one only slows it down). Switching task from the browser applies the same rule.
 BUF=()
 [[ "$TASK" != Isaacsimenvs-Cloth*-Direct-v0 ]] && BUF=("env.newton.per_env_triangle_pairs=2097152")
-exec scripts/newton_py -m isaacsimenvs.eval.live_viser \
+exec scripts/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser \
     --task "$TASK" \
     --num_envs "${ENVS:-8}" \
     --port "$PORT" \

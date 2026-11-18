@@ -40,8 +40,8 @@ import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
 
 import isaacsimenvs  # noqa: E402, F401
-from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant  # noqa: E402
-from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml  # noqa: E402
+from isaacsimenvs.scripts.evaluation.protocol import disable_randomization, use_single_object_variant  # noqa: E402
+from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml  # noqa: E402
 
 
 def _t(x):

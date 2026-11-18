@@ -58,8 +58,8 @@ if [ -z "${CKPT:-}" ]; then
 fi
 [ -n "$CKPT" ] && [ -f "$CKPT" ] || { echo "[px_mx] no checkpoint for $NAME" >&2; exit 1; }
 
-PHYSX=(.venv_isaacsim/bin/python -m isaacsimenvs.eval.episodes --headless)
-NEWTON=(scripts/newton_py -m isaacsimenvs.eval.episodes)
+PHYSX=(.venv_isaacsim/bin/python -m isaacsimenvs.scripts.evaluation.eval --headless)
+NEWTON=(scripts/newton_py -m isaacsimenvs.scripts.evaluation.eval)
 POOL7=("env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]"
        env.fold_pool.one_shape_per_env=true)
 case "$T" in
