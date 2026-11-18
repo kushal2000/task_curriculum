@@ -21,7 +21,7 @@ import time
 
 import numpy as np
 
-from isaacsimenvs.scripts.evaluation.eval_cloth import add_common_args, build, launch
+from isaacsimenvs.scripts.evaluation.eval_cloth import PenetrationMeter, add_common_args, build, launch
 
 ROBOT_RGB = (205, 208, 214)
 TABLE_RGB = (96, 112, 138)
@@ -128,12 +128,15 @@ def main() -> None:
     successes = np.zeros(n, dtype=int)
     episode_step = np.zeros(n, dtype=int)
     last_outcome = ["-"] * n
+    pen = PenetrationMeter(inner)
+    every_env = torch.ones(n, dtype=torch.bool, device=inner.device)
 
     def reset_all():
         nonlocal obs
         obs, _ = env.reset()
         b.player.reset_rnn()
         episode_step[:] = 0
+        pen.reset(every_env.nonzero(as_tuple=True)[0])
 
     obs = None
     steps_run = 0
@@ -158,6 +161,7 @@ def main() -> None:
                 requests["step"] = max(0, requests["step"] - 1)
                 obs, _, terminated, truncated, extras = env.step(b.act(obs))
                 episode_step += 1
+                pen.update(every_env)  # this step's depth enters the episode max before any reset
                 ended = (terminated | truncated).cpu().numpy()
                 if ended.any():
                     final = extras["episode_final"]
@@ -168,15 +172,21 @@ def main() -> None:
                         successes[e] += int(ok[e])
                         flags = [k for k, v in fired.items() if v[e]]
                         last_outcome[e] = ("SUCCESS (fold + release)" if ok[e] else "failed") + \
-                            f" at step {episode_step[e]} -- {', '.join(flags) or 'no flags'}"
+                            f" at step {episode_step[e]} -- {', '.join(flags) or 'no flags'}" + \
+                            (f"; max penetration {float(pen.episode_max[e]) * 1000:.1f} mm" if pen.available else "")
                         episode_step[e] = 0
+                    pen.reset(torch.as_tensor(np.flatnonzero(ended), device=inner.device))
                     b.player.reset_rnn(torch.as_tensor(np.flatnonzero(ended), device=inner.device))
             with lock:
                 update_poses(w)
             fold_err = float(inner.fold_error()[w])
             status.content = (("▶ playing" if requests["playing"] else "⏸ paused") + f"  \n**{label(w)}**  \nepisode step {episode_step[w]} / {int(inner.max_episode_length)}  \n"
                               f"fold error {fold_err * 1000:.1f} mm (fold < "
-                              f"{inner.cfg.task.keypoint_tolerance * 1000:.0f} mm)  \nlast episode: {last_outcome[w]}")
+                              f"{inner.cfg.task.keypoint_tolerance * 1000:.0f} mm)  \n"
+                              + (f"robot penetration now {float(pen.now[w]) * 1000:.1f} mm, "
+                                 f"episode max {float(pen.episode_max[w]) * 1000:.1f} mm  \n" if pen.available
+                                 else "robot penetration unavailable (contact reporting off)  \n")
+                              + f"last episode: {last_outcome[w]}")
             total = int(episodes.sum())
             tally.content = (f"**All {n} envs:** {total} episodes, {int(successes.sum())} successes"
                              + (f" ({successes.sum() / total:.0%})" if total else ""))

@@ -9,6 +9,7 @@ import torch
 
 from ...mdp.fold_guard import LiftWorkHistory, robot_opening_work, table_excursion
 from ...mdp.geometry import rotations
+from .checks import contacts_needed
 from .contacts import RigidClothContacts
 from .designs import extrusion_mesh
 
@@ -55,9 +56,15 @@ class RigidClothEpisodeGuard:
                 self.opening_sign[ids, h] = torch.sign(torch.cross(self.axis[ids], center-self.anchor[ids], dim=-1)[:, 2])
         self.history = LiftWorkHistory(self.n, self.device, self.cfg)
         self.contacts = (RigidClothContacts(backend, capacity=max(16384, self.n*self.cfg.contact_points_per_env))
-                         if self.cfg.press_driven_fold else None)
+                         if contacts_needed(self.cfg) else None)
+        fraction = float(getattr(self.cfg, 'max_robot_penetration_fraction', 0.0))
+        if fraction < 0:
+            raise ValueError('max_robot_penetration_fraction must be >= 0')
+        # Per-env depth limit [m]: a fraction of that env's panel thickness (dims[:, 2]).
+        self.penetration_limit = fraction*backend._dims[:, 2] if fraction > 0 else None
         self.outside = torch.zeros(self.n, dtype=torch.bool, device=self.device)
         self.pressing = torch.zeros_like(self.outside)
+        self.penetrating = torch.zeros_like(self.outside)
         self.nonfinite = torch.zeros_like(self.outside)
         self.fresh = torch.ones_like(self.outside)
         self.excursion = torch.zeros(self.n, device=self.device)
@@ -72,7 +79,9 @@ class RigidClothEpisodeGuard:
 
     def reset(self, ids):
         self.history.reset(ids)
-        for flag in (self.outside, self.pressing, self.nonfinite):
+        for flag in (self.outside, self.pressing, getattr(self, 'penetrating', None), self.nonfinite):
+            if flag is None:
+                continue
             flag[ids] = False
         self.excursion[ids] = 0
         self.fresh[ids] = True
@@ -109,6 +118,11 @@ class RigidClothEpisodeGuard:
         if self.cfg.outside_table:
             self.outside |= ~inside & finite
         if self.contacts is None:
+            return
+        limit = getattr(self, 'penetration_limit', None)
+        if limit is not None:
+            self.penetrating |= self.contacts.robot_penetration(self.n) > limit
+        if not self.cfg.press_driven_fold:
             return
 
         robot = b.robot.data
@@ -186,4 +200,7 @@ class RigidClothEpisodeGuard:
         self.pressing |= new
 
     def failures(self):
-        return {'outside_table': self.outside.clone(), 'press_driven_fold': self.pressing.clone()}
+        out = {'outside_table': self.outside.clone(), 'press_driven_fold': self.pressing.clone()}
+        if getattr(self, 'penetration_limit', None) is not None:  # only when enabled: unchanged keys otherwise
+            out['robot_penetration'] = self.penetrating.clone()
+        return out

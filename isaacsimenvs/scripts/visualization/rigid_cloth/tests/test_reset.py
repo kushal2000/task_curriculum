@@ -96,12 +96,15 @@ def test_recipe_inheritance_keeps_sections_and_does_not_mutate_future_reads(tmp_
 
 def test_default_recipe_all_sizes_fit_training_table_with_full_yaw_range():
     from isaacsimenvs.scripts.visualization.viser_rigidCloth_viewer import Settings
-    from isaacsimenvs.tasks.cloth.backends.rigid.designs import design_grid
+    from isaacsimenvs.tasks.cloth.backends.rigid.designs import sample_geometries
     recipe = load_training_env_config()
     cloth, reset = recipe['rigid_cloth'], recipe['reset']
     assert reset['yaw_range_deg'] == [0., 360.]
-    dims = torch.tensor(design_grid(cloth['design_levels'], cloth['length_range'],
-                                   cloth['width_range'], cloth['thickness_range']), dtype=torch.float32)
+    # The sampled training sizes plus the four corners of the size ranges (the largest extents).
+    sizes = sample_geometries(cloth['num_geometries'], cloth['length_range'], cloth['width_range'],
+                              cloth.get('geometry_seed', 0)).tolist()
+    sizes += [[l, w] for l in cloth['length_range'] for w in cloth['width_range']]
+    dims = torch.tensor([[l, w, cloth['thickness']] for l, w in sizes], dtype=torch.float32)
     selected = Settings(sample_reset=True, x_range=tuple(cloth['place_x']),
                         y_range=tuple(cloth['place_y']), yaw_range_deg=tuple(reset['yaw_range_deg']))
     xy, yaw = sample_reset_pose(selected, dims, table_size=(.475, .4, .04))

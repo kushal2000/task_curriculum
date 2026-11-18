@@ -226,16 +226,21 @@ def test_design_list_is_validated_before_scene_construction(paths):
         RigidBackend(cfg, paths)
 
 
-def test_designs_cycle_through_global_envs_without_changing_size_assignment():
+def test_designs_cycle_through_global_envs_and_each_sees_every_geometry():
     cfg = NS(
         task=NS(release=NS(touch="origin")), scene=NS(num_envs=9),
-        rigid_cloth=NS(design_levels=2, length_range=[.1, .3], width_range=[.1, .2], thickness_range=[.002, .01],
-                       thickness_curriculum=NS(enabled=False)),
+        rigid_cloth=NS(num_geometries=3, geometry_seed=0, geometries=[], length_range=[.1, .3],
+                       width_range=[.1, .2], thickness=.004),
     )
     mixed = RigidBackend(cfg, ["single_hinge.yaml", "flexible_corners.yaml", "strip_8.yaml"])
-    single = RigidBackend(cfg, ["single_hinge.yaml"])
     assert [group.env_ids.tolist() for group in mixed.groups] == [[0, 3, 6], [1, 4, 7], [2, 5, 8]]
-    np.testing.assert_array_equal(mixed._dimensions_cpu, single._dimensions_cpu)
+    sizes = {tuple(r) for r in np.round(mixed._dimensions_cpu, 9)}
+    assert len(sizes) == 3 and all(r[2] == .004 for r in sizes)
+    for group in mixed.groups:  # every topology gets all three geometries
+        assert {tuple(r) for r in np.round(mixed._dimensions_cpu[group.env_ids.numpy()], 9)} == sizes
+    cfg.rigid_cloth.geometries = [[.25, .15]]  # an explicit list overrides sampling
+    explicit = RigidBackend(cfg, ["single_hinge.yaml"])
+    np.testing.assert_allclose(explicit._dimensions_cpu, [[.25, .15, .004]] * 9)
     cfg.scene.num_envs = 1
     sparse = RigidBackend(cfg, ["single_hinge.yaml", "flexible_corners.yaml", "strip_8.yaml"])
     assert len(sparse.groups) == 1 and sparse.groups[0].env_ids.tolist() == [0]

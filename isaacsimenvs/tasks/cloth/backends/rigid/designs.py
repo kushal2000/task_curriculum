@@ -15,39 +15,39 @@ from isaacsimenvs import CONFIG_DIR
 
 LENGTH_RANGE = (0.10, 0.30)
 WIDTH_RANGE = (0.10, 0.30)
-THICKNESS_RANGE = (0.002, 0.020)
 
 # Physical moving-half corners, independent of the diagnostic surface grid.
 MOVING_KEYPOINTS = ((0.0, -0.5, 0.0), (0.0, 0.5, 0.0),
                     (0.5, -0.5, 0.0), (0.5, 0.5, 0.0))
 
 
-def design_grid(
-    n: int = 16,
+def sample_geometries(
+    n: int,
     length: tuple[float, float] = LENGTH_RANGE,
     width: tuple[float, float] = WIDTH_RANGE,
-    thickness: tuple[float, float] = THICKNESS_RANGE,
+    seed: int = 0,
 ) -> np.ndarray:
-    """``(n**3, 3)`` designs ``[length, width, thickness]`` [m]; design ``d`` is
-    ``(length[d // n**2], width[d // n % n], thickness[d % n])`` on the evenly spaced levels."""
+    """``(n, 2)`` sheet sizes ``[length, width]`` [m], drawn uniformly from the ranges with a fixed seed.
+
+    A range with equal ends gives that one value. The same (n, ranges, seed) always gives the same sizes.
+    """
     if n < 1:
-        raise ValueError(f"n must be >= 1, got {n}")
-    levels = [np.linspace(lo, hi, n) if n > 1 else np.array([lo]) for lo, hi in (length, width, thickness)]
-    for name, (lo, hi) in zip(("length", "width", "thickness"), (length, width, thickness)):
+        raise ValueError(f"num_geometries must be >= 1, got {n}")
+    for name, (lo, hi) in (("length", length), ("width", width)):
         if not 0.0 < lo <= hi:
             raise ValueError(f"{name} range must be 0 < lo <= hi, got {(lo, hi)}")
-    li, wi, ti = np.unravel_index(np.arange(n**3), (n, n, n))
-    return np.stack([levels[0][li], levels[1][wi], levels[2][ti]], axis=1)
+    rng = np.random.default_rng(int(seed))
+    return np.stack([rng.uniform(length[0], length[1], n), rng.uniform(width[0], width[1], n)], axis=1)
 
 
-def design_of(env_ids, n_designs: int, seed: int = 0) -> np.ndarray:
-    """Design index of each env: a fixed permutation of ``env_id % n_designs``.
+def geometry_of(env_ids, num_geometries: int, num_designs: int = 1) -> np.ndarray:
+    """Geometry index of each env, independent of its topology.
 
-    Every run of ``n_designs`` consecutive envs still holds each design exactly once; the
-    permutation only spreads a SMALL run (a smoke test, an eval of a few hundred envs) across all
-    three dimensions instead of the first lengths of the grid order."""
-    perm = np.random.default_rng(int(seed)).permutation(int(n_designs))
-    return perm[np.asarray(env_ids, dtype=np.int64) % int(n_designs)]
+    Topology is ``env_id % num_designs``, so geometry advances once per full cycle of topologies:
+    every topology then sees every geometry, whatever ``num_geometries`` and ``num_designs`` are.
+    """
+    env_ids = np.asarray(env_ids, dtype=np.int64)
+    return (env_ids // max(1, int(num_designs))) % int(num_geometries)
 
 
 @dataclass(frozen=True)

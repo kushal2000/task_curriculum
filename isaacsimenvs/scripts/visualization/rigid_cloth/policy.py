@@ -101,10 +101,8 @@ def build_policy_env_cfg(settings, saved: dict, profile: str, device: str, train
     cfg.reset.table_reset_xy, cfg.reset.table_reset_z = center[:2], center[2]
     cloth = cfg.rigid_cloth
     cloth.designs = [settings.design]
-    cloth.design_levels = 1
-    for name in ("length", "width", "thickness"):
-        value = float(getattr(settings, name))
-        setattr(cloth, f"{name}_range", [value, value])
+    cloth.geometries = [[float(settings.length), float(settings.width)]]
+    cloth.thickness = float(settings.thickness)
     cloth.density = float(settings.density)
     cloth.bending_rigidity = float(settings.bending_rigidity)
     cloth.bending_viscosity = float(settings.bending_viscosity)

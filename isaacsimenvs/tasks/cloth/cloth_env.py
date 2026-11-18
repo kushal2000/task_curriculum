@@ -25,10 +25,6 @@ class ClothEnv(DirectRLEnv):
             raise ValueError("whole-robot collision clearance currently requires the rigid cloth backend")
         self.robot_spec = robot_spec
         self._episode_guard = None
-        self.thickness_curriculum = None
-        if cfg.backend == 'rigid' and cfg.rigid_cloth.thickness_curriculum.enabled:
-            from .mdp.thickness_curriculum import ThicknessCurriculum
-            self.thickness_curriculum = ThicknessCurriculum(cfg.rigid_cloth.thickness_curriculum)
         cfg.action_space = robot_spec.num_joints
         cfg.observation_space = obs_dim(cfg.obs.obs_list, robot_spec.num_joints)
         cfg.state_space = obs_dim(cfg.obs.state_list, robot_spec.num_joints)
@@ -69,7 +65,9 @@ class ClothEnv(DirectRLEnv):
         self.backend.finish_setup()
         if cfg.backend == 'rigid':
             checks = cfg.rigid_cloth.episode_checks
-            if checks.outside_table or checks.press_driven_fold:
+            from .backends.rigid.checks import contacts_needed
+
+            if checks.outside_table or contacts_needed(checks):
                 from .backends.rigid.episode_guard import RigidClothEpisodeGuard
                 self._episode_guard = RigidClothEpisodeGuard(self.backend)
                 self._episode_guard.last_counter = self._sim_step_counter
@@ -77,56 +75,6 @@ class ClothEnv(DirectRLEnv):
         if cfg.task.release.enabled and cfg.task.release.touch == "robot_clearance":
             from .backends.rigid.clearance import RobotClothClearance
             self._robot_cloth_clearance = RobotClothClearance(self.backend)
-
-    def step(self, actions):
-        observation, reward, terminated, truncated, info = super().step(actions)
-        curriculum = self.thickness_curriculum
-        if curriculum is not None:
-            done = terminated | truncated
-            successes = info['episode_final']['successes'][done] > 0
-            if curriculum.observe(successes.detach().cpu().tolist()):
-                # These rewards belong to the completed old-geometry step. End
-                # all trajectories so PPO/RNN state cannot bridge the scene reset.
-                info = dict(info)
-                info['curriculum/restarted_episodes'] = int((~done).sum())
-                observation = self._rebuild_thickness(curriculum.thickness)
-                terminated, truncated = torch.ones_like(done), torch.zeros_like(done)
-                info['time_outs'] = truncated
-            info.update(curriculum.metrics())
-        return observation, reward, terminated, truncated, info
-
-    def _rebuild_thickness(self, thickness):
-        """Stop/rebind PhysX at a task boundary; the trainer and optimizer stay alive."""
-        print(f'[curriculum] rebuilding articulation thickness to {thickness*1000:.3f} mm', flush=True)
-        counters = self.task._nonfinite_count, self.task._insane_count
-        self._episode_guard = None  # release contact tensor views before detaching physics
-        self.sim._disable_app_control_on_stop_handle = True
-        try:
-            self.sim.stop()
-            # A timeline stop can retain cached collision shapes. Force native
-            # reconstruction as well as Isaac Lab's tensor-view reinitialization.
-            from omni.physx import get_physx_interface
-            get_physx_interface().release_physics_objects()
-            self.backend.set_thickness(thickness)
-            self.sim.reset()
-        finally:
-            self.sim._disable_app_control_on_stop_handle = False
-        self._initialize_task()
-        self.task._nonfinite_count, self.task._insane_count = counters
-        return self.reset()[0]
-
-    def get_env_state(self):
-        if self.thickness_curriculum is None:
-            return None
-        # Physical trajectories are restarted on resume; only curriculum history
-        # is restored, so saved recurrent/rollout state must also be discarded.
-        return {'thickness_curriculum': self.thickness_curriculum.state_dict(), 'physics_state_restored': False}
-
-    def set_env_state(self, state):
-        if state is not None and self.thickness_curriculum is not None:
-            self.thickness_curriculum.load_state_dict(state['thickness_curriculum'])
-            if abs(float(self.backend._dimensions_cpu[0, 2])-self.thickness_curriculum.thickness) > 1e-9:
-                self._rebuild_thickness(self.thickness_curriculum.thickness)
 
     # Isaac Lab calls these hooks in this order for each policy step.
 

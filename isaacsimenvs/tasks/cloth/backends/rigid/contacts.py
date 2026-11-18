@@ -179,6 +179,16 @@ class RigidClothContacts:
         return (self.env_ids[sensor], self.plate_ids[sensor], pairs%self.view.filter_count,
                 torch.cat((position, fpoint[findex])), torch.cat((vector, fforce[findex])))
 
+    def robot_penetration(self, num_envs):
+        """Per env, the deepest robot-link contact on the cloth (-separation, m; 0 if none) this substep."""
+        _, _, _, separation, counts, starts = self.view.get_contact_data(dt=self.dt)
+        pair, index = contact_indices(counts, starts, self.capacity)
+        robot = (pair % self.view.filter_count) < self.num_robot_links
+        env = self.env_ids[pair // self.view.filter_count][robot]
+        depth = (-separation.flatten()[index][robot]).clamp_min(0)
+        out = torch.zeros(num_envs, device=depth.device)
+        return out.scatter_reduce_(0, env, depth, reduce="amax")
+
     def sample(self):
         """Read the just-completed physics step; raise instead of silently losing contacts."""
         matrix = self.view.get_contact_force_matrix(dt=self.dt)

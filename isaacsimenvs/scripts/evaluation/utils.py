@@ -372,8 +372,8 @@ def read_policy_cfg(config_path: str | Path, device: str, overrides: list[str] |
     settings under ``agent:``. The latter is exposed as ``train`` as well.
 
     ``overrides`` are dotted ``key=value`` strings (``env.rigid_cloth.designs=[strip_4.yaml]``)
-    merged onto the file before interpolations resolve. Each key must already exist in the file,
-    so a typo is an error instead of a silently ignored setting.
+    merged onto the file before interpolations resolve. Each key, or its parent section, must
+    already exist in the file, so a misspelled section is an error instead of a silently ignored setting.
     """
     import yaml
     from omegaconf import OmegaConf
@@ -383,11 +383,18 @@ def read_policy_cfg(config_path: str | Path, device: str, overrides: list[str] |
     _register_resolvers()
     raw = OmegaConf.create(yaml.safe_load(Path(config_path).read_text()))
     if overrides:
+        # The key, or at least its parent section, must exist in the file: a setting added to the
+        # code after the run was saved is allowed, a typo in a section name is not. (Unknown env
+        # leaf keys are rejected again when the env configclass loads them.)
         missing = object()
         for item in overrides:
             key = item.split("=", 1)[0]
-            if "=" not in item or OmegaConf.select(raw, key, default=missing) is missing:
-                raise KeyError(f"override {item!r}: expected key=value with a key present in {config_path}")
+            parent = key.rsplit(".", 1)[0] if "." in key else None
+            if "=" not in item or (OmegaConf.select(raw, key, default=missing) is missing
+                                   and (parent is None or not isinstance(OmegaConf.select(raw, parent, default=None),
+                                                                         type(raw)))):
+                raise KeyError(f"override {item!r}: expected key=value whose key (or its parent section) "
+                               f"exists in {config_path}")
         raw = OmegaConf.merge(raw, OmegaConf.from_dotlist(list(overrides)))
     cfg = omegaconf_to_dict(raw)
     if "train" not in cfg and "agent" in cfg:

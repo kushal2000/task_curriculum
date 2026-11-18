@@ -32,10 +32,11 @@ env:
       press_driven_fold: true
       table_margin: 0.00001             # m, numerical tolerance on physical plate vertices
     designs: [single_hinge.yaml, strip_4.yaml, strip_8.yaml, hinge_band.yaml, flexible_corners.yaml]
-    design_levels: 16
-    length_range: [0.10, 0.30]           # m, construction-time size grid
+    num_geometries: 256                 # distinct sheet sizes, drawn uniformly from the ranges
+    geometry_seed: 0
+    length_range: [0.10, 0.30]           # m
     width_range: [0.10, 0.30]
-    thickness_range: [0.002, 0.002]      # fixed 2 mm collision approximation
+    thickness: 0.002                    # m, one collision thickness for every env
     density: 0.1                        # nominal kg/m²; 100 g/m²
     bending_rigidity: 0.00005           # B [N m]; k_joint = B × hinge_length / span
     bending_viscosity: 0.00005          # C [N m s]; c_joint = C × hinge_length / span

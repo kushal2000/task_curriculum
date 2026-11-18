@@ -18,7 +18,7 @@ env:
   rigid_cloth:
     length_range: [0.10, 0.20]
     width_range: [0.10, 0.20]
-    thickness_range: [0.002, 0.002]
+    thickness: 0.002
     point_resolution: 7
     density: 2.0
     hinge_stiffness_override: 0.0

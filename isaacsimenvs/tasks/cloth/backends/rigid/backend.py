@@ -75,16 +75,18 @@ class RigidBackend(ClothBackend):
         ]
 
         cloth_cfg = cfg.rigid_cloth
-        curriculum = cloth_cfg.thickness_curriculum
-        if curriculum.enabled:
-            cloth_cfg.thickness_range = [float(curriculum.start)]*2
         self.geometry_revision = 0
-        sizes = designs.design_grid(
-            int(cloth_cfg.design_levels), tuple(cloth_cfg.length_range),
-            tuple(cloth_cfg.width_range), tuple(cloth_cfg.thickness_range),
-        )
+        if cloth_cfg.geometries:
+            sizes = np.asarray(cloth_cfg.geometries, dtype=float).reshape(-1, 2)
+        else:
+            sizes = designs.sample_geometries(int(cloth_cfg.num_geometries), tuple(cloth_cfg.length_range),
+                                              tuple(cloth_cfg.width_range), int(cloth_cfg.geometry_seed))
+        thickness = float(cloth_cfg.thickness)
+        if not thickness > 0:
+            raise ValueError(f"rigid_cloth.thickness must be positive, got {thickness}")
+        sizes = np.c_[sizes, np.full(len(sizes), thickness)]  # [length, width, thickness]
         self._num_sizes = len(sizes)
-        self._size_ids = designs.design_of(np.arange(num_envs), self._num_sizes)
+        self._size_ids = designs.geometry_of(np.arange(num_envs), self._num_sizes, len(requested))
         self._dimensions_cpu = sizes[self._size_ids]
 
     def _setup_scene(self) -> None:
@@ -104,7 +106,9 @@ class RigidBackend(ClothBackend):
             group.env_ids = group.env_ids.to(self.device)
             group.scene_asset = rigid_scene.ArticulationGroup(group.articulation, group.env_ids, self.num_envs)
             self.scene.articulations[f"cloth_{group.index}"] = group.scene_asset
-        if self.cfg.rigid_cloth.episode_checks.press_driven_fold:
+        from .checks import contacts_needed
+
+        if contacts_needed(self.cfg.rigid_cloth.episode_checks):
             import carb
             carb.settings.get_settings().set_bool('/physics/disableContactProcessing', False)
             self._press_audit_report_paths = tuple(
@@ -152,17 +156,7 @@ class RigidBackend(ClothBackend):
         """PhysX views are now ready for material and hinge-property writes."""
         randomization.rigid_init(self)
         summary = ", ".join(f"{group.design.name}: {len(group.env_ids)} envs" for group in self.groups)
-        print(f"[rigid_body] {summary}; {self._num_sizes} independently assigned sizes", flush=True)
-
-    def set_thickness(self, thickness):
-        """Edit physical prisms, inertia and hinge anchors while simulation is stopped."""
-        if not self.sim.is_stopped():
-            raise RuntimeError('Changing articulation geometry requires stopping PhysX first')
-        self.cfg.rigid_cloth.thickness_range = [float(thickness)]*2
-        self._dimensions_cpu[:, 2] = float(thickness)
-        self._dims[:, 2] = float(thickness)
-        rigid_scene.update_cloth_geometry(self)
-        self.geometry_revision += 1
+        print(f"[rigid_body] {summary}; {self._num_sizes} geometries, every topology sees every geometry", flush=True)
 
     def _spawn_z(self, env_id: int) -> float:
         table_top = float(self.cfg.reset.table_reset_z) + self._table_half_height

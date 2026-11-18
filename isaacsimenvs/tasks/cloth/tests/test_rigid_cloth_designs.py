@@ -10,33 +10,36 @@ import pytest
 from isaacsimenvs.tasks.cloth.backends.rigid import designs as sd
 
 
-def test_the_grid_is_4096_distinct_designs_spanning_the_ranges():
-    g = sd.design_grid()
-    assert g.shape == (4096, 3)
-    assert len({tuple(r) for r in np.round(g, 9)}) == 4096
-    for col, (lo, hi) in enumerate((sd.LENGTH_RANGE, sd.WIDTH_RANGE, sd.THICKNESS_RANGE)):
-        levels = np.unique(np.round(g[:, col], 9))
-        assert len(levels) == 16
-        assert levels[0] == pytest.approx(lo) and levels[-1] == pytest.approx(hi)
+def test_geometries_are_seeded_uniform_draws_inside_the_ranges():
+    g = sd.sample_geometries(256, (0.10, 0.30), (0.12, 0.20), seed=3)
+    assert g.shape == (256, 2)
+    assert (g[:, 0] >= 0.10).all() and (g[:, 0] <= 0.30).all()
+    assert (g[:, 1] >= 0.12).all() and (g[:, 1] <= 0.20).all()
+    assert len({tuple(r) for r in np.round(g, 9)}) == 256
+    np.testing.assert_array_equal(g, sd.sample_geometries(256, (0.10, 0.30), (0.12, 0.20), seed=3))
+    assert not np.array_equal(g, sd.sample_geometries(256, (0.10, 0.30), (0.12, 0.20), seed=4))
 
 
-@pytest.mark.parametrize("start", [0, 4096, 8192, 20480])
-def test_every_sapg_block_of_4096_envs_holds_each_design_once(start):
-    d = sd.design_of(np.arange(start, start + 4096), 4096)
-    assert sorted(d.tolist()) == list(range(4096))
+def test_a_fixed_range_gives_that_one_size():
+    g = sd.sample_geometries(5, (0.2, 0.2), (0.15, 0.15))
+    np.testing.assert_allclose(g, [[0.2, 0.15]] * 5)
 
 
-def test_a_small_run_spans_every_dimension():
-    """256 envs (a smoke test) must not all be one length: the env -> design map is permuted."""
-    g = sd.design_grid()[sd.design_of(np.arange(256), 4096)]
-    for col in range(3):
-        assert len(np.unique(np.round(g[:, col], 9))) == 16
+@pytest.mark.parametrize("bad", [((0.0, 0.3), (0.1, 0.3)), ((0.3, 0.1), (0.1, 0.3))])
+def test_invalid_ranges_are_rejected(bad):
+    with pytest.raises(ValueError, match="range"):
+        sd.sample_geometries(4, *bad)
+    with pytest.raises(ValueError, match="num_geometries"):
+        sd.sample_geometries(0)
 
 
-def test_a_half_block_holds_half_the_designs_once():
-    """2 GPUs x 12288 envs: SAPG blocks of 2048 see 2048 distinct designs, not a repeat."""
-    d = sd.design_of(np.arange(2048, 4096), 4096)
-    assert len(set(d.tolist())) == 2048
+@pytest.mark.parametrize("num_designs,num_geometries", [(5, 256), (5, 10), (3, 9), (1, 7)])
+def test_every_topology_sees_every_geometry(num_designs, num_geometries):
+    """Topology is env % D; geometry must not lock to it even when D divides N."""
+    envs = np.arange(num_designs * num_geometries)
+    geometry = sd.geometry_of(envs, num_geometries, num_designs)
+    for design in range(num_designs):
+        assert sorted(geometry[envs % num_designs == design].tolist()) == list(range(num_geometries))
 
 
 def test_single_hinge_plates_tile_the_sheet():

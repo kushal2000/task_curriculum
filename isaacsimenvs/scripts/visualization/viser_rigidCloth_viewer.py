@@ -407,7 +407,7 @@ def main() -> None:
                           density=float(np.clip(training_physics.density, *dr.density)),
                           length=float(np.mean(training_physics.length_range)),
                           width=float(np.mean(training_physics.width_range)),
-                          thickness=float(np.mean(training_physics.thickness_range)),
+                          thickness=float(training_physics.thickness),
                           table_static_friction=float(training_physics.table_static_friction),
                           hand_static_friction=float(training_physics.hand_static_friction),
                           dynamic_friction_ratio=float(training_physics.dynamic_friction_ratio),
@@ -456,7 +456,7 @@ def main() -> None:
             for name, label, low, high, step in (
                 ("length", "Length (m)", *training_physics.length_range, 0.001),
                 ("width", "Width (m)", *training_physics.width_range, 0.001),
-                ("thickness", "Thickness (m)", *training_physics.thickness_range, 0.0001),
+                ("thickness", "Thickness (m)", 0.001, max(0.03, float(training_physics.thickness)), 0.0001),
                 ("density", "Areal density (kg/m²)", *training_physics.randomization.density, 0.001),
             ):
                 controls[name] = server.gui.add_slider(

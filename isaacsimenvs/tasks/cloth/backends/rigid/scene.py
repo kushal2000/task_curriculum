@@ -25,6 +25,7 @@ from ..assets import (
     urdf_box_size,
 )
 from . import designs
+from .checks import contacts_needed
 
 FRICTION_COMBINE_MODE = "multiply"
 
@@ -283,7 +284,7 @@ def author_rigid_cloths(env_ids, dims, cloth_cfg, spawn_z, design, root_name) ->
         body_path = f"{template}/{plate.name}"
         body = UsdGeom.Xform.Define(stage, body_path).GetPrim()
         UsdPhysics.RigidBodyAPI.Apply(body)
-        if getattr(getattr(cfg, 'episode_checks', None), 'press_driven_fold', False):
+        if contacts_needed(getattr(cfg, 'episode_checks', None)):
             PhysxSchema.PhysxContactReportAPI.Apply(body).CreateThresholdAttr(0.)
         mass = UsdPhysics.MassAPI.Apply(body)
         mass.CreateMassAttr(1.0)
@@ -385,29 +386,6 @@ def _put_cloth_geometry(root, spec, cfg, put):
         for side in (0, 1):
             put(f"{root}/{name}.physics:localPos{side}", anchor)
             put(f"{root}/{name}.physics:localRot{side}", rotation)
-
-
-def update_cloth_geometry(backend):
-    """Reauthor existing shapes while stopped, retaining all topology and materials."""
-    from isaaclab.sim.utils import get_current_stage
-    from pxr import Sdf
-
-    layer = get_current_stage().GetRootLayer()
-    def put(path, value):
-        attribute = layer.GetAttributeAtPath(Sdf.Path(path))
-        if attribute is None:
-            raise RuntimeError(f'No authored cloth attribute at {path}')
-        attribute.default = value
-
-    with Sdf.ChangeBlock():
-        for group in backend.groups:
-            cache = {}
-            for env_id in group.env_ids.cpu().tolist():
-                dimensions = tuple(float(x) for x in backend._dimensions_cpu[env_id])
-                if dimensions not in cache:
-                    cache[dimensions] = group.design.resolve(*dimensions)
-                root = f'/World/envs/env_{env_id}/RigidCloth_{group.index}'
-                _put_cloth_geometry(root, cache[dimensions], backend.cfg.rigid_cloth, put)
 
 
 def rigid_cloth_articulation(cloth_cfg, spawn_z0, design, root_name):

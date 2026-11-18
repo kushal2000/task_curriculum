@@ -23,18 +23,12 @@ class RigidClothEpisodeChecksCfg:
     maximum_base_tilt_deg: float = 20.0
     minimum_opposed_load: float = 0.001  # N, contact detection, not a force cap
     contact_points_per_env: int = 128
+    max_robot_penetration_fraction: float = 0.0
+    """Reset the episode (failure ``robot_penetration``) when any robot link is deeper in the cloth than
+    this fraction of the panel thickness (PhysX contact separation, every physics substep). 0 = off.
+    A rigid panel this light cannot stop a hand in PhysX (see experiments/nov18/press_test), so the
+    check keeps the policy from folding by pushing through it."""
 
-
-@configclass
-class ThicknessCurriculumCfg:
-    """One shared thickness, reduced after a fresh window of completed episodes."""
-
-    enabled: bool = False
-    start: float = 0.020
-    target: float = 0.002
-    reduction: float = 0.9
-    success_threshold: float = 0.9
-    window_episodes: int = 4096
 
 
 @configclass
@@ -86,17 +80,20 @@ class RigidClothCfg:
     Environments cycle through this list; dimensions vary independently. Different
     topologies share one RL batch through separate real PhysX articulations."""
 
-    design_levels: int = 16
-    """Sampling levels per dimension, assigned independently of topology.
-    Fixed ranges repeat one value; the default fixed thickness leaves 16² distinct
-    length/width combinations in the existing three-dimensional sampling grid."""
+    num_geometries: int = 256
+    """Distinct sheet sizes [length, width], drawn uniformly from the ranges below with
+    ``geometry_seed``. Every topology sees every geometry (``designs.geometry_of``)."""
+    geometry_seed: int = 0
     length_range: list[float] = [0.10, 0.30]
     """Along the sheet's x direction, across the crease [m]."""
     width_range: list[float] = [0.10, 0.30]
     """Along the crease (y) [m]."""
-    thickness_range: list[float] = [0.002, 0.002]
-    """Fixed 2 mm collision approximation; also the folded plies' target gap.
-    This is independent of areal density and the sheet bending coefficients."""
+    geometries: list = []
+    """Optional explicit sizes [[length, width], ...] [m]; when set, used instead of sampling
+    (num_geometries and the ranges are then ignored). For tests and targeted evaluation."""
+    thickness: float = 0.002
+    """Panel collision thickness [m], the same for every env; also the folded plies' target gap.
+    Independent of areal density and the sheet bending coefficients."""
     point_resolution: int = 7
     """Grid of tracked points per side carried by the plates (fold error, footprint, frame)."""
     density: float = 0.1
@@ -142,7 +139,6 @@ class RigidClothCfg:
     Centers are uniform within valid bounds, or centered when position noise is off."""
     randomization: RigidClothRandomizationCfg = RigidClothRandomizationCfg()
     episode_checks: RigidClothEpisodeChecksCfg = RigidClothEpisodeChecksCfg()
-    thickness_curriculum: ThicknessCurriculumCfg = ThicknessCurriculumCfg()
 
 
 def _sim() -> SimulationCfg:
