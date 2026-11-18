@@ -1,0 +1,22 @@
+# Yibo prior on the heavy recipe: single_hinge only, nominal material (material DR off), every sheet
+# exactly 15 x 15 cm, and only the outside-table reset: press_driven_fold and the robot-penetration
+# reset are off, so no contact readout runs (the expensive part of the episode checks).
+base: ../../../isaacsimenvs/scripts/configs/runs/rigid_cloth_heavy.yaml
+env:
+  rigid_cloth:
+    designs: [single_hinge.yaml]
+    geometries: [[0.15, 0.15]]
+    randomization:
+      enabled: false
+    episode_checks:
+      outside_table: true
+      press_driven_fold: false
+      max_robot_penetration_fraction: 0.0
+agent:
+  params:
+    load_checkpoint: true
+    load_path: pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth
+    checkpoint_load_mode: weights
+    config:
+      name: 0_cloth_heavy_prior_nominal_15cm_outside_only
+      expl_coef_block_size: 2048
