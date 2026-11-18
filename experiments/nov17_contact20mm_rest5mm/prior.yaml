@@ -1,0 +1,8 @@
+base: base.yaml
+agent:
+  params:
+    load_checkpoint: true
+    load_path: pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth
+    checkpoint_load_mode: weights
+    config:
+      name: 0_cloth_contact20mm_rest5mm_prior_thickness2mm

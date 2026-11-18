@@ -1,0 +1,24 @@
+{
+  "cpu_tests_passed": 19,
+  "native_smoke": {
+    "status": "complete",
+    "num_envs": 256,
+    "startup_s": 17.222493891604245,
+    "cloth_offsets_verified": {
+      "contact": 0.02,
+      "rest": 0.005
+    },
+    "step_wall_s": 8.63400318659842,
+    "steps": 120,
+    "counts": {
+      "outside_table": 0,
+      "press_driven_fold": 1,
+      "nonfinite": 0,
+      "released": 0
+    },
+    "ready_fraction": 0.99609375,
+    "torch_peak_gpu_gib": 0.019481182098388672,
+    "contact_capacity": 32768,
+    "forced_outside_reset_verified": true
+  }
+}
