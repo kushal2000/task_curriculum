@@ -1,9 +1,9 @@
 """The pool adapter shows each env's ACTIVE shape as the cloth grid, and parks the others.
 
-Same contract as the chain adapter (``test_rigid_cloth_env.py``), against fakes that report body
-poses in the REAL backend's convention (xyzw quaternions) computed from ``fold_shapes``' own
-kinematics -- so a wrong grid map, a wrong shape selection or a wrong park write shows up as a
-wrong cloud, not as a passing test against a fake that agrees with the adapter.
+Against fakes that speak the REAL backend's API (Isaac Lab 2.3 on PhysX: wxyz quaternions on reads
+and writes, ``env_ids`` as given) with body poses computed from ``fold_shapes``' own kinematics -- so a
+wrong grid map, a wrong shape selection or a wrong park write shows up as a wrong cloud, not as a
+passing test against a fake that agrees with the adapter. Recorded root poses are kept as xyzw.
 """
 
 from __future__ import annotations
@@ -17,13 +17,13 @@ torch = pytest.importorskip("torch")
 np = pytest.importorskip("numpy")
 
 RES = 7
-fs = load_module("isaacsimenvs/tasks/cloth/utils/fold_shapes.py", "fold_shapes")
+fs = load_module("isaacsimenvs/tasks/cloth/mdp/geometry/fold_shapes.py", "fold_shapes")
 SHAPES = [fs.POOL[n] for n in fs.DEFAULT_SHAPES]
 
 
 @pytest.fixture(scope="module")
 def pool_adapter():
-    return pytest.importorskip("isaacsimenvs.tasks.cloth.utils.fold_pool_adapter")
+    return pytest.importorskip("isaacsimenvs.tasks.cloth.backends.rigid.pool")
 
 
 def _rot_to_xyzw(r):
@@ -69,15 +69,17 @@ class _Art:
             for b, nm in enumerate(self.body_names):
                 r, t = tf[nm[len("slat_") :]]
                 pos[e, b] = torch.tensor(t, dtype=torch.float32) + torch.tensor(offset)
-                quat[e, b] = torch.tensor(_rot_to_xyzw(r), dtype=torch.float32)
+                x, y, z, w = _rot_to_xyzw(r)
+                quat[e, b] = torch.tensor([w, x, y, z], dtype=torch.float32)  # PhysX reports wxyz
         self.data = _Data(pos, quat)
         self.num_joints = len(shape.hinges)
         self.pose_writes = []
         self.vel_writes = []
         self.joint_writes = []
 
-    def write_root_pose_to_sim_index(self, *, root_pose, env_ids=None):
-        self.pose_writes.append((root_pose.clone(), env_ids.clone()))
+    def write_root_pose_to_sim(self, root_pose, env_ids=None):
+        xyzw = torch.cat((root_pose[:, :3], root_pose[:, 4:7], root_pose[:, 3:4]), dim=-1)
+        self.pose_writes.append((xyzw, env_ids.clone()))
 
     def write_root_velocity_to_sim(self, vel, env_ids=None):
         self.vel_writes.append((vel.clone(), env_ids))
@@ -325,11 +327,11 @@ def test_one_shape_per_env_writes_land_on_local_rows_only(pool_adapter):
     pose, local = arts[2].pose_writes[-1]
     assert sorted(local.tolist()) == [0, 1] and local.tolist() == [1, 0]
     assert torch.allclose(pose[:, :2], req[:2, :2])
-    # Both instances written -> a full write (env_ids None), rows sorted into instance order:
-    # instance 0 = env 7 (flat), instance 1 = env 2 (start angles).
+    # Rows in request order, addressed by instance: env 2 = instance 1 (start angles), env 7 =
+    # instance 0 (flat).
     pos, local = arts[2].joint_writes[-1]
-    assert local is None
-    assert pos[0].abs().max() == 0.0 and torch.allclose(pos[1], q[0])
+    assert local.tolist() == [1, 0]
+    assert torch.allclose(pos[0], q[0]) and pos[1].abs().max() == 0.0
     assert arts[3].pose_writes[-1][1].tolist() == [1]  # shape 3 instances: env 8, env 3
     for s in (0, 1, 4):
         assert not arts[s].pose_writes and not arts[s].joint_writes

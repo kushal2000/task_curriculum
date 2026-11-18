@@ -304,7 +304,7 @@ def main() -> None:
 
             from isaacsimenvs.distill import pc_rl
             from isaacsimenvs.distill.distill_pc import StudentObs
-            from isaacsimenvs.tasks.cloth.utils.scene_pointcloud import SceneCloudCfg, scene_noise_preset
+            from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import SceneCloudCfg, scene_noise_preset
 
             pc_args = {"cloud": "scene", "goal": "none", "noise": False, "n_points": 1024, "fk_points": 0,
                        "ref_step": 0, "pc_delay": 0, "proprio_delay": 0, "action_delay": 0,

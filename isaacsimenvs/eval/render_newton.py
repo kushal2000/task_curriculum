@@ -491,11 +491,9 @@ def _colorize(model, args) -> None:
     ]
     n_seg = (max(seg_ids) + 1) if seg_ids else 1
 
-    # The rigid-cloth chain's slats, `.../slat_<i>`. Coloured by index with the same hue sweep the
-    # cable uses, for the same reason: a hinged chain in one colour reads as a single blob, and the
-    # whole point of filming it is to see WHICH slats fold over which. Counted under "cable"
-    # because it is this scene's manipuland.
-    from isaacsimenvs.tasks.cloth.utils.rigid_cloth import SLAT_LINK_PREFIX
+    # Hinged plates, `.../slat_<i>`, coloured by index (a hinged chain in one colour reads as one
+    # blob). Counted under "cable" because it is this scene's manipuland.
+    SLAT_LINK_PREFIX = "slat_"
 
     slat_re = re.compile(r"(?:^|/)" + re.escape(SLAT_LINK_PREFIX) + r"(\d+)$")
     n_slat = max(

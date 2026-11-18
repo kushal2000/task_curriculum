@@ -17,7 +17,7 @@ import math
 
 import torch
 
-from isaacsimenvs.tasks.cloth.utils.cloth_geometry import grid_mesh
+from isaacsimenvs.tasks.cloth.mdp.geometry.grid import grid_mesh
 
 SIZE, RES = 0.10, 9
 

@@ -2,8 +2,8 @@
 
 A PhysX-trained policy is evaluated on Newton's VBD cloth, so every convention that reaches the
 observation has to match -- including two Newton quirks every existing policy was trained under
-(``isaacsimenvs/tasks/cloth/physx_envs.py``). These pin the pure-torch halves of that contract; the
-end-to-end check is ``scripts/analysis/cloth_obs_parity.py`` on a GPU.
+(``isaacsimenvs/tasks/cloth/backends/rigid/physx.py``). These pin the pure-torch halves of that
+contract.
 """
 
 from __future__ import annotations
@@ -22,12 +22,12 @@ REPO = Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope="module")
 def adapters():
-    return pytest.importorskip("isaacsimenvs.tasks.cloth.utils.physx_adapters")
+    return pytest.importorskip("isaacsimenvs.tasks.cloth.backends.rigid.pool")
 
 
 @pytest.fixture(scope="module")
 def cloth_adapter():
-    return pytest.importorskip("isaacsimenvs.tasks.cloth.utils.cloth_adapter")
+    return pytest.importorskip("isaacsimenvs.tasks.cloth.backends.adapter")
 
 
 def _yaw_wxyz(yaw: float) -> torch.Tensor:
@@ -58,14 +58,14 @@ class _Recorder:
 
 def test_object_pose_reorder_matches_newton(cloth_adapter):
     """The decoded reset heading is the same on both simulators, for a draw and for the pin."""
-    physx_envs_src = (REPO / "isaacsimenvs/tasks/cloth/physx_envs.py").read_text()
-    start = physx_envs_src.index("def _reorder_object_pose_writes")
-    end = physx_envs_src.index("class _PhysxClothMixin")
+    src = (REPO / "isaacsimenvs/tasks/cloth/backends/rigid/physx.py").read_text()
+    start = src.index("def reorder_object_pose_writes")
+    end = src.index("def size_gpu_buffers")
     ns = {"torch": torch}
-    exec(physx_envs_src[start:end], ns)
+    exec(src[start:end], ns)
 
     obj = _Recorder()
-    ns["_reorder_object_pose_writes"](obj)
+    ns["reorder_object_pose_writes"](obj)
     gen = torch.Generator().manual_seed(0)
     for _ in range(16):
         q = torch.randn(4, generator=gen)
@@ -90,9 +90,9 @@ def test_goal_quaternion_is_newtons_relabelling():
     newton_xyzw = true_wxyz[[1, 2, 3, 0]]                 # IL3 quat_from_matrix output
     stored_xyzw = torch.cat((newton_xyzw[1:4], newton_xyzw[0:1]))  # write patch: "wxyz" -> xyzw
     task_reads = torch.cat((stored_xyzw[3:4], stored_xyzw[0:3]))   # read patch: xyzw -> wxyz
-    physx_writes = true_wxyz[[1, 2, 3, 0]]               # _PhysxClothMixin._goal_quat_from_matrix
+    physx_writes = true_wxyz[[1, 2, 3, 0]]               # RigidClothEnv._goal_quat_from_matrix
     assert torch.equal(task_reads, physx_writes)
-    src = (REPO / "isaacsimenvs/tasks/cloth/physx_envs.py").read_text()
+    src = (REPO / "isaacsimenvs/tasks/cloth/backends/rigid/env.py").read_text()
     assert "quat_from_matrix(rot)[..., [1, 2, 3, 0]]" in src
 
 

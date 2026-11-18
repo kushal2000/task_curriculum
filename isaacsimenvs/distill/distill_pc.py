@@ -18,7 +18,7 @@ the keypoint observations the teacher read. Truncated BPTT over ``--horizon`` st
 ``seq_length``.
 
 Student input: the teacher's proprioceptive observation columns and a point cloud
-(``tasks/cloth/utils/cloth_pointcloud.py``) in place of the tracker columns. The network is the
+(``tasks/cloth/perception/pointcloud.py``) in place of the tracker columns. The network is the
 teacher's LSTM + MLP with a PointNet in front (``distill/student.py``).
 """
 
@@ -48,8 +48,8 @@ class StudentObs:
         import torch
 
         from isaacsimenvs.distill.student import split_columns
-        from isaacsimenvs.tasks.cloth.utils.cloth_pointcloud import ClothPointCloud, hand_capsules
-        from isaacsimenvs.tasks.cloth.utils.scene_pointcloud import LagBuffer, SceneCloudCfg
+        from isaacsimenvs.tasks.cloth.perception.pointcloud import ClothPointCloud, hand_capsules
+        from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import LagBuffer, SceneCloudCfg
         from isaacsimenvs.tasks.play.utils.obs_utils import compute_obs_dim
 
         self.inner, self.device, self.n = inner, inner.device, inner.num_envs
@@ -106,8 +106,8 @@ class StudentObs:
     def _init_scene(self, inner, pc_cfg, cams, names, n_proprio: int, n_aux: int) -> None:
         import torch
 
-        from isaacsimenvs.tasks.cloth.utils import robot_surface
-        from isaacsimenvs.tasks.cloth.utils.scene_pointcloud import LagBuffer, SceneCloud
+        from isaacsimenvs.tasks.cloth.perception import robot_surface
+        from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import LagBuffer, SceneCloud
 
         dev = self.device
         surf = robot_surface.load(inner.cfg.assets.robot_urdf, names)
@@ -292,8 +292,8 @@ def main() -> None:
     import isaacsimenvs  # noqa: F401  gym.register side effects
     from isaacsimenvs.distill.student import StudentNet, TeacherNet
     from isaacsimenvs.eval.protocol import disable_randomization, use_single_object_variant
-    from isaacsimenvs.tasks.cloth.utils.cloth_pointcloud import PointCloudCfg, g3_noise_preset, noise_preset
-    from isaacsimenvs.tasks.cloth.utils.scene_pointcloud import SceneCloudCfg, scene_noise_preset
+    from isaacsimenvs.tasks.cloth.perception.pointcloud import PointCloudCfg, g3_noise_preset, noise_preset
+    from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import SceneCloudCfg, scene_noise_preset
     from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
 
     def delays_of(a: dict) -> tuple[int, int]:

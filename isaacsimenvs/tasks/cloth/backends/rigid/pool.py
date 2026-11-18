@@ -1,34 +1,65 @@
-"""Present a POOL of fold-shape articulations as the one cloth ``ClothEnv`` knows how to score.
+"""Present the POOL of fold-shape articulations as the one cloth the fold task knows how to score.
 
-The stage-2 env trains one policy on five shapes at once, a shape drawn per env per episode. Newton
-cannot hold that as one articulation: ``newton.selection.ArticulationView`` raises "Articulations are
-not identical" unless every world has the same joint, link and shape counts, and ``SolverMuJoCo``
-builds its MuJoCo model from one template world, so per-world plate GEOMETRY cannot differ either.
-So every env carries all five shapes, as five articulations, identically in every world; one is
-ACTIVE on the table and the other four are PARKED -- hovering a few metres away inside that env's own
-world, where nothing can touch them (worlds never collide with each other).
+One policy trains on several shapes at once. Each shape is its own articulation; an env carries every
+shape (one ACTIVE on the table, the others PARKED -- hovering metres away, where nothing can touch
+them) or, with ``fold_pool.one_shape_per_env``, just one.
 
-The task code is untouched, exactly as for the stage-1 chain: :class:`PoolAsClothMesh` reconstructs
-the ``resolution x resolution`` particle cloud from the ACTIVE shape's body poses
-(``fold_shapes.grid_plate_map``), and :class:`PoolAsRigidObject` is ``env.object``. Reads are the
-inherited ``ClothAsRigidObject`` ones; writes place the active shape and park the rest.
+:class:`PoolAsClothMesh` reconstructs the ``resolution x resolution`` particle cloud from the ACTIVE
+shape's body poses (``fold_shapes.grid_plate_map``), so the task code sees a cloth;
+:class:`PoolAsRigidObject` is ``env.object``. Reads are the inherited ``ClothAsRigidObject`` ones;
+writes place the active shape and park the rest.
 
-Pure torch, no Isaac imports -- testable on a CPU, like ``rigid_cloth_adapter``.
+Isaac Lab 2.3 on PhysX: wxyz quaternions on reads and writes; ``write_joint_state_to_sim`` takes
+``env_ids`` normally. The layout is still MEASURED at startup (``detect_quat_layout``); the default
+only matters before that. Pure torch, no Isaac imports -- testable on a CPU.
 """
 
 from __future__ import annotations
 
 import torch
 
-from isaacsimenvs.tasks.cloth.utils.cloth_adapter import ClothAsRigidObject, _to_torch, task_yaw
-from isaacsimenvs.tasks.cloth.utils.rigid_cloth_adapter import (
-    _DEFAULT_QUAT_LAYOUT,
-    _quat_apply,
-    _sim_quat_to_wxyz,
-    _yaw_quat,
-)
+from isaacsimenvs.tasks.cloth.backends.adapter import ClothAsRigidObject, _to_torch, task_yaw
 
-__all__ = ["PoolAsClothMesh", "PoolAsRigidObject"]
+__all__ = ["PoolAsClothMesh", "PoolAsRigidObject", "xyzw_pose_to_wxyz"]
+
+
+def _quat_apply(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    """Rotate ``v`` by wxyz quaternion ``q``, both ``(..., 3)`` / ``(..., 4)``. Local, to stay kit-free."""
+    w = q[..., 0:1]
+    xyz = q[..., 1:4]
+    t = 2.0 * torch.cross(xyz, v, dim=-1)
+    return v + w * t + torch.cross(xyz, t, dim=-1)
+
+
+def _sim_quat_to_wxyz(q: torch.Tensor, layout: str) -> torch.Tensor:
+    """``(..., 4)`` quaternion as the articulation API reports it (``layout``), as wxyz.
+
+    The resting value is ambiguous between the two layouts -- ``(0, 0, 0, 1)`` is the xyzw identity
+    and also the wxyz half-turn about z -- and reading the wrong one mirrors every plate (a 100 mm
+    sheet read as 47 mm). Hence the measurement in ``PoolAsClothMesh.detect_quat_layout``.
+    """
+    if layout == "wxyz":
+        return q
+    if layout != "xyzw":
+        raise ValueError(f"unknown quaternion layout {layout!r}; expected 'xyzw' or 'wxyz'")
+    return torch.cat((q[..., 3:4], q[..., 0:3]), dim=-1)
+
+
+def _yaw_quat(yaw: torch.Tensor) -> torch.Tensor:
+    """``(n,)`` yaw angles to ``(n, 4)`` wxyz quaternions about ``+z``."""
+    half = 0.5 * yaw
+    out = torch.zeros((yaw.shape[0], 4), device=yaw.device, dtype=yaw.dtype)
+    out[:, 0] = torch.cos(half)
+    out[:, 3] = torch.sin(half)
+    return out
+
+
+def xyzw_pose_to_wxyz(pose_xyzw: torch.Tensor) -> torch.Tensor:
+    """``(n, 7)`` position + (x, y, z, w) quaternion -> position + (w, x, y, z)."""
+    out = pose_xyzw.clone()
+    out[:, 3] = pose_xyzw[:, 6]
+    out[:, 4:7] = pose_xyzw[:, 3:6]
+    return out
 
 
 class PoolAsClothMesh:
@@ -64,15 +95,15 @@ class PoolAsClothMesh:
             [[pt for _, pt in m] for m in mappings], device=device, dtype=torch.float32
         )
         self._num_particles = self._local.shape[1]
-        # Per-env in-plane size factor: each env's sheets were built at their own size
-        # (`fold_shape_assets.scale_builder_world`), so the grid point attached to a plate sits at
-        # the scaled position in that plate's frame. (N, 1, 3) so it broadcasts over the grid.
+        # Per-env in-plane size factor: each env's sheets were built at their own size, so the grid
+        # point attached to a plate sits at the scaled position in that plate's frame. (N, 1, 3) so
+        # it broadcasts over the grid.
         scale = (
             torch.ones(self._num_envs, device=device) if xy_scale is None else xy_scale.to(device)
         )
         self._scale3 = torch.stack((scale, scale, torch.ones_like(scale)), dim=-1).unsqueeze(1)
         self._body_idx: list[torch.Tensor] | None = None
-        self._quat_layout = _DEFAULT_QUAT_LAYOUT
+        self._quat_layout = "wxyz"
         #: Which shape each env is running. Set by ``PoolAsRigidObject.select``.
         self.active = torch.zeros(self._num_envs, device=device, dtype=torch.long)
         #: Per shape, which envs carry it, as ``(S, N)`` bool. Every env carries every shape unless
@@ -176,7 +207,8 @@ class PoolAsClothMesh:
         return self._quat_layout
 
     def detect_quat_layout(self, rest_local) -> str:
-        """Same measurement as ``ChainAsClothMesh.detect_quat_layout``, on env 0's active shape."""
+        """Which layout the articulation API reports, MEASURED against the analytic flat grid on env
+        0's active shape (the resting value is ambiguous; see ``_sim_quat_to_wxyz``)."""
         want = torch.as_tensor(rest_local, device=self._device, dtype=torch.float32)
         want = want - want.mean(dim=0, keepdim=True)
         scores = {}
@@ -193,9 +225,8 @@ class PoolAsClothMesh:
     def _resolve_bodies(self) -> list[torch.Tensor]:
         """Per shape, grid vertex -> body index in THAT articulation, by name, on first use.
 
-        Deferred and by name for the reasons ``ChainAsClothMesh._resolve_bodies`` gives: an
-        articulation has no ``body_names`` until the scene is played, and the solver's body order
-        need not be the file's.
+        Deferred and by name: an articulation has no ``body_names`` until the scene is played, and
+        the solver's body order need not be the file's.
         """
         if self._body_idx is not None:
             return self._body_idx
@@ -313,8 +344,8 @@ class PoolAsRigidObject(ClothAsRigidObject):
             else centre_offset.to(self._device, torch.float32)
         )
         # Every plate frame sits at the sheet origin, so the root pose IS the sheet pose and the
-        # offset starts at zero. Kept, and calibrated at startup like the chain's, because the
-        # chain's analytically-zero-looking offset turned out to be off by twice its own value.
+        # offset starts at zero. Kept, and calibrated at startup, because an analytically-zero
+        # offset once turned out to be off by twice its own value.
         self._root_offset = torch.zeros((mesh.num_shapes, 3), device=self._device)
         #: Per shape, ``(N, num_joints)`` hinge angles the active shape starts the episode at (see
         #: :meth:`set_start_joints`); zero = flat. Created on first use, when joint counts exist.
@@ -362,8 +393,8 @@ class PoolAsRigidObject(ClothAsRigidObject):
     # ------------------------------------------------------------ writes
 
     def write_root_pose_to_sim(self, root_pose: torch.Tensor, env_ids=None) -> None:
-        """Active shape flat at the requested XY and yaw (``ChainAsRigidObject`` semantics); the
-        rest parked. Every shape of ``env_ids`` is stopped and flattened."""
+        """Active shape flat at the requested XY and yaw (``task_yaw``); the rest parked. Every shape
+        of ``env_ids`` is stopped and flattened."""
         if env_ids is None:
             env_ids = torch.arange(self._num_envs, device=self._device)
         env_ids = torch.as_tensor(env_ids, device=self._device, dtype=torch.long)
@@ -456,7 +487,7 @@ class PoolAsRigidObject(ClothAsRigidObject):
         self._write_joints(self._arts[shape], position, torch.zeros_like(position), local)
 
     def calibrate_root_offset(self, shape: int, delta_xy: torch.Tensor) -> None:
-        """Shift one shape's root offset by a MEASURED placement error (see the chain's version)."""
+        """Shift one shape's root offset by a MEASURED placement error."""
         self._root_offset[shape, 0] += float(delta_xy[0])
         self._root_offset[shape, 1] += float(delta_xy[1])
 
@@ -471,33 +502,11 @@ class PoolAsRigidObject(ClothAsRigidObject):
     def set_external_force_and_torque(self, *args, **kwargs) -> None:
         return None
 
-    # The two sim writes, as methods so a backend with other conventions can override them
-    # (``physx_adapters``); these are the Newton ones.
+    # The two sim writes (PhysX: wxyz in, ``env_ids`` as given).
 
     def _write_root_pose(self, art, pose_xyzw: torch.Tensor, env_ids: torch.Tensor) -> None:
-        _write_root_pose(art, pose_xyzw, env_ids)
+        art.write_root_pose_to_sim(xyzw_pose_to_wxyz(pose_xyzw), env_ids)
 
     def _write_joints(self, art, position, velocity, env_ids: torch.Tensor) -> None:
         """``env_ids`` are the articulation's own instance indices (see ``local_rows``)."""
-        _write_joints(art, position, velocity, env_ids, self._mesh.count(self._arts.index(art)))
-
-
-def _write_root_pose(art, pose_xyzw: torch.Tensor, env_ids: torch.Tensor) -> None:
-    if hasattr(art, "write_root_pose_to_sim_index"):
-        art.write_root_pose_to_sim_index(root_pose=pose_xyzw, env_ids=env_ids)
-    else:
-        art.write_root_pose_to_sim(pose_xyzw, env_ids)
-
-
-def _write_joints(art, position, velocity, env_ids: torch.Tensor, num_envs: int) -> None:
-    """``write_joint_state_to_sim``, with ``env_ids=None`` for a full write.
-
-    Both rules are measured facts about this backend, from ``ChainAsRigidObject._write_joints``: the
-    deprecated name is the one that reaches the solver, and an explicit full ``arange`` does nothing.
-    """
-    if int(env_ids.numel()) == num_envs:
-        # A full write takes rows in instance order; mapped instance ids need not arrive sorted.
-        order = torch.argsort(env_ids)
-        art.write_joint_state_to_sim(position[order], velocity[order])
-    else:
         art.write_joint_state_to_sim(position, velocity, env_ids=env_ids)

@@ -1,49 +1,27 @@
-"""Cloth folding task registration.
+"""Cloth folding tasks: one fold task (``mdp/``) on two backends (``backends/``).
 
-Registers ``Isaacsimenvs-Cloth-Direct-v0``: the Play task with a VBD cloth sheet in place of the
-rigid procedural tool, on a coupled MJWarp + VBD solve. Fold the far half of the sheet onto the
-near half; state and goal are keypoints on the moving half.
+    Isaacsimenvs-Cloth-Direct-v0          VBD cloth sheet, Newton (``.venv_isaaclab3``)
+    Isaacsimenvs-FoldPoolPhysx-Direct-v0  fold-shape pool of hinged plates, PhysX (``.venv_isaacsim``)
 
-Subclasses ``PlayNewtonEnv``, so the observation stays 140-dim and the existing harness, player and
-renderer work unchanged.
+plus one id per robot overlay (``cfg/robot/``), below. Start with ``README.md``.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import gymnasium as gym
-
-if TYPE_CHECKING:
-    from .cloth_env import ClothEnv
-    from .cloth_env_cfg import ClothEnvCfg
-
-__all__ = ["ClothEnv", "ClothEnvCfg"]
 
 _CFG_DIR = Path(__file__).resolve().parents[2] / "cfg"
 
 
-def __getattr__(name: str):
-    """Deferred class import; see the note in ``isaacsimenvs/tasks/play/__init__.py``."""
-    if name == "ClothEnv":
-        from .cloth_env import ClothEnv
-
-        return ClothEnv
-    if name == "ClothEnvCfg":
-        from .cloth_env_cfg import ClothEnvCfg
-
-        return ClothEnvCfg
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 gym.register(
     id="Isaacsimenvs-Cloth-Direct-v0",
-    entry_point="isaacsimenvs.tasks.cloth.cloth_env:ClothEnv",
+    entry_point="isaacsimenvs.tasks.cloth.backends.vbd.env:ClothEnv",
     order_enforce=False,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.cloth_env_cfg:ClothEnvCfg",
+        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.backends.vbd.config:ClothEnvCfg",
         "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "Cloth.yaml"),
         "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
         "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
@@ -53,11 +31,11 @@ gym.register(
 
 gym.register(
     id="Isaacsimenvs-FoldPoolPhysx-Direct-v0",
-    entry_point="isaacsimenvs.tasks.cloth.physx_envs:FoldPoolPhysxEnv",
+    entry_point="isaacsimenvs.tasks.cloth.backends.rigid.env:RigidClothEnv",
     order_enforce=False,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.physx_env_cfg:FoldPoolPhysxEnvCfg",
+        "env_cfg_entry_point": "isaacsimenvs.tasks.cloth.backends.rigid.config:RigidClothEnvCfg",
         "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "FoldPoolPhysx.yaml"),
         "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
         "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
@@ -65,7 +43,7 @@ gym.register(
 )
 
 
-# The same five tasks on the Flexiv Rizon 4s + Wuji Hand 2 or the Kuka's Sharpa, e.g.
+# The same two tasks on the Flexiv Rizon 4s + Wuji Hand 2 or the Kuka's Sharpa, e.g.
 # `Isaacsimenvs-FoldPoolPhysxFlexivWujiHumanLike-Direct-v0`: the task's own cfg and YAML, then a
 # robot overlay from `cfg/robot/` (robot spec, URDF, self-collision as the Flexiv Play tasks train).
 _ROBOT_VARIANTS = {

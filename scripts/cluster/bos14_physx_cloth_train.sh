@@ -23,7 +23,7 @@
 # counters, so EPOCHS is the TOTAL epoch count (source epochs + new ones).
 #
 # Policies are evaluated on Newton (the VBD cloth exists only there): the observation is identical,
-# see isaacsimenvs/tasks/cloth/physx_envs.py.
+# see isaacsimenvs/tasks/cloth/backends/rigid/env.py.
 
 #SBATCH --job-name=px_train
 #SBATCH --partition=gpu_a100

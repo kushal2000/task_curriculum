@@ -71,7 +71,7 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
     def _build_html(self, frames: list[dict[str, Any]]) -> str:
         import numpy as np
 
-        from isaacsimenvs.tasks.cloth.utils.cloth_geometry import grid_mesh, half_indices, half_mesh
+        from isaacsimenvs.tasks.cloth.mdp.geometry.grid import grid_mesh, half_indices, half_mesh
 
         inner = self.env.unwrapped
         c = inner.cfg.cloth

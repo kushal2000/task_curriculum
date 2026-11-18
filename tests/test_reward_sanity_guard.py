@@ -11,7 +11,7 @@ from __future__ import annotations
 import torch
 import yaml
 
-from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
+from isaacsimenvs.tasks.cloth.backends.vbd.env import ClothEnv
 
 LIMIT = ClothEnv.REWARD_SANITY_LIMIT
 

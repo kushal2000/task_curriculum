@@ -17,7 +17,7 @@ from conftest import load_module  # noqa: E402  pytest puts tests/ on sys.path
 L = 0.05
 
 #: Loaded at import time too, because the fold list parametrises a test.
-_POOL = load_module("isaacsimenvs/tasks/cloth/utils/fold_shapes.py", "fold_shapes").POOL
+_POOL = load_module("isaacsimenvs/tasks/cloth/mdp/geometry/fold_shapes.py", "fold_shapes").POOL
 
 
 @pytest.fixture(scope="module")

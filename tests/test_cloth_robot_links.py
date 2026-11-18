@@ -51,7 +51,7 @@ def test_finger_segments_are_the_finger_bodies(spec):
 
 @pytest.mark.parametrize("spec", SPECS, ids=lambda s: s.name)
 def test_cloth_proxies_follow_the_robot(spec):
-    from isaacsimenvs.tasks.cloth.cloth_env_cfg import ClothEnvCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.config import ClothEnvCfg
 
     cfg = ClothEnvCfg()
     physics = cfg.cloth.build_physics(cfg.newton, 32, spec)
@@ -64,7 +64,7 @@ def test_cloth_proxies_follow_the_robot(spec):
 
 def test_kuka_proxies_unchanged():
     """The Kuka's proxy patterns are the ones written out before the spec carried them."""
-    from isaacsimenvs.tasks.cloth.cloth_env_cfg import ClothEnvCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.config import ClothEnvCfg
 
     cfg = ClothEnvCfg()
     physics = cfg.cloth.build_physics(cfg.newton, 32)

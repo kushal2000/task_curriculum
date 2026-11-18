@@ -25,10 +25,10 @@ class StudentPlayer:
     def __init__(self, inner, checkpoint_path: str, device) -> None:
         from isaacsimenvs.distill.distill_pc import StudentObs
         from isaacsimenvs.distill.student import StudentNet
-        from isaacsimenvs.tasks.cloth.utils.cloth_pointcloud import LABELS, PointCloudCfg, g3_noise_preset, noise_preset
+        from isaacsimenvs.tasks.cloth.perception.pointcloud import LABELS, PointCloudCfg, g3_noise_preset, noise_preset
 
         from isaacsimenvs.distill.pc_rl import load_student_any
-        from isaacsimenvs.tasks.cloth.utils.scene_pointcloud import SceneCloudCfg, scene_noise_preset
+        from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import SceneCloudCfg, scene_noise_preset
 
         ckpt = load_student_any(checkpoint_path)             # a distilled student or an RL-trained one
         a = self.pc_args = ckpt["pc_args"]

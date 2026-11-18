@@ -1,13 +1,12 @@
-"""ClothTaskMixin -- the fold task itself, on whichever simulator the env class is built on.
+"""ClothTaskMixin -- the fold task itself, whichever backend simulates the sheet.
 
-Everything ``ClothEnv`` defines about the TASK -- fold targets carried on the stationary half's live
-frame, the fold-progress ratchet and bonus, the success and footprint criterion, the goal marker, the
-finite-value guard -- lives here, so the Newton envs (``ClothEnv`` -> ``RigidClothEnv`` ->
-``FoldPoolEnv``) and the PhysX ones (``physx_envs``) score the fold with ONE copy of the code. Two
-copies would make a cross-simulator difference unattributable: it could be the physics or the reward.
+Fold targets carried on the stationary half's live frame, the fold-progress ratchet and bonus, the
+success and footprint criterion, the goal marker, the finite-value guard: ONE copy for both backends
+(``backends/vbd`` and ``backends/rigid``), so a cross-simulator difference is the physics and never
+the reward.
 
-What a concrete env adds is the manipuland: ``_install_cloth`` must set ``self._cloth`` (a mesh with
-``data.nodal_pos_w``), ``self.object`` (a ``ClothAsRigidObject``), ``self._cloth_rest_local`` and
+A backend's ``_install_cloth`` must set ``self._cloth`` (a mesh with ``data.nodal_pos_w``),
+``self.object`` (a ``backends.adapter.ClothAsRigidObject``), ``self._cloth_rest_local`` and
 ``self._cloth_kp_idx``. Mix in BEFORE the Play env class, so these methods override Play's.
 
 Kit-free at import (torch and ``isaaclab.utils.math`` only), so both stacks can import it.
@@ -15,70 +14,16 @@ Kit-free at import (torch and ``isaaclab.utils.math`` only), so both stacks can 
 
 from __future__ import annotations
 
-from math import degrees as math_degrees
-
 import torch
 from isaaclab.utils.math import quat_from_matrix
 
-from isaacsimenvs.tasks.cloth.utils.usd_bulk import bulk_edit_layer
-from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
+from isaacsimenvs.tasks.cloth.mdp.geometry.grid import (
     folded_targets,
     half_indices,
     half_mesh,
 )
 
 __all__ = ["ClothTaskMixin"]
-
-
-def _join(root: str, rel: str) -> str:
-    return f"{root}/{rel}" if rel else root
-
-
-def _set_attr_spec(layer, prim_path, name: str, vtype, value) -> None:
-    """Author ``name = value`` on ``prim_path`` in ``layer`` (an ``over`` if the prim is not there)."""
-    from pxr import Sdf
-
-    spec = Sdf.CreatePrimInLayer(layer, Sdf.Path(str(prim_path)))
-    attr = spec.attributes.get(name)
-    if attr is None:
-        attr = Sdf.AttributeSpec(spec, name, vtype)
-    attr.default = value
-
-
-def _author_in_every_env(asset: str, layout, author, check, samples: int = 4):
-    """Apply one env's edit to ``/World/envs/env_<i>/<asset>`` in every env that has it.
-
-    ``layout(prim)`` reads what to edit from the first env's composed prim; ``author(layer, root,
-    layout)`` writes it for one env as Sdf specs into ``usd_bulk.bulk_edit_layer``, which reaches the
-    stage in one step (per-env edits on Kit's root layer cost O(N^2)). Every env holds
-    the same asset (one variant), so one env's layout is every env's; ``check(prim, layout)`` --
-    ``None`` or a message -- confirms that on the first, last and a few envs between, through the
-    composed stage. Returns ``(envs edited, layout)``.
-    """
-    from isaaclab.sim.utils import get_current_stage
-    from pxr import Sdf
-
-    stage = get_current_stage()
-    envs = stage.GetPrimAtPath("/World/envs")
-    roots = []
-    if envs.IsValid():
-        for env in envs.GetChildren():
-            if env.GetName().startswith("env_") and env.GetChild(asset).IsValid():
-                roots.append(f"{env.GetPath()}/{asset}")
-    if not roots:
-        return 0, None
-    roots.sort(key=lambda p: int(p.split("/")[3][4:]))
-    lay = layout(stage.GetPrimAtPath(roots[0]))
-    with bulk_edit_layer(stage, asset) as layer:
-        for root in roots:
-            author(layer, root, lay)
-    picks = sorted({0, len(roots) - 1, *range(0, len(roots), max(1, len(roots) // samples))})
-    for i in picks:
-        bad = check(stage.GetPrimAtPath(roots[i]), lay)
-        if bad:
-            raise RuntimeError(f"[cloth] {asset} edit did not land in every env: {bad}")
-    return len(roots), lay
-
 
 
 class ClothTaskMixin:
@@ -131,119 +76,6 @@ class ClothTaskMixin:
         print(
             f"[cloth] object_scale = {[round(float(v), 2) for v in bbox / base]} "
             f"(bbox {[round(float(v), 3) for v in bbox]} m / base {base})",
-            flush=True,
-        )
-
-    def _neutralise_rigid_object(self) -> None:
-        """Disable the inherited rigid tool's colliders so it cannot touch the cloth.
-
-        Walks the whole subtree: the colliders sit at ``/Object/<mesh>/collisions``, two levels
-        down, and a one-level loop silently disables nothing.
-
-        The layout is read from ONE env and authored into all of them at the Sdf level, in one
-        change block (``_author_in_every_env``): a Usd-API edit per env re-notifies the whole stage
-        under Kit, which made scene construction quadratic in the env count -- 24576 envs never
-        finished building.
-        """
-        from pxr import Sdf, Usd, UsdPhysics
-
-        def layout(prim):
-            n = len(str(prim.GetPath())) + 1
-            colliders, bodies = [], []
-            for target in Usd.PrimRange(prim):
-                rel = str(target.GetPath())[n:]
-                if target.HasAPI(UsdPhysics.CollisionAPI):
-                    colliders.append(rel)
-                if target.HasAPI(UsdPhysics.RigidBodyAPI):
-                    bodies.append(rel)
-            return colliders, bodies
-
-        def author(layer, root, lay):
-            colliders, bodies = lay
-            for rel in colliders:
-                _set_attr_spec(layer, _join(root, rel), "physics:collisionEnabled", Sdf.ValueTypeNames.Bool, False)
-            for rel in bodies:
-                _set_attr_spec(layer, _join(root, rel), "physics:kinematicEnabled", Sdf.ValueTypeNames.Bool, True)
-
-        def check(prim, lay):
-            colliders, _ = lay
-            for rel in colliders:
-                api = UsdPhysics.CollisionAPI(prim.GetPrimAtPath(rel) if rel else prim)
-                if api.GetCollisionEnabledAttr().Get() is not False:
-                    return f"{prim.GetPath()}/{rel} still collides"
-            return None
-
-        prims, lay = _author_in_every_env("Object", layout, author, check)
-        colliders = prims * len(lay[0]) if lay else 0
-        print(f"[cloth] neutralised rigid tool ({prims} prims, {colliders} colliders off)", flush=True)
-        if prims and not colliders:
-            raise RuntimeError(
-                "found the inherited rigid tool but disabled none of its colliders -- it would "
-                "stay live and corrupt every measurement. Check the prim layout."
-            )
-
-    def _reshape_goal_marker(self) -> None:
-        """Give the goal marker the folded half's shape instead of the tool's.
-
-        ``goal_viz`` spawns from the same procedural handle+head USD as the manipuland, so the cloth
-        task renders a hammer-shaped ghost for a goal that is a folded sheet. The marker *pose* is
-        already correct and success is scored on keypoints, not on this mesh -- but the render is
-        the only thing a person actually looks at, and a hammer standing in for a fold invites
-        exactly the wrong reading. The same defect on the cable task cost hours.
-
-        Swaps the tool geometry for a thin slab the size of the moving half. ``collisionEnabled``
-        stays false so the marker can never touch the sheet;
-        ``render_newton._reveal_goal_viz`` draws it by setting the VISIBLE flag, which does not
-        require a collider. Authored in one Sdf change block, as ``_neutralise_rigid_object``.
-        """
-        from pxr import Gf, Sdf, Usd, UsdPhysics, Vt
-
-        c = self.cfg.cloth
-        # The half's own grid, not a box: the marker stands in for a folded SHEET, and a solid slab
-        # both reads as a brick and shows a thickness the cloth does not have (a VBD cloth is a
-        # surface -- its thickness is a collision radius the renderer never draws, so the sheet
-        # itself always renders flat).
-        gv, gi = half_mesh(float(c.size), int(c.resolution), c.fold_axis)
-        points = Vt.Vec3fArray([Gf.Vec3f(*[float(x) for x in v]) for v in gv])
-        indices = Vt.IntArray([int(i) for i in gi])
-        counts = Vt.IntArray([3] * (len(gi) // 3))
-
-        def layout(prim):
-            # The rigid body sits on a child (`.../GoalViz/object_root`), not the GoalViz root.
-            # Deactivating that child would remove the body the physics view resolves, so keep the
-            # body and replace only the geometry beneath it.
-            body = next((d for d in Usd.PrimRange(prim) if d.HasAPI(UsdPhysics.RigidBodyAPI)), prim)
-            rel = str(body.GetPath())[len(str(prim.GetPath())) + 1:]
-            return rel, [child.GetName() for child in body.GetChildren()]
-
-        def author(layer, root, lay):
-            rel, children = lay
-            body = _join(root, rel)
-            for name in children:
-                Sdf.CreatePrimInLayer(layer, f"{body}/{name}").active = False
-            mesh = Sdf.CreatePrimInLayer(layer, f"{body}/cloth_marker")
-            mesh.specifier = Sdf.SpecifierDef
-            mesh.typeName = "Mesh"
-            mesh.SetInfo("apiSchemas", Sdf.TokenListOp.Create(prependedItems=["PhysicsCollisionAPI"]))
-            _set_attr_spec(layer, mesh.path, "points", Sdf.ValueTypeNames.Point3fArray, points)
-            _set_attr_spec(layer, mesh.path, "faceVertexIndices", Sdf.ValueTypeNames.IntArray, indices)
-            _set_attr_spec(layer, mesh.path, "faceVertexCounts", Sdf.ValueTypeNames.IntArray, counts)
-            _set_attr_spec(layer, mesh.path, "physics:collisionEnabled", Sdf.ValueTypeNames.Bool, False)
-
-        def check(prim, lay):
-            rel, children = lay
-            body = prim.GetPrimAtPath(rel) if rel else prim
-            marker = body.GetChild("cloth_marker")
-            if not marker.IsValid() or len(marker.GetAttribute("points").Get() or []) != len(gv):
-                return f"{body.GetPath()} has no cloth_marker mesh"
-            if any(body.GetChild(n).IsActive() for n in children):
-                return f"{body.GetPath()} still shows the tool geometry"
-            return None
-
-        marked, _ = _author_in_every_env("GoalViz", layout, author, check)
-        print(
-            f"[cloth] goal marker reshaped on {marked} prims "
-            f"(half-sheet mesh, {len(gv)} verts / {len(gi) // 3} tris)",
             flush=True,
         )
 
@@ -507,141 +339,9 @@ class ClothTaskMixin:
         Lab 3.0 that returns (x, y, z, w), which the pose-write patch then treats as (w, x, y, z), so
         the goal orientation the task reads back is the true one's components relabelled -- and every
         Newton policy was trained on that. A backend whose helper is wxyz overrides this to hand the
-        task the same relabelled quaternion (see ``physx_envs``).
+        task the same relabelled quaternion (see ``backends/rigid/env.py``).
         """
         return quat_from_matrix(rot)
-
-    # ------------------------------------------------------------------ tracker observation DR
-
-    #: Flexiv + Wuji: wrist point (link7 -> flange -> mount -> wrist) and fingertip ends, in the
-    #: body frames after the importer merges fixed joints (flange / mount / wrist into link7, the
-    #: tip into the distal).
-    _TRACKER_WRIST_OFFSET = (0.003, 0.00025, 0.0955)
-    _TRACKER_FINGERS = ("thumb", "index_finger", "middle_finger", "ring_finger", "pinky")
-    _TRACKER_TIP = {"thumb": (0.0, 0.0, -0.02978)}
-    _TRACKER_TIP_DEFAULT = (0.0, 0.0, -0.02475)
-
-    def _tracker_capsule_spec(self) -> list:
-        """``[(body_a, off_a, body_b, off_b, radius)]``: forearm, wrist, palm fan, finger segments."""
-        c = self.cfg.cloth.tracker
-        regex = str(self.robot_spec.hand_joint_regex)
-        pre = regex[:2] if regex[:2] in ("r_", "l_") else ""
-        z = (0.0, 0.0, 0.0)
-        w = self._TRACKER_WRIST_OFFSET
-        caps = [
-            ("link5", z, "link6", z, c.arm_radius),
-            ("link6", z, "link7", z, c.arm_radius),
-            ("link7", z, "link7", w, c.wrist_radius),
-        ]
-        for f in self._TRACKER_FINGERS:
-            caps.append(("link7", w, f"{pre}{f}_proximal", z, c.palm_radius))
-            caps += [
-                (f"{pre}{f}_proximal_abd", z, f"{pre}{f}_middle", z, c.finger_radius),
-                (f"{pre}{f}_middle", z, f"{pre}{f}_distal", z, c.finger_radius),
-                (f"{pre}{f}_distal", z, f"{pre}{f}_distal", self._TRACKER_TIP.get(f, self._TRACKER_TIP_DEFAULT), c.finger_radius),
-            ]
-        caps.append((f"{pre}index_finger_proximal", z, f"{pre}pinky_proximal", z, c.palm_radius))
-        return caps
-
-    def _init_tracker(self) -> None:
-        from isaacsimenvs.tasks.cloth.utils.cloth_tracker import ClothTracker
-
-        c = self.cfg.cloth.tracker
-        dr = self.cfg.domain_randomization
-        if str(dr.point_dr_mode) != "off" or dr.use_object_state_delay_noise or any(
-            float(v) != 0.0 for v in dr.object_pose_bias_xyz
-        ) or float(dr.object_pose_bias_rot_degrees) > 0.0:
-            raise ValueError("cloth.tracker replaces point_dr_mode and the pose-level object DR; turn those off")
-        if tuple(float(v) for v in dr.object_scale_noise_multiplier_range) != (1.0, 1.0):
-            raise ValueError("cloth.tracker draws its own size factor; keep object_scale_noise_multiplier_range (1, 1)")
-        root = torch.as_tensor(self.cfg.robot_root_pos, dtype=torch.float32)
-        cams = torch.stack((torch.as_tensor(c.cam_a_base) + root, torch.as_tensor(c.cam_b_base) + root))
-        self._tracker = ClothTracker(c, self.num_envs, int(self.cfg.cloth.resolution), cams, self.device)
-        names = list(self.robot.body_names)
-        spec = self._tracker_capsule_spec() if c.hand_occlusion else []
-        missing = sorted({n for a, _, b, _, _ in spec for n in (a, b) if n not in names})
-        if missing:
-            raise ValueError(f"cloth.tracker.hand_occlusion: robot has no bodies {missing} (bodies: {names})")
-        dev = self.device
-        self._tracker_caps = (
-            torch.tensor([names.index(a) for a, *_ in spec], dtype=torch.long, device=dev),
-            torch.tensor([o for _, o, *_ in spec], dtype=torch.float32, device=dev).view(-1, 3),
-            torch.tensor([names.index(b) for _, _, b, _, _ in spec], dtype=torch.long, device=dev),
-            torch.tensor([o for *_, o, _ in spec], dtype=torch.float32, device=dev).view(-1, 3),
-            torch.tensor([r for *_, r in spec], dtype=torch.float32, device=dev),
-        )
-        parts = self._particles_w()[0] - self.scene.env_origins[0]
-        centre = parts.mean(dim=0).cpu()
-        for name, cam in zip("AB", cams):
-            d = centre - cam
-            print(
-                f"[tracker] camera {name} env {[round(float(v), 3) for v in cam]}: "
-                f"{float(d.norm()):.3f} m from the sheet, looking down "
-                f"{math_degrees(float(torch.atan2(-d[2], d[:2].norm()))):.1f} deg",
-                flush=True,
-            )
-        print(
-            f"[tracker] inset {c.inset}, n_min {c.n_min}, spread >= {c.min_spread} m, whole-sheet hold | "
-            f"hand occlusion {c.hand_occlusion} ({len(spec)} capsules, margin {tuple(c.margin_range)}) | "
-            f"reacquire {c.reacquire} (delay {tuple(c.reacquire_delay_s)} s, lost p {tuple(c.lost_prob_range)}) | "
-            f"self occlusion {c.self_occlusion} | noise {tuple(c.noise_std_range)} m, reacquire bias "
-            f"{tuple(c.reacquire_bias_range)} m | calib {tuple(c.calib_xyz)} m / {c.calib_rot_deg} deg | "
-            f"frame every {tuple(c.frame_period_choices)} steps, latency {tuple(c.latency_choices)} | "
-            f"size x{tuple(c.size_scale_range)}",
-            flush=True,
-        )
-
-    def _tracker_rest_grid(self) -> torch.Tensor:
-        """``(N, P, 3)`` each env's TRUE rest grid (per-env size in the pool)."""
-        rest = torch.tensor(self._cloth_rest_local, device=self.device, dtype=torch.float32).unsqueeze(0)
-        xy = getattr(self, "_xy_scale", None)
-        if xy is not None:
-            return rest * torch.stack((xy, xy, torch.ones_like(xy)), dim=-1).unsqueeze(1)
-        return rest.expand(self.num_envs, -1, -1)
-
-    def _tracker_observe(self, start: torch.Tensor):
-        """The tracker's estimate the policy reads now: ``(obj_pos, obj_quat_wxyz, goal_pos,
-        goal_quat, scale)``, env frame, the goal quaternion in the convention ``goal_viz`` reports."""
-        from isaaclab.utils.math import quat_apply
-
-        from isaacsimenvs.tasks.play.utils.point_dr import _mat_to_wxyz
-
-        if getattr(self, "_tracker", None) is None:
-            self._init_tracker()
-        origins = self.scene.env_origins
-        parts = self._particles_w() - origins.unsqueeze(1)
-        rest = self._tracker_rest_grid()
-        caps = (None, None, None)
-        if self.cfg.cloth.tracker.hand_occlusion:
-            ia, oa, ib, ob, rad = self._tracker_caps
-            pos = self.robot.data.body_pos_w
-            quat = self.robot.data.body_quat_w
-            pos = pos.torch if hasattr(pos, "torch") else pos
-            quat = quat.torch if hasattr(quat, "torch") else quat
-            n, cnum = self.num_envs, ia.numel()
-
-            def ends(ids, off):
-                q = quat[:, ids].reshape(-1, 4)
-                return pos[:, ids] + quat_apply(q, off.unsqueeze(0).expand(n, -1, -1).reshape(-1, 3)).view(n, cnum, 3) - origins.unsqueeze(1)
-
-            caps = (ends(ia, oa), ends(ib, ob), rad)
-        r_mv, t_mv, r_st, t_st, scale = self._tracker.step(
-            self.episode_length_buf, start, parts, rest, None, *caps
-        )
-        s_xy = torch.stack((scale, scale, torch.ones_like(scale)), dim=-1).unsqueeze(1)  # (N, 1, 3)
-        corners = rest[:, self._kp_idx_t] * s_xy
-        obj_pos = (torch.einsum("nij,nkj->nki", r_mv, corners) + t_mv.unsqueeze(1)).mean(dim=1)
-        folded = self._kp_folded_rest
-        folded = (folded if folded.dim() == 3 else folded.unsqueeze(0).expand(self.num_envs, -1, -1)) * s_xy
-        goal_pos = (torch.einsum("nij,nkj->nki", r_st, folded) + t_st.unsqueeze(1)).mean(dim=1)
-        flip = torch.eye(3, device=self.device).repeat(self.num_envs, 1, 1)
-        if self.cfg.cloth.fold_axis == "x":
-            flip[:, 0, 0] = -1.0
-        else:
-            flip[:, 1, 1] = -1.0
-        flip[:, 2, 2] = -1.0
-        goal_quat = self._goal_quat_from_matrix(torch.bmm(r_st, flip))
-        return obj_pos, _mat_to_wxyz(r_mv), goal_pos, goal_quat, scale
 
     def _get_rewards(self) -> torch.Tensor:
         """Re-point the inherited Play reward at the fold.

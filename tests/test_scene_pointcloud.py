@@ -1,4 +1,4 @@
-"""Scene point cloud (tasks/cloth/utils/scene_pointcloud.py, robot_surface.py): Kit-free, CPU."""
+"""Scene point cloud (tasks/cloth/perception/scene_pointcloud.py, robot_surface.py): Kit-free, CPU."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import torch
 
 from conftest import load_module
 
-sp = load_module("isaacsimenvs/tasks/cloth/utils/scene_pointcloud.py", "scene_pointcloud")
-rs = load_module("isaacsimenvs/tasks/cloth/utils/robot_surface.py", "robot_surface")
+sp = load_module("isaacsimenvs/tasks/cloth/perception/scene_pointcloud.py", "scene_pointcloud")
+rs = load_module("isaacsimenvs/tasks/cloth/perception/robot_surface.py", "robot_surface")
 
 R = 7
 SIZE = 0.15

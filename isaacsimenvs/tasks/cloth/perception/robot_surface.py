@@ -6,7 +6,7 @@ body_names)`` reads that file (baking it first if it is missing) and returns the
 frames of the simulator's bodies: the URDF importers merge a fixed-joint child into its parent, so
 a link that is not a body is carried up its fixed joints to the first ancestor that is.
 
-    python -m isaacsimenvs.tasks.cloth.utils.robot_surface <robot.urdf>      # (re)bake
+    python -m isaacsimenvs.tasks.cloth.perception.robot_surface <robot.urdf>      # (re)bake
 
 numpy + trimesh only (no torch, no Isaac Lab). The file is baked once and shared, so the PhysX and
 Newton environments (different venvs, different trimesh versions) use the same samples.

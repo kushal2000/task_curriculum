@@ -439,7 +439,7 @@ def _rodrigues(u: np.ndarray, theta: float) -> np.ndarray:
 # ------------------------------------------------------------------------------------- the pool
 
 #: The pool's designs, one YAML per shape (schema: ``load_design``).
-DESIGN_DIR = Path(__file__).resolve().parents[3] / "cfg" / "rigid_cloth_designs"
+DESIGN_DIR = Path(__file__).resolve().parents[4] / "cfg" / "rigid_cloth_designs"
 #: Grasp-point inset unit [m]: a fingertip pinches this far inside a corner.
 GRASP_INSET = 0.006
 

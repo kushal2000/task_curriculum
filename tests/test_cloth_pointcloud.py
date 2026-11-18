@@ -1,4 +1,4 @@
-"""Cloth point-cloud observation (isaacsimenvs/tasks/cloth/utils/cloth_pointcloud.py): Kit-free, CPU."""
+"""Cloth point-cloud observation (isaacsimenvs/tasks/cloth/perception/pointcloud.py): Kit-free, CPU."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import torch
 
 from conftest import load_module
 
-pc = load_module("isaacsimenvs/tasks/cloth/utils/cloth_pointcloud.py", "cloth_pointcloud")
+pc = load_module("isaacsimenvs/tasks/cloth/perception/pointcloud.py", "cloth_pointcloud")
 
 R = 7
 SIZE = 0.15

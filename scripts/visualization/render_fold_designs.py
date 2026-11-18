@@ -29,7 +29,7 @@ NAVY, BLUE, ORANGE, INK, MUTED, RED = "#203c59", "#c6dbea", "#f4c692", "#26384b"
 
 def _fold_shapes():
     # By path: importing the package would register every gym task.
-    path = REPO / "isaacsimenvs/tasks/cloth/utils/fold_shapes.py"
+    path = REPO / "isaacsimenvs/tasks/cloth/mdp/geometry/fold_shapes.py"
     spec = importlib.util.spec_from_file_location("fold_shapes", path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["fold_shapes"] = mod  # dataclasses look their module up there

@@ -132,13 +132,11 @@ EXPERIMENT_DIR = REPO_ROOT / "isaacsimenvs/cfg/experiment"
 # Per task id: env root configclass, its modules, and the SAPG agent YAML.
 EXPERIMENT_TASKS = {
     "Isaacsimenvs-FoldPoolPhysx-Direct-v0": (
-        "FoldPoolPhysxEnvCfg",
+        "RigidClothEnvCfg",
         [
-            "isaacsimenvs/tasks/cloth/physx_env_cfg.py",
+            "isaacsimenvs/tasks/cloth/backends/rigid/config.py",
             "isaacsimenvs/tasks/cloth/cloth_cfg.py",
-            "isaacsimenvs/tasks/cloth/cloth_tracker_cfg.py",
-            "isaacsimenvs/tasks/cloth/fold_pool_cfg.py",
-            "isaacsimenvs/tasks/cloth/rigid_cloth_cfg.py",
+            "isaacsimenvs/tasks/cloth/mdp/tracker_cfg.py",
             PLAY_CFG,
         ],
         "isaacsimenvs/cfg/train/ClothSAPG.yaml",
@@ -154,9 +152,9 @@ for _robot in ("FlexivWuji", "FlexivWujiHumanLike", "FlexivWujiHumanLikeS2R", "F
 EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"] = (
     "ClothEnvCfg",
     [
-        "isaacsimenvs/tasks/cloth/cloth_env_cfg.py",
+        "isaacsimenvs/tasks/cloth/backends/vbd/config.py",
         "isaacsimenvs/tasks/cloth/cloth_cfg.py",
-        "isaacsimenvs/tasks/cloth/cloth_tracker_cfg.py",
+        "isaacsimenvs/tasks/cloth/mdp/tracker_cfg.py",
         "isaacsimenvs/tasks/play_newton/play_newton_env_cfg.py",
         PLAY_CFG,
     ],

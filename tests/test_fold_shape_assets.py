@@ -17,8 +17,8 @@ pytest.importorskip("pxr")
 newton = pytest.importorskip("newton")
 wp = pytest.importorskip("warp")
 
-fs = load_module("isaacsimenvs/tasks/cloth/utils/fold_shapes.py", "fold_shapes")
-fsa = load_module("isaacsimenvs/tasks/cloth/utils/fold_shape_assets.py", "fold_shape_assets")
+fs = load_module("isaacsimenvs/tasks/cloth/mdp/geometry/fold_shapes.py", "fold_shapes")
+fsa = load_module("isaacsimenvs/tasks/cloth/backends/rigid/assets.py", "fold_shape_assets")
 
 
 def _quat_apply_xyzw(q, v):

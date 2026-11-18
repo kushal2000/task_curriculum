@@ -1,4 +1,4 @@
-"""Cloth tracker observation DR (isaacsimenvs/tasks/cloth/utils/cloth_tracker.py): Kit-free, CPU."""
+"""Cloth tracker observation DR (isaacsimenvs/tasks/cloth/mdp/tracker.py): Kit-free, CPU."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import torch
 
 from conftest import load_module
 
-ct = load_module("isaacsimenvs/tasks/cloth/utils/cloth_tracker.py", "cloth_tracker")
+ct = load_module("isaacsimenvs/tasks/cloth/mdp/tracker.py", "cloth_tracker")
 
 R = 7
 SIZE = 0.15

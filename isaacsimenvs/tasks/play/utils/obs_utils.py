@@ -307,7 +307,7 @@ def _observed_object_and_goal(env, obj_pos, obj_rot, obj_linvel, obj_angvel, obj
     dr = env.cfg.domain_randomization
     obj_vel = torch.cat([obj_linvel, obj_angvel], dim=-1)
     if tracker_on(env):
-        # The cloth tracker pipeline (tasks/cloth/utils/cloth_tracker.py): the object and goal as
+        # The cloth tracker pipeline (tasks/cloth/mdp/tracker.py): the object and goal as
         # the real stereo + CoTracker pipeline would report them. kp_offsets already carry its size
         # factor (build_observations).
         pos, rot, g_pos, g_rot, _ = env._tracker_observe(_episode_start(env))

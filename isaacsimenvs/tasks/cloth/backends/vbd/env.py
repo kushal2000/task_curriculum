@@ -8,29 +8,28 @@ The sheet is authored as a flat ``UsdGeom.Mesh`` grid before the environments ar
 ``UsdGeom.TetMesh``, so the prim type *is* the switch.
 
 State is the position of a few keypoints on the moving half; the goal is their mirror image across
-the fold line. See ``utils/cloth_geometry.py`` for both, kept separate so the fold is testable
+the fold line. See ``mdp/geometry/grid.py`` for both, kept separate so the fold is testable
 without a simulator.
 
 The task -- fold targets, reward, success, the goal marker, the finite guard -- is
-``cloth_task.ClothTaskMixin``, shared with the PhysX envs. This class adds only the VBD sheet.
+``mdp/task.ClothTaskMixin``, shared with the rigid backend. This class adds only the VBD sheet.
 """
 
 from __future__ import annotations
 
 from isaacsimenvs.newton import patches  # noqa: F401
-from isaacsimenvs.tasks.cloth.cloth_env_cfg import ClothEnvCfg
-from isaacsimenvs.tasks.cloth.cloth_task import ClothTaskMixin
-from isaacsimenvs.tasks.cloth.utils.cloth_adapter import ClothAsRigidObject
-from isaacsimenvs.tasks.cloth.utils.cloth_geometry import (
-    corner_indices,
-    grid_mesh,
-)
+from isaacsimenvs.tasks.cloth.backends.adapter import ClothAsRigidObject
+from isaacsimenvs.tasks.cloth.backends.usd import neutralise_rigid_object, reshape_goal_marker
+from isaacsimenvs.tasks.cloth.backends.vbd.config import ClothEnvCfg
+from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
+from isaacsimenvs.tasks.cloth.mdp.task import ClothTaskMixin
+from isaacsimenvs.tasks.cloth.mdp.tracker import TrackerMixin
 from isaacsimenvs.tasks.play_newton.play_newton_env import PlayNewtonEnv
 
 __all__ = ["ClothEnv"]
 
 
-class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
+class ClothEnv(TrackerMixin, ClothTaskMixin, PlayNewtonEnv):
     """Play task with a VBD cloth sheet as the manipuland."""
 
     cfg: ClothEnvCfg
@@ -70,8 +69,8 @@ class ClothEnv(ClothTaskMixin, PlayNewtonEnv):
         # cache and `object_scales` observation are all built around it. Make it inert, or it is a
         # live rigid body loose in the scene. (On the cable task this was visible for hours as a
         # hammer lying on the floor beside the table.)
-        self._neutralise_rigid_object()
-        self._reshape_goal_marker()
+        neutralise_rigid_object(self)
+        reshape_goal_marker(self)
 
         prim_path = "/World/envs/env_.*/Cloth"
         spawn_z = float(self.cfg.reset.table_reset_z) + c.start_height

@@ -28,7 +28,7 @@ by a null viewer, so what is drawn is exactly the collision geometry the solver 
 **PhysX tasks** (`*Physx*`, run in `.venv_isaacsim`; `scripts/cluster/bos14_live_viser_physx.sh`): the
 same viewer, with the geometry read from the USD stage (each rigid body's collision meshes and
 primitives, in its own frame) and the body poses from Isaac Lab's PhysX views every step. The friction
-sliders are hidden there: PhysX refuses friction DR (`physx_envs`). viser needs websockets >= 13,
+sliders are hidden there: PhysX refuses friction DR (`backends/rigid/physx.py`). viser needs websockets >= 13,
 newer than Isaac Sim's 12, so the launcher puts a copy first on PYTHONPATH (nothing Kit loads headless
 imports websockets).
 
@@ -143,7 +143,7 @@ CLOTH_SIZES = {
 _TASK_KEYS = ("env.rigid_cloth.variant=", "env.newton.per_env_triangle_pairs=",
               "env.fold_pool.init_fold_prob=", "env.rigid_cloth.joint_damping=",
               "env.cloth.size=", "env.cloth.resolution=", "env.cloth.reset_offset_xy=")
-#: PhysX has no friction DR (a tensor material write resets the combine modes; physx_envs).
+#: PhysX has no friction DR (a tensor material write resets the combine modes; backends/rigid/physx.py).
 _PHYSX_NO = ("slat_friction_scale", "fingertip_friction_scale")
 
 #: Physics sliders for rigid manipulands: (label, randomization field, lo, hi, step, nominal).
@@ -473,8 +473,8 @@ def main() -> None:
         use_single_object_variant()
 
         if args.even_sizes and hasattr(env_cfg, "fold_pool"):
-            # The per-env size draw is FoldPoolTaskMixin._draw_env_sizes (both engines).
-            from isaacsimenvs.tasks.cloth import fold_pool_task as fpe
+            # The per-env size draw is backends/rigid/scene.SceneMixin._draw_env_sizes_raw.
+            from isaacsimenvs.tasks.cloth.backends.rigid import scene as fpe
 
             class _Even:
                 def uniform(self, lo, hi, n):
@@ -561,7 +561,7 @@ def main() -> None:
         # Fingers through the cloth (VBD only: particles are its sole contact with the hand).
         pierce = None
         if tri_by_world:
-            from isaacsimenvs.tasks.cloth.utils.pierce import PierceDetector
+            from isaacsimenvs.tasks.cloth.backends.vbd.pierce import PierceDetector
 
             pierce = PierceDetector(model, n_env, device, robot_spec=getattr(inner, "robot_spec", None))
             pierce_run = torch.zeros(n_env, len(pierce.names), dtype=torch.long, device=device)

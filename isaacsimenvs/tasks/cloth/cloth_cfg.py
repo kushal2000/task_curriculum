@@ -13,7 +13,7 @@ from __future__ import annotations
 # before the compat shim has run.
 from isaaclab.utils.configclass import configclass
 
-from .cloth_tracker_cfg import ClothTrackerCfg
+from .mdp.tracker_cfg import ClothTrackerCfg
 
 __all__ = ["ClothCfg"]
 
