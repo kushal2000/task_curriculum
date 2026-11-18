@@ -60,10 +60,16 @@ FIELD_SIZES: dict[str, int] = {
     "reward": 1,
 }
 PER_JOINT_FIELDS = ("joint_pos", "joint_vel", "prev_action_targets")
+# The top-face point cloud (obs.num_points = P): P x 3 each, world frame relative to the env origin.
+PER_POINT_FIELDS = ("cloth_points", "goal_points")
 
 
-def obs_dim(fields, num_joints: int) -> int:
-    return sum(num_joints if f in PER_JOINT_FIELDS else FIELD_SIZES[f] for f in fields)
+def obs_dim(fields, num_joints: int, num_points: int = 0) -> int:
+    fields = tuple(fields)
+    if num_points <= 0 and any(f in PER_POINT_FIELDS for f in fields):
+        raise ValueError(f"observation fields {PER_POINT_FIELDS} need obs.num_points > 0")
+    return sum(num_joints if f in PER_JOINT_FIELDS else 3 * num_points if f in PER_POINT_FIELDS
+               else FIELD_SIZES[f] for f in fields)
 
 
 def stack(obs: dict[str, torch.Tensor], fields) -> torch.Tensor:
@@ -220,6 +226,10 @@ class ObservationBuilder:
             "successes": torch.log(self.task._successes.float() + 1.0).unsqueeze(-1),
             "reward": (self.task.reward_buf * 0.01).unsqueeze(-1),
         }
+        if state.surface_points_w is not None:
+            # Exact (clean) for actor and critic alike; no delay or noise model yet.
+            clean["cloth_points"] = state.surface_points_w - origins.unsqueeze(1)
+            clean["goal_points"] = self.task._goal_points - origins.unsqueeze(1)
         noisy = dict(clean)
         noisy["object_rot"] = rotations.to_xyzw(o_rot)
         noisy["object_vel"] = o_vel

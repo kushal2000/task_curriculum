@@ -56,12 +56,24 @@ class ObsCfg:
     keypoint_scale: float = 1.5
     """Expand virtual cuboid offsets in ``play`` mode; unused in ``planar`` and ``yibo`` modes."""
     clamp_abs_observations: float = 10.0
+    num_points: int = 0
+    """Top-face point cloud size P per env; 0 = off. Enables the ``cloth_points`` and
+    ``goal_points`` fields (P x 3 each, world frame relative to the env origin) and the
+    ``point_rew_scale`` reward. Rigid backend only."""
+    point_pool_size: int = 4096
+    """Normalized candidate points bound to plates once; each reset draws ``num_points`` distinct
+    ones per env, so P samples are area-uniform over every geometry."""
+    point_seed: int = 0
+    """Seeds the pool and the per-reset draws."""
 
 
 @configclass
 class RewardCfg:
     keypoint_rew_scale: float = 1500.0
     """Fold progress: x (best fold error so far - fold error), clamped >= 0, per step [1/m]."""
+    point_rew_scale: float = 0.0
+    """Point-cloud progress: x (best matched point distance so far - matched distance), clamped
+    >= 0, per step [1/m]; needs ``obs.num_points`` > 0. 0 = off (the corner reward is unchanged)."""
     reach_goal_bonus: float = 1000.0
     """Paid once, on the step the fold criterion is entered."""
     distance_delta_rew_scale: float = 50.0

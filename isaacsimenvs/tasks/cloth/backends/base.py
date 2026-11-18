@@ -90,6 +90,7 @@ class ClothBackend:
             points_vel_w=velocities,
             table_top_z=self.scene.env_origins[:, 2] + self._table_z + self._table_half_height,
             keypoints_w=self.cloth_keypoints(),
+            surface_points_w=self.cloth_surface_points(),
         )
 
     def apply_joint_commands(self, commands: JointCommands):
@@ -124,6 +125,13 @@ class ClothBackend:
 
     def cloth_keypoints(self):
         """Exact moving-half corners when supplied by a backend; otherwise use grid samples."""
+        return None
+
+    surface = None
+    """``point_cloud.SurfaceSamples`` when the backend supplies a top-face point cloud."""
+
+    def cloth_surface_points(self):
+        """``(N, P, 3)`` top-face samples (``obs.num_points`` > 0), else None."""
         return None
 
     def cloth_points(self):

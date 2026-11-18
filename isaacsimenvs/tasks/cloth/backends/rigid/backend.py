@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import torch
 
-from ...mdp.geometry import rotations
+from ...mdp.geometry import point_cloud, rotations
 from ...mdp.geometry.placement import placement_bounds, constrain_yaw
 from ..base import ClothBackend, place_in_region
 from ..robot import ROBOT
@@ -151,6 +151,55 @@ class RigidBackend(ClothBackend):
             moving = [i for i, plate in enumerate(group.design.plates) if plate.center[0] > 0.0]
             keypoint_owners = designs.point_owners(group.design, designs.MOVING_KEYPOINTS, plate_ids=moving)
             group.keypoint_body_ids = bodies[torch.as_tensor(keypoint_owners, device=self.device)]
+        self._init_surface()
+
+    def _init_surface(self) -> None:
+        """Bind the point-cloud pool to every topology's plates (``obs.num_points`` > 0 only)."""
+        obs = getattr(self.cfg, "obs", None)
+        num_points = int(getattr(obs, "num_points", 0) or 0)
+        self.surface = None
+        if num_points <= 0:
+            return
+        pool = point_cloud.sample_pool(int(obs.point_pool_size), int(obs.point_seed))
+        self._surface_pool = torch.as_tensor(pool, device=self.device, dtype=self._dims.dtype)
+        for group in self.groups:
+            owners = group.design.point_owners(pool)
+            moving = np.array([group.design.plates[i].center[0] > 0.0 for i in owners])
+            # Indices into the group's own body axis: the readout gathers per env.
+            group.surface_pool_body = torch.as_tensor(group.body_ids, device=self.device)[
+                torch.as_tensor(owners, device=self.device)]
+            group.surface_pool_moving = torch.as_tensor(moving, device=self.device)
+        self.surface = point_cloud.SurfaceSamples.empty(self.num_envs, num_points, self.device)
+        self._surface_pool_idx = torch.zeros(self.num_envs, num_points, dtype=torch.long, device=self.device)
+        self._surface_body = torch.zeros_like(self._surface_pool_idx)
+        self._surface_generator = torch.Generator(device=self.device)
+        self._surface_generator.manual_seed(int(obs.point_seed))
+
+    def _resample_surface(self, ids, pos_w, yaw) -> None:
+        """A fresh draw of samples for envs ``ids``, and the flat pose the sheet was placed in."""
+        surface = self.surface
+        idx = point_cloud.draw(ids.numel(), self._surface_pool.shape[0], surface.num_points, self.device,
+                               generator=self._surface_generator)
+        self._surface_pool_idx[ids] = idx
+        surface.rest[ids] = point_cloud.top_face_rest(self._surface_pool[idx], self._dims[ids])
+        for group in self.groups:
+            rows, _ = group.select(ids)
+            if rows.numel():
+                self._surface_body[ids[rows]] = group.surface_pool_body[idx[rows]]
+                surface.moving[ids[rows]] = group.surface_pool_moving[idx[rows]]
+        surface.placed_pos_w[ids] = pos_w
+        surface.placed_quat_w[ids] = rotations.yaw(yaw)
+
+    def cloth_surface_points(self) -> torch.Tensor | None:
+        """``(N, P, 3)`` top-face samples carried by their plates, or None without a point cloud."""
+        if self.surface is None:
+            return None
+        points_w = torch.empty_like(self.surface.rest)
+        for group in self.groups:
+            data, ids = group.articulation.data, group.env_ids
+            points_w[ids] = point_cloud.on_bodies(data.body_link_pos_w, data.body_link_quat_w,
+                                                  self._surface_body[ids], self.surface.rest[ids])
+        return points_w
 
     def finish_setup(self) -> None:
         """PhysX views are now ready for material and hinge-property writes."""
@@ -220,6 +269,10 @@ class RigidBackend(ClothBackend):
             asset.write_joint_state_to_sim(q, torch.zeros_like(q), env_ids=local_ids)
             asset.set_joint_position_target(torch.zeros_like(q), env_ids=local_ids)
             asset.set_joint_velocity_target(torch.zeros_like(q), env_ids=local_ids)
+        if getattr(self, "surface", None) is not None:
+            placed = pose_w[:, :3].clone()
+            placed[:, 2] -= float(self.cfg.rigid_cloth.spawn_clearance)  # lying on the table
+            self._resample_surface(ids, placed, yaw)
 
     def _randomize(self, ids) -> None:
         if hasattr(self, "_dr_density"):

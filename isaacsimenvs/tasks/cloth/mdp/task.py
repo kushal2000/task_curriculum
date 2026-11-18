@@ -11,7 +11,7 @@ import math
 import torch
 
 from ..backends.robot import ROBOT
-from .geometry import fold, rotations
+from .geometry import fold, point_cloud, rotations
 from .state import ResetState, SimState, TaskTransition, TaskView
 
 REWARD_SANITY_LIMIT = 1.0e4
@@ -24,8 +24,14 @@ def ratchet(best: torch.Tensor, current: torch.Tensor, cap: float) -> tuple[torc
 
 
 class ClothTask:
-    def __init__(self, cfg, cloth_grid, origins, arm_ids, hand_ids, *, robot_spec=ROBOT):
+    _surface = None  # point_cloud.SurfaceSamples when the backend supplies a point cloud
+
+    def __init__(self, cfg, cloth_grid, origins, arm_ids, hand_ids, *, robot_spec=ROBOT, surface=None):
         self.cfg, self._cloth_grid, self.origins = cfg, cloth_grid, origins
+        # point_cloud.SurfaceSamples, rewritten by the backend at reset; None = no point cloud.
+        self._surface = surface
+        if surface is None and float(getattr(cfg.reward, "point_rew_scale", 0.0)) != 0.0:
+            raise ValueError("reward.point_rew_scale needs a point cloud (obs.num_points > 0, rigid backend)")
         self.device, self.num_envs = origins.device, origins.shape[0]
         self._arm_ids, self._hand_ids = arm_ids, hand_ids
         self._fingertip_offsets = torch.tensor(robot_spec.fingertip_offsets, device=self.device)
@@ -66,6 +72,9 @@ class ClothTask:
         f32 = dict(device=dev, dtype=torch.float32)
 
         self._closest_fold_err = torch.full((n,), -1.0, **f32)  # -1 = not yet observed
+        self._closest_point_dist = torch.full((n,), -1.0, **f32)
+        p = 0 if self._surface is None else self._surface.num_points
+        self._goal_points = torch.zeros(n, p, 3, **f32)  # world frame, fixed per episode
         self._closest_fingertip_dist = torch.full((n, 5), -1.0, **f32)
         self._fold_hold = torch.zeros(n, dtype=torch.long, device=dev)
         self._successes = torch.zeros(n, dtype=torch.long, device=dev)
@@ -102,6 +111,9 @@ class ClothTask:
         self._successes[ids] = 0
         self._fold_success[ids] = False
         self._closest_fold_err[ids] = -1.0
+        self._closest_point_dist[ids] = -1.0
+        if self._surface is not None:
+            self._goal_points[ids] = self.point_goals(ids)
         self._closest_fingertip_dist[ids] = -1.0
         self._fold_hold[ids] = 0
         self._bonus_mask[ids] = False
@@ -125,6 +137,13 @@ class ClothTask:
         self._success_allowed[ids] = True
         self._step_eligible[ids] = True
 
+    def point_goals(self, ids: torch.Tensor) -> torch.Tensor:
+        """``(n, P, 3)`` world goals for envs ``ids``: their samples where the folded (or, for an
+        unfold, flat) cloth would lie on the table at the pose the backend placed the sheet in."""
+        sf = self._surface
+        rest = point_cloud.goal_rest(sf.rest[ids], sf.moving[ids], self._cloth_grid.ply_gap[ids], self._unfold_env[ids])
+        return point_cloud.place(rest, sf.placed_pos_w[ids], sf.placed_quat_w[ids])
+
     def derive(self, state: SimState) -> TaskView:
         cg = self._cloth_grid
         r, c = fold.stationary_frame(cg, state.points_w)
@@ -147,7 +166,15 @@ class ClothTask:
             footprint=fold.footprint_ratio(cg, state.points_w, r),
             pads_w=pads,
             fingertip_dist=(pads - pos.unsqueeze(1)).norm(dim=-1),
+            **self._point_metrics(state),
         )
+
+    def _point_metrics(self, state: SimState) -> dict:
+        if self._surface is None or state.surface_points_w is None:
+            return {}
+        pts, goals = state.surface_points_w, self._goal_points
+        return {"point_dist": point_cloud.matched_distance(pts, goals),
+                "point_chamfer": point_cloud.chamfer_distance(pts, goals)}
 
     def start_task(self, ids: torch.Tensor) -> torch.Tensor:
         """Draw each episode's task (``task.mode=mixed``) and return the + half's start angle [rad]:
@@ -340,6 +367,7 @@ class ClothTask:
         fold_gain, next_fold = ratchet(self._closest_fold_err, fold_err, 100.0)
         self._closest_fold_err = torch.where(eligible, next_fold, self._closest_fold_err)
         keypoint = rew.keypoint_rew_scale * fold_gain
+        point_scale = float(getattr(rew, "point_rew_scale", 0.0))
 
         arm = -rew.kuka_actions_penalty_scale * state.joint_vel[:, self._arm_ids].abs().sum(dim=-1)
         hand = -rew.hand_actions_penalty_scale * state.joint_vel[:, self._hand_ids].abs().sum(dim=-1)
@@ -350,6 +378,15 @@ class ClothTask:
             "kuka_actions_penalty": arm,
             "hand_actions_penalty": hand,
         }
+        if getattr(view, "point_dist", None) is not None:
+            dist = torch.where(torch.isfinite(view.point_dist), view.point_dist, self._closest_point_dist.clamp(min=0.0))
+            point_gain, next_point = ratchet(self._closest_point_dist, dist, 100.0)
+            self._closest_point_dist = torch.where(eligible, next_point, self._closest_point_dist)
+            self._point_dist_now = dist
+            self.extras["point_dist_mean"] = float(dist.mean())
+            self.extras["point_chamfer_mean"] = float(view.point_chamfer.mean())
+            if point_scale != 0.0:
+                terms["point_rew"] = point_scale * point_gain
         if rel.enabled:
             terms["bonus_rew"] = self._bonus_mask.float() * rel.fold_entry_bonus
             terms["release_rew"] = self._release_rew_step + self._release_latch_mask.float() * rel.release_bonus
@@ -373,6 +410,8 @@ class ClothTask:
         # successes = release success (fold + release); fold_success = the fold was reached.
         final = {"successes": self._successes.float(), "fold_success": self._fold_success.float()}
         final.update({f"done_{k}": view.float() for k, view in self._termination_reasons.items()})
+        if getattr(self, "_point_dist_now", None) is not None:
+            final["point_dist"] = self._point_dist_now  # matched distance at the episode's last step [m]
         self.extras["episode_cumulative"] = self._reward_terms
         self.extras["episode_final"] = final
         self.extras["successes"] = self._prev_episode_successes.float()

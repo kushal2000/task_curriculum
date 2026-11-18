@@ -25,6 +25,7 @@ class SimState:
     points_vel_w: torch.Tensor  # (N, P, 3)
     table_top_z: torch.Tensor  # (N,) world z of the table's top surface
     keypoints_w: torch.Tensor | None = None  # (N, 4, 3) optional exact moving-half corners
+    surface_points_w: torch.Tensor | None = None  # (N, P, 3) top-face point cloud (obs.num_points > 0)
 
 
 @dataclass
@@ -44,6 +45,8 @@ class TaskView:
     footprint: torch.Tensor  # (N,)
     pads_w: torch.Tensor  # (N, 5, 3) fingertip pads (or body origins)
     fingertip_dist: torch.Tensor  # (N, 5) pad -> cloth centre
+    point_dist: torch.Tensor | None = None  # (N,) matched mean distance, point cloud -> goal
+    point_chamfer: torch.Tensor | None = None  # (N,) symmetric chamfer, point cloud -> goal
 
 
 @dataclass

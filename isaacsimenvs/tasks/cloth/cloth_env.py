@@ -26,8 +26,11 @@ class ClothEnv(DirectRLEnv):
         self.robot_spec = robot_spec
         self._episode_guard = None
         cfg.action_space = robot_spec.num_joints
-        cfg.observation_space = obs_dim(cfg.obs.obs_list, robot_spec.num_joints)
-        cfg.state_space = obs_dim(cfg.obs.state_list, robot_spec.num_joints)
+        num_points = int(getattr(cfg.obs, "num_points", 0) or 0)
+        if num_points > 0 and cfg.backend != "rigid":
+            raise ValueError("obs.num_points (the top-face point cloud) currently requires the rigid cloth backend")
+        cfg.observation_space = obs_dim(cfg.obs.obs_list, robot_spec.num_joints, num_points)
+        cfg.state_space = obs_dim(cfg.obs.state_list, robot_spec.num_joints, num_points)
         if cfg.backend == "rigid":
             from .backends.rigid.backend import RigidBackend
 
@@ -58,7 +61,7 @@ class ClothEnv(DirectRLEnv):
         )
         self.task = ClothTask(
             cfg, self.backend.cloth_grid, self.scene.env_origins, self.controller._arm_ids, self.controller._hand_ids,
-            robot_spec=robot_spec,
+            robot_spec=robot_spec, surface=self.backend.surface,
         )
         self.observations = ObservationBuilder(cfg, self.controller, self.task, robot_spec=robot_spec)
         self.reward_buf = self.task.reward_buf
@@ -155,6 +158,19 @@ class ClothEnv(DirectRLEnv):
 
     def fold_error(self):
         return self._now()[1].fold_error
+
+    def surface_points_w(self):
+        """``(N, P, 3)`` top-face point cloud, or None (``obs.num_points`` = 0)."""
+        return self.backend.cloth_surface_points()
+
+    def point_goals_w(self):
+        """``(N, P, 3)`` this episode's world-frame point goals, or None."""
+        return None if self.task._surface is None else self.task._goal_points
+
+    def point_distances(self):
+        """``(matched, chamfer)``, each ``(N,)`` [m], or None."""
+        _, view = self._now()
+        return None if view.point_dist is None else (view.point_dist, view.point_chamfer)
 
     def footprint_ratio(self):
         return self._now()[1].footprint
