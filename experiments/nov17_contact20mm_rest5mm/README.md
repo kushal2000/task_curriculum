@@ -22,3 +22,15 @@ guard already accounts for positive rest offset. Robot/table offsets stay at
 experiments/nov17_contact20mm_rest5mm/submit_prior.sh
 experiments/nov17_contact20mm_rest5mm/submit_scratch.sh
 ```
+
+## Submitted jobs
+
+| Initialization | Job |
+| --- | --- |
+| Yibo prior | 767998 |
+| Scratch | 767999 |
+
+Both jobs were confirmed running with their saved Hydra configurations matching
+the intended offsets, thickness, disabled curriculum and enabled reset checks.
+The native 256-environment smoke test verified offsets on every cloth, 120 policy
+steps, finite observations/rewards and a forced off-table reset. CPU checks: 19 passed.
