@@ -70,7 +70,7 @@ def main() -> None:
 
     server.gui.add_markdown(f"**{b.task}**  \n`{args.checkpoint.name}`"
                             + (f"  \noverrides: `{' '.join(args.overrides)}`" if args.overrides else ""))
-    playback = server.gui.add_button_group("Playback", ("Play", "Pause"))
+    playback = server.gui.add_button("Pause", icon=viser.Icon.PLAYER_PAUSE)
     step_button = server.gui.add_button("Single step", hint="Advance one policy step while paused")
     env_menu = server.gui.add_dropdown("Drawn env", tuple(label(e) for e in range(n)), initial_value=label(0))
     reset_button = server.gui.add_button("Reset all envs")
@@ -82,8 +82,11 @@ def main() -> None:
     requests = {"step": 0, "reset": False, "playing": True}
 
     @playback.on_click
-    def _playback(event) -> None:
-        requests["playing"] = event.target.value == "Play"
+    def _playback(_) -> None:
+        requests["playing"] = not requests["playing"]
+        # The button names the action it will take next.
+        playback.label = "Pause" if requests["playing"] else "Play"
+        playback.icon = viser.Icon.PLAYER_PAUSE if requests["playing"] else viser.Icon.PLAYER_PLAY
     step_button.on_click(lambda _: requests.__setitem__("step", requests["step"] + 1))
     reset_button.on_click(lambda _: requests.__setitem__("reset", True))
 
