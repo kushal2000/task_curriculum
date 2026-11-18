@@ -1,0 +1,26 @@
+{
+  "scratch_2mm": {
+    "run": "debug_outputs/train_logs/nov/2026-11-16_yibo_our_dr_scratch_710889",
+    "checkpoint": "debug_outputs/train_logs/nov/2026-11-16_yibo_our_dr_scratch_710889/nn/periodic_0_yibo_our_dr_scratch_ep_4040.pth",
+    "sha256": "b5377c86d95a05ebb16ba1cf7b3b55ba7efe82cc45578041bc12b541bcfc7b84",
+    "frozen_checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/scratch_2mm_periodic_0_yibo_our_dr_scratch_ep_4040.pth"
+  },
+  "prior_2mm": {
+    "run": "debug_outputs/train_logs/nov/2026-11-16_yibo_our_dr_finetune_710887",
+    "checkpoint": "debug_outputs/train_logs/nov/2026-11-16_yibo_our_dr_finetune_710887/nn/periodic_0_yibo_our_dr_finetune_ep_3980.pth",
+    "sha256": "14cee01ff89894610a3acc4816e7871b0d8193b0d18caada749ae4f74bf24928",
+    "frozen_checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/prior_2mm_periodic_0_yibo_our_dr_finetune_ep_3980.pth"
+  },
+  "scratch_2to20mm": {
+    "run": "debug_outputs/train_logs/nov/2026-11-16_yibo_our_dr_scratch_thickness_2_20mm_711273",
+    "checkpoint": "debug_outputs/train_logs/nov/2026-11-16_yibo_our_dr_scratch_thickness_2_20mm_711273/nn/periodic_0_yibo_our_dr_scratch_thickness_2_20mm_ep_4020.pth",
+    "sha256": "02c7d28e8df3a3b37df8e118b0e241657461bb19cd97df2d80e7fd1d55bb41df",
+    "frozen_checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/scratch_2to20mm_periodic_0_yibo_our_dr_scratch_thickness_2_20mm_ep_4020.pth"
+  },
+  "prior_2to20mm": {
+    "run": "debug_outputs/train_logs/nov/2026-11-16_yibo_our_dr_finetune_thickness_2_20mm_711271",
+    "checkpoint": "debug_outputs/train_logs/nov/2026-11-16_yibo_our_dr_finetune_thickness_2_20mm_711271/nn/periodic_0_yibo_our_dr_finetune_thickness_2_20mm_ep_3480.pth",
+    "sha256": "bc095a19e0110630b95a738c0336b67c67d8e61fe423c1aa0eb7090a48fe111c",
+    "frozen_checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/prior_2to20mm_periodic_0_yibo_our_dr_finetune_thickness_2_20mm_ep_3480.pth"
+  }
+}

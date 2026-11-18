@@ -44,7 +44,7 @@ Yibo's fixed per-hinge gains disable the B/C sliders.
 These presets run our current design catalog and fold/release objective. They do
 not recreate Yibo's old seven-design simulator, reset distribution or hinge layout.
 The two training variants live under
-[experiments/nov16_yibo_our_dr](../../../../experiments/nov16_yibo_our_dr/README.md).
+[experiments/nov16/yibo_our_dr](../../../../experiments/nov16/yibo_our_dr/README.md).
 
 Policy mode starts paused with a flat cloth; click **Run simulation** or **Single step**.
 The default DR recipe is `scripts/configs/runs/rigid_body_cloth.yaml`; override it with

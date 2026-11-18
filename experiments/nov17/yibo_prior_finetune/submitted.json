@@ -1,0 +1,15 @@
+{
+  "job_id": 768528,
+  "submitted_on": "2026-11-17",
+  "training_commit": "7f0115e",
+  "branch": "kushal/2026-11-17_compare_with_yibo",
+  "config": "experiments/nov17/yibo_prior_finetune/prior.yaml",
+  "checkpoint": "pretrained_policy/flexiv_wuji_finetuned/flat7RW_fricition.pth",
+  "checkpoint_load_mode": "weights",
+  "num_envs": 12288,
+  "wandb_project": "rigidClothDR",
+  "wandb_group": "nov17_yibo_prior_finetune",
+  "wandb_name": "rigidClothDR_yibo_prior_finetune",
+  "status_at_submission": "PENDING",
+  "reason_at_submission": "Resources"
+}

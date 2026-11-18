@@ -1,0 +1,14 @@
+{
+  "source": "experiments/nov17/pressing_audit/results/work_validation/prior_2to20mm_holdout41",
+  "original_env_id": 1,
+  "first_trigger_frame": 216,
+  "time_s": 1.8083333333333333,
+  "rising_material": "stationary_blue",
+  "tilt_degrees": [
+    30.285518264214083,
+    0.41601122158361187
+  ],
+  "direct_work_j": 0.0,
+  "gravity_j": 0.0003819135275680774,
+  "other_half_net_supported_load_n": 2.000553752091946
+}

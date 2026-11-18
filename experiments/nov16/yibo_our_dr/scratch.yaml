@@ -1,0 +1,10 @@
+# Same environment, robot, action/observation interface and DR as the finetune.
+# Initialize the policy network from scratch.
+base: ../../../isaacsimenvs/scripts/configs/runs/yibo_our_dr.yaml
+agent:
+  params:
+    load_checkpoint: false
+    load_path: ''
+    checkpoint_load_mode: weights
+    config:
+      name: 0_yibo_our_dr_scratch

@@ -1,0 +1,79 @@
+[
+  {
+    "dataset": "experiments/nov17/pressing_audit/results/work_validation/prior_2mm",
+    "seed": 17,
+    "num_envs": 64,
+    "checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/prior_2mm_periodic_0_yibo_our_dr_finetune_ep_3980.pth",
+    "status": "complete",
+    "physics_frames": 1200,
+    "completed_first_episodes": 64,
+    "contact_matrix_verified": true,
+    "metadata_sha256": "a07edecf9a767115aab667d95f12c612e2a84d9cdf085cdd2f4914306e0ac31e"
+  },
+  {
+    "dataset": "experiments/nov17/pressing_audit/results/work_validation/prior_2to20mm",
+    "seed": 17,
+    "num_envs": 64,
+    "checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/prior_2to20mm_periodic_0_yibo_our_dr_finetune_thickness_2_20mm_ep_3480.pth",
+    "status": "complete",
+    "physics_frames": 1200,
+    "completed_first_episodes": 64,
+    "contact_matrix_verified": true,
+    "metadata_sha256": "9dacb47277496046e4da38d76850eec913fb816fabecc491f2aee0b541248497"
+  },
+  {
+    "dataset": "experiments/nov17/pressing_audit/results/work_validation/prior_2to20mm_holdout",
+    "seed": 29,
+    "num_envs": 128,
+    "checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/prior_2to20mm_periodic_0_yibo_our_dr_finetune_thickness_2_20mm_ep_3480.pth",
+    "status": "complete",
+    "physics_frames": 1200,
+    "completed_first_episodes": 128,
+    "contact_matrix_verified": true,
+    "metadata_sha256": "f33dcb55df16627489f33da3d8bc8567be4d60499a8acd25f0082c889aa82018"
+  },
+  {
+    "dataset": "experiments/nov17/pressing_audit/results/work_validation/prior_2to20mm_holdout41",
+    "seed": 41,
+    "num_envs": 128,
+    "checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/prior_2to20mm_periodic_0_yibo_our_dr_finetune_thickness_2_20mm_ep_3480.pth",
+    "status": "complete",
+    "physics_frames": 1200,
+    "completed_first_episodes": 128,
+    "contact_matrix_verified": true,
+    "metadata_sha256": "46c09c2dc0da144d4dfbe7effd56b2e72067cdf845e737fe78b4854e78d361ce"
+  },
+  {
+    "dataset": "experiments/nov17/pressing_audit/results/work_validation/prior_2to20mm_holdout53",
+    "seed": 53,
+    "num_envs": 128,
+    "checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/prior_2to20mm_periodic_0_yibo_our_dr_finetune_thickness_2_20mm_ep_3480.pth",
+    "status": "complete",
+    "physics_frames": 1200,
+    "completed_first_episodes": 128,
+    "contact_matrix_verified": true,
+    "metadata_sha256": "ef9e9eccf24634bb56a8a420961cf1588deeb357c0f523281282517d699a4bb2"
+  },
+  {
+    "dataset": "experiments/nov17/pressing_audit/results/work_validation/scratch_2mm",
+    "seed": 17,
+    "num_envs": 64,
+    "checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/scratch_2mm_periodic_0_yibo_our_dr_scratch_ep_4040.pth",
+    "status": "complete",
+    "physics_frames": 1200,
+    "completed_first_episodes": 64,
+    "contact_matrix_verified": true,
+    "metadata_sha256": "bd48575a3218d596204a697df6730331da053a7993fa466b960b0909c0e365b7"
+  },
+  {
+    "dataset": "experiments/nov17/pressing_audit/results/work_validation/scratch_2to20mm",
+    "seed": 17,
+    "num_envs": 64,
+    "checkpoint": "experiments/nov17/pressing_audit/results/reset_validation/checkpoints/scratch_2to20mm_periodic_0_yibo_our_dr_scratch_thickness_2_20mm_ep_4020.pth",
+    "status": "complete",
+    "physics_frames": 1200,
+    "completed_first_episodes": 64,
+    "contact_matrix_verified": true,
+    "metadata_sha256": "6fee02270cd57f0ae9aa412b377266255759e1b4a72a6f15154bec8b318e04cd"
+  }
+]

@@ -1,0 +1,11 @@
+base: ../../../isaacsimenvs/scripts/configs/runs/yibo_our_dr.yaml
+env:
+  rigid_cloth:
+    contact_offset: 0.020
+    rest_offset: 0.0
+    thickness_range: [0.002, 0.002]
+    thickness_curriculum:
+      enabled: false
+    episode_checks:
+      outside_table: true
+      press_driven_fold: true
