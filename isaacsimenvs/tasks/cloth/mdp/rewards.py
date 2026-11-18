@@ -11,9 +11,9 @@
 The reward is then guarded: a non-finite or implausibly large value (a diverging env) is zeroed and
 the env flagged for reset.
 
-:func:`update_hand_and_goal_metrics` also keeps the Play task's goal measurement -- the keypoints of
-the fitted sheet pose against the goal pose's -- which the critic observes
-(``closest_keypoint_max_dist``) and ``terminations`` reads.
+:func:`update_hand_and_goal_metrics` also measures the goal the way the Play prior's critic learnt
+it -- the keypoints of the fitted sheet pose against the goal pose's -- for the critic's
+``closest_keypoint_max_dist``.
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ REWARD_SANITY_LIMIT = 1.0e4
 
 
 def update_hand_and_goal_metrics(env) -> None:
-    """Fingertip-to-sheet distances, the goal keypoint distance, and the near-goal counter."""
-    reward_cfg, term_cfg = env.cfg.reward, env.cfg.termination
+    """Fingertip-to-sheet distances and the goal keypoint distance, with their best-so-far values."""
+    reward_cfg = env.cfg.reward
     origins = env.scene.env_origins
     sheet_pos = env.object.data.root_pos_w - origins
     sheet_rot = env.object.data.root_quat_w
@@ -52,19 +52,11 @@ def update_hand_and_goal_metrics(env) -> None:
     goal_kp = keypoints_world(goal_pos, goal_rot, env._keypoint_offsets)
     env._keypoints_max_dist = torch.norm(sheet_kp - goal_kp, dim=-1).max(dim=-1).values
 
-    # -1 means "not observed yet this goal": the first value becomes the best so far.
+    # -1 means "not observed yet this episode": the first value becomes the best so far.
     unset = env._closest_keypoint_max_dist < 0.0
     env._closest_keypoint_max_dist = torch.where(unset, env._keypoints_max_dist, env._closest_keypoint_max_dist)
     unset = env._closest_fingertip_dist < 0.0
     env._closest_fingertip_dist = torch.where(unset, env._curr_fingertip_distances, env._closest_fingertip_dist)
-
-    near_goal = env._keypoints_max_dist <= env._current_success_tolerance * reward_cfg.keypoint_scale
-    if term_cfg.force_consecutive_near_goal_steps:
-        env._near_goal_steps = (env._near_goal_steps + near_goal.long()) * near_goal.long()
-    else:
-        env._near_goal_steps = env._near_goal_steps + near_goal.long()
-    env._near_goal = near_goal
-    env._is_success = env._near_goal_steps >= term_cfg.success_steps
 
 
 def compute_reward(env) -> torch.Tensor:

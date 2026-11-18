@@ -31,7 +31,7 @@ from isaacsimenvs.tasks.play.robots import get_robot_spec
 
 from .mdp.actions import process_actions
 from .mdp.observations import build_observations, guard_finite, obs_dim
-from .mdp.randomization import init_dr, reset_dr, rng_parity_goal, rng_parity_step
+from .mdp.randomization import init_dr, reset_dr
 from .mdp.reset import reset_sheet, reset_table, reset_task_trackers
 from .mdp.rewards import compute_reward
 from .mdp.robot import NUM_FINGERTIPS, init_robot, reset_robot, spring_effort
@@ -71,7 +71,7 @@ class ClothEnv(DirectRLEnv):
 
     def _init_task_state(self) -> None:
         n, dev = self.num_envs, self.device
-        reset_cfg, term_cfg = self.cfg.reset, self.cfg.termination
+        reset_cfg = self.cfg.reset
         # Folds this episode, and in the finished one (the logger's `successes`).
         self._successes = torch.zeros(n, dtype=torch.long, device=dev)
         self._prev_episode_successes = torch.zeros(n, dtype=torch.long, device=dev)
@@ -84,12 +84,6 @@ class ClothEnv(DirectRLEnv):
         self._closest_fingertip_dist = torch.full((n, NUM_FINGERTIPS), -1.0, device=dev)
         self._keypoints_max_dist = torch.zeros(n, device=dev)
         self._closest_keypoint_max_dist = torch.full((n,), -1.0, device=dev)
-        self._near_goal = torch.zeros(n, dtype=torch.bool, device=dev)
-        self._near_goal_steps = torch.zeros(n, dtype=torch.long, device=dev)
-        self._is_success = torch.zeros(n, dtype=torch.bool, device=dev)
-        self._current_success_tolerance = float(term_cfg.success_tolerance)
-        self._frame_counter = 0
-        self._last_curriculum_update = 0
         self._lifted_object = torch.zeros(n, dtype=torch.bool, device=dev)
         self._object_init_z = torch.full((n,), reset_cfg.table_reset_z + reset_cfg.table_object_z_offset, device=dev)
         self._table_z_per_env = torch.full((n,), float(reset_cfg.table_reset_z), device=dev)
@@ -109,7 +103,6 @@ class ClothEnv(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         process_actions(self, actions)
-        rng_parity_step(self)
 
     def _apply_action(self) -> None:
         # Every physics step (decimation times per policy step).
@@ -134,7 +127,6 @@ class ClothEnv(DirectRLEnv):
         reset_robot(self, ids)
         reset_table(self, ids)
         reset_sheet(self, ids)
-        rng_parity_goal(self, ids.numel(), "absolute")
         reset_task_trackers(self, ids)
         reset_dr(self, ids)
         self._drive_goal_marker()
@@ -156,4 +148,3 @@ class ClothEnv(DirectRLEnv):
         self.extras["episode_cumulative"] = self._reward_terms
         self.extras["episode_final"] = final
         self.extras["successes"] = self._prev_episode_successes.float()
-        self.extras["current_success_tolerance"] = float(self._current_success_tolerance)

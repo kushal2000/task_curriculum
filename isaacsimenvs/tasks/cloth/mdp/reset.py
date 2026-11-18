@@ -75,7 +75,6 @@ def reset_task_trackers(env, env_ids: torch.Tensor) -> None:
     env._successes[env_ids] = 0
     env._closest_keypoint_max_dist[env_ids] = -1.0
     env._closest_fingertip_dist[env_ids] = -1.0
-    env._near_goal_steps[env_ids] = 0
     env._lifted_object[env_ids] = False
     env._fold_hold[env_ids] = 0
     env._closest_fold_err[env_ids] = -1.0

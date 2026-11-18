@@ -28,9 +28,6 @@ __all__ = [
     "init_dr",
     "perturb_quat",
     "reset_dr",
-    "rng_parity_goal",
-    "rng_parity_reset",
-    "rng_parity_step",
 ]
 
 
@@ -45,11 +42,6 @@ def perturb_quat(q_wxyz: torch.Tensor, max_deg: float) -> torch.Tensor:
     axis = torch.nn.functional.normalize(torch.randn(n, 3, device=q_wxyz.device), dim=-1)
     angle = torch.empty(n, device=q_wxyz.device).uniform_(-max_deg, max_deg) * (math.pi / 180.0)
     return quat.quat_mul(quat.quat_from_angle_axis(angle, axis), q_wxyz)
-
-
-def _log_uniform(lo_hi, n: int) -> torch.Tensor:
-    lo, hi = lo_hi
-    return torch.exp(torch.empty(n).uniform_(math.log(lo + 1e-12), math.log(hi + 1e-12)))
 
 
 def init_dr(env) -> None:
@@ -81,7 +73,6 @@ def init_dr(env) -> None:
     _init_hand_dynamics(env)
     _init_point_dr(env)
     _print_summary(env)
-    rng_parity_init(env)
 
 
 def _init_hand_dynamics(env) -> None:
@@ -159,7 +150,6 @@ def reset_dr(env, env_ids: torch.Tensor) -> None:
     env._action_queue[env_ids] = 0.0
     env._obs_queue[env_ids] = 0.0
     env._object_state_queue[env_ids] = 0.0
-    rng_parity_reset(env, n)
     lo, hi = dr.object_scale_noise_multiplier_range
     env._object_scale_multiplier[env_ids] = torch.empty(n, 3, device=env.device).uniform_(lo, hi)
     _draw_delay_lags(env, env_ids, dr)
@@ -279,48 +269,3 @@ def _print_summary(env) -> None:
             f"(points + goal) | obs delay on proprio only",
             flush=True,
         )
-
-
-# ---------------------------------------------------------------------------------------------------
-# RNG parity with the Play task (temporary). The Play task drew random numbers the cloth never uses:
-# a random wrench on the object every step (inert on a sheet), a wrench probability per episode, and
-# a goal pose per reset (overwritten by the fold target). Drawing them here keeps the random stream,
-# and so every fixed-seed run, bit-identical to the Play-based env while the code moves over.
-# ---------------------------------------------------------------------------------------------------
-
-
-def rng_parity_init(env) -> None:
-    dr = env.cfg.domain_randomization
-    _log_uniform(dr.force_prob_range, env.num_envs)
-    _log_uniform(dr.torque_prob_range, env.num_envs)
-
-
-def rng_parity_reset(env, n: int) -> None:
-    dr = env.cfg.domain_randomization
-    _log_uniform(dr.force_prob_range, n)
-    _log_uniform(dr.torque_prob_range, n)
-
-
-def rng_parity_step(env) -> None:
-    n, dev = env.num_envs, env.device
-    torch.rand(n, device=dev)
-    torch.rand(n, device=dev)
-    torch.randn(n, 1, 3, device=dev)
-    torch.randn(n, 1, 3, device=dev)
-
-
-def rng_parity_goal(env, n: int, mode: str) -> None:
-    """The draws of the Play goal sampler: ``absolute`` at every reset, ``delta`` (the
-    configured ``goal_sampling_type``) at every Play goal hit."""
-    if env.cfg.reset.fixed_goal_pose is not None:
-        return
-    dev = env.device
-    if mode == "absolute":
-        torch.rand(n, 3, device=dev)
-        quat.random_orientation(n, device=dev)
-    elif mode == "delta":
-        torch.rand(n, 3, device=dev)
-        torch.randn(n, 3, device=dev)
-        torch.rand(n, device=dev)
-    else:
-        raise ValueError(f"unknown goal sampling mode: {mode}")
