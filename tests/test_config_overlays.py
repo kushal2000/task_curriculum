@@ -171,6 +171,7 @@ EXPERIMENT_TASKS = {
         [
             "isaacsimenvs/tasks/cloth/physx_env_cfg.py",
             "isaacsimenvs/tasks/cloth/cloth_cfg.py",
+            "isaacsimenvs/tasks/cloth/cloth_tracker_cfg.py",
             "isaacsimenvs/tasks/cloth/fold_pool_cfg.py",
             "isaacsimenvs/tasks/cloth/rigid_cloth_cfg.py",
             PLAY_CFG,
@@ -185,6 +186,21 @@ for _robot in ("FlexivWuji", "FlexivWujiHumanLike", "FlexivWujiHumanLikeS2R", "F
     EXPERIMENT_TASKS[f"Isaacsimenvs-FoldPoolPhysx{_robot}-Direct-v0"] = EXPERIMENT_TASKS[
         "Isaacsimenvs-FoldPoolPhysx-Direct-v0"
     ]
+# The VBD cloth (Newton) recipes, VBD-direct training (vbdRW_*).
+EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"] = (
+    "ClothEnvCfg",
+    [
+        "isaacsimenvs/tasks/cloth/cloth_env_cfg.py",
+        "isaacsimenvs/tasks/cloth/cloth_cfg.py",
+        "isaacsimenvs/tasks/cloth/cloth_tracker_cfg.py",
+        "isaacsimenvs/tasks/play_newton/play_newton_env_cfg.py",
+        PLAY_CFG,
+        CURRICULUM_CFG,
+    ],
+    "isaacsimenvs/cfg/train/ClothSAPG.yaml",
+)
+for _robot in ("FlexivWujiRightReal", "FlexivWujiRightS2REff", "FlexivWujiRightSharpaGain"):
+    EXPERIMENT_TASKS[f"Isaacsimenvs-Cloth{_robot}-Direct-v0"] = EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"]
 
 
 def _load_experiment(name: str) -> dict:

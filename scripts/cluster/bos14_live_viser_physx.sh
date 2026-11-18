@@ -28,7 +28,7 @@
 #SBATCH --error=slurm_logs/%x_%j.out
 
 set -uo pipefail
-cd /home/yiboc/mit/task_curriculum
+cd "${REPO:-/home/yiboc/mit/task_curriculum_flexiv}"
 mkdir -p slurm_logs
 PORT="${PORT:-8081}"
 export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES

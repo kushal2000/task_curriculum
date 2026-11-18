@@ -1,0 +1,8 @@
+# flat7RW_trkB (stage 13, run B): flat7RW_trkA + cloth self-occlusion (a point is hidden when the ray
+# from either camera crosses the other half, e.g. the stationary half under the folded flap).
+base: flat7RW_trkA
+
+env:
+  cloth:
+    tracker:
+      self_occlusion: true

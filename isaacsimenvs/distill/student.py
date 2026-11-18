@@ -117,8 +117,11 @@ class PointNet(nn.Module):
         self.out = nn.Sequential(nn.Linear(widths[-1], out_dim), nn.LayerNorm(out_dim))
 
     def forward(self, points: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        f = self.point_mlp(points)                                         # (B, M, W)
-        f = f.masked_fill(~mask.unsqueeze(-1), float("-inf")).amax(dim=1)
+        # An invalid slot is given a valid point of the same cloud: a duplicate does not change the
+        # max-pool, and the (B, M, 3..7) input is far cheaper to mask than the (B, M, W) features.
+        first = mask.to(torch.uint8).argmax(dim=1)
+        fill = points[torch.arange(points.shape[0], device=points.device), first].unsqueeze(1)
+        f = self.point_mlp(torch.where(mask.unsqueeze(-1), points, fill)).amax(dim=1)          # (B, W)
         f = torch.where(mask.any(dim=1, keepdim=True), f, torch.zeros_like(f))
         return self.out(f)
 

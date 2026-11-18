@@ -31,12 +31,19 @@ primitives, in its own frame) and the body poses from Isaac Lab's PhysX views ev
 sliders are hidden there: PhysX refuses friction DR (`physx_envs`). viser needs websockets >= 13,
 newer than Isaac Sim's 12, so the launcher puts a copy first on PYTHONPATH (nothing Kit loads headless
 imports websockets).
+
+**Point-cloud students** (`distill/distill_pc.py`): a `POLICIES` entry whose checkpoint file is named
+`student_*.pth` runs through `distill/student_player.py`. The "Point cloud" folder then draws what the
+network reads -- the cloud by label or by source camera, the two cameras, the auxiliary head's keypoint
+and goal estimates against the truth -- over the true sheet (made translucent), and the "Point-cloud
+noise" folder switches the parts of the version C noise (new per-episode draws, so it resets the envs).
 """
 
 from __future__ import annotations
 
 import argparse
 import colorsys
+import copy
 import math
 import os
 import sys
@@ -171,6 +178,21 @@ GOAL_RGB = (40, 200, 90)
 KP_RGB = (255, 165, 25)
 MOVING_RGB = (242, 77, 26)
 STATIONARY_RGB = (250, 199, 38)
+#: Student point cloud, by label (cloth_pointcloud.LABELS order): cloth, cloth moving / stationary (gl),
+#: hand (forward kinematics), first-frame reference moving / stationary (g1), goal corners (g0 / g3).
+PC_LABEL_RGB = np.array([(245, 245, 245), (230, 40, 160), (40, 110, 235), (40, 40, 40),
+                         (255, 150, 200), (140, 195, 255), (40, 200, 90)], np.uint8)
+PC_HAND_CAM_RGB = (150, 60, 220)   # hand points as the cameras see them (hand_cam students)
+PC_CAM_RGB = np.array([(0, 190, 215), (235, 60, 200)], np.uint8)   # camera A, B
+PC_NO_CAM_RGB = np.array((120, 120, 120), np.uint8)
+PC_AUX_KP_RGB, PC_AUX_GOAL_RGB = (255, 0, 200), (0, 120, 110)
+PC_NOISE_LABELS = {
+    "occl": "occlusion: camera position +-5 cm, capsule margin 0-1.5 cm",
+    "calib": "calibration: each camera +-1.5 cm, +-2 deg",
+    "depth": "depth noise 1-4 mm",
+    "drop": "random drop 0-30%",
+    "tip": "hole at the fingertips (half the episodes, 1-3 cm)",
+}
 
 
 def _parse():
@@ -417,7 +439,13 @@ def main() -> None:
     server.scene.set_up_direction("+z")
     status = server.gui.add_markdown(f"**Building `{args.task}` with {args.num_envs} envs...** (~2-3 min)")
 
-    @hydra_task_config_with_yaml(args.task, "")
+    # $LIVE_VISER_EXPERIMENT: build the env from a cfg/experiment recipe (as train.py --experiment does).
+    experiment = os.environ.get("LIVE_VISER_EXPERIMENT") or None
+    if experiment:
+        print(f"[live] experiment recipe {experiment}", flush=True)
+
+    # A recipe carries an agent block too, so it needs the agent cfg loaded (unused here).
+    @hydra_task_config_with_yaml(args.task, "rl_games_sapg_cfg_entry_point" if experiment else "", experiment=experiment)
     def run(env_cfg, agent_cfg) -> None:
         env_cfg.scene.num_envs = args.num_envs
         env_cfg.assets.num_assets_per_type = 1
@@ -445,7 +473,14 @@ def main() -> None:
             "reset_position_noise_x", "reset_position_noise_y", "reset_position_noise_z",
             "reset_dof_pos_random_interval_arm", "reset_dof_pos_random_interval_fingers",
             "reset_dof_vel_random_interval", "table_reset_z_range", "fixed_start_pose")}
+        # $LIVE_VISER_KEEP_DR=1: keep the task's domain randomisation (delays, noise, gains); the start
+        # pose is still pinned / training via the GUI toggle below.
+        keep_dr = os.environ.get("LIVE_VISER_KEEP_DR") == "1"
+        dr_keep = copy.deepcopy(env_cfg.domain_randomization) if keep_dr else None
         disable_randomization(env_cfg)
+        if keep_dr:
+            env_cfg.domain_randomization = dr_keep
+            print("[live] LIVE_VISER_KEEP_DR=1: domain randomisation left ON", flush=True)
         reset_pin = {k: getattr(rs, k) for k in reset_rand}
         use_single_object_variant()
 
@@ -552,6 +587,7 @@ def main() -> None:
             stats=[{"episodes": 0, "folds": 0, "last": "-"} for _ in range(n_env)],
             lock=threading.Lock(), rebuild=True, restart=None, physics_dirty=False,
             fps=0.0, fold_choice=["random"] * n_env, angle_choice=[None] * n_env, pause_at=0,
+            noise_sync=False,
         )
         # Partly folded starts (fold pool with fold_pool.init_fold_prob > 0): per shape, its start
         # folds in the order of the env's (sign-calibrated) direction table.
@@ -563,6 +599,12 @@ def main() -> None:
         players: dict[str, PretrainedPlayer] = {}
 
         def get_player(name):
+            # point-cloud students: distilled (student_*.pth) or RL-trained point-cloud actors (*_pcrl_*)
+            if name not in players and (Path(POLICIES[name][0]).name.startswith("student_")
+                                        or "_pcrl_" in Path(POLICIES[name][0]).name):
+                from isaacsimenvs.distill.student_player import StudentPlayer
+
+                players[name] = StudentPlayer(inner, POLICIES[name][0], device)
             if name not in players:
                 ckpt, _ = POLICIES[name]
                 players[name] = PretrainedPlayer(
@@ -571,6 +613,10 @@ def main() -> None:
                     num_actions=int(inner.cfg.action_space), expl_coef=S.coef,
                 )
             return players[name]
+
+        def stu():
+            """The active player if it is a point-cloud student, else None."""
+            return S.player if getattr(S.player, "is_student", False) else None
 
         # Fold pool: honour the GUI's per-env shape at each reset.
         if pool:
@@ -673,6 +719,32 @@ def main() -> None:
             g_play = server.gui.add_checkbox("playing", True)
             g_step = server.gui.add_button("single step")
             g_speed = server.gui.add_slider("speed (x real time; 4 = as fast as possible)", 0.1, 4.0, 0.1, 1.0)
+
+        with server.gui.add_folder("Point cloud (student policies)"):
+            g_pc_col = server.gui.add_dropdown("colour points by", ["label", "camera"])
+            g_pc_show = {
+                "cloth": server.gui.add_checkbox("cloth points (what the cameras see)", True),
+                "hand": server.gui.add_checkbox("hand points (forward kinematics)", True),
+                "handcam": server.gui.add_checkbox("hand points as the cameras see them (hand_cam)", True),
+                "ref": server.gui.add_checkbox("goal corners / first-frame reference cloud", True),
+            }
+            g_pc_aux = server.gui.add_checkbox("aux head: estimated keypoints + goal", True)
+            g_pc_cams = server.gui.add_checkbox("cameras", True)
+            g_pc_true = server.gui.add_checkbox("true sheet particles (grey)", False)
+            g_opac = server.gui.add_slider("true sheet opacity", 0.05, 1.0, 0.05, 0.4)
+            g_pc_size = server.gui.add_slider("point size [mm]", 1.0, 10.0, 0.5, 4.0)
+            server.gui.add_markdown(
+                "by label: white = cloth, pink / blue = moving / stationary half (gl), black = hand (FK), "
+                "purple = hand seen by the cameras, light pink / light blue = first-frame reference "
+                "moving / stationary (g1), green = goal corners (g0, g3).  \n"
+                "by camera: cyan = camera A, magenta = camera B, grey = no camera.  \n"
+                "aux head: magenta = estimated keypoints, teal = estimated goal, lines go to the truth "
+                "(orange / green, 'show keypoints / targets').")
+        with server.gui.add_folder("Point-cloud noise (student; a change resets all envs)"):
+            g_noise = {k: server.gui.add_checkbox(label, False) for k, label in PC_NOISE_LABELS.items()}
+            g_noise_trained = server.gui.add_button("as the student was trained")
+            g_noise_clean = server.gui.add_button("clean (all off)")
+            g_noise_c = server.gui.add_button("version C (all on)")
 
         g_fold = g_ang = g_ang_rand = g_prob = g_layout = g_pause = None
         if start_tabs is not None:
@@ -818,6 +890,51 @@ def main() -> None:
             g_coef.value = POLICIES[g_pol.value][1]
             S.reset_all = True
 
+        def apply_noise():
+            """Checkboxes -> the active student's point-cloud cfg (per-episode draws: needs a reset)."""
+            pl = stu()
+            if pl is None or S.noise_sync:
+                return
+            if pl.set_noise({k: bool(g.value) for k, g in g_noise.items()}):
+                S.reset_all = True
+
+        def set_noise_gui(values):
+            S.noise_sync = True
+            for k, v in values.items():
+                g_noise[k].value = bool(v)
+            S.noise_sync = False
+            apply_noise()
+
+        def sync_noise_gui():
+            """Show the active student's current noise switches (no change to its cfg)."""
+            pl = stu()
+            if pl is not None:
+                S.noise_sync = True
+                for k, v in pl.noise_state().items():
+                    g_noise[k].value = bool(v)
+                S.noise_sync = False
+
+        for _g in g_noise.values():
+            _g.on_update(lambda _e: apply_noise())
+
+        @g_noise_trained.on_click
+        def _(_e):
+            pl = stu()
+            if pl is not None:
+                set_noise_gui(pl.trained_noise)
+
+        @g_noise_clean.on_click
+        def _(_e):
+            set_noise_gui({k: False for k in g_noise})
+
+        @g_noise_c.on_click
+        def _(_e):
+            set_noise_gui({k: True for k in g_noise})
+
+        @g_opac.on_update
+        def _(_e):
+            S.rebuild = True  # rigid plates carry their opacity from the build
+
         @g_coef.on_update
         def _(_e):
             S.coef = float(g_coef.value)
@@ -908,6 +1025,12 @@ def main() -> None:
         # so drawing must not read S.world: between that write and the next rebuild, world_keys
         # still belong to the previous env (on a one-shape-per-env pool, a shape that env lacks).
         scene_w = [0]
+        pc_nodes: dict[str, object] = {}   # the student's point-cloud layers
+        cam_key = [None]
+
+        def sheet_opacity():
+            """Under a student the true sheet is translucent, so the cloud on and under it shows."""
+            return float(g_opac.value) if stu() is not None and float(g_opac.value) < 0.995 else None
 
         def is_body(s):
             return s.key is not None and (physx or s.key >= 0)
@@ -923,6 +1046,9 @@ def main() -> None:
             root["root"] = server.scene.add_frame("/w", show_axes=False)
             frames.clear()
             clouds.clear()
+            pc_nodes.clear()
+            cam_key[0] = None
+            opac = sheet_opacity()
             w = scene_w[0] = S.world
             o = origins[w]
             mine = shapes_of(w)
@@ -935,6 +1061,7 @@ def main() -> None:
                 server.scene.add_mesh_simple(
                     f"{parent}/s{i}", s.verts, s.faces, color=colour(s),
                     position=pos, wxyz=s.wxyz, side="double" if is_body(s) and "Robot" not in s.label else "front",
+                    opacity=opac if is_body(s) and "Robot" not in s.label and "Table" not in s.label else None,
                 )
             S.rebuild = False
 
@@ -965,7 +1092,7 @@ def main() -> None:
                 for name, t, rgb in (("moving", t_mv, MOVING_RGB), ("stationary", t_st, STATIONARY_RGB)):
                     if len(t):
                         server.scene.add_mesh_simple(f"/w/cloth_{name}", pts.astype(np.float32), t,
-                                                     color=rgb, side="double")
+                                                     color=rgb, side="double", opacity=sheet_opacity())
             if pierce is not None and last_pierce:
                 hit, a, b = last_pierce[0]
                 hit_w = hit[w].cpu().numpy()
@@ -990,6 +1117,96 @@ def main() -> None:
             else:
                 for h in clouds.values():
                     h.visible = False
+            draw_cloud()
+
+        def put_points(name, pts, rgb, size):
+            if len(pts) == 0:
+                if name in pc_nodes:
+                    pc_nodes[name].visible = False
+                return
+            pc_nodes[name] = server.scene.add_point_cloud(
+                f"/w/pc_{name}", np.asarray(pts, np.float32), np.asarray(rgb, np.uint8),
+                point_size=size, point_shape="circle", precision="float32")
+
+        def look_at(pos, target):
+            """wxyz of a camera at ``pos`` (OpenCV axes: +z forward, +y down) looking at ``target``."""
+            import viser.transforms as vtf
+
+            z = (target - pos) / max(float(np.linalg.norm(target - pos)), 1e-9)
+            x = np.cross(z, (0.0, 0.0, 1.0))
+            x = x / max(float(np.linalg.norm(x)), 1e-9)
+            return vtf.SO3.from_matrix(np.stack((x, np.cross(z, x), z), axis=1)).wxyz
+
+        def draw_cloud():
+            """What the active student read at its latest step, in the drawn env."""
+            pl, w = stu(), scene_w[0]
+            if pl is None or pl.last is None or not hasattr(pl.sobs.pc, "last_xyz"):
+                for h in pc_nodes.values():
+                    h.visible = False
+                return
+            pc, o = pl.sobs.pc, origins[w]
+            xyz = pc.last_xyz[w].detach().float().cpu().numpy()          # env frame
+            lab, cam = pc.last_label[w].cpu().numpy(), pc.last_cam[w].cpu().numpy()
+            if getattr(pl, "scene", False):
+                # scene cloud: its own label set -> the legacy indices the colours and groups use
+                # (live -> cloth 0, first-frame reference -> 4 / 5, forward kinematics -> hand 3)
+                to_legacy = {"live": 0, "ref_moving": 4, "ref_stationary": 5, "fk": 3}
+                names = pc.labels or ("live",)
+                lab = np.array([to_legacy[k] for k in names])[lab]
+            ok = pc.last_mask[w].cpu().numpy() & np.isfinite(xyz).all(axis=1)
+            seen_hand = (lab == 6) & (cam >= 0)
+            if g_pc_col.value == "camera":
+                rgb = np.where((cam >= 0)[:, None], PC_CAM_RGB[np.clip(cam, 0, 1)], PC_NO_CAM_RGB)
+            else:
+                rgb = PC_LABEL_RGB[lab].copy()
+                rgb[seen_hand] = PC_HAND_CAM_RGB
+            size = float(g_pc_size.value) * 1e-3
+            groups = {"cloth": lab <= 2, "hand": lab == 3, "handcam": seen_hand,
+                      "ref": (lab == 4) | (lab == 5) | ((lab == 6) & (cam < 0))}
+            for name, sel in groups.items():
+                sel = sel & ok & bool(g_pc_show[name].value)
+                put_points(name, xyz[sel], rgb[sel], size)
+
+            true = inner._particles_w()[w].detach().cpu().numpy() - o if g_pc_true.value else np.zeros((0, 3))
+            put_points("true", true, np.tile((90, 90, 90), (len(true), 1)), 0.003)
+
+            if g_pc_cams.value:
+                pos = pc.cams[w].cpu().numpy()
+                ctr = (pc.centre if pc.centre.dim() == 1 else pc.centre[w]).cpu().numpy()
+                key = (w, pos.round(4).tobytes(), ctr.round(3).tobytes())
+                if cam_key[0] != key:   # the per-episode camera position draw
+                    cam_key[0] = key
+                    for c in range(2):
+                        pc_nodes[f"cam{c}"] = server.scene.add_camera_frustum(
+                            f"/w/pc_cam{c}", fov=0.9, aspect=1.33, scale=0.08,
+                            color=tuple(int(v) for v in PC_CAM_RGB[c]), wxyz=look_at(pos[c], ctr), position=pos[c])
+                        pc_nodes[f"camname{c}"] = server.scene.add_label(
+                            f"/w/pc_cam{c}_name", f"camera {'AB'[c]}", position=pos[c])
+                for c in range(2):
+                    pc_nodes[f"cam{c}"].visible = pc_nodes[f"camname{c}"].visible = True
+            else:
+                for c in range(2):
+                    for nm in (f"cam{c}", f"camname{c}"):
+                        if nm in pc_nodes:
+                            pc_nodes[nm].visible = False
+
+            if g_pc_aux.value and hasattr(inner, "fold_targets_w"):
+                # aux = [keypoints - palm, keypoints - goal] * scale; its error is in the env frame, so
+                # the estimates are the truth moved by it (drawn on the current sheet).
+                d = ((pl.last["aux_pred"][w] - pl.last["aux_true"][w]) / pl.sobs.scale).view(2, -1, 3).cpu().numpy()
+                kp = inner.cloth_keypoints_w()[w].detach().cpu().numpy() - o
+                goal = inner.fold_targets_w()[w].detach().cpu().numpy() - o
+                kp_est, goal_est = kp + d[0], goal + d[0] - d[1]
+                put_points("aux_kp", kp_est, np.tile(PC_AUX_KP_RGB, (len(kp), 1)), 0.006)
+                put_points("aux_goal", goal_est, np.tile(PC_AUX_GOAL_RGB, (len(goal), 1)), 0.006)
+                segs = np.concatenate((np.stack((kp, kp_est), axis=1), np.stack((goal, goal_est), axis=1)))
+                cols = np.concatenate((np.tile(PC_AUX_KP_RGB, (len(kp), 2, 1)), np.tile(PC_AUX_GOAL_RGB, (len(goal), 2, 1))))
+                pc_nodes["aux_lines"] = server.scene.add_line_segments(
+                    "/w/pc_aux_lines", segs.astype(np.float32), cols.astype(np.uint8), thickness=0.002)
+            else:
+                for nm in ("aux_kp", "aux_goal", "aux_lines"):
+                    if nm in pc_nodes:
+                        pc_nodes[nm].visible = False
 
         def hud_text():
             w = S.world
@@ -1016,6 +1233,32 @@ def main() -> None:
                 through = [f"{nm.replace('left_', '')} ({k} steps)" for nm, k in zip(pierce.names, run) if k > 0]
                 lines.append("finger THROUGH cloth: **" + ", ".join(through) + "** (red)" if through
                              else "finger through cloth: none")
+            pl = stu()
+            if pl is not None and pl.last is not None and hasattr(pl.sobs.pc, "last_xyz"):
+                pc = pl.sobs.pc
+                lab, m = pc.last_label[w], pc.last_mask[w]
+                e = ((pl.last["aux_pred"][w] - pl.last["aux_true"][w]) / pl.sobs.scale).view(2, -1, 3)
+                e = e.norm(dim=-1).mean(dim=-1) * 100.0
+                shift = pc.calib_t[w].norm(dim=-1) * 1e3
+                if getattr(pl, "scene", False):
+                    lines += [
+                        f"scene cloud (goal input {pc.cfg.goal_mode}, fk points {pc.cfg.fk_points}): "
+                        f"**{int(pc.last_count[w])} / {pc.cfg.n_points}** live points, "
+                        f"cloth share {float(pc.last_cloth_share[w]) * 100:.0f}%, "
+                        f"{float(pc.last_visible_frac[w]) * 100:.0f}% of the sheet seen",
+                        f"this episode: calibration shift A {float(shift[0]):.0f} mm / B {float(shift[1]):.0f} mm, "
+                        f"depth std {float(pc.depth_std[w]) * 1e3:.1f} mm, drop {float(pc.drop_p[w]) * 100:.0f}%, "
+                        f"cloud {int(pc.lag[w])} steps old, proprio {int(pl.sobs.p_lag[w])} steps old",
+                    ]
+                else:
+                    lines += [
+                        f"point cloud (goal input {pc.cfg.goal_mode}{', hand_cam' if pc.cfg.hand_cam else ''}): "
+                        f"**{int((m & (lab <= 2)).sum())} / {pc.cfg.n_cloth}** cloth points seen, {int(m.sum())} points in all",
+                        f"aux head error: keypoints **{float(e[0]):.1f} cm**, keypoints - goal **{float(e[1]):.1f} cm**",
+                        f"this episode's noise: calibration shift A {float(shift[0]):.0f} mm / B {float(shift[1]):.0f} mm, "
+                        f"depth std {float(pc.depth_std[w]) * 1e3:.1f} mm, drop {float(pc.drop_p[w]) * 100:.0f}%, "
+                        f"fingertip hole {float(pc.tip_r[w]) * 1e3:.0f} mm, capsule margin {float(pc.margin[w]) * 1e3:.0f} mm",
+                    ]
             if rigid and hasattr(inner, "dr_sample"):
                 d = {k: float(v[w]) for k, v in inner.dr_sample.items()}
                 lines.append(
@@ -1030,6 +1273,7 @@ def main() -> None:
         obs, *_ = env.step(torch.zeros((n_env, inner.cfg.action_space), device=device))
         S.player = get_player(S.policy_name)
         active_name = S.policy_name
+        sync_noise_gui()
         t_last, n_steps, t_fps = time.perf_counter(), 0, time.perf_counter()
         t_log = t_sim = t_draw = 0.0
         dt = float(inner.step_dt)
@@ -1052,6 +1296,8 @@ def main() -> None:
             if S.policy_name != active_name:
                 S.player = get_player(S.policy_name)
                 active_name = S.policy_name
+                sync_noise_gui()
+                S.rebuild = True  # the sheet is translucent under a student only
             if rigid and S.physics_dirty:
                 inner._randomize_physics(torch.arange(n_env, device=device))
                 S.physics_dirty = False

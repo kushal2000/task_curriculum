@@ -247,6 +247,7 @@ cloth:
   resolution: 7                          # 49 particles / 72 triangles
   thickness: 0.016                       # SIM1 particle radius 0.008; spacing is 16.7 mm
   proxy_mode: staggered                  # the cable result: lagged shakes deformables loose
+  proxy_relaxation: 1.0                  # cloth->hand force under-relaxation; 1.0 = off (Newton default)
   substeps: 6                            # cloth dt 1/1440 s, matching SIM1; was 2 (1/480)
   vbd_iterations: 12                     # SIM1 lift2 (acone uses 16); was 10, Newton's default
   # A GENUINE drop. The table's collision surface is at table_reset_z + 0.150, not + 0.045, so the

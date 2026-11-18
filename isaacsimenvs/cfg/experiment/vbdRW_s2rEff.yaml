@@ -1,0 +1,8 @@
+# vbdRW_s2rEff (stage 12, run 1): SAPG directly on the VBD cloth (Newton), Flexiv + right Wuji in the real
+# setup's geometry and joint limits, HAND2_DRIVE (S2R) kp/kd with the real hand's torque limit (1.0 A x Kt),
+# no sysid, no DR. Launcher: scripts/cluster/bos14_cloth_vbd_train.sh (sizes and epochs there).
+task: Isaacsimenvs-ClothFlexivWujiRightS2REff-Direct-v0
+
+env:
+  cloth:
+    start_height: 0.20          # 5 cm above the table top (base 5 cm lower than before); see flat7FlexivWujiRHL

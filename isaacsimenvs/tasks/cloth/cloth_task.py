@@ -15,6 +15,8 @@ Kit-free at import (torch and ``isaaclab.utils.math`` only), so both stacks can 
 
 from __future__ import annotations
 
+from math import degrees as math_degrees
+
 import torch
 from isaaclab.utils.math import quat_from_matrix
 
@@ -508,6 +510,138 @@ class ClothTaskMixin:
         task the same relabelled quaternion (see ``physx_envs``).
         """
         return quat_from_matrix(rot)
+
+    # ------------------------------------------------------------------ tracker observation DR
+
+    #: Flexiv + Wuji: wrist point (link7 -> flange -> mount -> wrist) and fingertip ends, in the
+    #: body frames after the importer merges fixed joints (flange / mount / wrist into link7, the
+    #: tip into the distal).
+    _TRACKER_WRIST_OFFSET = (0.003, 0.00025, 0.0955)
+    _TRACKER_FINGERS = ("thumb", "index_finger", "middle_finger", "ring_finger", "pinky")
+    _TRACKER_TIP = {"thumb": (0.0, 0.0, -0.02978)}
+    _TRACKER_TIP_DEFAULT = (0.0, 0.0, -0.02475)
+
+    def _tracker_capsule_spec(self) -> list:
+        """``[(body_a, off_a, body_b, off_b, radius)]``: forearm, wrist, palm fan, finger segments."""
+        c = self.cfg.cloth.tracker
+        regex = str(self.robot_spec.hand_joint_regex)
+        pre = regex[:2] if regex[:2] in ("r_", "l_") else ""
+        z = (0.0, 0.0, 0.0)
+        w = self._TRACKER_WRIST_OFFSET
+        caps = [
+            ("link5", z, "link6", z, c.arm_radius),
+            ("link6", z, "link7", z, c.arm_radius),
+            ("link7", z, "link7", w, c.wrist_radius),
+        ]
+        for f in self._TRACKER_FINGERS:
+            caps.append(("link7", w, f"{pre}{f}_proximal", z, c.palm_radius))
+            caps += [
+                (f"{pre}{f}_proximal_abd", z, f"{pre}{f}_middle", z, c.finger_radius),
+                (f"{pre}{f}_middle", z, f"{pre}{f}_distal", z, c.finger_radius),
+                (f"{pre}{f}_distal", z, f"{pre}{f}_distal", self._TRACKER_TIP.get(f, self._TRACKER_TIP_DEFAULT), c.finger_radius),
+            ]
+        caps.append((f"{pre}index_finger_proximal", z, f"{pre}pinky_proximal", z, c.palm_radius))
+        return caps
+
+    def _init_tracker(self) -> None:
+        from isaacsimenvs.tasks.cloth.utils.cloth_tracker import ClothTracker
+
+        c = self.cfg.cloth.tracker
+        dr = self.cfg.domain_randomization
+        if str(dr.point_dr_mode) != "off" or dr.use_object_state_delay_noise or any(
+            float(v) != 0.0 for v in dr.object_pose_bias_xyz
+        ) or float(dr.object_pose_bias_rot_degrees) > 0.0:
+            raise ValueError("cloth.tracker replaces point_dr_mode and the pose-level object DR; turn those off")
+        if tuple(float(v) for v in dr.object_scale_noise_multiplier_range) != (1.0, 1.0):
+            raise ValueError("cloth.tracker draws its own size factor; keep object_scale_noise_multiplier_range (1, 1)")
+        root = torch.as_tensor(self.cfg.robot_root_pos, dtype=torch.float32)
+        cams = torch.stack((torch.as_tensor(c.cam_a_base) + root, torch.as_tensor(c.cam_b_base) + root))
+        self._tracker = ClothTracker(c, self.num_envs, int(self.cfg.cloth.resolution), cams, self.device)
+        names = list(self.robot.body_names)
+        spec = self._tracker_capsule_spec() if c.hand_occlusion else []
+        missing = sorted({n for a, _, b, _, _ in spec for n in (a, b) if n not in names})
+        if missing:
+            raise ValueError(f"cloth.tracker.hand_occlusion: robot has no bodies {missing} (bodies: {names})")
+        dev = self.device
+        self._tracker_caps = (
+            torch.tensor([names.index(a) for a, *_ in spec], dtype=torch.long, device=dev),
+            torch.tensor([o for _, o, *_ in spec], dtype=torch.float32, device=dev).view(-1, 3),
+            torch.tensor([names.index(b) for _, _, b, _, _ in spec], dtype=torch.long, device=dev),
+            torch.tensor([o for *_, o, _ in spec], dtype=torch.float32, device=dev).view(-1, 3),
+            torch.tensor([r for *_, r in spec], dtype=torch.float32, device=dev),
+        )
+        parts = self._particles_w()[0] - self.scene.env_origins[0]
+        centre = parts.mean(dim=0).cpu()
+        for name, cam in zip("AB", cams):
+            d = centre - cam
+            print(
+                f"[tracker] camera {name} env {[round(float(v), 3) for v in cam]}: "
+                f"{float(d.norm()):.3f} m from the sheet, looking down "
+                f"{math_degrees(float(torch.atan2(-d[2], d[:2].norm()))):.1f} deg",
+                flush=True,
+            )
+        print(
+            f"[tracker] inset {c.inset}, n_min {c.n_min}, spread >= {c.min_spread} m, whole-sheet hold | "
+            f"hand occlusion {c.hand_occlusion} ({len(spec)} capsules, margin {tuple(c.margin_range)}) | "
+            f"reacquire {c.reacquire} (delay {tuple(c.reacquire_delay_s)} s, lost p {tuple(c.lost_prob_range)}) | "
+            f"self occlusion {c.self_occlusion} | noise {tuple(c.noise_std_range)} m, reacquire bias "
+            f"{tuple(c.reacquire_bias_range)} m | calib {tuple(c.calib_xyz)} m / {c.calib_rot_deg} deg | "
+            f"frame every {tuple(c.frame_period_choices)} steps, latency {tuple(c.latency_choices)} | "
+            f"size x{tuple(c.size_scale_range)}",
+            flush=True,
+        )
+
+    def _tracker_rest_grid(self) -> torch.Tensor:
+        """``(N, P, 3)`` each env's TRUE rest grid (per-env size in the pool)."""
+        rest = torch.tensor(self._cloth_rest_local, device=self.device, dtype=torch.float32).unsqueeze(0)
+        xy = getattr(self, "_xy_scale", None)
+        if xy is not None:
+            return rest * torch.stack((xy, xy, torch.ones_like(xy)), dim=-1).unsqueeze(1)
+        return rest.expand(self.num_envs, -1, -1)
+
+    def _tracker_observe(self, start: torch.Tensor):
+        """The tracker's estimate the policy reads now: ``(obj_pos, obj_quat_wxyz, goal_pos,
+        goal_quat, scale)``, env frame, the goal quaternion in the convention ``goal_viz`` reports."""
+        from isaaclab.utils.math import quat_apply
+
+        from isaacsimenvs.tasks.play.utils.point_dr import _mat_to_wxyz
+
+        if getattr(self, "_tracker", None) is None:
+            self._init_tracker()
+        origins = self.scene.env_origins
+        parts = self._particles_w() - origins.unsqueeze(1)
+        rest = self._tracker_rest_grid()
+        caps = (None, None, None)
+        if self.cfg.cloth.tracker.hand_occlusion:
+            ia, oa, ib, ob, rad = self._tracker_caps
+            pos = self.robot.data.body_pos_w
+            quat = self.robot.data.body_quat_w
+            pos = pos.torch if hasattr(pos, "torch") else pos
+            quat = quat.torch if hasattr(quat, "torch") else quat
+            n, cnum = self.num_envs, ia.numel()
+
+            def ends(ids, off):
+                q = quat[:, ids].reshape(-1, 4)
+                return pos[:, ids] + quat_apply(q, off.unsqueeze(0).expand(n, -1, -1).reshape(-1, 3)).view(n, cnum, 3) - origins.unsqueeze(1)
+
+            caps = (ends(ia, oa), ends(ib, ob), rad)
+        r_mv, t_mv, r_st, t_st, scale = self._tracker.step(
+            self.episode_length_buf, start, parts, rest, None, *caps
+        )
+        s_xy = torch.stack((scale, scale, torch.ones_like(scale)), dim=-1).unsqueeze(1)  # (N, 1, 3)
+        corners = rest[:, self._kp_idx_t] * s_xy
+        obj_pos = (torch.einsum("nij,nkj->nki", r_mv, corners) + t_mv.unsqueeze(1)).mean(dim=1)
+        folded = self._kp_folded_rest
+        folded = (folded if folded.dim() == 3 else folded.unsqueeze(0).expand(self.num_envs, -1, -1)) * s_xy
+        goal_pos = (torch.einsum("nij,nkj->nki", r_st, folded) + t_st.unsqueeze(1)).mean(dim=1)
+        flip = torch.eye(3, device=self.device).repeat(self.num_envs, 1, 1)
+        if self.cfg.cloth.fold_axis == "x":
+            flip[:, 0, 0] = -1.0
+        else:
+            flip[:, 1, 1] = -1.0
+        flip[:, 2, 2] = -1.0
+        goal_quat = self._goal_quat_from_matrix(torch.bmm(r_st, flip))
+        return obj_pos, _mat_to_wxyz(r_mv), goal_pos, goal_quat, scale
 
     def _get_rewards(self) -> torch.Tensor:
         """Re-point the inherited Play reward at the fold.

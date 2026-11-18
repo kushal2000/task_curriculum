@@ -1,0 +1,18 @@
+# flat7RW_trkA (stage 13, run A): flat7RW_base + the cloth tracker observation DR without occlusion
+# (cloth.tracker, tasks/cloth/utils/cloth_tracker.py): the real stereo + CoTracker pipeline replayed --
+# 7x7 grid inset 10%, Kabsch per half from fresh points (n_min 4, minor-axis spread >= 2 cm), whole-sheet
+# hold, goal from the stationary half's fit; per-frame noise 0.2-1 mm, re-acquisition offset +-3-5 mm,
+# calibration +-1.5/1.5/1 cm +-2 deg, a frame every 2-4 steps read 2-3 steps later, assumed size x0.95-1.05.
+# Proprio: obs delay 0-3 steps per episode, joint pos / vel noise as flat7RW_obsDR. No action delay.
+base: flat7RW_base
+
+env:
+  cloth:
+    tracker:
+      enabled: true
+  domain_randomization:
+    use_obs_delay: true
+    obs_delay_max: 4
+    delay_mode: per_episode
+    joint_pos_obs_noise_std: 0.005
+    joint_velocity_obs_noise_std: 0.1

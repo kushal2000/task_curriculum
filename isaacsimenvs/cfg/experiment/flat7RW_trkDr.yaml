@@ -1,0 +1,9 @@
+# flat7RW_trkDr (stage 13, run Dr): flat7RW_trkD + re-acquisition failure as flat7RW_trkCr.
+base: flat7RW_trkD
+
+env:
+  cloth:
+    tracker:
+      reacquire: true
+      reacquire_delay_s: [0.0, 0.0]
+      lost_prob_range: [0.0, 0.1]

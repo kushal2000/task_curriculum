@@ -682,11 +682,30 @@ FLEXIV_WUJI_RIGHT_REAL = dataclasses.replace(
     hand_spring_ref={j: v[1] for j, v in _WUJI_RIGHT_SPRING.items()},
 )
 
+# Right-hand drive variants for the 11-11 training set (stage 12). Both keep FLEXIV_WUJI_RIGHT_HUMAN_LIKE's
+# armature, no joint friction and no spring; their overlays use the real-limits URDF.
+#   * _S2R_EFF: HAND2_DRIVE kp/kd (as RIGHT_HUMAN_LIKE) with the real hand's torque limit, 1.0 A x Kt
+#     (FLEXIV_WUJI_RIGHT_REAL's), instead of HAND2_DRIVE's limits.
+#   * _SHARPAGAIN: the Sharpa's kp / kd / URDF torque limit by joint role, as
+#     FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN does for the left hand.
+FLEXIV_WUJI_RIGHT_S2R_EFF = dataclasses.replace(
+    FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
+    name="flexiv_wuji_right_s2r_eff",
+    hand_effort_limit=dict(FLEXIV_WUJI_RIGHT_REAL.hand_effort_limit),
+)
+FLEXIV_WUJI_RIGHT_SHARPAGAIN = dataclasses.replace(
+    FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
+    name="flexiv_wuji_right_sharpagain",
+    hand_stiffness={_right(w): KUKA_SHARPA.hand_stiffness[_WUJI_TO_SHARPA[w]] for w in _WUJI_JOINTS},
+    hand_damping={_right(w): KUKA_SHARPA.hand_damping[_WUJI_TO_SHARPA[w]] for w in _WUJI_JOINTS},
+    hand_effort_limit={_right(w): _SHARPA_URDF_EFFORT[_WUJI_TO_SHARPA[w]] for w in _WUJI_JOINTS},
+)
+
 ROBOT_SPECS: dict[str, RobotSpec] = {
     spec.name: spec for spec in (
         KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_HUMAN_LIKE_S2R, FLEXIV_SHARPA,
         FLEXIV_WUJI_HUMAN_LIKE_SHARPAGAIN, FLEXIV_SHARPA_WUJIGAIN, FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
-        FLEXIV_WUJI_RIGHT_REAL,
+        FLEXIV_WUJI_RIGHT_REAL, FLEXIV_WUJI_RIGHT_S2R_EFF, FLEXIV_WUJI_RIGHT_SHARPAGAIN,
     )
 }
 

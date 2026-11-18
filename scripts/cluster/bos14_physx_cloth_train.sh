@@ -4,6 +4,8 @@
 #   TASK=pool PRIOR=<run>.pth RUN_TAG=box3 sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
 #   TASK=chain VARIANT=box3-mid sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
 #   TASK=pool ENVS=256 EPOCHS=3 RUN_TAG=smoke sbatch --array=0 scripts/cluster/bos14_physx_cloth_train.sh
+#   EXPERIMENT=flat7DRABC TASK=pool RUN_TAG=flat7DRABC sbatch --array=0-2 ...   (recipe: isaacsimenvs/cfg/experiment/)
+#   REPO=<worktree> ROBOT=FlexivWujiHumanLike PRIOR=pretrained_policy/flexiv_wuji.pth ... (another checkout / robot)
 #   PRIORS="<s1>.pth <s2>.pth <s3>.pth" TASK=pool RUN_TAG=ft sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
 #       (finetune: array index k starts from the k-th checkpoint)
 #
@@ -32,12 +34,12 @@
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=100G
 #SBATCH --time=16:00:00
-#SBATCH --exclude=bos14-node-057,bos14-node-062,bos14-node-092
+#SBATCH --exclude=bos14-node-[040,047,051,057,062,086,092,104,105,109,110,112,121,123]
 #SBATCH --output=slurm_logs/%x_%A_%a.out
 #SBATCH --error=slurm_logs/%x_%A_%a.out
 
 set -uo pipefail
-cd /home/yiboc/mit/task_curriculum
+cd "${REPO:-/home/yiboc/mit/task_curriculum}"
 mkdir -p slurm_logs
 
 I="${PX_TASK_ID:-${SLURM_ARRAY_TASK_ID:-0}}"
@@ -55,10 +57,17 @@ if [ -n "${PRIORS:-}" ]; then
     PRIOR="${PRIOR_LIST[$I]:-}"
     [ -n "$PRIOR" ] || { echo "[px_train] PRIORS has no entry for array index $I"; exit 2; }
 fi
-[ -f "$PRIOR" ] || { echo "[px_train] prior not found: $PRIOR"; exit 2; }
+# NO_PRIOR=1: no --checkpoint at all (random initialisation, or a point-cloud actor that takes its
+# start from --pc_init_student in EXTRA_ARGS).
+if [ "${NO_PRIOR:-0}" = 1 ]; then
+    PRIOR=none; CKPT_ARGS=()
+else
+    [ -f "$PRIOR" ] || { echo "[px_train] prior not found: $PRIOR"; exit 2; }
+    CKPT_ARGS=(--checkpoint "$PRIOR" --checkpoint_load_mode "${LOAD_MODE:-weights}")
+fi
 case "$TASK_KIND" in
-    pool)  GYM_TASK=Isaacsimenvs-FoldPoolPhysx-Direct-v0; TASK_ARGS=() ;;
-    chain) GYM_TASK=Isaacsimenvs-RigidClothPhysx-Direct-v0
+    pool)  GYM_TASK=Isaacsimenvs-FoldPoolPhysx${ROBOT:-}-Direct-v0; TASK_ARGS=() ;;
+    chain) GYM_TASK=Isaacsimenvs-RigidClothPhysx${ROBOT:-}-Direct-v0
            TASK_ARGS=("env.rigid_cloth.variant=${VARIANT:-box3-mid}") ;;
     *) echo "TASK must be pool or chain, got $TASK_KIND"; exit 2 ;;
 esac
@@ -71,9 +80,46 @@ if [ "${WANDB:-0}" = 1 ]; then
     WANDB_ARGS=(--wandb_activate --wandb_project fold_pool --wandb_group "px_${RUN_TAG:-run}_${JOB_TAG}" --wandb_name "$NAME")
 fi
 read -r -a EXTRA <<<"${EXTRA_ARGS:-}"
+# EXPERIMENT=<name>: the run recipe in isaacsimenvs/cfg/experiment/<name>.yaml supplies the env count,
+# epochs, minibatch, SAPG block and DR, so the launcher's own size overrides are left out (ENVS / EPOCHS /
+# MINIBATCH are ignored; override through EXTRA_ARGS instead).
+if [ -n "${EXPERIMENT:-}" ]; then
+    RUN_ARGS=(--experiment "$EXPERIMENT")
+else
+    RUN_ARGS=(env.cloth.nan_policy=reset "env.scene.num_envs=${ENVS}" agent.params.config.multi_gpu=False
+              "agent.params.config.minibatch_size=${MINIBATCH}"
+              "agent.params.config.central_value_config.minibatch_size=${MINIBATCH}"
+              "agent.params.config.expl_coef_block_size=${BLOCK}" "agent.params.config.max_epochs=${EPOCHS}"
+              "agent.params.config.best_save_min_interval_s=${BEST_SAVE_S:-60}")
+fi
 
 export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES
-echo "[px_train] task=$GYM_TASK seed=$SEED envs=$ENVS epochs=$EPOCHS minibatch=$MINIBATCH name=$NAME"
+if [ -n "${EXPERIMENT:-}" ]; then
+    # envs / epochs as the run will use them (recipe, then EXTRA_ARGS), for run_record_sync.py's header parse
+    read -r ENVS EPOCHS < <(.venv_isaacsim/bin/python - "$EXPERIMENT" "${EXTRA_ARGS:-}" <<'PY'
+import re, sys, yaml
+from pathlib import Path
+def load(n):
+    e = yaml.safe_load(Path(f"isaacsimenvs/cfg/experiment/{n}.yaml").read_text())
+    b = e.pop("base", None)
+    return merge(load(b), e) if b else e
+def merge(a, o):
+    a = dict(a)
+    for k, v in o.items():
+        a[k] = merge(a[k], v) if isinstance(v, dict) and isinstance(a.get(k), dict) else v
+    return a
+e = load(sys.argv[1])
+envs = e.get("env", {}).get("scene", {}).get("num_envs", "?")
+epochs = e.get("agent", {}).get("params", {}).get("config", {}).get("max_epochs", "?")
+envs = (re.findall(r"env\.scene\.num_envs=(\d+)", sys.argv[2]) or [envs])[-1]
+epochs = (re.findall(r"max_epochs=(\d+)", sys.argv[2]) or [epochs])[-1]
+print(envs, epochs)
+PY
+)
+    echo "[px_train] task=$GYM_TASK seed=$SEED envs=$ENVS epochs=$EPOCHS experiment=$EXPERIMENT name=$NAME"
+else
+    echo "[px_train] task=$GYM_TASK seed=$SEED envs=$ENVS epochs=$EPOCHS minibatch=$MINIBATCH name=$NAME"
+fi
 echo "[px_train] prior=$PRIOR load_mode=${LOAD_MODE:-weights} wandb=${WANDB:-0} extra=${EXTRA_ARGS:-none} ${TASK_ARGS[*]:-}"
 echo "[px_train] host=$(hostname -s) commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain)" && echo YES || echo no)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
@@ -102,19 +148,11 @@ for TRY in $(seq 1 "${PX_TRIES:-3}"); do
         --task "$GYM_TASK" \
         --agent rl_games_sapg_cfg_entry_point \
         --headless \
-        --checkpoint "$PRIOR" \
-        --checkpoint_load_mode "${LOAD_MODE:-weights}" \
+        "${CKPT_ARGS[@]}" \
         --single_variant \
         "${WANDB_ARGS[@]}" \
         "${TASK_ARGS[@]}" \
-        env.cloth.nan_policy=reset \
-        "env.scene.num_envs=${ENVS}" \
-        agent.params.config.multi_gpu=False \
-        "agent.params.config.minibatch_size=${MINIBATCH}" \
-        "agent.params.config.central_value_config.minibatch_size=${MINIBATCH}" \
-        "agent.params.config.expl_coef_block_size=${BLOCK}" \
-        "agent.params.config.max_epochs=${EPOCHS}" \
-        "agent.params.config.best_save_min_interval_s=${BEST_SAVE_S:-60}" \
+        "${RUN_ARGS[@]}" \
         "agent.params.config.name=${NAME}" \
         "agent.params.seed=${SEED}" \
         "${EXTRA[@]}" \

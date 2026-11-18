@@ -286,6 +286,13 @@ def _apply_point_dr(env, points, rest, goal_pos, goal_rot):
     return kp, quat, obs_goal_pos, obs_goal_rot
 
 
+def tracker_on(env) -> bool:
+    """Whether the cloth tracker observation DR (``cloth.tracker.enabled``) drives the object."""
+    cloth = getattr(env.cfg, "cloth", None)
+    tracker = getattr(cloth, "tracker", None)
+    return bool(getattr(tracker, "enabled", False))
+
+
 def _observed_object_and_goal(env, obj_pos, obj_rot, obj_linvel, obj_angvel, obj_kp, goal_pos, goal_rot, kp_offsets):
     """The object and goal as the policy observes them, under one of three regimes.
 
@@ -299,6 +306,13 @@ def _observed_object_and_goal(env, obj_pos, obj_rot, obj_linvel, obj_angvel, obj
     """
     dr = env.cfg.domain_randomization
     obj_vel = torch.cat([obj_linvel, obj_angvel], dim=-1)
+    if tracker_on(env):
+        # The cloth tracker pipeline (tasks/cloth/utils/cloth_tracker.py): the object and goal as
+        # the real stereo + CoTracker pipeline would report them. kp_offsets already carry its size
+        # factor (build_observations).
+        pos, rot, g_pos, g_rot, _ = env._tracker_observe(_episode_start(env))
+        rot = torch.where((rot * obj_rot).sum(dim=-1, keepdim=True) < 0.0, -rot, rot)
+        return _keypoints_world(pos, rot, kp_offsets * _tracker_size_xy(env)), rot, obj_vel, g_pos, g_rot
     if str(dr.point_dr_mode) != "off":
         tracked = getattr(env, "_tracked_points_w", None)
         points = tracked() - env.scene.env_origins.unsqueeze(1) if tracked is not None else obj_kp
@@ -315,6 +329,13 @@ def _observed_object_and_goal(env, obj_pos, obj_rot, obj_linvel, obj_angvel, obj
     pos = pos + env._object_bias_pos
     rot = quat_mul(env._object_bias_quat, rot)
     return _keypoints_world(pos, rot, kp_offsets), rot, vel, goal_pos, goal_rot
+
+
+def _tracker_size_xy(env) -> torch.Tensor:
+    """``(N, 1, 3)``: the tracker's per-env assumed-size factor on x and y, 1 on z (DR-6). Read
+    after the tracker has stepped this step (it is redrawn at episode starts)."""
+    s = env._tracker.scale
+    return torch.stack((s, s, torch.ones_like(s)), dim=-1).unsqueeze(1)
 
 
 def _delay_proprio_fields(env, obs_noisy: dict, obj_kp: torch.Tensor, palm_frame_offset: torch.Tensor) -> None:
@@ -395,13 +416,17 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     goal_pos = env.goal_viz.data.root_pos_w - env_origins
     goal_rot = env.goal_viz.data.root_quat_w  # wxyz
 
-    point_mode = str(dr.point_dr_mode) != "off"
+    tracker = tracker_on(env)
+    point_mode = str(dr.point_dr_mode) != "off" or tracker
     kp_offsets = env._keypoint_offsets * env._object_scale_multiplier.unsqueeze(1)
     obj_kp = _keypoints_world(obj_pos, obj_rot, kp_offsets)
     goal_kp = _keypoints_world(goal_pos, goal_rot, kp_offsets)
     noisy_obj_kp, noisy_obj_rot, noisy_obj_vel, obs_goal_pos, obs_goal_rot = _observed_object_and_goal(
         env, obj_pos, obj_rot, obj_linvel, obj_angvel, obj_kp, goal_pos, goal_rot, kp_offsets
     )
+    # The tracker's assumed sheet size (DR-6) scales what the POLICY sees: its keypoint offsets and
+    # object_scales (x, y). Read after the tracker stepped (inside _observed_object_and_goal).
+    kp_offsets_obs = kp_offsets * _tracker_size_xy(env) if tracker else kp_offsets
 
     # Optional per-env yaw noise on the observed goal (world +Z about goal_pos).
     goal_yaw_obs_noise = getattr(env, "goal_yaw_obs_noise", None)
@@ -412,7 +437,7 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         obs_goal_rot = quat_mul(quat_from_angle_axis(goal_yaw_obs_noise, z_axis), obs_goal_rot)
         noisy_goal_kp = _keypoints_world(obs_goal_pos, obs_goal_rot, kp_offsets)
     elif point_mode:
-        noisy_goal_kp = _keypoints_world(obs_goal_pos, obs_goal_rot, kp_offsets)
+        noisy_goal_kp = _keypoints_world(obs_goal_pos, obs_goal_rot, kp_offsets_obs)
     else:
         noisy_goal_kp = goal_kp
 
@@ -458,6 +483,8 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     obs_noisy["object_vel"] = noisy_obj_vel
     obs_noisy["keypoints_rel_palm"] = keypoints_rel_palm_noisy
     obs_noisy["keypoints_rel_goal"] = keypoints_rel_goal_noisy
+    if tracker:
+        obs_noisy["object_scales"] = object_scales_obs * _tracker_size_xy(env).squeeze(1)
     if dr.joint_velocity_obs_noise_std > 0:
         obs_noisy["joint_vel"] = (
             joint_vel + torch.randn_like(joint_vel) * dr.joint_velocity_obs_noise_std

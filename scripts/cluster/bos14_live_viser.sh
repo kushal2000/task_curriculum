@@ -23,7 +23,7 @@
 #SBATCH --error=slurm_logs/%x_%j.out
 
 set -uo pipefail
-cd /home/yiboc/mit/task_curriculum
+cd "${REPO:-/home/yiboc/mit/task_curriculum}"
 mkdir -p slurm_logs
 PORT="${PORT:-8080}"
 export PYTHONUNBUFFERED=1
@@ -34,7 +34,7 @@ TASK="${TASK:-Isaacsimenvs-FoldPool-Direct-v0}"
 # Rigid manipulands need the evaluation-sized contact buffer; the VBD cloth keeps its default
 # (the big one only slows it down). Switching task from the browser applies the same rule.
 BUF=()
-[ "$TASK" != Isaacsimenvs-Cloth-Direct-v0 ] && BUF=("env.newton.per_env_triangle_pairs=2097152")
+[[ "$TASK" != Isaacsimenvs-Cloth*-Direct-v0 ]] && BUF=("env.newton.per_env_triangle_pairs=2097152")
 exec scripts/newton_py -m isaacsimenvs.eval.live_viser \
     --task "$TASK" \
     --num_envs "${ENVS:-8}" \

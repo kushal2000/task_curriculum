@@ -1293,7 +1293,46 @@ def _convert_urdf_to_usd(
 
 
 
-def _apply_self_collision_filters(usd_path: str, pairs: dict[str, tuple[str, ...]]) -> int:
+def _self_collision_keep(env):
+    """``cfg.robot_self_collision_scope`` as a predicate over two body names (None = keep all).
+
+    "all": everything collides except the spec's filter (SimToolReal). "hand": only pairs of hand
+    bodies (palm + finger segments); the arm's links do not collide with anything of the robot.
+    "tips": only the distal / middle segments of different fingers, and the thumb's distal / middle
+    against the palm -- the pairs a policy trained without self-collision pushes through each other.
+    """
+    import re
+
+    scope = str(getattr(env.cfg, "robot_self_collision_scope", "all"))
+    if scope == "all":
+        return None
+    spec = env.robot_spec
+    seg = {k: re.compile(v) for k, v in spec.finger_segment_regex.items()}
+    palm = {spec.palm_body_name, *spec.palm_side_link_names}
+
+    def is_hand(b):
+        return b in palm or any(r.fullmatch(b) for r in seg.values())
+
+    def tip_finger(b):  # finger name of a distal / middle segment, else None
+        for k in ("distal", "middle"):
+            m = seg[k].fullmatch(b)
+            if m:
+                return m.group(1) if m.groups() else b
+        return None
+
+    if scope == "hand":
+        return lambda a, b: is_hand(a) and is_hand(b)
+    if scope == "tips":
+        def keep(a, b):
+            fa, fb = tip_finger(a), tip_finger(b)
+            if fa is not None and fb is not None:
+                return fa != fb
+            return (fa is not None and "thumb" in fa and b in palm) or (fb is not None and "thumb" in fb and a in palm)
+        return keep
+    raise ValueError(f"robot_self_collision_scope {scope!r}: expected all / hand / tips")
+
+
+def _apply_self_collision_filters(usd_path: str, pairs: dict[str, tuple[str, ...]], keep=None) -> int:
     """Author ``FilteredPairsAPI`` on the robot's bodies so ``pairs`` (``RobotSpec.
     self_collision_filter``) do not collide with each other; returns how many were authored.
 
@@ -1334,10 +1373,28 @@ def _apply_self_collision_filters(usd_path: str, pairs: dict[str, tuple[str, ...
                 rel.AddTarget(path)
                 existing.add(path)
                 authored += 1
+    kept = []
+    if keep is not None:
+        # Filter every remaining pair the scope does not keep.
+        names = sorted(body_by_name)
+        for i, a in enumerate(names):
+            rel = UsdPhysics.FilteredPairsAPI.Apply(body_by_name[a]).CreateFilteredPairsRel()
+            existing = set(rel.GetTargets())
+            for b in names[i + 1:]:
+                if keep(a, b):
+                    if body_by_name[b].GetPath() not in existing and b not in pairs.get(a, ()) and a not in pairs.get(b, ()):
+                        kept.append((a, b))
+                    continue
+                path = body_by_name[b].GetPath()
+                if path not in existing:
+                    rel.AddTarget(path)
+                    existing.add(path)
+                    authored += 1
     stage.GetRootLayer().Save()
     print(
         f"[scene_utils] self-collision: filtered {authored} link pairs "
-        f"across {len(body_by_name)} robot bodies in {edit_usd_path.name}",
+        f"across {len(body_by_name)} robot bodies in {edit_usd_path.name}"
+        + (f"; scope keeps {len(kept)} body pairs, e.g. {kept[:6]}" if keep is not None else ""),
         flush=True,
     )
     return authored
@@ -1612,7 +1669,8 @@ def setup_scene(env) -> None:
         joint_drive=_robot_joint_drive_cfg(),
     )
     if self_collision:
-        _apply_self_collision_filters(robot_converted_usd, env.robot_spec.self_collision_filter)
+        _apply_self_collision_filters(robot_converted_usd, env.robot_spec.self_collision_filter,
+                                      keep=_self_collision_keep(env))
     robot_usd_path = _bake_usd(
         robot_converted_usd,
         bake_root, "robot",

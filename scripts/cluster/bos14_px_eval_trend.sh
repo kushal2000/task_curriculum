@@ -14,21 +14,25 @@
 # Index = line*2 + start (0 = pinned, 1 = randomised).
 # Output: docs/results/px_matrix/<tag>_s<seed>__on_vbd__<pinned|rand>__<4cm|1p5cm>_s<es>.json, the
 # matrix's naming, so px_eval_matrix_summary.py and px_eval_fold_steps.py read it as is.
+# EVAL_SEEDS (default "1 2"): eval seeds per cell, 32 episodes each; a re-test of a picked checkpoint should
+# use fresh seeds (e.g. "3 4 5 6 7 8") so the pick's lucky seeds 1-2 don't count again.
+# EVAL_EXTRA: extra hydra overrides for every episode run, e.g. "env.obs.exact_cloth_keypoints=true".
+# REPO / ROBOT: another checkout, and the robot suffix of the task id (e.g. FlexivWujiHumanLike).
 
 #SBATCH --job-name=px_trend
-#SBATCH --partition=gpu_a100
-#SBATCH --gres=gpu:rtxpro6000:1
+#SBATCH --partition=gpu_a100,gpu_5090
+#SBATCH --gres=gpu:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=80G
 #SBATCH --time=01:30:00
-#SBATCH --exclude=bos14-node-057,bos14-node-062,bos14-node-092
+#SBATCH --exclude=bos14-node-057,bos14-node-062,bos14-node-086,bos14-node-092
 #SBATCH --output=slurm_logs/%x_%A_%a.out
 #SBATCH --error=slurm_logs/%x_%A_%a.out
 
 set -uo pipefail
-cd /home/yiboc/mit/task_curriculum
+cd "${REPO:-/home/yiboc/mit/task_curriculum}"
 : "${LIST:?set LIST to the checkpoint list file}"
 OUTDIR="${OUTDIR:-docs/results/px_matrix}"
 mkdir -p slurm_logs "$OUTDIR"
@@ -44,15 +48,16 @@ export PYTHONUNBUFFERED=1
 echo "[px_trend] $TAG s$SEED vbd/$START ckpt=$CKPT host=$(hostname -s) commit=$(git rev-parse --short HEAD)"
 for CUT in 0.04 0.015; do
     [ "$CUT" = 0.04 ] && CT=4cm || CT=1p5cm
-    for ES in 1 2; do
+    for ES in ${EVAL_SEEDS:-1 2}; do
         OUT="$OUTDIR/${TAG}_s${SEED}__on_vbd__${START}__${CT}_s${ES}.json"
         [ -s "$OUT" ] && { echo "[px_trend] exists: $OUT"; continue; }
-        scripts/newton_py -m isaacsimenvs.eval.episodes --task Isaacsimenvs-Cloth-Direct-v0 \
+        scripts/newton_py -m isaacsimenvs.eval.episodes --task "Isaacsimenvs-Cloth${ROBOT:-}-Direct-v0" \
             --checkpoint "$CKPT" --policy_config pretrained_policy/config.yaml \
             --sapg_expl_coef 0 --num_envs 32 --max_steps 900 --success_tolerance 0.01 \
             --num_assets_per_type 1 --single_variant "${SARGS[@]}" --seed "$ES" --out "$OUT" \
             "env.cloth.keypoint_tolerance=$CUT" env.cloth.nan_policy=reset \
             env.termination.success_steps=10 \
+            ${EVAL_EXTRA:-} \
             || echo "[px_trend] $OUT FAILED"
     done
 done

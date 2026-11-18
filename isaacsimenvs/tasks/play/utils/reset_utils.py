@@ -279,6 +279,9 @@ def _init_point_dr(env) -> None:
     mode = str(dr.point_dr_mode)
     if mode not in MODES:
         raise ValueError(f"domain_randomization.point_dr_mode must be one of {MODES}, got {mode!r}")
+    # The proprio-only delay line is also used by the cloth tracker DR (cloth.tracker), which leaves
+    # point_dr_mode off.
+    env._proprio_queue = None
     if mode == "off":
         return
     pose_dr = (

@@ -1,0 +1,7 @@
+# vbdRW_sharpa (stage 12, run 2): as vbdRW_s2rEff with the Sharpa's hand drive (kp / kd / torque limit by
+# joint role) on the right Wuji; no DR.
+task: Isaacsimenvs-ClothFlexivWujiRightSharpaGain-Direct-v0
+
+env:
+  cloth:
+    start_height: 0.20

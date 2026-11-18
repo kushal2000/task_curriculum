@@ -599,6 +599,10 @@ class PlayEnvCfg(DirectRLEnvCfg):
     # setup. Off here, where this port has always run (docs/phase1_baseline.md), so the Kuka eval
     # and the tasks built on Play are unchanged; the tasks that train from scratch turn it on.
     robot_self_collision: bool = False
+    # Which robot pairs self-collision checks when it is on: "all" (above), "hand" (palm + finger
+    # segments only, no arm links) or "tips" (distal / middle of different fingers + thumb vs palm);
+    # scene_utils._self_collision_keep. MJWarp (Newton) is ~26x slower with "all" on the Flexiv.
+    robot_self_collision_scope: str = "all"
     # Robot base position in the env frame. Play's (0, 0.8, 0) puts the table where SimToolReal has
     # it; a robot overlay moves the base to put the table where a real setup has it (relative to the
     # robot) without moving the table and what sits on it. The observed palm_pos is expressed as if

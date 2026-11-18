@@ -1,0 +1,9 @@
+# flat7RW_trkC (stage 13, run C): flat7RW_trkB + hand occlusion (camera positions +-5 cm per episode;
+# forearm / wrist / palm / finger capsules inflated 0-1.5 cm). Geometric occlusion only: a point is fresh
+# again at the first frame it is uncovered (no re-acquisition failure; that is flat7RW_trkCr).
+base: flat7RW_trkB
+
+env:
+  cloth:
+    tracker:
+      hand_occlusion: true

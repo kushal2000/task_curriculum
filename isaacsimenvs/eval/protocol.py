@@ -30,6 +30,9 @@ def disable_randomization(cfg) -> None:
     dr.robot_stiffness_scale_range = (1.0, 1.0)
     dr.robot_damping_scale_range = (1.0, 1.0)
     dr.point_dr_mode = "off"
+    tracker = getattr(getattr(cfg, "cloth", None), "tracker", None)
+    if tracker is not None:
+        tracker.enabled = False  # the cloth tracker obs DR (cloth.tracker): true observation in eval
     dr.hand_friction_scale_range = (1.0, 1.0)
     dr.hand_effort_limit_scale_range = (1.0, 1.0)
     dr.force_scale = 0.0

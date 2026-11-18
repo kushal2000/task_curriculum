@@ -13,6 +13,8 @@ from __future__ import annotations
 # before the compat shim has run.
 from isaaclab.utils.configclass import configclass
 
+from .cloth_tracker_cfg import ClothTrackerCfg
+
 __all__ = ["ClothCfg"]
 
 
@@ -258,6 +260,18 @@ class ClothCfg:
 
     collide_interval: int = 1
 
+    proxy_relaxation: float = 1.0
+    """Under-relaxation of the cloth -> hand feedback force: applied = r * new + (1 - r) * previous.
+    1.0 is off (Newton's default). The exchange is explicit, so light fingers (Wuji armature
+    2-5e-4) overshoot and chatter on contact; r < 1 damps that. With ``coupler_iterations`` 1 the
+    Aitken mode is identical to fixed (its state resets every coupled step)."""
+
+    proxy_relaxation_mode: str = "fixed"
+    """``fixed`` or ``aitken`` (adaptive per coupled step; needs ``coupler_iterations`` > 1)."""
+
+    proxy_relaxation_min: float = 0.1
+    """Aitken lower bound."""
+
     use_cuda_graph: bool = False
     """Capture the coupled MJWarp + VBD step as a CUDA graph. Off by default because every result so
     far was produced without it (inherited from the cable, whose reason -- entries stepping at
@@ -388,6 +402,9 @@ class ClothCfg:
     non-finite can reach the network or the gradient, and are terminated so they reset through the
     normal path. Over a multi-hour run on 4 GPUs a single diverged env would otherwise kill
     everything; the failure has been seen roughly once per three 900-step evals."""
+
+    tracker: ClothTrackerCfg = ClothTrackerCfg()
+    """Observation DR replaying the real CoTracker pipeline (``utils/cloth_tracker.py``)."""
 
     # --- buffers ---------------------------------------------------------------------------
     rigid_body_particle_contact_buffer_size: int = 65536
@@ -624,6 +641,16 @@ class ClothCfg:
                 soft_contact_mu=self.soft_contact_mu,
             ),
         )
+
+        # `CouplerProxyMappingCfg` does not declare the relaxation fields, but the coupler builds
+        # `SolverCoupledProxy.Proxy(**vars(cfg))`, so instance attributes reach Newton -- the same
+        # pass-through as the VBD arguments above. Set them on `solver.proxies`, NOT on the object
+        # passed in: `CouplerProxyCfg` copies its list on construction, so an attribute set on the
+        # original never reaches the solver (that is how the first wiring of this read 1.0).
+        for proxy_mapping in solver.proxies:
+            proxy_mapping.proxy_relaxation = float(self.proxy_relaxation)
+            proxy_mapping.proxy_relaxation_mode = str(self.proxy_relaxation_mode)
+            proxy_mapping.proxy_relaxation_min = min(float(self.proxy_relaxation_min), float(self.proxy_relaxation))
 
         return NewtonCfg(
             solver_cfg=solver,

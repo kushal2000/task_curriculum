@@ -141,6 +141,17 @@ def main() -> None:
     )
     parser.add_argument("--rl_device", default="cuda:0")
     parser.add_argument("--sim_device", default="cuda:0")
+    # --- Point-cloud actor (isaacsimenvs/distill/pc_rl.py) ---
+    parser.add_argument(
+        "--pc_args",
+        default=None,
+        help="JSON: train the point-cloud student as the actor. Keys as distill_pc's pc_args: cloud, goal, "
+        "noise, n_points, fk_points, ref_step, pc_delay, proprio_delay, action_delay.",
+    )
+    parser.add_argument("--pc_init_student", default=None, help="Start the actor from this distilled student (.pth)")
+    parser.add_argument("--pc_init_sigma", default=None, help="Take the exploration sigma of this state-policy checkpoint")
+    parser.add_argument("--pc_freeze_norm", action="store_true", help="Keep the proprio normaliser fixed")
+    parser.add_argument("--critic_checkpoint", default=None, help="Start the central value network from this full checkpoint")
     # --- Video ---
     parser.add_argument("--capture_video", action="store_true", help="Attach recording camera; implies --enable_cameras")
     parser.add_argument("--video_interval", type=int, default=10)
@@ -278,11 +289,47 @@ def main() -> None:
         # (~400 GB at 24576 envs) and OOM'd the slurm cgroup. The Lab-
         # canonical pattern is render_mode + gym.wrappers.RecordVideo (see
         # IsaacLab tests/test_record_video.py).
+        if args_cli.pc_args:
+            import json as _json
+
+            _delay = int(_json.loads(args_cli.pc_args).get("action_delay", 0))
+            if _delay > 0:
+                _dr = env_cfg.domain_randomization
+                _dr.use_action_delay, _dr.action_delay_max, _dr.delay_mode = True, _delay, "per_episode"
         env = gym.make(
             args_cli.task,
             cfg=env_cfg,
             render_mode="rgb_array" if args_cli.capture_video else None,
         )
+
+        if args_cli.pc_args:
+            import json
+
+            from isaacsimenvs.distill import pc_rl
+            from isaacsimenvs.distill.distill_pc import StudentObs
+            from isaacsimenvs.tasks.cloth.utils.scene_pointcloud import SceneCloudCfg, scene_noise_preset
+
+            pc_args = {"cloud": "scene", "goal": "none", "noise": False, "n_points": 1024, "fk_points": 0,
+                       "ref_step": 0, "pc_delay": 0, "proprio_delay": 0, "action_delay": 0,
+                       **json.loads(args_cli.pc_args)}
+            if pc_args["cloud"] != "scene":
+                raise ValueError("--pc_args: only the scene cloud is supported")
+            pc_cfg = SceneCloudCfg(n_points=int(pc_args["n_points"]), goal_mode=pc_args["goal"],
+                                   ref_step=int(pc_args["ref_step"]), fk_points=int(pc_args["fk_points"]))
+            if pc_args["noise"]:
+                scene_noise_preset(pc_cfg)
+            pc_cfg.delay_max = int(pc_args["pc_delay"])
+            inner = env.unwrapped
+            layout = pc_rl.attach_student_obs(inner, StudentObs(inner, pc_cfg, proprio_delay=int(pc_args["proprio_delay"])))
+            pc_rl.register_network()
+            net = agent_cfg["params"]["network"]
+            net["name"] = "pc_actor_critic"
+            net["pc"] = {**layout, "init_student": args_cli.pc_init_student, "init_sigma": args_cli.pc_init_sigma,
+                         "freeze_norm": bool(args_cli.pc_freeze_norm)}
+            agent_cfg["params"]["config"]["normalize_input"] = False     # the network normalises the proprio part
+            if is_main_rank:
+                pc_rl.write_pc_args(hydra_run_dir, pc_args, layout, args_cli.pc_init_sigma)
+            print(f"[train] point-cloud actor: {pc_args}, obs {inner.cfg.observation_space} columns", flush=True)
 
         if args_cli.capture_video:
             from pathlib import Path
@@ -372,6 +419,26 @@ def main() -> None:
             )
             observers.append(WandbAlgoObserver(wandb_cfg))
 
+        if args_cli.critic_checkpoint:
+            # Start the central value network (and its normalisers) from another run's FULL checkpoint,
+            # after rl_games' own restore. Patched in here rather than in rl_games.
+            import rl_games.torch_runner as _tr
+
+            _restore = _tr._restore
+
+            def _restore_with_critic(agent, args):
+                _restore(agent, args)
+                weights = _tr._load_checkpoint_weights(agent, args_cli.critic_checkpoint)
+                if "assymetric_vf_nets" not in weights:
+                    raise ValueError(f"{args_cli.critic_checkpoint} has no central value network (a snap_* file?)")
+                agent.central_value_net.load_state_dict(weights["assymetric_vf_nets"])
+                print(f"[train] central value network <- {args_cli.critic_checkpoint}", flush=True)
+
+            _tr._restore = _restore_with_critic
+
+        if args_cli.pc_args:
+            pc_rl.patch_gradient_step()
+
         runner = Runner(MultiObserver(observers))
         # Co-locate rl_games artifacts (checkpoints, summaries) with the Hydra
         # run dir so slurm logs + config + videos all live together.
@@ -381,14 +448,24 @@ def main() -> None:
 
         runner.load(agent_cfg)
         runner.reset()
-        runner.run(
-            {
-                "train": not args_cli.test,
-                "play": args_cli.test,
-                "checkpoint": args_cli.checkpoint,
-                "checkpoint_load_mode": args_cli.checkpoint_load_mode,
-            }
-        )
+        _run_args = {
+            "train": not args_cli.test,
+            "play": args_cli.test,
+            "checkpoint": args_cli.checkpoint,
+            "checkpoint_load_mode": args_cli.checkpoint_load_mode,
+        }
+        if os.getenv("PC_PROFILE"):          # cProfile of the whole run (set CUDA_LAUNCH_BLOCKING=1 with it)
+            import cProfile
+            import pstats
+
+            _prof = cProfile.Profile()
+            try:
+                _prof.runcall(runner.run, _run_args)
+            finally:
+                _prof.dump_stats(os.getenv("PC_PROFILE"))
+                pstats.Stats(os.getenv("PC_PROFILE")).sort_stats("cumulative").print_stats(70)
+        else:
+            runner.run(_run_args)
 
     run()
 

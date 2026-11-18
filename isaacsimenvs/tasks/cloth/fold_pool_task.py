@@ -600,6 +600,10 @@ class FoldPoolTaskMixin:
         final["fold_steps"] = entered.float() * length
         final["fold_flat_start"] = flat_fold.float()
         final["fold_steps_flat_start"] = flat_fold.float() * length
+        if getattr(self, "_tracker", None) is not None:
+            # Cloth tracker DR: per-episode frozen share of camera frames, fresh share per half,
+            # covered share by the hand and by the cloth itself.
+            final.update(self._tracker.episode_stats())
         return reward
 
     # ------------------------------------------------------------------ startup proofs
