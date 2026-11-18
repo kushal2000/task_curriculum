@@ -70,16 +70,20 @@ def main() -> None:
 
     server.gui.add_markdown(f"**{b.task}**  \n`{args.checkpoint.name}`"
                             + (f"  \noverrides: `{' '.join(args.overrides)}`" if args.overrides else ""))
+    playback = server.gui.add_button_group("Playback", ("Play", "Pause"))
+    step_button = server.gui.add_button("Single step", hint="Advance one policy step while paused")
     env_menu = server.gui.add_dropdown("Drawn env", tuple(label(e) for e in range(n)), initial_value=label(0))
-    running = server.gui.add_checkbox("Run", initial_value=True)
-    step_button = server.gui.add_button("Single step")
     reset_button = server.gui.add_button("Reset all envs")
     speed = server.gui.add_slider("Playback speed", min=0.1, max=4.0, step=0.1, initial_value=1.0)
     status = server.gui.add_markdown("")
     tally = server.gui.add_markdown("")
 
     lock = threading.Lock()
-    requests = {"step": 0, "reset": False}
+    requests = {"step": 0, "reset": False, "playing": True}
+
+    @playback.on_click
+    def _playback(event) -> None:
+        requests["playing"] = event.target.value == "Play"
     step_button.on_click(lambda _: requests.__setitem__("step", requests["step"] + 1))
     reset_button.on_click(lambda _: requests.__setitem__("reset", True))
 
@@ -146,7 +150,7 @@ def main() -> None:
             if requests["reset"]:
                 requests["reset"] = False
                 reset_all()
-            stepping = running.value or requests["step"] > 0
+            stepping = requests["playing"] or requests["step"] > 0
             if stepping:
                 requests["step"] = max(0, requests["step"] - 1)
                 obs, _, terminated, truncated, extras = env.step(b.act(obs))
@@ -167,7 +171,7 @@ def main() -> None:
             with lock:
                 update_poses(w)
             fold_err = float(inner.fold_error()[w])
-            status.content = (f"**{label(w)}**  \nepisode step {episode_step[w]} / {int(inner.max_episode_length)}  \n"
+            status.content = (("▶ playing" if requests["playing"] else "⏸ paused") + f"  \n**{label(w)}**  \nepisode step {episode_step[w]} / {int(inner.max_episode_length)}  \n"
                               f"fold error {fold_err * 1000:.1f} mm (fold < "
                               f"{inner.cfg.task.keypoint_tolerance * 1000:.0f} mm)  \nlast episode: {last_outcome[w]}")
             total = int(episodes.sum())
