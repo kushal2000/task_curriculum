@@ -28,8 +28,8 @@ TABLE_RGB = (96, 112, 138)
 CLOTH_RGB = (242, 120, 60)
 KEYPOINT_RGB = (255, 165, 25)
 TARGET_RGB = (40, 200, 90)
-# Top-face point cloud (obs.num_points > 0): samples on the stationary / moving half, and goals.
-POINT_RGB = {False: (60, 120, 230), True: (230, 60, 160)}
+# Top-face point cloud (obs.num_points > 0): samples and their goals.
+POINT_RGB = (60, 120, 230)
 POINT_GOAL_RGB = (40, 200, 90)
 
 
@@ -80,7 +80,7 @@ def main() -> None:
     speed = server.gui.add_slider("Playback speed", min=0.1, max=4.0, step=0.1, initial_value=1.0)
     has_points = inner.surface_points_w() is not None
     show_points = server.gui.add_checkbox("Show point cloud", initial_value=True, disabled=not has_points,
-                                          hint="Top-face samples (blue stationary, pink moving) and goals (green)"
+                                          hint="Top-face samples (blue) and goals (green)"
                                           if has_points else "Off: run with obs.num_points=64 to sample one")
     status = server.gui.add_markdown("")
     tally = server.gui.add_markdown("")
@@ -115,7 +115,7 @@ def main() -> None:
                     "/targets", points=np.zeros((1, 3)), colors=TARGET_RGB, point_size=0.012)
             if has_points and drawn["points"] is None:
                 drawn["points"] = server.scene.add_point_cloud(
-                    "/cloud/points", points=np.zeros((1, 3)), colors=POINT_RGB[False], point_size=0.005)
+                    "/cloud/points", points=np.zeros((1, 3)), colors=POINT_RGB, point_size=0.005)
                 drawn["goals"] = server.scene.add_point_cloud(
                     "/cloud/goals", points=np.zeros((1, 3)), colors=POINT_GOAL_RGB, point_size=0.005)
             drawn["env"] = w
@@ -129,9 +129,7 @@ def main() -> None:
         drawn["keypoints"].points = (inner.cloth_keypoints_w()[w].cpu().numpy() - origins[w]).astype(np.float32)
         drawn["targets"].points = (inner.fold_targets_w()[w].cpu().numpy() - origins[w]).astype(np.float32)
         if has_points:
-            moving = inner.backend.surface.moving[w].cpu().numpy()
             drawn["points"].points = (inner.surface_points_w()[w].cpu().numpy() - origins[w]).astype(np.float32)
-            drawn["points"].colors = np.array([POINT_RGB[bool(m)] for m in moving], dtype=np.uint8)
             drawn["goals"].points = (inner.point_goals_w()[w].cpu().numpy() - origins[w]).astype(np.float32)
             drawn["points"].visible = drawn["goals"].visible = show_points.value
 
