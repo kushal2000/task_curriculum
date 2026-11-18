@@ -13,7 +13,7 @@ from __future__ import annotations
 # time, and Isaac Lab 3.0 renamed that keyword to `physics`, so importing it before the compat
 # shim is installed raises at import. The shim also re-asserts `isaaclab.utils.configclass` as a
 # function after `isaaclab_physx` shadows it with its same-named submodule.
-from isaacsimenvs.newton import compat  # isort: skip
+from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat  # isort: skip
 
 compat.install_isaaclab3_compat()
 

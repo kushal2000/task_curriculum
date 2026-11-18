@@ -1,15 +1,14 @@
 """Task registry for isaacsimenvs.
 
-Each task subpackage registers itself with gymnasium on import (side effect
-in its ``__init__.py``). Importing ``isaacsimenvs`` (or any child) is enough
-to expose all task ids to ``gym.make`` / ``gym.spec``.
+Each task subpackage registers itself with gymnasium on import (side effect in its
+``__init__.py``). Importing ``isaacsimenvs`` (or any child) is enough to expose all task ids to
+``gym.make`` / ``gym.spec``.
 
-``play`` is the play2perfect rigid-object pretraining env (PhysX); ``play_newton`` is its
-Newton port, the base class of the VBD cloth env.
+``play`` is the play2perfect rigid-object pretraining env (PhysX); ``cloth`` the fold task on a VBD
+sheet (Newton) or on the fold-shape pool of hinged plates (PhysX).
 """
 
-from . import cloth              # gym.register("Isaacsimenvs-Cloth-Direct-v0", ...)
-from . import play               # gym.register("Isaacsimenvs-Play-Direct-v0" / "-PlayFlexivWuji-" / ...)
-from . import play_newton        # gym.register("Isaacsimenvs-PlayNewton-Direct-v0", ...)
+from . import cloth  # gym.register("Isaacsimenvs-Cloth-Direct-v0" / "-RigidCloth-" / aliases)
+from . import play   # gym.register("Isaacsimenvs-Play-Direct-v0" / "-PlayFlexivWuji-" / ...)
 
-__all__ = ["cloth", "play", "play_newton"]
+__all__ = ["cloth", "play"]

@@ -417,7 +417,7 @@ def main() -> None:
         all_ids = torch.arange(n, device=device)
         obs, _ = env.reset()
         if not train and not args.allow_overflow:
-            from isaacsimenvs.newton.contact_guard import assert_no_buffer_overflow
+            from isaacsimenvs.eval.contact_guard import assert_no_buffer_overflow
 
             assert_no_buffer_overflow(env)
             env.reset()
@@ -444,7 +444,7 @@ def main() -> None:
         if not train:
             capture = capture_cm = None
             if not args.allow_overflow:
-                from isaacsimenvs.newton.contact_guard import capture_fd_output, raise_if_overflowed
+                from isaacsimenvs.eval.contact_guard import capture_fd_output, raise_if_overflowed
 
                 capture_cm = capture_fd_output()
                 capture = capture_cm.__enter__()

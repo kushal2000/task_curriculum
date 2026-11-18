@@ -6,7 +6,7 @@ that 2.x did implicitly, and the physics properties 3.0 accepts and then ignores
 
 Each section keeps the finding that motivated it, because several of these look like arbitrary
 compatibility shims until you know what they cost to discover. Which patches a given backend
-applies is decided in :mod:`isaacsimenvs.tasks.play_newton.play_newton_env_cfg` -- deliberately not here, so that a
+applies is decided in :mod:`isaacsimenvs.tasks.cloth.backends.vbd.play_newton_cfg` -- deliberately not here, so that a
 patch written for one solver cannot leak into another.
 
 Sections in application order:
@@ -131,7 +131,7 @@ def install_multi_asset(num_envs: int, *, prototypes_only: bool = True) -> None:
         num_envs: environment count; must match ``cfg.scene.num_envs``.
         prototypes_only: spawn one prim per *variant* (True) or one per *environment* (False).
     """
-    from isaacsimenvs.newton import compat
+    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
 
     scene_utils = compat.play_module("scene_utils")
     if getattr(scene_utils, "_multi_asset_patch_installed", False):
@@ -534,7 +534,7 @@ def _wrap(fn, quat_arg_positions: tuple[int, ...], returns_quat: bool):
 
     wrapped.__name__ = getattr(fn, "__name__", "wrapped")
     wrapped.__doc__ = (
-        "wxyz-facing wrapper installed by isaacsimenvs.newton.patches.\n\n"
+        "wxyz-facing wrapper installed by isaacsimenvs.tasks.cloth.backends.vbd.newton_support.patches.\n\n"
         + (getattr(fn, "__doc__", "") or "")
     )
     return wrapped
@@ -542,7 +542,7 @@ def _wrap(fn, quat_arg_positions: tuple[int, ...], returns_quat: bool):
 
 def install_quat_math() -> list[str]:
     """Rebind quaternion helpers inside upstream modules to wxyz semantics."""
-    from isaacsimenvs.newton import compat
+    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
 
     patched: list[str] = []
     for module_name in _TARGET_MODULES:
@@ -614,7 +614,7 @@ def wxyz_to_xyzw(rot: tuple[float, float, float, float]) -> tuple[float, float, 
 
 def install_quat_convention() -> None:
     """Reinterpret upstream's wxyz initial rotations as xyzw for Isaac Lab 3.0."""
-    from isaacsimenvs.newton import compat
+    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
 
     scene_utils = compat.play_module("scene_utils")
     if getattr(scene_utils, "_quat_convention_patch_installed", False):
@@ -677,7 +677,7 @@ def install_quat_convention() -> None:
 
 def install_fingertip_order() -> None:
     """Reorder ``env._fingertip_body_ids`` to canonical order after they are cached."""
-    from isaacsimenvs.newton import compat
+    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
 
     reset_utils = compat.play_module("reset_utils")
     if getattr(reset_utils, "_fingertip_order_patch_installed", False):
@@ -877,7 +877,7 @@ def install_cloning(
         request_full_stage: ask the ovphysx wheel to ingest every authored environment when the
             plan has more than one prototype per asset.
     """
-    from isaacsimenvs.newton import compat
+    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
 
     scene_utils = compat.play_module("scene_utils")
     if getattr(scene_utils, "_clone_patch_installed", False):
@@ -1475,7 +1475,7 @@ def disable_global_gravity(cfg) -> None:
 
 def install_object_gravity() -> None:
     """Apply object-only gravity every physics step, mirroring PhysX's per-body setup."""
-    from isaacsimenvs.newton import compat
+    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
 
     action_utils = compat.play_module("action_utils")
     if getattr(action_utils, "_gravity_patch_installed", False):
@@ -1650,7 +1650,7 @@ def restore_placeholder_inertia(env, *, inertia: float = NEGLIGIBLE_INERTIA) -> 
 
 def install_newton_materials() -> None:
     """Replace ``scene_utils.apply_physx_material_properties`` with a Newton implementation."""
-    from isaacsimenvs.newton import compat
+    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
 
     scene_utils = compat.play_module("scene_utils")
     if getattr(scene_utils, "_material_patch_installed", False):
@@ -1758,7 +1758,7 @@ def install_newton_materials() -> None:
 # solver's internal buffers without rebuilding it. ``ModelFlags.JOINT_DOF_PROPERTIES`` is
 # documented as covering "joint axis limits, targets, modes, DOF state, or force buffers".
 #
-# The same reasoning applies to :mod:`isaacsimenvs.newton.patches`, which writes
+# The same reasoning applies to :mod:`isaacsimenvs.tasks.cloth.backends.vbd.newton_support.patches`, which writes
 # ``Model.shape_material_mu`` after finalization — fingertip friction would otherwise also be
 # cached at its pre-write value. ``ModelFlags.SHAPE_PROPERTIES`` covers that.
 #
@@ -1952,7 +1952,7 @@ def install_newton_condim(condim: int = 6, grasping: tuple[str, ...] | None = No
     if getattr(NewtonManager, "_simtoolreal_condim_patch", False):
         return False
 
-    from isaacsimenvs.newton import compat
+    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
 
     if grasping is None:
         grasping = tuple(compat.play_module("scene_utils").FINGERTIP_LINK_NAMES)

@@ -155,7 +155,7 @@ EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"] = (
         "isaacsimenvs/tasks/cloth/backends/vbd/config.py",
         "isaacsimenvs/tasks/cloth/cloth_cfg.py",
         "isaacsimenvs/tasks/cloth/mdp/tracker_cfg.py",
-        "isaacsimenvs/tasks/play_newton/play_newton_env_cfg.py",
+        "isaacsimenvs/tasks/cloth/backends/vbd/play_newton_cfg.py",
         PLAY_CFG,
     ],
     "isaacsimenvs/cfg/train/ClothSAPG.yaml",

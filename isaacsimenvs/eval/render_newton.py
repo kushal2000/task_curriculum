@@ -562,7 +562,7 @@ def _colorize(model, args) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render the policy on Newton to a video.")
-    parser.add_argument("--task", default="Isaacsimenvs-PlayNewton-Direct-v0")
+    parser.add_argument("--task", default="Isaacsimenvs-Cloth-Direct-v0")
     parser.add_argument("--num_envs", type=int, default=4)
     parser.add_argument("--steps", type=int, default=900)
     parser.add_argument("--stride", type=int, default=2, help="capture every Nth policy step")
@@ -633,7 +633,7 @@ def main() -> None:
     parser.add_argument("--num_assets_per_type", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cuda:0")
-    parser.add_argument("--out", type=Path, default=Path("videos/play_newton.mp4"))
+    parser.add_argument("--out", type=Path, default=Path("videos/cloth.mp4"))
     parser.add_argument(
         "--no_goal", action="store_true", help="do not render the goal marker at all"
     )

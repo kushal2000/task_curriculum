@@ -12,7 +12,7 @@ were produced, and is unattributable.
 
 Populate (Isaac Sim venv)::
 
-    OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.newton.usd_cache \
+    OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.tasks.cloth.backends.vbd.newton_support.usd_cache \
         --populate --num_assets_per_type 4
 
 Consume: :func:`install_reader` runs automatically from ``PlayNewtonEnv``.
@@ -34,9 +34,9 @@ import json
 import shutil
 from pathlib import Path
 
-from isaacsimenvs.newton import compat
+from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[6]
 DEFAULT_CACHE_DIR = REPO_ROOT / ".usd_cache"
 
 _MANIFEST_NAME = "manifest.json"
@@ -117,7 +117,7 @@ def install_reader(cache_dir: Path = DEFAULT_CACHE_DIR) -> None:
         raise RuntimeError(
             f"USD cache missing at {cache_dir}. Populate it first:\n"
             "  OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python "
-            "-m isaacsimenvs.newton.usd_cache --populate"
+            "-m isaacsimenvs.tasks.cloth.backends.vbd.newton_support.usd_cache --populate"
         )
 
     def _lookup(asset_path, usd_work_dir, **kwargs):

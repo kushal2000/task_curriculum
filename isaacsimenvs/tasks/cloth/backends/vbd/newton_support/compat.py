@@ -1,7 +1,7 @@
 """Making the Play task modules importable and correct under Isaac Lab 3.0.
 
 Two jobs, both about getting code to *load*; runtime behaviour is patched in
-:mod:`isaacsimenvs.newton.patches`.
+:mod:`isaacsimenvs.tasks.cloth.backends.vbd.newton_support.patches`.
 
 * **Relocations.** Isaac Lab 3.0 moved several symbols the task package imports by their 2.x
   paths, and renamed one constructor keyword. These are aliased back so `tasks/play/` stays a

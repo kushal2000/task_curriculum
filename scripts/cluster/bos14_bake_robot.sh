@@ -18,6 +18,6 @@ set -uo pipefail
 cd /home/yiboc/mit/task_curriculum_flexiv
 export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES PYTHONPATH=$PWD
 echo "== bake $(hostname -s) task=$TASK sc=${SC:-false}"
-.venv_isaacsim/bin/python -m isaacsimenvs.newton.usd_cache --populate --task "$TASK" \
+.venv_isaacsim/bin/python -m isaacsimenvs.tasks.cloth.backends.vbd.newton_support.usd_cache --populate --task "$TASK" \
     "env.robot_self_collision=${SC:-false}"
 echo "[bake] exit=$?"

@@ -27,7 +27,7 @@ import statistics
 import sys
 from pathlib import Path
 
-from isaacsimenvs.newton.contact_guard import (
+from isaacsimenvs.eval.contact_guard import (
     assert_no_buffer_overflow,
     capture_fd_output,
     raise_if_overflowed,

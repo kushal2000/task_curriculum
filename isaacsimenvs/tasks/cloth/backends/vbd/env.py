@@ -17,14 +17,14 @@ The task -- fold targets, reward, success, the goal marker, the finite guard -- 
 
 from __future__ import annotations
 
-from isaacsimenvs.newton import patches  # noqa: F401
+from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import patches  # noqa: F401
 from isaacsimenvs.tasks.cloth.backends.adapter import ClothAsRigidObject
 from isaacsimenvs.tasks.cloth.backends.usd import neutralise_rigid_object, reshape_goal_marker
 from isaacsimenvs.tasks.cloth.backends.vbd.config import ClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
 from isaacsimenvs.tasks.cloth.mdp.task import ClothTaskMixin
 from isaacsimenvs.tasks.cloth.mdp.tracker import TrackerMixin
-from isaacsimenvs.tasks.play_newton.play_newton_env import PlayNewtonEnv
+from isaacsimenvs.tasks.cloth.backends.vbd.play_newton import PlayNewtonEnv
 
 __all__ = ["ClothEnv"]
 

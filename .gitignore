@@ -29,7 +29,7 @@ pretrained_policy/
 pretrained_assembly/
 
 # Baked URDF->USD cache: written under .venv_isaacsim, read by the kit-less Newton venv.
-# Regenerate with `python -m isaacsimenvs.newton.usd_cache --populate`.
+# Regenerate with `python -m isaacsimenvs.tasks.cloth.backends.vbd.newton_support.usd_cache --populate`.
 .usd_cache/
 
 # Third-party source checkouts (Isaac Lab 3.0 for the Newton backend).

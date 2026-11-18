@@ -18,11 +18,11 @@ takes effect on the objects that were already built.
 
 from __future__ import annotations
 
-from isaacsimenvs.newton import compat, patches, physx_schema_shim, usd_cache
+from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat, patches, physx_schema_shim, usd_cache
 from isaacsimenvs.tasks.play.play_env import PlayEnv
 from isaacsimenvs.tasks.play.robots import get_robot_spec
 
-from .play_newton_env_cfg import PlayNewtonEnvCfg
+from .play_newton_cfg import PlayNewtonEnvCfg
 
 __all__ = ["PlayNewtonEnv", "PlayNewtonEnvCfg"]
 
