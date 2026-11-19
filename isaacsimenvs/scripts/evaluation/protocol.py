@@ -62,9 +62,12 @@ def disable_randomization(cfg) -> None:
     rs.reset_dof_pos_random_interval_fingers = 0.0
     rs.reset_dof_vel_random_interval = 0.0
     rs.table_reset_z_range = 0.0
+    # Over the table's centre (the Play task's right-hand setup moves the table; the cloth task's
+    # reset has no table_reset_xy and keeps the origin).
+    table_xy = getattr(rs, "table_reset_xy", (0.0, 0.0))
     rs.fixed_start_pose = (
-        0.0,
-        0.0,
+        table_xy[0],
+        table_xy[1],
         rs.table_reset_z + rs.table_object_z_offset,
         1.0,
         0.0,
