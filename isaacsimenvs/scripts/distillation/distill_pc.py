@@ -261,8 +261,10 @@ def main() -> None:
     p.add_argument("--fk_points", type=int, default=0, help="scene: forward-kinematics points (forearm + hand)")
     p.add_argument("--pc_delay", type=int, default=0, help="scene: the cloud is up to this many steps old")
     p.add_argument("--proprio_delay", type=int, default=0, help="the student's proprioception is up to this many steps old")
-    p.add_argument("--action_delay", type=int, default=0, help="env: actions applied up to this many steps late")
-    p.add_argument("--env_obs_delay", type=int, default=0, help="env: the teacher's whole observation delayed (teacher eval)")
+    p.add_argument("--action_delay", type=int, default=0,
+                   help="env: actions applied 0 .. N-1 steps late (lag per episode; 0 and 1 = no delay)")
+    p.add_argument("--env_obs_delay", type=int, default=0,
+                   help="env: the teacher's whole observation 0 .. N-1 steps late (teacher eval)")
     p.add_argument("--noise", action="store_true", help="version C point-cloud noise (noise_preset)")
     p.add_argument("--g3_noise", action="store_true", help="g3 estimate error (g3_noise_preset)")
     p.add_argument("--eval_noise", action="store_true", help="eval: version C noise whatever the student trained with")
@@ -378,10 +380,11 @@ def main() -> None:
         action_delay = int(args.action_delay)
         if not train and student_ckpt is not None and not args.eval_clean:   # as the student trained
             action_delay = max(action_delay, int(student_ckpt["pc_args"].get("action_delay", 0)))
+        # N is a delay line of N entries (lags 0 .. N-1), the meaning the students' pc_args were saved with.
         if action_delay > 0:
-            dr.use_action_delay, dr.action_delay_max, dr.delay_mode = True, action_delay, "per_episode"
+            dr.action.delay_max = action_delay - 1
         if args.env_obs_delay > 0:
-            dr.use_obs_delay, dr.obs_delay_max, dr.delay_mode = True, int(args.env_obs_delay), "per_episode"
+            dr.observation.delay_max = int(args.env_obs_delay) - 1
         torch.manual_seed(args.seed)
 
         env = gym.make(args.task, cfg=env_cfg)

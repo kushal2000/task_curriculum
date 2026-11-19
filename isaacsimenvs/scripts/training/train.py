@@ -288,9 +288,8 @@ def main() -> None:
             import json as _json
 
             _delay = int(_json.loads(args_cli.pc_args).get("action_delay", 0))
-            if _delay > 0:
-                _dr = env_cfg.domain_randomization
-                _dr.use_action_delay, _dr.action_delay_max, _dr.delay_mode = True, _delay, "per_episode"
+            if _delay > 0:  # a delay line of _delay entries: lags 0 .. _delay - 1
+                env_cfg.domain_randomization.action.delay_max = _delay - 1
         env = gym.make(
             args_cli.task,
             cfg=env_cfg,

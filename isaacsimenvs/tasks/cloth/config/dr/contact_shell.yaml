@@ -1,9 +1,0 @@
-# DR block contact_shell: felt thickness about 5 mm (2026-11-10) instead of 16 mm.
-#
-# 2 mm plate + 2 x 1.5 mm contact shell, redrawn per episode at +-1 mm of shell, so 3-7 mm. The
-# default (7 +- 3 mm of shell = 16 mm) is the VBD sheet's particle diameter; real fabrics are under
-# 1 mm, a towel 2-5 mm.
-rigid_cloth:
-  contact_margin: 0.0015
-  randomization:
-    contact_margin_offset: [-0.001, 0.001]

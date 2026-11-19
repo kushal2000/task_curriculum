@@ -4,7 +4,7 @@
 #   experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 --experiment rigid_cloth_right_wuji \
 #       --checkpoint <prior.pth>
 #   RUN_TAG=trkCr experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
-#       --experiment experiments/nov15_cloth_tracker/flat7RW_trkCr.yaml --checkpoint <prior.pth>
+#       --experiment experiments/nov15_dr_delay/flat7RW_DR_delay.yaml --checkpoint <prior.pth>
 #
 # The arguments go to isaacsimenvs/scripts/training/train.py unchanged; this script adds:
 #   --agent rl_games_sapg_cfg_entry_point   unless --agent is given

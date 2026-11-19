@@ -151,8 +151,7 @@ def install_pool(b) -> None:
     # set -- and built with a negligible stiffness when DR will draw one, so the position gain
     # exists to be written.
     stiffness = float(r.joint_stiffness)
-    rd = r.randomization
-    if rd.enabled and float(rd.hinge_stiffness[1]) > 0.0 and stiffness == 0.0:
+    if float(b.cfg.domain_randomization.cloth.hinge_stiffness[1]) > 0.0 and stiffness == 0.0:
         stiffness = 1.0e-9
 
     park = torch.tensor(

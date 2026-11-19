@@ -4,7 +4,7 @@ A recipe has up to five keys:
 
     task:  Isaacsimenvs-RigidCloth-Direct-v0   # the gym id it is written for
     base:  rigid_cloth_right_wuji              # another recipe underneath it (optional)
-    dr:    [sysid, friction]                   # DR blocks from tasks/cloth/config/dr/, in order (optional)
+    dr:    [observation, action]               # DR blocks from tasks/cloth/config/dr/, in order (optional)
     env:   {...}                               # overrides of the env config
     agent: {...}                               # overrides of the learner config
 
@@ -12,7 +12,7 @@ A recipe has up to five keys:
 recipe's own values win. A DR block is a plain env overlay (the same keys as a recipe's `env:`).
 
 A recipe is named by a file stem in `tasks/cloth/config/runs/` or by a path, absolute or relative to the
-repo root (e.g. `experiments/nov15_cloth_tracker/flat7RW_trkA.yaml`). A `base:` is looked up next to
+repo root (e.g. `experiments/nov15_dr_delay/flat7RW_DR_delay.yaml`). A `base:` is looked up next to
 the recipe first, then in `tasks/cloth/config/runs/`.
 
 Kit-free (plain YAML), so tests and tools can compose recipes without booting a simulator.

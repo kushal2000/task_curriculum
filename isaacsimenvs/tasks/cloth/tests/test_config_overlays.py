@@ -37,7 +37,6 @@ SCENE_FIELDS = {
 CLOTH_CFG = [
     "isaacsimenvs/tasks/cloth/env_cfg.py",
     "isaacsimenvs/tasks/cloth/cloth_cfg.py",
-    "isaacsimenvs/tasks/cloth/mdp/tracker_cfg.py",
 ]
 RIGID_CLOTH_CFG = ["isaacsimenvs/tasks/cloth/backends/rigid/config.py", *CLOTH_CFG]
 VBD_CLOTH_CFG = [

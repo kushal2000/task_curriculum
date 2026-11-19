@@ -1,3 +1,0 @@
-# DR block action_noise: Gaussian noise on every action, std 0.05 (normalised action units).
-domain_randomization:
-  action_noise_std: 0.05

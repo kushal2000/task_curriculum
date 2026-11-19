@@ -12,11 +12,9 @@ same vector:
   ``centre + R * offsets``, from the moving half's fitted pose and the fold goal's pose
   (``FoldView.object_*`` and ``ClothTask.goal_*``).
 
-Observation DR, at most one object regime at a time (:meth:`ObservationBuilder._observed_object_and_goal`):
-the cloth tracker (``cloth.tracker``), point-level DR (``point_dr_mode``), or pose-level DR
-(object-state delay and noise, a per-episode pose bias). On top: joint noise, and a policy delay
-line (``use_obs_delay``; under point DR it delays the proprioceptive fields only). The critic always
-reads the clean values.
+Observation DR (``domain_randomization.observation``): the observed sheet pose delayed, noised and
+biased (:meth:`ObservationBuilder._observed_object`), joint noise, and a delay line on the whole
+policy vector. The critic always reads the clean values.
 """
 
 from __future__ import annotations
@@ -25,12 +23,10 @@ import torch
 
 from .actions import JointController
 from .geometry import quat
-from .point_dr import push_and_read, refit_points, simple_lags
 from .randomization import DelayLine, DomainRandomization, perturb_quat
 from .robot import NUM_FINGERTIPS, RobotLayout
 from .state import FoldView, SimState
 from .task import ClothTask, apply_local_offset, keypoints_world
-from .tracker import TrackerObservation
 
 __all__ = ["FIELD_SIZES", "NUM_KEYPOINTS", "PLAY_ROBOT_ROOT_POS", "ObservationBuilder", "obs_dim"]
 
@@ -60,15 +56,6 @@ FIELD_SIZES: dict[str, int] = {
     "reward": 1,
 }
 
-#: Under point DR, the policy fields ``use_obs_delay`` leaves alone: the point-derived ones (they
-#: carry the point lag), ``prev_action_targets`` (the robot's own command, known instantly on
-#: hardware) and the constant ``object_scales``.
-_UNDELAYED_IN_POINT_MODE = (
-    "object_rot", "object_vel", "keypoints_rel_palm", "keypoints_rel_goal",
-    "prev_action_targets", "object_scales",
-)
-
-
 def obs_dim(fields, num_joints: int) -> int:
     """Width of the vector the ordered ``fields`` make for a robot with ``num_joints`` joints."""
     sizes = {**FIELD_SIZES, **{f: num_joints for f in _PER_JOINT_FIELDS}}
@@ -88,120 +75,33 @@ class ObservationBuilder:
         self.num_envs, self.device = num_envs, device
         self.env_origins = env_origins
         self.extras = extras
-        self.obs_delay = DelayLine(num_envs, dr.obs_delay_len, cfg.observation_space, device)
-        self.object_delay = DelayLine(num_envs, dr.object_delay_len, 13, device)
-        # The proprio-only delay line (point DR and the tracker) and the point stream; sized on
-        # first use, when their widths are known. Not cleared at reset: the episode's first step
-        # flushes them.
-        self.proprio_delay: DelayLine | None = None
-        self.point_queue: torch.Tensor | None = None
-        self.tracker = TrackerObservation(
-            cfg, robot, task.geometry, num_envs=num_envs, device=device, env_origins=env_origins
-        )
+        obs_dr = cfg.domain_randomization.observation
+        self.obs_delay = DelayLine(num_envs, obs_dr.delay_max, cfg.observation_space, device)
+        self.object_delay = DelayLine(num_envs, obs_dr.object_delay_max, 13, device)
 
     def reset(self, env_ids: torch.Tensor) -> None:
         self.obs_delay.clear(env_ids)
         self.object_delay.clear(env_ids)
 
-    def tracker_on(self) -> bool:
-        """Whether the cloth tracker observation DR (``cloth.tracker.enabled``) drives the object."""
-        return bool(self.cfg.cloth.tracker.enabled)
+    # ------------------------------------------------------------------ observation DR
 
-    # ------------------------------------------------------------------ object DR regimes
-
-    def _object_state_dr(self, start, obj_pos, obj_rot, obj_linvel, obj_angvel):
-        """Pose-level object DR: object-state delay and pose noise."""
-        dr = self.cfg.domain_randomization
-        state = torch.cat([obj_pos, obj_rot, obj_linvel, obj_angvel], dim=-1)
-        delayed = self.object_delay.push_and_read(state, start, self.dr.lag(self.dr.object_delay_idx))
-        noisy_pos = delayed[:, 0:3] + torch.randn_like(delayed[:, 0:3]) * dr.object_state_xyz_noise_std
-        noisy_rot = perturb_quat(delayed[:, 3:7], dr.object_state_rotation_noise_degrees)
-        return noisy_pos, noisy_rot, delayed[:, 7:13]
-
-    def _point_dr(self, start, points, rest, goal_pos, goal_rot):
-        """Point-level object DR (``point_dr_mode``; see ``point_dr.py``).
-
-        ``points`` (N, K, 3) and the goal pose share one lag; each point gets its own noise and
-        per-episode bias; a per-episode common bias moves the points and the goal together. The points
-        are then rigidly re-fitted to ``rest`` (N, K, 3), as the clean keypoints are built from a pose.
-        Returns ``(keypoints (N, K, 3), object quat wxyz, goal pos, goal quat wxyz)``.
-        """
-        dr = self.cfg.domain_randomization
-        n, k, _ = points.shape
-        frame = torch.cat([points.reshape(n, 3 * k), goal_pos, goal_rot], dim=-1)
-        if self.point_queue is None:
-            self.point_queue = torch.zeros(n, self.dr.point_queue_len, frame.shape[1], device=self.device)
-        if dr.point_dr_mode == "simple":
-            lags = simple_lags(n, dr.point_delay_range, self.device)
-        else:
-            lags = self.dr.point_lags.step(start, int(dr.point_delay_jitter), int(dr.point_delay_max))
-        self.point_queue, delayed = push_and_read(self.point_queue, frame, lags, start)
-
-        obs_points = delayed[:, : 3 * k].reshape(n, k, 3) + self.dr.point_bias
-        obs_points = obs_points + self.dr.point_common_bias.unsqueeze(1)
-        if float(dr.point_noise_std) > 0.0:
-            obs_points = obs_points + torch.randn_like(obs_points) * float(dr.point_noise_std)
-        kp, rot = refit_points(rest, obs_points)
-        obs_goal_pos = delayed[:, 3 * k : 3 * k + 3] + self.dr.point_common_bias
-        obs_goal_rot = torch.nn.functional.normalize(delayed[:, 3 * k + 3 : 3 * k + 7], dim=-1)
-        return kp, rot, obs_goal_pos, obs_goal_rot
-
-    def _observed_object_and_goal(self, state, view, episode_length_buf, start, obj_pos, obj_rot, obj_linvel,
-                                  obj_angvel, goal_pos, goal_rot, kp_offsets):
-        """The object and goal as the policy observes them, under one of three regimes:
-
-        * the cloth tracker (``cloth.tracker``): the estimate a stereo + point-tracker pipeline would
-          report (``mdp/tracker.py``);
-        * point-level DR (``point_dr_mode``): the tracked corners and the goal go through
-          :meth:`_point_dr` and the object pose is re-fitted from the perturbed points;
-        * pose-level DR (``use_object_state_delay_noise`` and/or ``object_pose_bias_*``), or none: the
-          object pose delayed, noised and biased (all neutral when off).
-
-        Returns ``(keypoints (N, K, 3), object quat wxyz, object vel (N, 6), goal pos, goal quat wxyz)``.
-        """
-        dr = self.cfg.domain_randomization
-        obj_vel = torch.cat([obj_linvel, obj_angvel], dim=-1)
-        if self.tracker_on():
-            pos, rot, g_pos, g_rot, _ = self.tracker.observe(state, episode_length_buf, start)
-            rot = torch.where((rot * obj_rot).sum(dim=-1, keepdim=True) < 0.0, -rot, rot)
-            return keypoints_world(pos, rot, kp_offsets * self.tracker.size_xy()), rot, obj_vel, g_pos, g_rot
-        if str(dr.point_dr_mode) != "off":
-            # The moving-half corners themselves, in keypoint order -- what a point tracker sees --
-            # rather than the rigid reconstruction.
-            points = view.keypoints_w - self.env_origins.unsqueeze(1)
-            kp, rot, g_pos, g_rot = self._point_dr(start, points, kp_offsets, goal_pos, goal_rot)
-            # Same quaternion sign as the clean observation (the fit's sign is arbitrary).
-            rot = torch.where((rot * obj_rot).sum(dim=-1, keepdim=True) < 0.0, -rot, rot)
-            return kp, rot, obj_vel, g_pos, g_rot  # the point stream carries no velocity: obj_vel unused
-
-        if dr.use_object_state_delay_noise:
-            pos, rot, vel = self._object_state_dr(start, obj_pos, obj_rot, obj_linvel, obj_angvel)
-        else:
-            pos, rot, vel = obj_pos, obj_rot, obj_vel
+    def _observed_object(self, start, obj_pos, obj_rot, obj_linvel, obj_angvel):
+        """The sheet pose and velocity as the policy observes them: delayed and noised every step
+        (``object_delay_max``, ``object_pos_noise_std``, ``object_rot_noise_deg``), then offset by
+        the episode's bias (``object_pos_bias``, ``object_rot_bias_deg``). All neutral when off.
+        Returns ``(pos, quat wxyz, vel (N, 6))``."""
+        dr = self.cfg.domain_randomization.observation
+        pos, rot = obj_pos, obj_rot
+        vel = torch.cat([obj_linvel, obj_angvel], dim=-1)
+        if dr.object_delay_max > 0 or dr.object_pos_noise_std > 0.0 or dr.object_rot_noise_deg > 0.0:
+            state = torch.cat([obj_pos, obj_rot, vel], dim=-1)
+            delayed = self.object_delay.push_and_read(state, start, self.dr.object_lag)
+            pos = delayed[:, 0:3] + torch.randn_like(delayed[:, 0:3]) * dr.object_pos_noise_std
+            rot = perturb_quat(delayed[:, 3:7], dr.object_rot_noise_deg)
+            vel = delayed[:, 7:13]
         pos = pos + self.dr.object_bias_pos
         rot = quat.quat_mul(self.dr.object_bias_quat, rot)
-        return keypoints_world(pos, rot, kp_offsets), rot, vel, goal_pos, goal_rot
-
-    def _delay_proprio_fields(self, start, obs_noisy: dict, obj_kp: torch.Tensor, palm_frame_offset: torch.Tensor) -> None:
-        """Under point DR, ``use_obs_delay`` delays the proprioceptive fields only, in place.
-
-        ``keypoints_rel_palm`` is rebuilt from the DELAYED palm, as on hardware: camera points minus
-        the proprio palm the policy reads at the same step. ``palm_frame_offset`` turns the observed
-        palm_pos (Play frame) back into the env frame the points are in.
-        """
-        fields = [f for f in self.cfg.obs.obs_list if f not in _UNDELAYED_IN_POINT_MODE]
-        if "palm_pos" not in fields:
-            fields.append("palm_pos")
-        prop = _stack(obs_noisy, fields)
-        if self.proprio_delay is None:
-            self.proprio_delay = DelayLine(self.num_envs, self.obs_delay.length, prop.shape[1], self.device)
-        prop = self.proprio_delay.push_and_read(prop, start, self.dr.lag(self.dr.obs_delay_idx))
-        begin = 0
-        for f in fields:
-            width = obs_noisy[f].reshape(self.num_envs, -1).shape[1]
-            obs_noisy[f] = prop[:, begin:begin + width].reshape(obs_noisy[f].shape)
-            begin += width
-        obs_noisy["keypoints_rel_palm"] = obj_kp - (obs_noisy["palm_pos"] + palm_frame_offset).unsqueeze(1)
+        return pos, rot, vel
 
     # ------------------------------------------------------------------ the observation
 
@@ -209,7 +109,7 @@ class ObservationBuilder:
               start: torch.Tensor) -> dict[str, torch.Tensor]:
         """``{"policy": (N, obs_dim), "critic": (N, state_dim)}``, both clamped to
         ``obs.clamp_abs_observations``. ``start``: the envs on their episode's first step."""
-        cfg, dr, task, robot = self.cfg, self.cfg.domain_randomization, self.task, self.robot
+        cfg, dr, task, robot = self.cfg, self.cfg.domain_randomization.observation, self.task, self.robot
         env_origins = self.env_origins
         n = self.num_envs
 
@@ -242,24 +142,11 @@ class ObservationBuilder:
         goal_pos = task.goal_pos_w - env_origins
         goal_rot = task.goal_quat
 
-        tracker = self.tracker_on()
-        point_mode = str(dr.point_dr_mode) != "off" or tracker
-        kp_offsets = task.keypoint_offsets * self.dr.object_scale_multiplier.unsqueeze(1)
+        kp_offsets = task.keypoint_offsets
         obj_kp = keypoints_world(obj_pos, obj_rot, kp_offsets)
         goal_kp = keypoints_world(goal_pos, goal_rot, kp_offsets)
-        noisy_obj_kp, noisy_obj_rot, noisy_obj_vel, obs_goal_pos, obs_goal_rot = self._observed_object_and_goal(
-            state, view, episode_length_buf, start, obj_pos, obj_rot, obj_linvel, obj_angvel, goal_pos, goal_rot,
-            kp_offsets,
-        )
-        if point_mode:
-            # The tracker's assumed sheet size scales what the POLICY sees: its keypoint offsets and
-            # object_scales (x, y). Read after the tracker stepped (inside _observed_object_and_goal).
-            kp_offsets_obs = kp_offsets * self.tracker.size_xy() if tracker else kp_offsets
-            noisy_goal_kp = keypoints_world(obs_goal_pos, obs_goal_rot, kp_offsets_obs)
-        else:
-            noisy_goal_kp = goal_kp
-
-        object_scales = task.object_scale * self.dr.object_scale_multiplier
+        noisy_obj_pos, noisy_obj_rot, noisy_obj_vel = self._observed_object(start, obj_pos, obj_rot, obj_linvel, obj_angvel)
+        noisy_obj_kp = keypoints_world(noisy_obj_pos, noisy_obj_rot, kp_offsets)
 
         obs_clean: dict[str, torch.Tensor] = {
             "joint_pos": joint_pos,
@@ -273,7 +160,7 @@ class ObservationBuilder:
             "fingertip_pos_rel_palm": (ft_pos_w - env_origins.unsqueeze(1)) - palm_pos.unsqueeze(1),
             "keypoints_rel_palm": obj_kp - palm_pos.unsqueeze(1),
             "keypoints_rel_goal": obj_kp - goal_kp,
-            "object_scales": object_scales,
+            "object_scales": task.object_scale,
             "closest_keypoint_max_dist": task.closest_keypoint_max_dist.unsqueeze(-1),
             "closest_fingertip_dist": task.closest_fingertip_dist,
             "lifted_object": task.lifted_object.float().unsqueeze(-1),
@@ -286,23 +173,18 @@ class ObservationBuilder:
         obs_noisy["object_rot"] = quat.convert_quat(noisy_obj_rot, to="xyzw")
         obs_noisy["object_vel"] = noisy_obj_vel
         obs_noisy["keypoints_rel_palm"] = noisy_obj_kp - palm_pos.unsqueeze(1)
-        obs_noisy["keypoints_rel_goal"] = noisy_obj_kp - noisy_goal_kp
-        if tracker:
-            obs_noisy["object_scales"] = object_scales * self.tracker.size_xy().squeeze(1)
-        if dr.joint_velocity_obs_noise_std > 0:
-            obs_noisy["joint_vel"] = joint_vel + torch.randn_like(joint_vel) * dr.joint_velocity_obs_noise_std
-        if dr.joint_pos_obs_noise_std > 0:
+        obs_noisy["keypoints_rel_goal"] = noisy_obj_kp - goal_kp
+        if dr.joint_vel_noise_std > 0:
+            obs_noisy["joint_vel"] = joint_vel + torch.randn_like(joint_vel) * dr.joint_vel_noise_std
+        if dr.joint_pos_noise_std > 0:
             # Noise in radians, carried through the [-1, 1] normalisation.
             span = robot.joint_upper_canon - robot.joint_lower_canon
-            obs_noisy["joint_pos"] = joint_pos + torch.randn_like(joint_pos) * dr.joint_pos_obs_noise_std * 2.0 / span
-
-        if point_mode and dr.use_obs_delay:
-            self._delay_proprio_fields(start, obs_noisy, noisy_obj_kp, palm_pos - palm_pos_obs)
+            obs_noisy["joint_pos"] = joint_pos + torch.randn_like(joint_pos) * dr.joint_pos_noise_std * 2.0 / span
 
         critic = _stack(obs_clean, cfg.obs.state_list)
         policy = _stack(obs_noisy, cfg.obs.obs_list)
-        if dr.use_obs_delay and not point_mode:
-            policy = self.obs_delay.push_and_read(policy, start, self.dr.lag(self.dr.obs_delay_idx))
+        if dr.delay_max > 0:
+            policy = self.obs_delay.push_and_read(policy, start, self.dr.obs_lag)
 
         clip = cfg.obs.clamp_abs_observations
         return {"policy": policy.clamp(-clip, clip), "critic": critic.clamp(-clip, clip)}

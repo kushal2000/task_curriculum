@@ -57,9 +57,14 @@ case "$T" in
 esac
 # _common.sh picked the interpreter from the (absent) --task; pick it for this target.
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh" --task "$TASK"
+# Pinned on the rigid pool: the plates' physics DR off too (eval.py turns off the rest).
+C=env.domain_randomization.cloth
+PINNED_PLATES=("$C.slat_friction_scale=[1.0,1.0]" "$C.robot_friction_scale=[1.0,1.0]" "$C.table_friction_scale=[1.0,1.0]"
+               "$C.hinge_damping_scale=[1.0,1.0]" "$C.hinge_stiffness=[0.0,0.0]" "$C.mass_scale=[1.0,1.0]"
+               "$C.contact_margin_offset=[0.0,0.0]")
 case "$START" in
     rand)   SARGS=(--randomize) ;;
-    pinned) SARGS=(); [ "$T" != vbd ] && SARGS=(env.rigid_cloth.randomization.enabled=false) ;;
+    pinned) SARGS=(); [ "$T" != vbd ] && SARGS=("${PINNED_PLATES[@]}") ;;
     *) echo "[eval] unknown start $START (pinned, rand)" >&2; exit 2 ;;
 esac
 read -r -a EXTRA <<<"${EXTRA_ARGS:-}"

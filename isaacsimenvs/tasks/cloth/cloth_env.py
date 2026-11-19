@@ -63,9 +63,7 @@ class ClothEnv(DirectRLEnv):
         )
         # Observed by the critic (`reward`) from the first reset on, before any step has paid one.
         self.reward_buf = torch.zeros(n, device=dev)
-        self.dr = DomainRandomization(
-            cfg, self.robot_layout, self.robot, num_envs=n, num_keypoints=len(layout.keypoint_idx), device=dev
-        )
+        self.dr = DomainRandomization(cfg, self.robot_layout, self.robot, num_envs=n, device=dev)
         self.controller = JointController(cfg, self.robot_layout, self.dr, step_dt=self.step_dt, num_envs=n, device=dev)
         self.observations = ObservationBuilder(
             cfg, self.robot_layout, self.controller, self.task, self.dr, num_envs=n, device=dev,
@@ -165,10 +163,7 @@ class ClothEnv(DirectRLEnv):
         state, view = self._step_state
         reward = self.task.compute_reward(state, view)
         self._publish_metrics()
-        self.backend.add_episode_final(
-            self.extras["episode_final"], self.task.termination_reasons, self.episode_length_buf,
-            self.observations.tracker.episode_stats(),
-        )
+        self.backend.add_episode_final(self.extras["episode_final"], self.task.termination_reasons, self.episode_length_buf)
         return reward
 
     def _reset_idx(self, env_ids) -> None:

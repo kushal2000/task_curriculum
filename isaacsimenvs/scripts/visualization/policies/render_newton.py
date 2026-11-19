@@ -677,9 +677,7 @@ def main() -> None:
         elif args.randomize_reset:
             # Only the DR block; the reset distribution is what we are deliberately keeping.
             dr = env_cfg.domain_randomization
-            dr.use_obs_delay = dr.use_action_delay = dr.use_object_state_delay_noise = False
-            dr.object_scale_noise_multiplier_range = (1.0, 1.0)
-            dr.joint_velocity_obs_noise_std = 0.0
+            dr.observation, dr.action = type(dr.observation)(), type(dr.action)()
             print(
                 f"[render] reset randomisation KEPT: xy noise "
                 f"+-{env_cfg.reset.reset_position_noise_x}/"

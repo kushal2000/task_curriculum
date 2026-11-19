@@ -25,10 +25,38 @@ from __future__ import annotations
 import torch
 
 from .geometry.grid import half_indices, half_mesh
-from .point_dr import mat_to_wxyz
 from .state import FoldView, SheetLayout
 
 __all__ = ["FoldGeometry", "kabsch_quat_wxyz"]
+
+
+def _mat_to_wxyz(r: torch.Tensor) -> torch.Tensor:
+    """``(N, 3, 3)`` rotation matrices to ``(N, 4)`` wxyz quaternions with w >= 0 (Shepperd, a
+    per-row branch; the goal marker pose). Unlike :func:`_rotation_to_wxyz` the sign is fixed."""
+    m00, m11, m22 = r[:, 0, 0], r[:, 1, 1], r[:, 2, 2]
+    # Shepperd: the four candidate magnitudes; pick the largest for each row (numerically safe).
+    cand = torch.stack(
+        (1.0 + m00 + m11 + m22, 1.0 + m00 - m11 - m22, 1.0 - m00 + m11 - m22, 1.0 - m00 - m11 + m22),
+        dim=-1,
+    ).clamp(min=0.0)
+    i = cand.argmax(dim=-1)
+    s = torch.sqrt(cand.gather(1, i.unsqueeze(1)).squeeze(1)) * 2.0  # 4 * |component i|
+    q = torch.empty(r.shape[0], 4, device=r.device, dtype=r.dtype)
+    # i == 0: w largest
+    w0 = torch.stack((0.25 * s, (r[:, 2, 1] - r[:, 1, 2]) / s, (r[:, 0, 2] - r[:, 2, 0]) / s,
+                      (r[:, 1, 0] - r[:, 0, 1]) / s), dim=-1)
+    x0 = torch.stack(((r[:, 2, 1] - r[:, 1, 2]) / s, 0.25 * s, (r[:, 0, 1] + r[:, 1, 0]) / s,
+                      (r[:, 0, 2] + r[:, 2, 0]) / s), dim=-1)
+    y0 = torch.stack(((r[:, 0, 2] - r[:, 2, 0]) / s, (r[:, 0, 1] + r[:, 1, 0]) / s, 0.25 * s,
+                      (r[:, 1, 2] + r[:, 2, 1]) / s), dim=-1)
+    z0 = torch.stack(((r[:, 1, 0] - r[:, 0, 1]) / s, (r[:, 0, 2] + r[:, 2, 0]) / s,
+                      (r[:, 1, 2] + r[:, 2, 1]) / s, 0.25 * s), dim=-1)
+    q = torch.where((i == 0).unsqueeze(-1), w0, q)
+    q = torch.where((i == 1).unsqueeze(-1), x0, q)
+    q = torch.where((i == 2).unsqueeze(-1), y0, q)
+    q = torch.where((i == 3).unsqueeze(-1), z0, q)
+    q = torch.nn.functional.normalize(q, dim=-1)
+    return torch.where(q[:, :1] < 0.0, -q, q)
 
 
 def _rotation_to_wxyz(r: torch.Tensor) -> torch.Tensor:
@@ -312,7 +340,7 @@ class FoldGeometry:
         relabelled; every policy was trained on it), ``marker_pose`` the true pose (w, x, y, z)."""
         rot = self.goal_rotation(view.frame_r)
         goal_pos = view.targets_w.mean(dim=1)
-        return goal_pos, self._observed_goal_quat(rot), torch.cat([goal_pos, mat_to_wxyz(rot)], dim=-1)
+        return goal_pos, self._observed_goal_quat(rot), torch.cat([goal_pos, _mat_to_wxyz(rot)], dim=-1)
 
     def observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
         return self._observed_goal_quat(rot)

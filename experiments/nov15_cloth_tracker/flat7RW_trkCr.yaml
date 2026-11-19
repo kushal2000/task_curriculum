@@ -1,3 +1,0 @@
-# flat7RW_trkCr (stage 13, run Cr): flat7RW_trkC + re-acquisition failure calibrated to the real data.
-base: rigid_cloth_right_wuji
-dr: [proprio_noise, tracker, tracker_reacquire]

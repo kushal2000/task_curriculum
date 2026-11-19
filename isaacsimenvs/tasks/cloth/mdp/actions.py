@@ -7,8 +7,8 @@ The policy acts in canonical joint order, every entry in [-1, 1]:
 * **hand**: an absolute position, ``a`` mapped linearly onto the joint range, then low-passed
   (``hand_moving_average``).
 
-Domain randomization on the way: a delay line (``use_action_delay``; per step or per episode, see
-``delay_mode``) and Gaussian noise (``action_noise_std``) on the action that is executed.
+Domain randomization on the way (``domain_randomization.action``): a delay line (``delay_max``, one
+lag per episode) and Gaussian noise (``noise_std``) on the action that is executed.
 
 ``targets`` is what the env writes every physics step; ``prev_targets`` is the smoothing state and
 the ``prev_action_targets`` observation.
@@ -32,24 +32,24 @@ class JointController:
         n_joints = layout.num_joints
         self.targets = torch.zeros(num_envs, n_joints, device=device)
         self.prev_targets = torch.zeros(num_envs, n_joints, device=device)
-        self.action_delay = DelayLine(num_envs, dr.action_delay_len, n_joints, device)
+        self.action_delay = DelayLine(num_envs, cfg.domain_randomization.action.delay_max, n_joints, device)
 
     def process(self, actions: torch.Tensor, start: torch.Tensor) -> None:
         """This policy step's ``actions`` (N, J, canonical) -> ``targets`` (Lab order). ``start``:
         the envs on their episode's first step (the delay line flushes there)."""
-        dr = self.cfg.domain_randomization
+        dr = self.cfg.domain_randomization.action
         act_cfg = self.cfg.action
         layout = self.layout
         n_arm = len(layout.arm_joint_ids)
 
         actions = actions.clone().to(self.device)[:, layout.perm_canon_to_lab]
 
-        if dr.use_action_delay and dr.action_delay_max > 0:
-            actions = self.action_delay.push_and_read(actions, start, self.dr.lag(self.dr.action_delay_idx))
+        if dr.delay_max > 0:
+            actions = self.action_delay.push_and_read(actions, start, self.dr.action_lag)
 
         # On the executed (delayed) action, kept in the policy's [-1, 1].
-        if dr.action_noise_std > 0:
-            actions = (actions + torch.randn_like(actions) * dr.action_noise_std).clamp(-1.0, 1.0)
+        if dr.noise_std > 0:
+            actions = (actions + torch.randn_like(actions) * dr.noise_std).clamp(-1.0, 1.0)
 
         prev = self.prev_targets
         arm_raw = prev[:, :n_arm] + act_cfg.dof_speed_scale * self.step_dt * actions[:, :n_arm]

@@ -87,15 +87,15 @@ class RigidBackend(ClothBackend):
             cfg.rigid_cloth.joint_armature = float(cfg.physx_chain.hinge_armature)
         print(f"[physx] hinge armature {cfg.rigid_cloth.joint_armature:g} kg m^2", flush=True)
         size_gpu_buffers(cfg)
-        rd = cfg.rigid_cloth.randomization
-        if model == "priority" and rd.enabled and (
-            tuple(rd.slat_friction_scale) != (1.0, 1.0) or tuple(rd.fingertip_friction_scale) != (1.0, 1.0)
+        rd = cfg.domain_randomization.cloth
+        if model == "priority" and (
+            tuple(rd.slat_friction_scale) != (1.0, 1.0) or tuple(rd.robot_friction_scale) != (1.0, 1.0)
             or tuple(rd.table_friction_scale) != (1.0, 1.0)
         ):
             raise NotImplementedError(
                 "friction DR on PhysX: a tensor-API material write resets the combine modes that "
                 "match the cloth's friction, so it would silently average instead. Set "
-                "rigid_cloth.randomization.{slat,fingertip,table}_friction_scale to [1.0, 1.0], or use "
+                "domain_randomization.cloth.{slat,robot,table}_friction_scale to [1.0, 1.0], or use "
                 "physx_chain.friction_model: cloth_min."
             )
         p.goal_task.check(p.init_fold_prob)
@@ -197,7 +197,7 @@ class RigidBackend(ClothBackend):
         pool_scene.draw_start_folds(self, env_ids, shapes)
 
     def end_reset(self, env_ids: torch.Tensor) -> None:
-        if self.physics_dr is not None and self.physics_dr.enabled:
+        if self.physics_dr is not None:
             self.physics_dr.draw(env_ids)
 
     def pre_physics_step(self) -> None:
@@ -234,7 +234,7 @@ class RigidBackend(ClothBackend):
             reasons["start_folded"] = self.start_folded
             reasons["fold_start_folded"] = entered & self.start_folded
 
-    def add_episode_final(self, final: dict, reasons: dict, episode_length_buf: torch.Tensor, tracker_stats) -> None:
+    def add_episode_final(self, final: dict, reasons: dict, episode_length_buf: torch.Tensor) -> None:
         # How many steps a fold takes. The logger averages `episode_final` over finished episodes,
         # so `fold_steps` (the episode length if it folded, else 0) divided by `done_fold` is the
         # mean length of a folded episode; `fold_steps_flat_start` / `fold_flat_start` the same for
@@ -247,7 +247,3 @@ class RigidBackend(ClothBackend):
         final["fold_steps"] = entered.float() * length
         final["fold_flat_start"] = flat_fold.float()
         final["fold_steps_flat_start"] = flat_fold.float() * length
-        if tracker_stats is not None:
-            # Cloth tracker DR: per-episode frozen share of camera frames, fresh share per half,
-            # covered share by the hand and by the cloth itself.
-            final.update(tracker_stats)

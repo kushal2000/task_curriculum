@@ -14,8 +14,6 @@ from __future__ import annotations
 # before the compat shim has run.
 from isaaclab.utils.configclass import configclass
 
-from .mdp.tracker_cfg import ClothTrackerCfg
-
 __all__ = ["ClothCfg"]
 
 
@@ -139,9 +137,6 @@ class ClothCfg:
     non-finite can reach the network or the gradient, and are terminated so they reset through the
     normal path. Over a multi-hour run on 4 GPUs a single diverged env would otherwise kill
     everything; the failure has been seen roughly once per three 900-step evals."""
-
-    tracker: ClothTrackerCfg = ClothTrackerCfg()
-    """Observation DR replaying the real CoTracker pipeline (``utils/cloth_tracker.py``)."""
 
     def __post_init__(self) -> None:
         """Reject a sheet that would spawn inside the table: it presents as violent instability rather

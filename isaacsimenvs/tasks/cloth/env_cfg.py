@@ -18,11 +18,15 @@ from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
 
 __all__ = [
     "ActionCfg",
+    "ActionDRCfg",
     "AssetsCfg",
+    "ClothDRCfg",
     "ClothEnvCfg",
     "DomainRandomizationCfg",
     "ObsCfg",
+    "ObservationDRCfg",
     "ResetCfg",
+    "RobotDRCfg",
     "RewardCfg",
     "TerminationCfg",
 ]
@@ -106,8 +110,6 @@ class ResetCfg:
     table_reset_z: float = 0.38
     table_reset_z_range: float = 0.01
     table_object_z_offset: float = 0.25
-    table_reset_xy_range_m: tuple[float, float] = (0.0, 0.0)
-    table_reset_yaw_range_deg: float = 0.0
 
 
 @configclass
@@ -119,53 +121,96 @@ class TerminationCfg:
 
 
 @configclass
+class ObservationDRCfg:
+    """What the policy reads (the critic always reads the clean values); ``mdp/observations.py``.
+
+    Delays are in policy steps (1/60 s): one lag per env and episode, uniform in ``0 .. *_delay_max``.
+    Noise is drawn every step, biases once per episode."""
+
+    delay_max: int = 0
+    """Lag of the whole policy observation."""
+    joint_pos_noise_std: float = 0.0
+    """Gaussian noise on the joint positions [rad] (carried through the [-1, 1] normalisation)."""
+    joint_vel_noise_std: float = 0.0
+    """Gaussian noise on the joint velocities [rad/s]."""
+    object_delay_max: int = 0
+    """Lag of the observed sheet pose and velocity, on top of ``delay_max``."""
+    object_pos_noise_std: float = 0.0
+    """Gaussian noise on the observed sheet position [m]."""
+    object_rot_noise_deg: float = 0.0
+    """The observed sheet orientation turned about a random axis by up to this angle."""
+    object_pos_bias: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    """Per-episode offset of the observed sheet position, uniform in +- this per axis [m] (a
+    calibration error: it does not average out)."""
+    object_rot_bias_deg: float = 0.0
+    """Per-episode turn of the observed sheet orientation, about a random axis, up to this angle."""
+
+
+@configclass
+class ActionDRCfg:
+    """The action that is executed; ``mdp/actions.py``."""
+
+    delay_max: int = 0
+    """Lag in policy steps, one per env and episode, uniform in ``0 .. delay_max``."""
+    noise_std: float = 0.0
+    """Gaussian noise on every action every step (normalised units, clamped to [-1, 1])."""
+
+
+@configclass
+class RobotDRCfg:
+    """The robot's dynamics, one draw per env and episode; ``mdp/randomization.py``."""
+
+    stiffness_scale: tuple[float, float] = (1.0, 1.0)
+    """Factor on the PD stiffness, drawn for the arm and the hand separately."""
+    damping_scale: tuple[float, float] = (1.0, 1.0)
+    """Factor on the PD damping, drawn for the arm and the hand separately."""
+    hand_friction_scale: tuple[float, float] = (1.0, 1.0)
+    """Factor on the hand's joint friction, per joint (PhysX only). Needs ``hand_sysid``: the
+    HAND2_DRIVE hand has no joint friction to scale."""
+    hand_effort_limit_scale: tuple[float, float] = (1.0, 1.0)
+    """Factor on the hand's torque limit, one per env (PhysX only)."""
+
+
+@configclass
+class ClothDRCfg:
+    """The sheet's physics: the rigid fold pool's plates (PhysX); ``backends/rigid/randomization.py``.
+    The VBD sheet has none of these and refuses a range that is not neutral.
+
+    Factors and offsets on the configured values (``rigid_cloth``, ``assets``), so the centre of each
+    range is the configuration. Uniform draws unless marked log-uniform; the plates' terms are redrawn
+    at every reset, the frictions once per env at startup."""
+
+    slat_friction_scale: tuple[float, float] = (1.0, 1.0)
+    """Factor on ``rigid_cloth.slat_friction``. Friction DR needs ``physx_chain.friction_model: cloth_min``."""
+    robot_friction_scale: tuple[float, float] = (1.0, 1.0)
+    """Factor on ``assets.finger_tip_friction``, the whole robot's friction under ``cloth_min``."""
+    table_friction_scale: tuple[float, float] = (1.0, 1.0)
+    """Factor on ``assets.table_friction`` under ``cloth_min``."""
+    hinge_damping_scale: tuple[float, float] = (1.0, 1.0)
+    """Log-uniform factor on ``rigid_cloth.joint_damping``. Keep the floor at 0.5 or above: the hinge
+    is only stable at ``dt = 1/120`` because of this damping, and at a 0.3 floor one env in 32 went
+    non-finite in a forced 180 deg fold of a two-plate chain (none at 0.5 or above)."""
+    hinge_stiffness: tuple[float, float] = (0.0, 0.0)
+    """Hinge spring [N m / rad]; ``(0, 0)`` keeps the hinge actuator velocity-only. For scale: a 10 g
+    plate's weight at 25 mm is 2.5e-3 N m, and 5e-4 N m/rad returns 0.8e-3 N m at a 90 deg bend --
+    a third of that, so still a limp sheet."""
+    mass_scale: tuple[float, float] = (1.0, 1.0)
+    """Factor on every plate's mass and inertia together (the mass distribution keeps its shape)."""
+    contact_margin_offset: tuple[float, float] = (0.0, 0.0)
+    """Added to ``rigid_cloth.contact_margin`` [m]: where the surface a fingertip meets sits. The
+    rigid task's default is +-3 mm (``RigidClothEnvCfg``)."""
+
+
+@configclass
 class DomainRandomizationCfg:
-    """Observation, action and robot-dynamics DR; see ``mdp/randomization.py``. All off by default."""
+    """Domain randomization, by what it acts on. Every range defaults to neutral (off); the DR blocks
+    (``tasks/cloth/config/dr/``) turn a group on. Centre values (the hand model, frictions, contact
+    shell) are configuration, not DR: ``hand_sysid``, ``assets``, ``rigid_cloth``."""
 
-    # Delay lines: policy observation, executed action, observed object state. A lag uniform in
-    # [0, max - 1] policy steps, drawn every step ("per_step") or once per episode ("per_episode").
-    use_obs_delay: bool = False
-    obs_delay_max: int = 3
-    use_action_delay: bool = False
-    action_delay_max: int = 3
-    delay_mode: str = "per_step"
-
-    # Pose-level object DR: the observed sheet pose delayed and noised every step, plus a
-    # per-episode bias (a calibration error; it does not average out).
-    use_object_state_delay_noise: bool = False
-    object_state_delay_max: int = 10
-    object_state_xyz_noise_std: float = 0.0
-    object_state_rotation_noise_degrees: float = 0.0
-    object_pose_bias_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    object_pose_bias_rot_degrees: float = 0.0
-    # Per-env factor on the observed sheet size (keypoint offsets and object_scales), per episode.
-    object_scale_noise_multiplier_range: tuple[float, float] = (1.0, 1.0)
-
-    # Per-step Gaussian noise: joint velocity and position observations, the executed action.
-    joint_velocity_obs_noise_std: float = 0.0
-    joint_pos_obs_noise_std: float = 0.0
-    action_noise_std: float = 0.0
-
-    # Robot dynamics, per episode: PD gain factors (arm and hand separately), and the hand's joint
-    # friction (per joint) and torque limit (shared) factors -- the last two PhysX only.
-    robot_stiffness_scale_range: tuple[float, float] = (1.0, 1.0)
-    robot_damping_scale_range: tuple[float, float] = (1.0, 1.0)
-    hand_friction_scale_range: tuple[float, float] = (1.0, 1.0)
-    hand_effort_limit_scale_range: tuple[float, float] = (1.0, 1.0)
-
-    # Point-level object DR ("off" | "simple" | "realistic"; see mdp/point_dr.py): the tracked
-    # corners and the goal share one lag; each corner gets its own noise and per-episode bias, all
-    # of them a common per-episode bias; the corners are then rigidly re-fitted. Replaces the
-    # pose-level object DR; use_obs_delay then delays the proprioceptive fields only.
-    point_dr_mode: str = "off"
-    point_delay_range: tuple[int, int] = (0, 0)
-    point_base_delay_range: tuple[int, int] = (0, 0)
-    point_delay_jitter: int = 0
-    point_delay_max: int = 0
-    point_hold_choices: tuple[int, ...] = (1,)
-    point_noise_std: float = 0.0
-    point_bias_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    point_common_bias_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    observation: ObservationDRCfg = ObservationDRCfg()
+    action: ActionDRCfg = ActionDRCfg()
+    robot: RobotDRCfg = RobotDRCfg()
+    cloth: ClothDRCfg = ClothDRCfg()
 
 
 def _physx_sim_cfg() -> SimulationCfg:
@@ -194,7 +239,8 @@ class ClothEnvCfg(DirectRLEnvCfg):
 
     hand_sysid: bool = False
     """The real hand's identified joint dynamics (``robots.with_sysid``: armature, friction, passive
-    spring, torque limit 1.0 A x Kt) instead of HAND2_DRIVE's; the sysid DR block turns it on."""
+    spring, torque limit 1.0 A x Kt) instead of HAND2_DRIVE's. Configuration, not DR: the robot DR
+    (``domain_randomization.robot``) scales around it."""
     robot_self_collision: bool = True
     """Robot self-collision, minus ``RobotSpec.self_collision_filter``."""
     robot_self_collision_scope: str = "all"

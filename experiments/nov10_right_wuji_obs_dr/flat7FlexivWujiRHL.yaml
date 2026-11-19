@@ -1,18 +1,9 @@
-# flat7FlexivWujiRHL: the base recipe on the identified hand (no hand DR), with the 11-10 contact
-# frictions (no friction DR), the 5 mm contact shell and table-height DR +-1.5 cm (the kinematic table moves in z at every reset; the base stays put, so the policy cannot see
-# it). The control for flat7FWRHL_dA / _dB.
-base: rigid_cloth_right_wuji
-dr: [contact_shell]
+# flat7FlexivWujiRHL: the base recipe on the real setup's centre values (the identified hand, the 11-10
+# contact frictions, the 5 mm contact shell; no hand or friction DR) and table-height DR +-1.5 cm (the
+# kinematic table moves in z at every reset; the base stays put, so the policy cannot see it). The
+# control for flat7FWRHL_dA / _dB (deleted 2026-11-19 with the point-level object DR they used).
+base: rigid_cloth_right_wuji_real
 
 env:
-  hand_sysid: true                       # the sysid block's hand, without its DR
   reset:
     table_reset_z_range: 0.015
-  assets:                                # friction's centres, without its DR
-    finger_tip_friction: 0.5
-    table_friction: 1.0
-  rigid_cloth:
-    slat_friction: 1.0
-    fingertip_slat_friction: 0.364
-  physx_chain:
-    friction_model: cloth_min

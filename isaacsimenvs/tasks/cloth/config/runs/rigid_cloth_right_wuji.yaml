@@ -10,9 +10,9 @@
 #       --checkpoint <Play prior .pth> --checkpoint_load_mode weights \
 #       agent.params.config.name=0_<run name>
 #
-# DR is added with blocks from ../dr/, in a recipe that has `base: rigid_cloth_right_wuji` and
-# `dr: [...]` (examples: experiments/*/). The blocks: sysid, friction, contact_shell, proprio_noise,
-# object_points, tracker, tracker_reacquire, action_delay, action_noise, pd_gains, hinge_mass, dr_delay.
+# The real setup's centre values (identified hand, frictions, 5 mm felt) are rigid_cloth_right_wuji_real.
+# DR is added with blocks from ../dr/ (observation, action, robot, cloth) in a recipe with `base:` and
+# `dr: [...]` (examples: experiments/*/).
 task: Isaacsimenvs-RigidCloth-Direct-v0
 
 env:

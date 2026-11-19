@@ -1,3 +1,16 @@
-# flat7RW_DR_delay (stage 12, run 12): flat7DRABC's delay / noise DR (A and B layers, no C).
+# flat7RW_DR_delay (stage 12, run 12): flat7DRABC's delay / noise DR (A and B layers, no C): the
+# observation and action blocks with the Kuka runs' values -- delays 0-2 steps (sheet pose a further
+# 0-5), joint position noise 0.01 rad -- and PD gains x0.8-1.2.
 base: rigid_cloth_right_wuji
-dr: [dr_delay]
+dr: [observation, action]
+
+env:
+  domain_randomization:
+    observation:
+      delay_max: 2
+      joint_pos_noise_std: 0.01
+    action:
+      delay_max: 2
+    robot:
+      stiffness_scale: [0.8, 1.2]
+      damping_scale: [0.8, 1.2]

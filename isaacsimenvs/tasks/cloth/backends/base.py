@@ -106,5 +106,5 @@ class ClothBackend:
     def add_termination_reasons(self, reasons: dict[str, torch.Tensor]) -> None:
         """Extra per-episode ``done_<name>`` outcomes (reported, not acted on)."""
 
-    def add_episode_final(self, final: dict, reasons: dict, episode_length_buf: torch.Tensor, tracker_stats) -> None:
+    def add_episode_final(self, final: dict, reasons: dict, episode_length_buf: torch.Tensor) -> None:
         """Extra per-episode values for ``extras["episode_final"]``."""

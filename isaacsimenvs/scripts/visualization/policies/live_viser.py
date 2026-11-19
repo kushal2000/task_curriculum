@@ -123,13 +123,13 @@ _TASK_KEYS = ("env.rigid_cloth.variant=", "env.newton.per_env_triangle_pairs=",
               "env.fold_pool.init_fold_prob=", "env.rigid_cloth.joint_damping=",
               "env.cloth.size=", "env.cloth.resolution=", "env.cloth.reset_offset_xy=")
 #: PhysX has no friction DR (a tensor material write resets the combine modes; backends/rigid/physx.py).
-_PHYSX_NO = ("slat_friction_scale", "fingertip_friction_scale")
+_PHYSX_NO = ("slat_friction_scale", "robot_friction_scale")
 
-#: Physics sliders for rigid manipulands: (label, randomization field, lo, hi, step, nominal).
+#: Physics sliders for rigid manipulands: (label, domain_randomization.cloth field, lo, hi, step, nominal).
 #: Each is written as a degenerate range [v, v], so the env's own DR draw returns exactly v.
 PHYSICS = (
     ("slat friction x", "slat_friction_scale", 0.2, 3.0, 0.05, 1.0),
-    ("fingertip friction x", "fingertip_friction_scale", 0.2, 3.0, 0.05, 1.0),
+    ("robot friction x", "robot_friction_scale", 0.2, 3.0, 0.05, 1.0),
     ("hinge damping x", "hinge_damping_scale", 0.5, 10.0, 0.1, 1.0),
     ("hinge stiffness [1e-4 N m/rad]", "hinge_stiffness", 0.0, 10.0, 0.1, 0.0),
     ("contact margin offset [mm]", "contact_margin_offset", -5.0, 5.0, 0.25, 0.0),
@@ -429,8 +429,7 @@ def main() -> None:
         if rigid:
             # Build hinge actuators with a position gain (1e-9 N m/rad) so the stiffness slider can
             # reach them: Newton fixes the actuator TYPE at build time (rigid_cloth_env.py).
-            rd = env_cfg.rigid_cloth.randomization
-            rd.enabled = True
+            rd = env_cfg.domain_randomization.cloth
             if float(rd.hinge_stiffness[1]) <= 0.0:
                 rd.hinge_stiffness = [0.0, 1e-3]
         # Keep the training reset distribution's numbers, then pin; the GUI swaps between them.
@@ -641,7 +640,7 @@ def main() -> None:
             cos = (tab @ q) / (tab.norm(dim=1) * q.norm()).clamp(min=1e-9)
             return s, int(cos.argmax()), math.degrees(float(q.abs().max()))
 
-        rd_cfg = inner.cfg.rigid_cloth.randomization if rigid else None
+        rd_cfg = inner.cfg.domain_randomization.cloth if rigid else None
         rd_train = {f: list(getattr(rd_cfg, f)) for _, f, *_ in PHYSICS} if rigid else {}
 
         # ------------------------------------------------------------------ GUI
@@ -1280,7 +1279,7 @@ def main() -> None:
             if rb is not None and rb.physics_dr is not None:
                 d = {k: float(v[w]) for k, v in rb.physics_dr.sample.items()}
                 lines.append(
-                    f"physics: slat mu {d['slat_friction']:.3f}, tip mu {d['fingertip_friction']:.3f}, "
+                    f"physics: slat mu {d['slat_friction']:.3f}, robot mu {d['robot_friction']:.3f}, "
                     f"damping {d['hinge_damping']:.3g}, stiffness {d['hinge_stiffness']:.2g}, "
                     f"margin {d['contact_margin'] * 1e3:.1f} mm, mass x{d['mass']:.2f}"
                 )

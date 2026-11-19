@@ -1,6 +1,6 @@
-"""Per-env physics randomisation of the plates, redrawn at every reset (``rigid_cloth.randomization``):
-contact margin, hinge damping and stiffness, mass. Friction (``cloth_min``) is drawn once at startup,
-in ``contacts.py``."""
+"""The sheet's physics DR on the plates (``domain_randomization.cloth``), redrawn per env at every
+reset: contact margin, hinge damping and stiffness, mass. Friction (``cloth_min``) is drawn once at
+startup, in ``contacts.py``."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ __all__ = ["PlateRandomization"]
 
 class PlateRandomization:
     """``sample`` holds each env's current draw (read by the viewer and the logs). Construction
-    draws every env once when ``enabled``."""
+    draws every env once."""
 
     def __init__(self, b) -> None:
         self.b = b
@@ -24,21 +24,24 @@ class PlateRandomization:
         self.inertia_base = [a.root_physx_view.get_inertias().clone() for a in b.arts]
         self.contact_margin = contacts.contact_margin(b)
         self.sample = {
-            k: torch.ones(n, device=b.device) for k in ("slat_friction", "fingertip_friction", "hinge_damping", "mass")
+            k: torch.ones(n, device=b.device) for k in ("slat_friction", "robot_friction", "hinge_damping", "mass")
         }
         if b.cfg.physx_chain.friction_model == "cloth_min":
             # Drawn once at startup (contacts.py); absolute values here, not factors.
             self.sample["slat_friction"] = b.friction_slat.to(b.device)
-            self.sample["fingertip_friction"] = b.friction_robot.to(b.device)
+            self.sample["robot_friction"] = b.friction_robot.to(b.device)
             self.sample["table_friction"] = b.friction_table.to(b.device)
         self.sample["hinge_stiffness"] = torch.zeros(n, device=b.device)
         self.sample["contact_margin"] = torch.full((n,), self.contact_margin, device=b.device)
-        self.enabled = bool(b.cfg.rigid_cloth.randomization.enabled)
-        if self.enabled:
-            self.draw(torch.arange(n, device=b.device))
-            rd = b.cfg.rigid_cloth.randomization
+        rd = b.cfg.domain_randomization.cloth
+        self.draw(torch.arange(n, device=b.device))
+        varies = [
+            name for name in ("hinge_damping_scale", "hinge_stiffness", "contact_margin_offset", "mass_scale")
+            if float(getattr(rd, name)[0]) != float(getattr(rd, name)[1])
+        ]
+        if varies:
             print(
-                f"[rigid_cloth] physics randomisation ON, per env at every reset: hinge damping x"
+                f"[rigid_cloth] physics DR per env at every reset: hinge damping x"
                 f"{tuple(rd.hinge_damping_scale)} (log), hinge stiffness {tuple(rd.hinge_stiffness)} "
                 f"N m/rad, contact margin {self.contact_margin * 1e3:.1f}"
                 f"{rd.contact_margin_offset[0] * 1e3:+.1f}..{rd.contact_margin_offset[1] * 1e3:+.1f} mm, "
@@ -50,7 +53,7 @@ class PlateRandomization:
     def draw(self, env_ids) -> None:
         """Re-draw the plates' physics for ``env_ids``: only the ranges that are not a point."""
         b = self.b
-        rd = b.cfg.rigid_cloth.randomization
+        rd = b.cfg.domain_randomization.cloth
         r = b.cfg.rigid_cloth
         ids = torch.as_tensor(env_ids, device=b.device, dtype=torch.long).reshape(-1)
         n = int(ids.numel())

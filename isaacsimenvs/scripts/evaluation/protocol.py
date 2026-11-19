@@ -21,38 +21,41 @@ def set_present(section, **values) -> None:
 
 
 def disable_randomization(cfg) -> None:
-    """Turn off every DR and reset-noise source, and pin the object's start pose.
+    """Turn off every observation / action / robot DR and reset-noise source, and pin the object's
+    start pose. The cloth task's sheet-physics DR (``domain_randomization.cloth``) stays as the run
+    configured it; ``experiments/eval.sh`` pins it for its pinned protocol.
 
     Domain randomisation is *on* by default in ``PlayEnvCfg`` because that is the
     training regime. For evaluation it has to be off: obs/action delays, object-state noise and
     random wrench impulses all inject variance that has nothing to do with the policy under
     test.
     """
-    set_present(
-        cfg.domain_randomization,
-        use_obs_delay=False,
-        use_action_delay=False,
-        use_object_state_delay_noise=False,
-        object_scale_noise_multiplier_range=(1.0, 1.0),
-        joint_velocity_obs_noise_std=0.0,
-        joint_pos_obs_noise_std=0.0,
-        action_noise_std=0.0,
-        object_pose_bias_xyz=(0.0, 0.0, 0.0),
-        object_pose_bias_rot_degrees=0.0,
-        robot_stiffness_scale_range=(1.0, 1.0),
-        robot_damping_scale_range=(1.0, 1.0),
-        point_dr_mode="off",
-        hand_friction_scale_range=(1.0, 1.0),
-        hand_effort_limit_scale_range=(1.0, 1.0),
-        # The Play task's random wrench on its tool.
-        force_scale=0.0,
-        torque_scale=0.0,
-        force_prob_range=(0.0001, 0.0001),
-        torque_prob_range=(0.0001, 0.0001),
-    )
-    tracker = getattr(getattr(cfg, "cloth", None), "tracker", None)
-    if tracker is not None:
-        tracker.enabled = False  # the cloth tracker obs DR (cloth.tracker): true observation in eval
+    dr = cfg.domain_randomization
+    if hasattr(dr, "observation"):  # the cloth task: DR by group, each back to its (neutral) defaults
+        dr.observation, dr.action, dr.robot = type(dr.observation)(), type(dr.action)(), type(dr.robot)()
+    else:  # the Play task
+        set_present(
+            dr,
+            use_obs_delay=False,
+            use_action_delay=False,
+            use_object_state_delay_noise=False,
+            object_scale_noise_multiplier_range=(1.0, 1.0),
+            joint_velocity_obs_noise_std=0.0,
+            joint_pos_obs_noise_std=0.0,
+            action_noise_std=0.0,
+            object_pose_bias_xyz=(0.0, 0.0, 0.0),
+            object_pose_bias_rot_degrees=0.0,
+            robot_stiffness_scale_range=(1.0, 1.0),
+            robot_damping_scale_range=(1.0, 1.0),
+            point_dr_mode="off",
+            hand_friction_scale_range=(1.0, 1.0),
+            hand_effort_limit_scale_range=(1.0, 1.0),
+            # The Play task's random wrench on its tool.
+            force_scale=0.0,
+            torque_scale=0.0,
+            force_prob_range=(0.0001, 0.0001),
+            torque_prob_range=(0.0001, 0.0001),
+        )
 
     rs = cfg.reset
     rs.reset_position_noise_x = 0.0

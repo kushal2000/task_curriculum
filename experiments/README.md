@@ -20,7 +20,7 @@ Their headers list the options.
 experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 --experiment rigid_cloth_right_wuji \
     --checkpoint <prior.pth>
 SMOKE=1 experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
-    --experiment experiments/nov15_cloth_tracker/flat7RW_trkCr.yaml --checkpoint <prior.pth>
+    --experiment experiments/nov15_dr_delay/flat7RW_DR_delay.yaml --checkpoint <prior.pth>
 CKPT=<pth> TAG=mypolicy INDEX=2 experiments/eval.sh
 ```
 

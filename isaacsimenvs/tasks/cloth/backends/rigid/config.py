@@ -2,7 +2,7 @@
 
 Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv_isaacsim``). ``RigidClothEnvCfg`` is the task's
 ``ClothEnvCfg`` (whose ``cloth`` block is the sheet the plates stand in for) plus three blocks:
-``rigid_cloth`` (plate physics and its randomisation), ``fold_pool`` (which shapes, how big, folded
+``rigid_cloth`` (plate physics; its DR is ``domain_randomization.cloth``), ``fold_pool`` (which shapes, how big, folded
 starts) and ``physx_chain`` (how contacts are expressed in PhysX).
 """
 
@@ -13,12 +13,11 @@ import math
 from isaaclab.utils import configclass
 
 from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
-from isaacsimenvs.tasks.cloth.env_cfg import AssetsCfg, ClothEnvCfg
+from isaacsimenvs.tasks.cloth.env_cfg import AssetsCfg, ClothDRCfg, ClothEnvCfg, DomainRandomizationCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 
 __all__ = [
     "CLOTH_FOLD_LIFT", "FoldPoolCfg", "GoalTaskCfg", "PhysxChainCfg", "RigidClothCfg", "RigidClothEnvCfg",
-    "RigidClothRandomizationCfg",
 ]
 
 #: The VBD cloth's own friction and the shapes' it meets (Newton mixes them by geometric mean).
@@ -54,10 +53,10 @@ class PhysxChainCfg:
     ``"cloth_min"``: slats ``min`` at ``rigid_cloth.friction``; the WHOLE robot at
     ``assets.finger_tip_friction`` and the table at ``assets.table_friction``, both average-mode
     (tensor-API written). Pairs: cloth-table = min(slat, table), cloth-robot = min(slat, robot),
-    robot-table = (robot + table) / 2. With ``rigid_cloth.randomization`` on, each of the three is
-    drawn per env ONCE at startup (``slat_friction_scale``, ``fingertip_friction_scale`` -- the robot
-    here --, ``table_friction_scale``), quantised to ``friction_buckets`` values: PhysX caps a scene at
-    64K materials and the slats need one USD material (with its combine mode) per bucket."""
+    robot-table = (robot + table) / 2. Each of the three can be drawn per env ONCE at startup
+    (``domain_randomization.cloth.{slat,robot,table}_friction_scale``), quantised to
+    ``friction_buckets`` values: PhysX caps a scene at 64K materials and the slats need one USD
+    material (with its combine mode) per bucket."""
 
     friction_buckets: int = 16
     """Distinct values per randomised friction under ``friction_model: cloth_min``."""
@@ -122,48 +121,6 @@ class PhysxChainCfg:
     """Per-env sheet sizes are quantised to this [m], and one USD per distinct size and shape is
     written. PhysX parses every env on its own (``replicate_physics: false``), so envs can
     simply reference differently sized sheets -- no per-world builder hook as on Newton."""
-
-
-@configclass
-class RigidClothRandomizationCfg:
-    """Per-env physics randomisation of the chain, re-drawn for every env at every reset.
-
-    The point is transfer, not robustness for its own sake: what is left between a chain and the
-    cloth after the deterministic fixes is dynamics a hinged slab cannot reproduce exactly, so the
-    policy is trained across a band of chain physics centred on the cloth-matched values rather
-    than on one chain. Every range is a multiplier on (or an offset from) the matched value, so the
-    centre of the distribution is the deterministic configuration.
-
-    Uniform draws unless marked log-uniform. By default only the contact shell is randomised
-    (``contact_margin_offset``); every other term is pinned neutral, and the DR blocks
-    (``tasks/cloth/config/dr/``) turn them on: ``friction``, ``hinge_mass``.
-    """
-
-    enabled: bool = True
-    slat_friction_scale: tuple[float, float] = (1.0, 1.0)
-    """Multiplies ``slat_friction`` (slat vs table and non-fingertip links). DR block ``friction``:
-    0.7-1.5."""
-    fingertip_friction_scale: tuple[float, float] = (1.0, 1.0)
-    """Multiplies ``fingertip_slat_friction``. DR block ``friction``: 0.7-1.3. Written on the fingertips, so with
-    ``friction_priority`` it also moves that env's fingertip-table friction by the same factor.
-    Under PhysX ``physx_chain.friction_model: cloth_min`` it multiplies the WHOLE robot's friction
-    (``assets.finger_tip_friction``), drawn once per env at startup."""
-    table_friction_scale: tuple[float, float] = (1.0, 1.0)
-    """PhysX ``physx_chain.friction_model: cloth_min`` only: multiplies ``assets.table_friction``,
-    drawn once per env at startup."""
-    hinge_damping_scale: tuple[float, float] = (1.0, 1.0)
-    """Log-uniform multiplier on ``joint_damping``; DR block ``hinge_mass``: 0.5-3. The floor is 0.5, not lower: the hinge is only
-    stable at ``dt = 1/120`` because of this damping, and at a 0.3 floor one env in 32 went
-    non-finite in a forced 180 deg fold of a two-plate chain (not reproduced in 128 at 0.3, none at 0.5 or above)."""
-    hinge_stiffness: tuple[float, float] = (0.0, 0.0)
-    """Hinge spring [N m / rad]; ``(0, 0)`` also keeps the actuator velocity-only, as with DR off.
-    DR block ``hinge_mass``: 0-5e-4. For scale: a 10 g plate's weight at 25 mm is 2.5e-3 N m, and the
-    top of the range returns 0.8e-3 N m at a 90 deg bend -- a third of that, so still a limp sheet."""
-    contact_margin_offset: tuple[float, float] = (-0.003, 0.003)
-    """Added to ``contact_margin`` [m]: where the surface a fingertip meets sits, +-3 mm."""
-    mass_scale: tuple[float, float] = (1.0, 1.0)
-    """Multiplies every slat's mass and inertia together (the shape of the mass distribution is
-    kept). DR block ``hinge_mass``: 0.7-1.5."""
 
 
 @configclass
@@ -234,8 +191,6 @@ class RigidClothCfg:
     with its mid-plane 8 mm above the table and a fingertip meets it 8 mm above that. A 2 mm plate
     with a 7 mm margin puts both where the cloth's are. Plate-plate contact would sum two margins,
     so those pairs are off whenever this is nonzero (articulation self-collision disabled)."""
-
-    randomization: RigidClothRandomizationCfg = RigidClothRandomizationCfg()
 
     def __post_init__(self) -> None:
         if self.density <= 0.0:
@@ -339,7 +294,7 @@ class FoldPoolCfg:
     thickness_range: list[float] = [0.002, 0.002]
     """Plate (slab) thickness [m], drawn once per env like ``size_range``. NOT the thickness the
     hand feels: that is slab + 2 x ``rigid_cloth.contact_margin`` (2 + 2 x 7 = 16 mm by default),
-    and the margin is already randomised PER EPISODE by ``rigid_cloth.randomization``."""
+    and the margin is already randomised PER EPISODE (``domain_randomization.cloth.contact_margin_offset``)."""
 
     size_seed: int = 0
     """Seed for the per-env size / thickness draws, so a run's sizes are reproducible."""
@@ -433,3 +388,8 @@ class RigidClothEnvCfg(ClothEnvCfg):
     rigid_cloth: RigidClothCfg = RigidClothCfg()
     physx_chain: PhysxChainCfg = PhysxChainCfg()
     fold_pool: FoldPoolCfg = FoldPoolCfg()
+    # The contact shell (where a fingertip meets the plates) at +-3 mm per episode around
+    # rigid_cloth.contact_margin; every other DR range neutral.
+    domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg(
+        cloth=ClothDRCfg(contact_margin_offset=(-0.003, 0.003))
+    )

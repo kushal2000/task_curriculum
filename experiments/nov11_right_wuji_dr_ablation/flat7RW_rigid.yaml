@@ -1,3 +1,9 @@
 # flat7RW_rigid (stage 12, run 10): the 5 mm felt (contact shell 1.5 +- 1 mm). Nothing else changes.
 base: rigid_cloth_right_wuji
-dr: [contact_shell]
+
+env:
+  rigid_cloth:
+    contact_margin: 0.0015
+  domain_randomization:
+    cloth:
+      contact_margin_offset: [-0.001, 0.001]

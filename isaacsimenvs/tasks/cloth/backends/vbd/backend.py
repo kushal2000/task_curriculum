@@ -21,6 +21,7 @@ from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
     install_post_construction_patches,
     install_pre_construction_patches,
 )
+from isaacsimenvs.tasks.cloth.env_cfg import ClothDRCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
 from isaacsimenvs.tasks.cloth.mdp.state import SheetLayout
 
@@ -37,6 +38,14 @@ class VbdBackend(ClothBackend):
 
     def __init__(self, cfg, robot_spec) -> None:
         super().__init__(cfg, robot_spec)
+        # The sheet-physics DR is the rigid plates'; the VBD sheet has nothing it could act on.
+        neutral = vars(ClothDRCfg())
+        moved = {
+            name: list(v) for name, v in vars(cfg.domain_randomization.cloth).items()
+            if tuple(float(x) for x in v) != tuple(float(x) for x in neutral[name])
+        }
+        if moved:
+            raise NotImplementedError(f"domain_randomization.cloth is the rigid plates' DR; on VBD keep it neutral, got {moved}")
         install_pre_construction_patches(
             cfg,
             # Coupled MJWarp (robot) + VBD (cloth), sized for this env count.

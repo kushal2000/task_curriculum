@@ -1,0 +1,18 @@
+# DR block observation: what the policy reads (domain_randomization.observation; the critic reads the
+# clean values). Lags are drawn once per episode, uniform in 0 .. max policy steps (1/60 s).
+#
+#   proprioception  the whole observation 0-3 steps late; joint position noise 0.005 rad, joint
+#                   velocity noise 0.1 rad/s every step (the 2026-11-10 right-Wuji values)
+#   sheet pose      a further 0-5 steps late; noise 1 cm / 5 deg every step; a per-episode bias of
+#                   5 / 5 / 2 mm and 3 deg, a calibration error that does not average out
+#                   (flat7DRABC's object DR, A and B layers)
+domain_randomization:
+  observation:
+    delay_max: 3
+    joint_pos_noise_std: 0.005
+    joint_vel_noise_std: 0.1
+    object_delay_max: 5
+    object_pos_noise_std: 0.01
+    object_rot_noise_deg: 5.0
+    object_pos_bias: [0.005, 0.005, 0.002]
+    object_rot_bias_deg: 3.0

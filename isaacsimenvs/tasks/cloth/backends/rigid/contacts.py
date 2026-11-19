@@ -30,8 +30,7 @@ def contact_offset(b) -> float:
     depending on the direction of the change. It only sets how early a contact is generated,
     not where the surface rests.
     """
-    rd = b.cfg.rigid_cloth.randomization
-    top = float(rd.contact_margin_offset[1]) if rd.enabled else 0.0
+    top = float(b.cfg.domain_randomization.cloth.contact_margin_offset[1])
     return contact_margin(b) + max(top, 0.0) + float(b.cfg.physx_chain.contact_offset_margin)
 
 
@@ -94,10 +93,10 @@ def bind_contact_materials(b) -> None:
 
 def _draw_friction_buckets(b, scale, gen) -> tuple[torch.Tensor, torch.Tensor]:
     """``(bucket multipliers (B,), env -> bucket (N,))`` for one friction, cloth_min model."""
-    rd, n = b.cfg.rigid_cloth.randomization, b.num_envs
+    n = b.num_envs
     lo, hi = float(scale[0]), float(scale[1])
-    if not rd.enabled or lo == hi:
-        return torch.tensor([lo if rd.enabled else 1.0]), torch.zeros(n, dtype=torch.long)
+    if lo == hi:
+        return torch.tensor([lo]), torch.zeros(n, dtype=torch.long)
     nb = max(1, int(b.cfg.physx_chain.friction_buckets))
     return torch.linspace(lo, hi, nb), torch.randint(0, nb, (n,), generator=gen)
 
@@ -107,10 +106,10 @@ def _bind_cloth_min_materials(b, stage) -> None:
     bound to the slats of the envs drawn into it. The robot's and the table's (average-mode)
     frictions are tensor-written once the simulator runs (:func:`check_contacts`)."""
     r, pc, a = b.cfg.rigid_cloth, b.cfg.physx_chain, b.cfg.assets
-    rd = r.randomization
+    rd = b.cfg.domain_randomization.cloth
     gen = torch.Generator().manual_seed(int(pc.friction_seed))
     s_mult, s_idx = _draw_friction_buckets(b, rd.slat_friction_scale, gen)
-    f_mult, f_idx = _draw_friction_buckets(b, rd.fingertip_friction_scale, gen)
+    f_mult, f_idx = _draw_friction_buckets(b, rd.robot_friction_scale, gen)
     t_mult, t_idx = _draw_friction_buckets(b, rd.table_friction_scale, gen)
     #: (N,) cpu: each env's friction of the slats, the robot and the table.
     b.friction_slat = float(r.friction) * s_mult[s_idx]

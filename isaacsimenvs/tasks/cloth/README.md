@@ -10,7 +10,8 @@ thing on both, so a policy trained on the rigid pool is evaluated on the VBD clo
 
 The robot is the real setup's (`ClothEnvCfg`): `robots.FLEXIV_WUJI_RIGHT` (Wuji's HAND2_DRIVE on the
 hand) with the real robot's joint limits (`rizon4s_right_wuji_real_limits.urdf`), its base where the
-real table puts it. `env.hand_sysid=true` (the `sysid` DR block) uses the identified hand instead.
+real table puts it. `env.hand_sysid=true` uses the identified hand instead (the recipe
+`rigid_cloth_right_wuji_real` sets it, with the real setup's frictions and contact shell).
 
 ## Layout
 
@@ -29,9 +30,8 @@ cloth/
     task.py           ClothTask: episode start (table, sheet), dones, reward, the goal as state
     goal_tasks.py     GoalTasks: one-fold goal tasks on the rigid pool (fold_pool.goal_task)
     observations.py   ObservationBuilder: policy and critic vectors, observation DR
-    randomization.py  DomainRandomization: per-episode DR draws (fixed order); DelayLine
-    point_dr.py       point-level observation DR
-    tracker.py        the cloth tracker pipeline (ClothTracker) and its observation (TrackerObservation)
+    randomization.py  DomainRandomization: per-episode observation / action / robot DR draws
+                      (fixed order); DelayLine
     geometry/         grid.py (sheet grid, keypoints, fold targets), fold_shapes.py (pool shapes),
                       fold_states.py (each shape's reachable folded states, one-fold moves,
                       look-alike classes), quat.py (the quaternion helpers, one place for the
@@ -42,7 +42,7 @@ cloth/
     scene.py          robot, table, goal marker, ground, light; then the backend's sheet
     rigid/            RigidBackend (backend.py) on PhysX: config.py, pool.py (PlatePool), scene.py
                       (building the pool, shape draws, folded starts), contacts.py,
-                      randomization.py (PlateRandomization), checks.py (startup proofs), physx.py,
+                      randomization.py (PlateRandomization: the sheet-physics DR), checks.py (startup proofs), physx.py,
                       assets.py, usd.py
     vbd/              VbdBackend (backend.py) on Newton: config.py, cloth_cfg.py (VbdClothCfg: the
                       sheet's material, contact, coupling), newton_setup.py, pierce.py,

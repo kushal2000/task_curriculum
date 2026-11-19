@@ -137,9 +137,8 @@ class ClothTask:
     # ------------------------------------------------------------------ the episode's start
 
     def sample_table(self, env_ids: torch.Tensor) -> torch.Tensor:
-        """Draw the table pose of ``env_ids``, (n, 7) env frame, wxyz: its height jittered by
-        ``table_reset_z_range``, optionally shifted and yawed (``table_reset_xy_range_m``,
-        ``table_reset_yaw_range_deg``). Drawn before the sheet, whose height it sets."""
+        """Draw the table pose of ``env_ids``, (n, 7) env frame, wxyz: at the env origin, its height
+        jittered by ``table_reset_z_range``. Drawn before the sheet, whose height it sets."""
         cfg = self.cfg.reset
         dev = self.device
         n = env_ids.numel()
@@ -149,17 +148,7 @@ class ClothTask:
 
         pos = torch.zeros(n, 3, device=dev)
         pos[:, 2] = table_z
-        half_x, half_y = (float(v) for v in cfg.table_reset_xy_range_m)
-        if half_x > 0.0 or half_y > 0.0:
-            pos[:, 0] = torch.empty(n, device=dev).uniform_(-half_x, half_x)
-            pos[:, 1] = torch.empty(n, device=dev).uniform_(-half_y, half_y)
-        yaw_range_deg = float(cfg.table_reset_yaw_range_deg)
-        if yaw_range_deg > 0.0:
-            half_yaw = torch.empty(n, device=dev).uniform_(-1.0, 1.0) * yaw_range_deg * (torch.pi / 180.0) * 0.5
-            zero = torch.zeros_like(half_yaw)
-            rot = torch.stack([torch.cos(half_yaw), zero, zero, torch.sin(half_yaw)], dim=-1)
-        else:
-            rot = torch.tensor([1.0, 0.0, 0.0, 0.0], device=dev).unsqueeze(0).expand(n, -1)
+        rot = torch.tensor([1.0, 0.0, 0.0, 0.0], device=dev).unsqueeze(0).expand(n, -1)
         return torch.cat([pos, rot], dim=-1)
 
     def sample_sheet(self, env_ids: torch.Tensor) -> torch.Tensor:

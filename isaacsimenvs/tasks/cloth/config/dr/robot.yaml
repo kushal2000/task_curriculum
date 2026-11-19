@@ -1,0 +1,12 @@
+# DR block robot: the robot's dynamics (domain_randomization.robot), one draw per env and episode.
+#
+# PD gains x0.7-1.3, stiffness and damping drawn separately for the arm and the hand. The hand's
+# joint friction x0.7-1.3 per joint and its torque limit x0.85-1.15 (PhysX only) scale the identified
+# hand's values, so the recipe needs hand_sysid: true (rigid_cloth_right_wuji_real); the HAND2_DRIVE
+# hand has no joint friction to scale and the env refuses.
+domain_randomization:
+  robot:
+    stiffness_scale: [0.7, 1.3]
+    damping_scale: [0.7, 1.3]
+    hand_friction_scale: [0.7, 1.3]
+    hand_effort_limit_scale: [0.85, 1.15]

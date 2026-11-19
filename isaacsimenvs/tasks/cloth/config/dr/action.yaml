@@ -1,0 +1,6 @@
+# DR block action: the executed action (domain_randomization.action) 0-3 policy steps late (lag drawn
+# once per episode) and Gaussian noise 0.05 on every action every step (normalised units).
+domain_randomization:
+  action:
+    delay_max: 3
+    noise_std: 0.05
