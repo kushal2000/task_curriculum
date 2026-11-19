@@ -4,7 +4,7 @@ A recipe has up to five keys:
 
     task:  Isaacsimenvs-RigidCloth-Direct-v0   # the gym id it is written for
     base:  rigid_cloth_right_wuji              # another recipe underneath it (optional)
-    dr:    [observation, action]               # DR blocks from tasks/cloth/config/dr/, in order (optional)
+    dr:    [proprio, keypoints]                # DR blocks from tasks/cloth/config/dr/, in order (optional)
     env:   {...}                               # overrides of the env config
     agent: {...}                               # overrides of the learner config
 

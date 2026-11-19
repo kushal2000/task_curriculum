@@ -1,12 +1,14 @@
-"""Domain randomization of the observation, the action and the robot
-(``cfg.domain_randomization.{observation,action,robot}``). The sheet's physics DR
-(``domain_randomization.cloth``) is the rigid backend's (``backends/rigid/randomization.py``).
+"""Domain randomization of the proprioception, the keypoint observation, the action and the robot
+(``cfg.domain_randomization.{proprio,keypoints,action,robot}``). The point cloud's DR
+(``domain_randomization.pointcloud``) is drawn by the cloud (``perception/pointcloud.py``), the
+sheet's physics DR (``domain_randomization.cloth``) by the rigid backend
+(``backends/rigid/randomization.py``).
 
 :class:`DomainRandomization` holds every per-episode draw and re-draws them for the envs being
 reset, in a FIXED order (it sets the random stream):
 
-    delay lags        observation, action, object state -- all three whenever any delay is on
-    object pose bias  (``observation.object_pos_bias``, ``observation.object_rot_bias_deg``)
+    delay lags        proprio, action, keypoints -- all three whenever any of them is on
+    keypoint bias     (``keypoints.pos_bias``, ``keypoints.rot_bias_deg``)
     robot PD gains    (``robot.stiffness_scale``, ``robot.damping_scale``)
     hand dynamics     (``robot.hand_friction_scale``, ``robot.hand_effort_limit_scale``; PhysX only)
 
@@ -35,47 +37,56 @@ def perturb_quat(q_wxyz: torch.Tensor, max_deg: float) -> torch.Tensor:
     return quat.quat_mul(quat.quat_from_angle_axis(angle, axis), q_wxyz)
 
 
+def _as_tuple(v):
+    return tuple(float(x) for x in v) if isinstance(v, (tuple, list)) else float(v)
+
+
 def _neutral(scale) -> bool:
     return tuple(float(v) for v in scale) == (1.0, 1.0)
 
 
 class DelayLine:
-    """The last ``max_lag + 1`` values of a ``(N, width)`` signal per env, read back at a lag."""
+    """The last ``max_lag + 1`` values of a ``(N, *shape)`` signal per env (a ring buffer), read back at
+    a per-env lag. ``max_lag = 0`` passes the signal through."""
 
-    def __init__(self, num_envs: int, max_lag: int, width: int, device) -> None:
-        self.buffer = torch.zeros(num_envs, max_lag + 1, width, device=device)
+    def __init__(self, num_envs: int, max_lag: int, shape, device, dtype=torch.float32) -> None:
+        shape = (int(shape),) if isinstance(shape, int) else tuple(shape)
+        self.size = int(max_lag) + 1
+        self.buffer = torch.zeros(self.size, num_envs, *shape, device=device, dtype=dtype)
+        self.ptr = 0
+        self.env = torch.arange(num_envs, device=device)
 
     def clear(self, env_ids: torch.Tensor) -> None:
-        self.buffer[env_ids] = 0.0
+        self.buffer[:, env_ids] = 0.0
 
     def push_and_read(self, values: torch.Tensor, flush: torch.Tensor | None, lag: torch.Tensor) -> torch.Tensor:
-        """Push ``values`` and read each env's entry ``lag`` steps back. ``flush`` rows are refilled
-        with ``values`` first, so an episode never reads the previous one."""
-        queue = self.buffer
-        n = values.shape[0]
-        if flush is not None and flush.any():
-            queue[flush] = values[flush].unsqueeze(1).expand(-1, queue.shape[1], -1)
-        queue = torch.roll(queue, shifts=1, dims=1)
-        queue[:, 0, :] = values
-        self.buffer = queue
-        return queue[torch.arange(n, device=values.device), lag]
+        """Push ``values`` and read each env's entry ``lag`` steps back. ``flush`` envs (the first step
+        of an episode) have their whole history set to ``values`` first, so an episode never reads
+        the previous one."""
+        values = values.to(self.buffer.dtype)
+        if self.size == 1:
+            return values
+        self.ptr = (self.ptr + 1) % self.size
+        self.buffer[self.ptr] = values
+        if flush is not None and bool(flush.any()):
+            self.buffer[:, flush] = values[flush].unsqueeze(0)
+        return self.buffer[(self.ptr - lag.clamp(0, self.size - 1)) % self.size, self.env]
 
 
 class DomainRandomization:
-    """The per-episode DR draws of the observation, the action and the robot."""
+    """The per-episode DR draws of the proprioception, the keypoints, the action and the robot."""
 
     def __init__(self, cfg, layout: RobotLayout, robot, *, num_envs: int, device) -> None:
         dr = cfg.domain_randomization
         self.cfg, self.layout, self.robot = cfg, layout, robot
         self.num_envs, self.device = num_envs, device
         n, dev = num_envs, device
-        _check(dr)
-        obs, act = dr.observation, dr.action
-        self.any_delay = obs.delay_max > 0 or act.delay_max > 0 or obs.object_delay_max > 0
+        _check(cfg)
+        self.any_delay = dr.proprio.delay_max > 0 or dr.action.delay_max > 0 or dr.keypoints.delay_max > 0
         # Per-episode draws, neutral until the first reset.
-        self.obs_lag = torch.zeros(n, dtype=torch.long, device=dev)
+        self.proprio_lag = torch.zeros(n, dtype=torch.long, device=dev)
         self.action_lag = torch.zeros(n, dtype=torch.long, device=dev)
-        self.object_lag = torch.zeros(n, dtype=torch.long, device=dev)
+        self.keypoints_lag = torch.zeros(n, dtype=torch.long, device=dev)
         self.object_bias_pos = torch.zeros(n, 3, device=dev)
         self.object_bias_quat = torch.zeros(n, 4, device=dev)
         self.object_bias_quat[:, 0] = 1.0
@@ -128,7 +139,7 @@ class DomainRandomization:
         """Re-draw every per-episode term of ``env_ids`` (see the module doc for the order)."""
         dr = self.cfg.domain_randomization
         self._draw_delay_lags(env_ids, dr)
-        self._draw_object_pose_bias(env_ids, dr.observation)
+        self._draw_keypoints_bias(env_ids, dr.keypoints)
         self._draw_robot_gains(env_ids, dr.robot)
         self._draw_hand_dynamics(env_ids, dr.robot)
 
@@ -139,22 +150,22 @@ class DomainRandomization:
             return
         n = env_ids.numel()
         for lag, max_lag in (
-            (self.obs_lag, dr.observation.delay_max),
+            (self.proprio_lag, dr.proprio.delay_max),
             (self.action_lag, dr.action.delay_max),
-            (self.object_lag, dr.observation.object_delay_max),
+            (self.keypoints_lag, dr.keypoints.delay_max),
         ):
             lag[env_ids] = torch.randint(0, int(max_lag) + 1, (n,), device=self.device)
 
-    def _draw_object_pose_bias(self, env_ids, obs) -> None:
-        """A per-episode position and rotation bias on the observed sheet."""
+    def _draw_keypoints_bias(self, env_ids, kp) -> None:
+        """A per-episode position and rotation bias on the sheet pose the keypoints are built from."""
         n = env_ids.numel()
-        if any(float(v) != 0.0 for v in obs.object_pos_bias):
-            half = torch.as_tensor(tuple(float(v) for v in obs.object_pos_bias), device=self.device)
+        if any(float(v) != 0.0 for v in kp.pos_bias):
+            half = torch.as_tensor(tuple(float(v) for v in kp.pos_bias), device=self.device)
             self.object_bias_pos[env_ids] = (torch.rand(n, 3, device=self.device) * 2.0 - 1.0) * half
-        if float(obs.object_rot_bias_deg) > 0.0:
+        if float(kp.rot_bias_deg) > 0.0:
             ident = torch.zeros(n, 4, device=self.device)
             ident[:, 0] = 1.0
-            self.object_bias_quat[env_ids] = perturb_quat(ident, float(obs.object_rot_bias_deg))
+            self.object_bias_quat[env_ids] = perturb_quat(ident, float(kp.rot_bias_deg))
 
     def _draw_robot_gains(self, env_ids, rob) -> None:
         """PD gain DR: one stiffness and one damping factor per env, arm and hand separately."""
@@ -190,11 +201,18 @@ class DomainRandomization:
     def _print_summary(self) -> None:
         """One log line per group, so a run's log states its regime."""
         dr = self.cfg.domain_randomization
-        o, a, r = dr.observation, dr.action, dr.robot
+        p, k, c, a, r = dr.proprio, dr.keypoints, dr.pointcloud, dr.action, dr.robot
+        sheet = (
+            f"[dr] keypoints: delay 0-{k.delay_max}, noise {k.pos_noise_std} m / {k.rot_noise_deg} deg, bias "
+            f"+-{tuple(k.pos_bias)} m / {k.rot_bias_deg} deg"
+            if self.cfg.obs.object == "keypoints" else
+            f"[dr] pointcloud: delay 0-{c.delay_max}, camera +-{tuple(c.cam_pos_noise)} m, calibration "
+            f"+-{tuple(c.calib_xyz)} m / {c.calib_rot_deg} deg, depth noise {tuple(c.depth_noise_std_range)} m, "
+            f"drop {tuple(c.drop_prob_range)}"
+        )
         print(
-            f"[dr] observation: delay 0-{o.delay_max}, joint pos noise {o.joint_pos_noise_std} rad, joint vel noise "
-            f"{o.joint_vel_noise_std} rad/s, object delay 0-{o.object_delay_max} + noise {o.object_pos_noise_std} m / "
-            f"{o.object_rot_noise_deg} deg, object bias +-{tuple(o.object_pos_bias)} m / {o.object_rot_bias_deg} deg\n"
+            f"[dr] proprio: delay 0-{p.delay_max}, joint pos noise {p.joint_pos_noise_std} rad, joint vel noise "
+            f"{p.joint_vel_noise_std} rad/s\n{sheet}\n"
             f"[dr] action: delay 0-{a.delay_max}, noise {a.noise_std}\n"
             f"[dr] robot: PD k x{tuple(r.stiffness_scale)} d x{tuple(r.damping_scale)}, hand friction "
             f"x{tuple(r.hand_friction_scale)}, hand torque limit x{tuple(r.hand_effort_limit_scale)}",
@@ -202,15 +220,21 @@ class DomainRandomization:
         )
 
 
-def _check(dr) -> None:
-    """Refuse a malformed DR config before anything is allocated."""
-    for name, v in (
-        ("observation.delay_max", dr.observation.delay_max),
-        ("observation.object_delay_max", dr.observation.object_delay_max),
-        ("action.delay_max", dr.action.delay_max),
-    ):
+def _check(cfg) -> None:
+    """Refuse a malformed DR config before anything is allocated, and DR for the way of seeing the
+    sheet the policy does not use (``obs.object``)."""
+    dr = cfg.domain_randomization
+    if cfg.obs.object not in ("keypoints", "pointcloud"):
+        raise ValueError(f"obs.object must be keypoints or pointcloud, got {cfg.obs.object!r}")
+    unused = "pointcloud" if cfg.obs.object == "keypoints" else "keypoints"
+    neutral = vars(type(getattr(dr, unused))())
+    moved = {k: v for k, v in vars(getattr(dr, unused)).items() if _as_tuple(v) != _as_tuple(neutral[k])}
+    if moved:
+        raise ValueError(f"obs.object is {cfg.obs.object}: domain_randomization.{unused} must stay neutral, got {moved}")
+    for group in ("proprio", "keypoints", "pointcloud", "action"):
+        v = getattr(dr, group).delay_max
         if int(v) != v or v < 0:
-            raise ValueError(f"domain_randomization.{name} must be an integer >= 0, got {v}")
+            raise ValueError(f"domain_randomization.{group}.delay_max must be an integer >= 0, got {v}")
     for group in ("robot", "cloth"):
         for name, v in vars(getattr(dr, group)).items():
             if isinstance(v, (tuple, list)) and len(v) == 2 and float(v[0]) > float(v[1]):

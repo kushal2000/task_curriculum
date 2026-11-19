@@ -27,15 +27,29 @@ needed).
 ## Recipes
 
 ```yaml
-# an all-DR run on the real setup
+# a keypoint policy with every DR group, on the real setup
 base: rigid_cloth_right_wuji_real
-dr: [observation, action, robot, cloth]
+dr: [proprio, keypoints, action, robot, cloth]
 env:
   reset:
     table_reset_z_range: 0.015      # not DR: the episode's start distribution
   domain_randomization:
     action:
       noise_std: 0.02               # a recipe's own values override its blocks'
+```
+
+```yaml
+# a point-cloud policy (DAgger student or point-cloud RL): the same proprioception, the cloud instead
+# of the keypoints
+base: rigid_cloth_right_wuji
+dr: [proprio, pointcloud, action]
+env:
+  obs:
+    object: pointcloud
+    pointcloud:
+      goal: label
+      ref_step: 12
+      fk_points: 128
 ```
 
 `--experiment` takes a name in `runs/` or a path (`experiments/<study>/<name>.yaml`). A `base:` is
@@ -46,21 +60,26 @@ recipes of one study live beside it in `experiments/<date>_<study>/`.
 
 A centre value -- what the robot, the sheet or a contact *is* -- is configuration: `hand_sysid`,
 `assets.*_friction`, `rigid_cloth.*`, `physx_chain.friction_model`. `rigid_cloth_right_wuji_real` sets
-the real setup's. DR is a range around those centres, under `domain_randomization`, in four groups
+the real setup's. DR is a range around those centres, under `domain_randomization`, in six groups
 (`env_cfg.py`); every range is neutral by default except the rigid sheet's contact-shell jitter
 (`cloth.contact_margin_offset`, +-3 mm), which belongs to the shell's configuration.
 
 ## DR blocks
 
-One block per group; each turns its whole group on with the standard values.
+One block per group; each turns its whole group on with the standard values. The policy sees the
+sheet either as keypoints or as a point cloud (`obs.object`), so `keypoints` and `pointcloud` are
+parallel: a recipe uses one of them, never both. The sheet's lag and the proprioception's are
+independent in both.
 
 | Block | Group | What it randomizes |
 | --- | --- | --- |
-| `observation` | `domain_randomization.observation` | observation delay 0-3 steps, joint position / velocity noise; the sheet pose: delay 0-5 steps, noise 1 cm / 5 deg, per-episode bias 5 / 5 / 2 mm, 3 deg |
+| `proprio` | `domain_randomization.proprio` | every field but the sheet's 0-3 steps late, joint position / velocity noise |
+| `keypoints` | `domain_randomization.keypoints` | the sheet pose the keypoints come from: 0-5 steps late, noise 1 cm / 5 deg, per-episode bias 5 / 5 / 2 mm, 3 deg |
+| `pointcloud` | `domain_randomization.pointcloud` | the cloud: 0-6 steps late, camera position, per-camera calibration, depth noise, dropped points |
 | `action` | `domain_randomization.action` | action delay 0-3 steps, action noise 0.05 |
 | `robot` | `domain_randomization.robot` | PD gains x0.7-1.3; hand joint friction x0.7-1.3 and torque limit x0.85-1.15 (needs `hand_sysid`) |
 | `cloth` | `domain_randomization.cloth` | plate / robot / table friction (needs `cloth_min`); hinge damping, stiffness, plate mass (PhysX only) |
 
 Each file's header says what the values are and where they come from. A recipe changes any value
 of a block in its own `env:` (it is applied after the blocks), or sets a group's fields without the
-block.
+block. A delay `delay_max: N` is a lag of 0 .. N policy steps (1/60 s), drawn once per episode.

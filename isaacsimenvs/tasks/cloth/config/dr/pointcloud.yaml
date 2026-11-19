@@ -1,0 +1,12 @@
+# DR block pointcloud: the two depth cameras' errors on the point cloud (domain_randomization.pointcloud;
+# needs obs.object: pointcloud). Version C of the 11-16 point-cloud students: per episode, each camera's
+# position +-5 cm, each camera's cloud offset +-1.5 / 1.5 / 1 cm and turned +-2 deg, depth noise std
+# 1-4 mm and 0-30% of the points dropped; the whole cloud 0-6 policy steps late.
+domain_randomization:
+  pointcloud:
+    delay_max: 6
+    cam_pos_noise: [0.05, 0.05, 0.05]
+    calib_xyz: [0.015, 0.015, 0.01]
+    calib_rot_deg: 2.0
+    depth_noise_std_range: [0.001, 0.004]
+    drop_prob_range: [0.0, 0.3]

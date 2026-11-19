@@ -1,0 +1,12 @@
+# DR block keypoints: the sheet as the keypoint policy reads it (domain_randomization.keypoints; needs
+# obs.object: keypoints, the default). The pose the keypoints are built from is 0-5 policy steps late
+# (its own lag, independent of the proprioception's), noised 1 cm / 5 deg every step and offset by a
+# per-episode bias of 5 / 5 / 2 mm and 3 deg, a calibration error that does not average out
+# (flat7DRABC's object DR, A and B layers).
+domain_randomization:
+  keypoints:
+    delay_max: 5
+    pos_noise_std: 0.01
+    rot_noise_deg: 5.0
+    pos_bias: [0.005, 0.005, 0.002]
+    rot_bias_deg: 3.0

@@ -1,0 +1,9 @@
+# DR block proprio: the robot's own state as the policy reads it (domain_randomization.proprio), for
+# a keypoint and a point-cloud policy alike: every field but the sheet's 0-3 policy steps late (lag
+# drawn once per episode, independent of the sheet's), joint position noise 0.005 rad and joint
+# velocity noise 0.1 rad/s every step (the 2026-11-10 right-Wuji values).
+domain_randomization:
+  proprio:
+    delay_max: 3
+    joint_pos_noise_std: 0.005
+    joint_vel_noise_std: 0.1

@@ -21,8 +21,8 @@ def set_present(section, **values) -> None:
 
 
 def disable_randomization(cfg) -> None:
-    """Turn off every observation / action / robot DR and reset-noise source, and pin the object's
-    start pose. The cloth task's sheet-physics DR (``domain_randomization.cloth``) stays as the run
+    """Turn off every observation (proprio, keypoints, point cloud) / action / robot DR and reset-noise
+    source, and pin the object's start pose. The cloth task's sheet-physics DR (``domain_randomization.cloth``) stays as the run
     configured it; ``experiments/eval.sh`` pins it for its pinned protocol.
 
     Domain randomisation is *on* by default in ``PlayEnvCfg`` because that is the
@@ -31,8 +31,9 @@ def disable_randomization(cfg) -> None:
     test.
     """
     dr = cfg.domain_randomization
-    if hasattr(dr, "observation"):  # the cloth task: DR by group, each back to its (neutral) defaults
-        dr.observation, dr.action, dr.robot = type(dr.observation)(), type(dr.action)(), type(dr.robot)()
+    if hasattr(dr, "proprio"):  # the cloth task: DR by group, each back to its (neutral) defaults
+        for group in ("proprio", "keypoints", "pointcloud", "action", "robot"):
+            setattr(dr, group, type(getattr(dr, group))())
     else:  # the Play task
         set_present(
             dr,

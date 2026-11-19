@@ -23,8 +23,11 @@ __all__ = [
     "ClothDRCfg",
     "ClothEnvCfg",
     "DomainRandomizationCfg",
+    "KeypointsDRCfg",
     "ObsCfg",
-    "ObservationDRCfg",
+    "PointCloudDRCfg",
+    "PointCloudObsCfg",
+    "ProprioDRCfg",
     "ResetCfg",
     "RobotDRCfg",
     "RewardCfg",
@@ -44,6 +47,26 @@ class AssetsCfg:
 
 
 @configclass
+class PointCloudObsCfg:
+    """The point cloud the policy reads with ``obs.object: pointcloud``: everything the two depth cameras
+    see in a box over the table (cloth, hand, arm) as bare xyz; ``perception/pointcloud.py``."""
+
+    n_points: int = 1024
+    """Live points per step (the fixed size; unused slots are masked)."""
+    goal: str = "none"
+    """An extra group of points that says what to do: ``none``; ``label`` (the cloth at ``ref_step``
+    with moving / stationary labels); ``goal_fixed`` (the folded goal sheet where it belongs) or
+    ``goal_any`` (its shape only, at any yaw) -- these two need ``fold_pool.goal_task``."""
+    ref_step: int = 0
+    """The episode step the ``label`` / ``goal_fixed`` group is taken at (the sheet spawns ~4 cm up
+    and lands by step ~12)."""
+    fk_points: int = 0
+    """Points on the forearm and hand from forward kinematics of the (delayed) joint state (0: none)."""
+    chunk: int = 1024
+    """Envs per batch when the cloud is built (memory, not the result)."""
+
+
+@configclass
 class ObsCfg:
     """The policy (``obs_list``) and critic (``state_list``) fields; see ``mdp/observations.py``."""
 
@@ -58,6 +81,11 @@ class ObsCfg:
         "fingertip_pos_rel_palm", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales",
     )
     clamp_abs_observations: float = 10.0
+    object: str = "keypoints"
+    """How the policy sees the sheet. ``keypoints``: the ``obs_list`` fields as listed. ``pointcloud``:
+    the ``obs_list`` fields that are not the sheet's (``observations.OBJECT_FIELDS``), then the cloud
+    (``pointcloud``); the keypoint vector stays available as the clean ``teacher`` group."""
+    pointcloud: PointCloudObsCfg = PointCloudObsCfg()
 
 
 @configclass
@@ -121,29 +149,54 @@ class TerminationCfg:
 
 
 @configclass
-class ObservationDRCfg:
-    """What the policy reads (the critic always reads the clean values); ``mdp/observations.py``.
-
-    Delays are in policy steps (1/60 s): one lag per env and episode, uniform in ``0 .. *_delay_max``.
-    Noise is drawn every step, biases once per episode."""
+class ProprioDRCfg:
+    """The robot's own state as the policy reads it (every field but the sheet's), whichever way the
+    policy sees the sheet; ``mdp/observations.py``. The critic reads the clean values."""
 
     delay_max: int = 0
-    """Lag of the whole policy observation."""
+    """Lag in policy steps (1/60 s), one per env and episode, uniform in ``0 .. delay_max``. The
+    sheet's own observation has its own lag (``keypoints`` / ``pointcloud``), independent of this one."""
     joint_pos_noise_std: float = 0.0
-    """Gaussian noise on the joint positions [rad] (carried through the [-1, 1] normalisation)."""
+    """Gaussian noise on the joint positions [rad], every step (carried through the [-1, 1] normalisation)."""
     joint_vel_noise_std: float = 0.0
-    """Gaussian noise on the joint velocities [rad/s]."""
-    object_delay_max: int = 0
-    """Lag of the observed sheet pose and velocity, on top of ``delay_max``."""
-    object_pos_noise_std: float = 0.0
-    """Gaussian noise on the observed sheet position [m]."""
-    object_rot_noise_deg: float = 0.0
-    """The observed sheet orientation turned about a random axis by up to this angle."""
-    object_pos_bias: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    """Per-episode offset of the observed sheet position, uniform in +- this per axis [m] (a
-    calibration error: it does not average out)."""
-    object_rot_bias_deg: float = 0.0
-    """Per-episode turn of the observed sheet orientation, about a random axis, up to this angle."""
+    """Gaussian noise on the joint velocities [rad/s], every step."""
+
+
+@configclass
+class KeypointsDRCfg:
+    """The sheet as the keypoint policy reads it (``obs.object: keypoints``): its pose, from which the
+    keypoints and its rotation are built."""
+
+    delay_max: int = 0
+    """Lag of the observed pose in policy steps, one per env and episode, uniform in ``0 .. delay_max``."""
+    pos_noise_std: float = 0.0
+    """Gaussian noise on the observed position [m], every step."""
+    rot_noise_deg: float = 0.0
+    """The observed orientation turned about a random axis by up to this angle, every step."""
+    pos_bias: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    """Per-episode offset of the observed position, uniform in +- this per axis [m] (a calibration
+    error: it does not average out)."""
+    rot_bias_deg: float = 0.0
+    """Per-episode turn of the observed orientation, about a random axis, up to this angle."""
+
+
+@configclass
+class PointCloudDRCfg:
+    """The sheet as the point-cloud policy sees it (``obs.object: pointcloud``): the two depth cameras'
+    errors; ``perception/pointcloud.py``. Per-episode draws unless marked."""
+
+    delay_max: int = 0
+    """Lag of the whole cloud in policy steps, uniform in ``0 .. delay_max``."""
+    cam_pos_noise: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    """Each camera's position, uniform in +- this per axis [m] (what it can see from where)."""
+    calib_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    """Rigid offset of each camera's cloud, uniform in +- this per axis [m]: the two clouds do not coincide."""
+    calib_rot_deg: float = 0.0
+    """Rigid turn of each camera's cloud about the box centre, per axis up to this angle."""
+    depth_noise_std_range: tuple[float, float] = (0.0, 0.0)
+    """The std of the per-point noise along the camera ray [m], drawn in this range; the noise every step."""
+    drop_prob_range: tuple[float, float] = (0.0, 0.0)
+    """The share of visible points dropped (holes, segmentation misses), drawn in this range; the drops every step."""
 
 
 @configclass
@@ -204,10 +257,13 @@ class ClothDRCfg:
 @configclass
 class DomainRandomizationCfg:
     """Domain randomization, by what it acts on. Every range defaults to neutral (off); the DR blocks
-    (``tasks/cloth/config/dr/``) turn a group on. Centre values (the hand model, frictions, contact
+    (``tasks/cloth/config/dr/``) turn a group on. ``keypoints`` and ``pointcloud`` are the two ways the
+    policy can see the sheet (``obs.object``); only the one in use may be set. Centre values (the hand model, frictions, contact
     shell) are configuration, not DR: ``hand_sysid``, ``assets``, ``rigid_cloth``."""
 
-    observation: ObservationDRCfg = ObservationDRCfg()
+    proprio: ProprioDRCfg = ProprioDRCfg()
+    keypoints: KeypointsDRCfg = KeypointsDRCfg()
+    pointcloud: PointCloudDRCfg = PointCloudDRCfg()
     action: ActionDRCfg = ActionDRCfg()
     robot: RobotDRCfg = RobotDRCfg()
     cloth: ClothDRCfg = ClothDRCfg()

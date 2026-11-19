@@ -12,9 +12,10 @@ same vector:
   ``centre + R * offsets``, from the moving half's fitted pose and the fold goal's pose
   (``FoldView.object_*`` and ``ClothTask.goal_*``).
 
-Observation DR (``domain_randomization.observation``): the observed sheet pose delayed, noised and
-biased (:meth:`ObservationBuilder._observed_object`), joint noise, and a delay line on the whole
-policy vector. The critic always reads the clean values.
+Observation DR, two independent parts: the proprioception (``domain_randomization.proprio``: joint
+noise, a delay line on every field that is not the sheet's) and the sheet (``keypoints``: its pose
+delayed, noised and biased, :meth:`ObservationBuilder._observed_object`). The critic always reads the
+clean values.
 """
 
 from __future__ import annotations
@@ -28,12 +29,18 @@ from .robot import NUM_FINGERTIPS, RobotLayout
 from .state import FoldView, SimState
 from .task import ClothTask, apply_local_offset, keypoints_world
 
-__all__ = ["FIELD_SIZES", "NUM_KEYPOINTS", "PLAY_ROBOT_ROOT_POS", "ObservationBuilder", "obs_dim"]
+__all__ = ["AUX_FIELDS", "FIELD_SIZES", "NUM_KEYPOINTS", "OBJECT_FIELDS", "PLAY_ROBOT_ROOT_POS", "ObservationBuilder", "obs_dim"]
 
 NUM_KEYPOINTS = 4
 
 #: Where the Play task puts the robot base; ``palm_pos`` is observed relative to it.
 PLAY_ROBOT_ROOT_POS: tuple[float, float, float] = (0.0, 0.8, 0.0)
+
+#: The policy fields that are the sheet's: built from the keypoints, or replaced by the point cloud.
+#: Every other field is proprioception (``domain_randomization.proprio``).
+OBJECT_FIELDS = ("object_rot", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales")
+#: What a point-cloud student's auxiliary head regresses: the keypoint teacher's view of the sheet.
+AUX_FIELDS = ("keypoints_rel_palm", "keypoints_rel_goal")
 
 #: Fields with one entry per robot joint; their size follows the robot.
 _PER_JOINT_FIELDS = ("joint_pos", "joint_vel", "prev_action_targets")
@@ -75,33 +82,51 @@ class ObservationBuilder:
         self.num_envs, self.device = num_envs, device
         self.env_origins = env_origins
         self.extras = extras
-        obs_dr = cfg.domain_randomization.observation
-        self.obs_delay = DelayLine(num_envs, obs_dr.delay_max, cfg.observation_space, device)
-        self.object_delay = DelayLine(num_envs, obs_dr.object_delay_max, 13, device)
+        dr_cfg = cfg.domain_randomization
+        #: The proprioceptive fields, in policy order; ``palm_pos`` is carried along when the policy
+        #: does not read it, so ``keypoints_rel_palm`` can be rebuilt from the delayed palm.
+        self.proprio_fields = [f for f in cfg.obs.obs_list if f not in OBJECT_FIELDS]
+        carried = self.proprio_fields + ([] if "palm_pos" in self.proprio_fields else ["palm_pos"])
+        self.carried_fields = carried
+        self.proprio_delay = DelayLine(num_envs, dr_cfg.proprio.delay_max, obs_dim(carried, robot.num_joints), device)
+        self.keypoints_delay = DelayLine(num_envs, dr_cfg.keypoints.delay_max, 13, device)
 
     def reset(self, env_ids: torch.Tensor) -> None:
-        self.obs_delay.clear(env_ids)
-        self.object_delay.clear(env_ids)
+        self.proprio_delay.clear(env_ids)
+        self.keypoints_delay.clear(env_ids)
 
     # ------------------------------------------------------------------ observation DR
 
     def _observed_object(self, start, obj_pos, obj_rot, obj_linvel, obj_angvel):
-        """The sheet pose and velocity as the policy observes them: delayed and noised every step
-        (``object_delay_max``, ``object_pos_noise_std``, ``object_rot_noise_deg``), then offset by
-        the episode's bias (``object_pos_bias``, ``object_rot_bias_deg``). All neutral when off.
-        Returns ``(pos, quat wxyz, vel (N, 6))``."""
-        dr = self.cfg.domain_randomization.observation
+        """The sheet pose and velocity the keypoints are built from: delayed and noised every step
+        (``keypoints.delay_max``, ``pos_noise_std``, ``rot_noise_deg``), then offset by the episode's
+        bias (``pos_bias``, ``rot_bias_deg``). All neutral when off. Returns ``(pos, quat wxyz, vel (N, 6))``."""
+        dr = self.cfg.domain_randomization.keypoints
         pos, rot = obj_pos, obj_rot
         vel = torch.cat([obj_linvel, obj_angvel], dim=-1)
-        if dr.object_delay_max > 0 or dr.object_pos_noise_std > 0.0 or dr.object_rot_noise_deg > 0.0:
+        if dr.delay_max > 0 or dr.pos_noise_std > 0.0 or dr.rot_noise_deg > 0.0:
             state = torch.cat([obj_pos, obj_rot, vel], dim=-1)
-            delayed = self.object_delay.push_and_read(state, start, self.dr.object_lag)
-            pos = delayed[:, 0:3] + torch.randn_like(delayed[:, 0:3]) * dr.object_pos_noise_std
-            rot = perturb_quat(delayed[:, 3:7], dr.object_rot_noise_deg)
+            delayed = self.keypoints_delay.push_and_read(state, start, self.dr.keypoints_lag)
+            pos = delayed[:, 0:3] + torch.randn_like(delayed[:, 0:3]) * dr.pos_noise_std
+            rot = perturb_quat(delayed[:, 3:7], dr.rot_noise_deg)
             vel = delayed[:, 7:13]
         pos = pos + self.dr.object_bias_pos
         rot = quat.quat_mul(self.dr.object_bias_quat, rot)
         return pos, rot, vel
+
+    def _delay_proprio(self, start, obs_noisy: dict, obj_kp: torch.Tensor, palm_frame_offset: torch.Tensor) -> None:
+        """``proprio.delay_max``: the proprioceptive fields read ``proprio_lag`` steps back, in place.
+        ``keypoints_rel_palm`` is rebuilt from the delayed palm, as on hardware: the camera's keypoints
+        minus the palm the policy reads at the same step. ``palm_frame_offset`` turns the observed
+        ``palm_pos`` (Play frame) back into the env frame the keypoints are in."""
+        fields = self.carried_fields
+        delayed = self.proprio_delay.push_and_read(_stack(obs_noisy, fields), start, self.dr.proprio_lag)
+        begin = 0
+        for f in fields:
+            width = obs_noisy[f].reshape(self.num_envs, -1).shape[1]
+            obs_noisy[f] = delayed[:, begin:begin + width].reshape(obs_noisy[f].shape)
+            begin += width
+        obs_noisy["keypoints_rel_palm"] = obj_kp - (obs_noisy["palm_pos"] + palm_frame_offset).unsqueeze(1)
 
     # ------------------------------------------------------------------ the observation
 
@@ -109,7 +134,7 @@ class ObservationBuilder:
               start: torch.Tensor) -> dict[str, torch.Tensor]:
         """``{"policy": (N, obs_dim), "critic": (N, state_dim)}``, both clamped to
         ``obs.clamp_abs_observations``. ``start``: the envs on their episode's first step."""
-        cfg, dr, task, robot = self.cfg, self.cfg.domain_randomization.observation, self.task, self.robot
+        cfg, dr, task, robot = self.cfg, self.cfg.domain_randomization.proprio, self.task, self.robot
         env_origins = self.env_origins
         n = self.num_envs
 
@@ -181,10 +206,11 @@ class ObservationBuilder:
             span = robot.joint_upper_canon - robot.joint_lower_canon
             obs_noisy["joint_pos"] = joint_pos + torch.randn_like(joint_pos) * dr.joint_pos_noise_std * 2.0 / span
 
+        if dr.delay_max > 0:
+            self._delay_proprio(start, obs_noisy, noisy_obj_kp, palm_pos - palm_pos_obs)
+
         critic = _stack(obs_clean, cfg.obs.state_list)
         policy = _stack(obs_noisy, cfg.obs.obs_list)
-        if dr.delay_max > 0:
-            policy = self.obs_delay.push_and_read(policy, start, self.dr.obs_lag)
 
         clip = cfg.obs.clamp_abs_observations
         return {"policy": policy.clamp(-clip, clip), "critic": critic.clamp(-clip, clip)}

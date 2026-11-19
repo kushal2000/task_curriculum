@@ -677,7 +677,8 @@ def main() -> None:
         elif args.randomize_reset:
             # Only the DR block; the reset distribution is what we are deliberately keeping.
             dr = env_cfg.domain_randomization
-            dr.observation, dr.action = type(dr.observation)(), type(dr.action)()
+            for group in ("proprio", "keypoints", "pointcloud", "action"):
+                setattr(dr, group, type(getattr(dr, group))())
             print(
                 f"[render] reset randomisation KEPT: xy noise "
                 f"+-{env_cfg.reset.reset_position_noise_x}/"

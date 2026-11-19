@@ -384,7 +384,7 @@ def main() -> None:
         if action_delay > 0:
             dr.action.delay_max = action_delay - 1
         if args.env_obs_delay > 0:
-            dr.observation.delay_max = int(args.env_obs_delay) - 1
+            dr.proprio.delay_max = dr.keypoints.delay_max = int(args.env_obs_delay) - 1
         torch.manual_seed(args.seed)
 
         env = gym.make(args.task, cfg=env_cfg)
