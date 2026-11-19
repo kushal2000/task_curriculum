@@ -1,15 +1,51 @@
-# Isaac Sim (Isaac Lab) installation
+# Installation
 
-`task_curriculum` runs in Isaac Sim via Isaac Lab. It requires **Python 3.11** (Isaac Sim 5.x / Isaac Lab 2.3.x requirement) and lives in a dedicated venv at `.venv_isaacsim/`.
+Two venvs on one source tree, both editable-installing it:
 
-## Prerequisites
+| venv | stack | runs | built by |
+|---|---|---|---|
+| `.venv_isaacsim` | Python 3.11, Isaac Sim 5.1 / Isaac Lab 2.3 | Play, rigid fold pool (PhysX) | `install_isaacsim.sh` |
+| `.venv_isaaclab3` | Python 3.12, Isaac Lab 3.0 + Newton (kit-less) | VBD cloth | `install_isaaclab3.sh` |
+
+From the repo root:
+
+```bash
+docs/installation/install_isaacsim.sh
+docs/installation/install_isaaclab3.sh        # Isaac Lab 3.0 from source into third_party/ (pinned SHA)
+isaacsimenvs/scripts/robots/fetch_assets.sh   # Rizon 4s + Wuji Hand 2 vendor meshes (assets/flexiv_wuji/)
+```
+
+Run Newton code through `experiments/newton_py`, not `.venv_isaaclab3/bin/python`: the venv was built
+on an anaconda interpreter whose old `libstdc++` lacks a symbol `omni.client` needs, and the wrapper
+preloads the system one (see its header).
+
+Newton cannot convert URDFs (no Kit), so it reads robots from a USD cache (`.usd_cache/`) baked with
+Isaac Sim, once per robot setup and self-collision value:
+
+```bash
+ROBOT_SETUP=flexiv_wuji_right_hl_reallimits SC=false experiments/bake_robot.sh
+```
+
+The live viewer on PhysX needs websockets >= 13, which Isaac Sim pins to 12; `install_isaacsim.sh`
+installs websockets 16 into `third_party/viser_websockets`, outside the venv, and the viewers put it
+first on the path.
+
+The policies (`pretrained_policy/`) are not in git: the Play prior goes in
+`pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth`, the network config in
+`pretrained_policy/config.yaml` (`PRETRAINED_POLICY_DIR` moves the folder).
+
+## The Isaac Sim venv by hand
+
+What `install_isaacsim.sh` does, step by step.
+
+### Prerequisites
 
 - Python 3.11
 - NVIDIA GPU with driver >= 525.60
 - CUDA 12+
 - `uv` for package management ([install instructions](https://docs.astral.sh/uv/getting-started/installation/))
 
-## Install
+### Install
 
 ```bash
 uv venv .venv_isaacsim --python 3.11

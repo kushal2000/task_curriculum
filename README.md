@@ -14,7 +14,7 @@ docs/installation/install_isaaclab3.sh     # .venv_isaaclab3 (Isaac Lab 3 / Newt
 isaacsimenvs/scripts/robots/fetch_assets.sh   # Rizon 4s + Wuji Hand 2 vendor meshes into assets/flexiv_wuji/
 ```
 
-Details in [`docs/installation/`](docs/installation/isaacsim_installation.md). Newton reads the robot as
+Details in [`docs/installation/`](docs/installation/README.md). Newton reads the robot as
 a USD baked by Kit, once per robot setup: `ROBOT_SETUP=flexiv_wuji_right_hl_reallimits experiments/bake_robot.sh`.
 Policies are not in git: the Play prior goes in `pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth`,
 the network config in `pretrained_policy/config.yaml`.
