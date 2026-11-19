@@ -112,9 +112,18 @@ class ClothTask:
         return self.geometry.derive(state.points_w, state.points_vel_w)
 
     def is_folded(self, view: FoldView) -> torch.Tensor:
-        """Both conditions: keypoints on target AND the footprint halved."""
+        """Both conditions: keypoints on target AND the footprint halved.
+
+        With goal tasks (``fold_pool.goal_task``): ``any_fold`` needs only the fold error (the
+        smaller of the designated and the look-alike one) within tolerance; ``half_fold`` keeps
+        both conditions for the designated fold, and a look-alike within tolerance also counts."""
         c = self.cfg.cloth
-        return (view.fold_error < c.keypoint_tolerance) & (view.footprint < c.max_folded_footprint)
+        tol = c.keypoint_tolerance
+        if view.designated_error is None:
+            return (view.fold_error < tol) & (view.footprint < c.max_folded_footprint)
+        if self.geometry.goal_tasks.any_fold:
+            return view.fold_error < tol
+        return ((view.designated_error < tol) & (view.footprint < c.max_folded_footprint)) | (view.lookalike_error < tol)
 
     @property
     def keypoint_offsets(self) -> torch.Tensor:

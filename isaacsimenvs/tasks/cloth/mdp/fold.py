@@ -65,7 +65,8 @@ def _rotation_to_wxyz(r: torch.Tensor) -> torch.Tensor:
 
 
 def kabsch_quat_wxyz(rest: torch.Tensor, cur: torch.Tensor) -> torch.Tensor:
-    """Least-squares rotation taking ``rest`` (K, 3) to ``cur`` (N, K, 3), both centred here, as wxyz.
+    """Least-squares rotation taking ``rest`` (K, 3), or per env (N, K, 3), to ``cur`` (N, K, 3),
+    both centred here, as wxyz.
 
     H = P^T Q, then R = V diag(1, 1, det(VU^T)) U^T. The determinant term forbids a reflection: a
     badly deformed patch could otherwise fit a mirror, and a mirrored frame is worse than a wrong
@@ -74,8 +75,12 @@ def kabsch_quat_wxyz(rest: torch.Tensor, cur: torch.Tensor) -> torch.Tensor:
     back to identity: wrong but bounded, where a NaN would poison the whole observation.
     """
     q = cur - cur.mean(dim=1, keepdim=True)
-    p = rest - rest.mean(dim=0, keepdim=True)
-    h = torch.einsum("ki,nkj->nij", p, q)
+    if rest.dim() == 2:
+        p = rest - rest.mean(dim=0, keepdim=True)
+        h = torch.einsum("ki,nkj->nij", p, q)
+    else:
+        p = rest - rest.mean(dim=1, keepdim=True)
+        h = torch.einsum("nki,nkj->nij", p, q)
     h = h + 1e-8 * torch.eye(3, device=h.device, dtype=h.dtype).unsqueeze(0)
     u, _, vh = torch.linalg.svd(h)
     v = vh.transpose(-2, -1)
@@ -101,6 +106,9 @@ class FoldGeometry:
         self._observed_goal_quat = observed_goal_quat
         self.axis = 0 if layout.fold_axis == "x" else 1
         self.per_env = layout.xy_scale is not None
+        #: One-fold goal tasks (``goal_tasks.GoalTasks``), or ``None``. Active once the backend has
+        #: drawn each env's task; until then the fold is the stage-1 one.
+        self.goal_tasks = layout.goal_tasks
 
         rest = torch.tensor(layout.rest_local, device=device, dtype=torch.float32)
         self.rest_local = rest
@@ -148,11 +156,31 @@ class FoldGeometry:
         #: The observed keypoints' offsets from the moving half's centre: its REST corners. With the
         #: fitted rotation, ``centre + R * offsets`` tracks the real corners and ``goal_centre +
         #: R_goal * offsets`` is the folded configuration.
-        self.keypoint_offsets = torch.zeros(num_envs, len(layout.keypoint_idx), 3, device=device)
+        self._keypoint_offsets = torch.zeros(num_envs, len(layout.keypoint_idx), 3, device=device)
         if self.per_env:
-            self.keypoint_offsets[:] = corner_rest_offsets
+            self._keypoint_offsets[:] = corner_rest_offsets
         else:
-            self.keypoint_offsets[:] = corner_rest_offsets.unsqueeze(0).expand(num_envs, -1, -1)
+            self._keypoint_offsets[:] = corner_rest_offsets.unsqueeze(0).expand(num_envs, -1, -1)
+
+    @property
+    def keypoint_offsets(self) -> torch.Tensor:
+        """``(N, K, 3)`` the observed keypoints' offsets from their centre, at rest and each env's
+        size. With ``any_fold`` goal tasks: the tracked points of each env's task in its start state."""
+        g = self._active_goal_tasks()
+        if g is None or not g.any_fold:
+            return self._keypoint_offsets
+        rest = g.keypoint_rest()
+        return (rest - rest.mean(dim=1, keepdim=True)) * self._scale3()
+
+    def _active_goal_tasks(self):
+        g = self.goal_tasks
+        return g if g is not None and g.task is not None else None
+
+    def _scale3(self) -> torch.Tensor:
+        """``(N, 1, 3)``: each env's in-plane size factor on x and y, 1 on z."""
+        if self.per_env:
+            return self.scale3
+        return torch.ones((self.num_envs, 1, 3), device=self.device)
 
     # ------------------------------------------------------------------ the stationary half's frame
 
@@ -192,6 +220,21 @@ class FoldGeometry:
     # ------------------------------------------------------------------ one state -> the fold
 
     def derive(self, points_w: torch.Tensor, points_vel_w: torch.Tensor) -> FoldView:
+        g = self._active_goal_tasks()
+        view = self._derive_any_fold(g, points_w, points_vel_w) if g is not None and g.any_fold else (
+            self._derive_half_fold(points_w, points_vel_w)
+        )
+        if g is not None:
+            view.designated_error = view.fold_error
+            view.lookalike_error = (
+                g.lookalike_error(self._scale3(), points_w) if g.accept_lookalike
+                else torch.full_like(view.fold_error, float("inf"))
+            )
+            view.fold_error = torch.minimum(view.designated_error, view.lookalike_error)
+        return view
+
+    def _derive_half_fold(self, points_w: torch.Tensor, points_vel_w: torch.Tensor) -> FoldView:
+        """The stage-1 fold: the moving half's corners onto the stationary half."""
         r, c = self.stationary_frame(points_w)
         keypoints = points_w[:, self.keypoint_idx, :]
         targets = self.folded_w(r, c, self.kp_folded_rest)
@@ -212,6 +255,31 @@ class FoldGeometry:
             object_ang_vel_w=torch.zeros((self.num_envs, 3), device=self.device),
         )
 
+    def _derive_any_fold(self, g, points_w: torch.Tensor, points_vel_w: torch.Tensor) -> FoldView:
+        """``any_fold`` goal tasks: the fold each env's task names. The frame is the part that fold
+        leaves in place (fitted against the task's start state), the keypoints are on the piece it
+        moves, the targets are those points in the goal state carried on that frame, and the error
+        is the farthest any moved point is from its goal place."""
+        task, s3 = g.task, self._scale3()
+        r, c = g.frame(task, s3, points_w)
+        idx = g.keypoint_idx().unsqueeze(-1).expand(-1, -1, 3)
+        keypoints = torch.gather(points_w, 1, idx)
+        goal_points, _ = g.goal_particles(task, s3, points_w)
+        return FoldView(
+            points_w=points_w,
+            points_vel_w=points_vel_w,
+            frame_r=r,
+            frame_c=c,
+            keypoints_w=keypoints,
+            targets_w=torch.gather(goal_points, 1, idx),
+            fold_error=g.error(task, s3, points_w),
+            footprint=self.footprint(points_w, r),
+            object_pos_w=keypoints.mean(dim=1),
+            object_quat_w=kabsch_quat_wxyz(g.keypoint_rest(), keypoints),
+            object_lin_vel_w=torch.gather(points_vel_w, 1, idx).mean(dim=1),
+            object_ang_vel_w=torch.zeros((self.num_envs, 3), device=self.device),
+        )
+
     def footprint(self, points_w: torch.Tensor, frame_r: torch.Tensor) -> torch.Tensor:
         """Sheet extent along its OWN fold axis, as a fraction of its unfolded size.
 
@@ -228,7 +296,11 @@ class FoldGeometry:
 
     def goal_rotation(self, frame_r: torch.Tensor) -> torch.Tensor:
         """``(N, 3, 3)``: the moving half's orientation after the fold -- 180 deg about the crease,
-        composed with the stationary half's live rotation."""
+        composed with the stationary half's live rotation. With ``any_fold`` goal tasks: the task's
+        own fold rotation, composed with the live rotation of the part it leaves in place."""
+        g = self._active_goal_tasks()
+        if g is not None and g.any_fold:
+            return torch.bmm(frame_r, g.rot[g.task])
         flip = torch.eye(3, device=self.device).repeat(self.num_envs, 1, 1)
         flip[:, self.axis, self.axis] = -1.0
         flip[:, 2, 2] = -1.0

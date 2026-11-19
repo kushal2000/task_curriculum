@@ -98,6 +98,9 @@ class RigidBackend(ClothBackend):
                 "rigid_cloth.randomization.{slat,fingertip,table}_friction_scale to [1.0, 1.0], or use "
                 "physx_chain.friction_model: cloth_min."
             )
+        p.goal_task.check(p.init_fold_prob)
+        #: One-fold goal tasks (``fold_pool.goal_task``): built with the sheet layout, drawn from start.
+        self.goal_tasks = None
         #: Set by :meth:`start`: until then resets keep the shape the startup proofs left in place.
         self.started = False
         self.physics_dr: PlateRandomization | None = None
@@ -124,6 +127,8 @@ class RigidBackend(ClothBackend):
         self.physics_dr = PlateRandomization(self)
         self.shape_weights = self.shape_weights.to(self.device)
         pool_scene.init_start_folds(self)
+        if self.goal_tasks is not None:
+            pool_scene.start_goal_tasks(self)
         self.started = True
 
     # ------------------------------------------------------------------ the sheet, for the task
@@ -146,6 +151,8 @@ class RigidBackend(ClothBackend):
                 flush=True,
             )
             lift = gap
+        if self.goal_tasks is None:
+            self.goal_tasks = pool_scene.build_goal_tasks(self)
         return SheetLayout(
             rest_local=self.rest_local,
             keypoint_idx=list(self.keypoint_idx),
@@ -156,13 +163,15 @@ class RigidBackend(ClothBackend):
             object_scale=self.object_scale,
             xy_scale=self.xy_scale,
             env_size=self.env_size,
+            goal_tasks=self.goal_tasks,
         )
 
     def read_points(self) -> tuple[torch.Tensor, torch.Tensor]:
         return self.pool.positions(), self.pool.velocities()
 
     def write_sheet(self, env_ids: torch.Tensor, pose_w: torch.Tensor) -> None:
-        self.pool.place(env_ids, pose_w[:, :2], reset_yaw(pose_w[:, 3:7]))
+        yaw = pool_scene.goal_task_yaw(self, env_ids, reset_yaw(pose_w[:, 3:7]))
+        self.pool.place(env_ids, pose_w[:, :2], yaw)
 
     def observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
         # Isaac Lab 2.3's helper is wxyz; hand the task the (x, y, z, w) relabelling Newton does.

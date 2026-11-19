@@ -1,7 +1,8 @@
 """Building the pool: every fold shape as a PhysX articulation (one USD per shape and per-env sheet
 size, referenced from each env that carries the shape) gathered in the backend's ``pool``
 (``pool.PlatePool``), the per-episode shape draw, and the folded-start tables. Functions of the
-``RigidBackend`` (``b``)."""
+``RigidBackend`` (``b``). With ``fold_pool.goal_task`` also each env's one-fold task (``mdp/goal_tasks.py``):
+its draw, its start hinge angles, the sheet yaw that puts its fold's travel direction in a sector."""
 
 from __future__ import annotations
 
@@ -16,12 +17,16 @@ from isaacsimenvs.tasks.cloth.backends.rigid import assets as fsa
 from isaacsimenvs.tasks.cloth.backends.rigid import checks
 from isaacsimenvs.tasks.cloth.backends.rigid import contacts
 from isaacsimenvs.tasks.cloth.backends.rigid.physx import author_articulation_props, prepare_collider_asset
-from isaacsimenvs.tasks.cloth.backends.rigid.pool import PlatePool
+from isaacsimenvs.tasks.cloth.backends.rigid.pool import PlatePool, to_torch
 from isaacsimenvs.tasks.cloth.backends.rigid.usd import bulk_edit_layer
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
+from isaacsimenvs.tasks.cloth.mdp.goal_tasks import GoalTasks
 
-__all__ = ["draw_env_sizes", "draw_episode", "init_start_folds", "install_pool"]
+__all__ = [
+    "build_goal_tasks", "draw_env_sizes", "draw_episode", "goal_task_yaw", "init_start_folds", "install_pool",
+    "start_goal_tasks",
+]
 
 
 # ---------------------------------------------------------------------------- sizes
@@ -248,6 +253,8 @@ def draw_episode(b, env_ids: torch.Tensor) -> None:
     b.pool.select(env_ids, draw.to(b.pool.active.device))
     if b.start_tables is not None:
         b.draw_start_folds(env_ids, draw.to(b.device))
+    if b.goal_tasks is not None:
+        draw_goal_tasks(b, env_ids, draw.to(b.device))
 
 
 def init_start_folds(b) -> None:
@@ -317,3 +324,69 @@ def draw_start_folds(b, env_ids: torch.Tensor, draw: torch.Tensor) -> None:
         k = torch.randint(table.shape[0], (ids.numel(),), device=b.device)
         b.pool.set_start_joints(s, ids, table[k] * torch.gather(ang[on], 1, part[k]))
     b.start_folded[env_ids] = folded
+
+
+# ---------------------------------------------------------------------------- goal tasks
+
+
+def build_goal_tasks(b) -> GoalTasks | None:
+    """The one-fold goal tables of the pool (``fold_pool.goal_task``), or ``None`` when off. No
+    draws: each env's task is drawn at :func:`start_goal_tasks`."""
+    g = b.cfg.fold_pool.goal_task
+    if g.mode == "off":
+        return None
+    joints = [list(a.joint_names) for a in b.arts]
+    return GoalTasks(
+        b.shapes, int(b.cfg.cloth.resolution), g.mode, joints, fsa.JOINT_PREFIX, b.device,
+        accept_lookalike=bool(g.accept_lookalike), read_hinge_abs=lambda: hinge_abs(b),
+    )
+
+
+def start_goal_tasks(b) -> None:
+    """Each env's first task, on the shape the startup proofs left active."""
+    g = b.cfg.fold_pool.goal_task
+    all_ids = torch.arange(b.num_envs, device=b.device)
+    draw_goal_tasks(b, all_ids, b.pool.active.to(b.device))
+    print(
+        f"[goal_task] accept_lookalike {b.goal_tasks.accept_lookalike}, travel sector {float(g.sector_deg):g} deg "
+        f"about {float(g.sector_centre_deg):g} deg (margin {float(g.sector_margin_deg):g})",
+        flush=True,
+    )
+
+
+def draw_goal_tasks(b, env_ids: torch.Tensor, draw: torch.Tensor) -> None:
+    """The task of ``env_ids``, running shapes ``draw``; with ``any_fold`` also its start hinge
+    angles (and whether it starts folded, for the logs)."""
+    gt = b.goal_tasks
+    gt.draw_envs(env_ids, draw)
+    if not gt.any_fold:
+        return
+    task = gt.task[env_ids]
+    shape = gt.task_shape[task]
+    for s, art in enumerate(b.arts):
+        on = shape == s
+        if bool(on.any()):
+            b.pool.set_start_joints(s, env_ids[on], gt.q_start[task[on], : art.num_joints])
+    b.start_folded[env_ids] = gt.q_start[task].abs().amax(dim=1) > 1e-6
+
+
+def goal_task_yaw(b, env_ids: torch.Tensor, yaw: torch.Tensor) -> torch.Tensor:
+    """The reset yaw of ``env_ids``: the sheet's own, or (``goal_task.sector_deg`` < 360) one that
+    puts the designated fold's travel direction in the sector."""
+    gt, g = b.goal_tasks, b.cfg.fold_pool.goal_task
+    if gt is None or gt.task is None or float(g.sector_deg) >= 360.0:
+        return yaw
+    return gt.sector_yaw(gt.task[env_ids], g.sector_deg, g.sector_centre_deg, g.sector_margin_deg).to(yaw.dtype)
+
+
+def hinge_abs(b) -> torch.Tensor:
+    """``(N, J)`` |hinge angle| of each env's active shape, zero-padded to the widest shape."""
+    gt = b.goal_tasks
+    q = torch.zeros((b.num_envs, gt.m_q.shape[-1]), device=b.device)
+    active = b.pool.active.to(b.device)
+    for s, art in enumerate(b.arts):
+        ids = b.pool.members(s)
+        jp = to_torch(art.data.joint_pos)
+        sel = active[ids] == s
+        q[ids[sel], : jp.shape[1]] = jp[sel].abs().to(q.dtype)
+    return q

@@ -16,7 +16,10 @@ from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
 from isaacsimenvs.tasks.cloth.env_cfg import AssetsCfg, ClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 
-__all__ = ["CLOTH_FOLD_LIFT", "FoldPoolCfg", "PhysxChainCfg", "RigidClothCfg", "RigidClothEnvCfg", "RigidClothRandomizationCfg"]
+__all__ = [
+    "CLOTH_FOLD_LIFT", "FoldPoolCfg", "GoalTaskCfg", "PhysxChainCfg", "RigidClothCfg", "RigidClothEnvCfg",
+    "RigidClothRandomizationCfg",
+]
 
 #: The VBD cloth's own friction and the shapes' it meets (Newton mixes them by geometric mean).
 _CLOTH_MU, _TABLE_MU, _FINGERTIP_MU = 0.25, 0.5, 1.5
@@ -262,6 +265,46 @@ class RigidClothCfg:
 
 
 @configclass
+class GoalTaskCfg:
+    """One-fold goal tasks on the pool (``mdp/goal_tasks.py``): each env is given a start state and
+    the state one fold further on as its goal, so a goal can be shown to a point-cloud student as a
+    cloud of the folded sheet."""
+
+    mode: str = "off"
+    """``off``: the stage-1 task as it always was, no goal tables. ``half_fold``: the same task (flat
+    start, the half fold; observations unchanged) with the goal tables built, so the goal cloud,
+    ``accept_lookalike`` and the travel sector are available. ``any_fold``: every episode starts
+    from a random reachable folded state (each hinge flat or fully folded, flat included,
+    ``mdp/geometry/fold_states.py``) and the goal is that state plus ONE more fold; the keypoints
+    the policy observes are on the piece that fold moves."""
+
+    accept_lookalike: bool = False
+    """Success and the dense fold reward accept every folded state that looks like the goal from
+    above (any position, any direction, any equivalent crease), not only the designated fold."""
+
+    sector_deg: float = 360.0
+    """Width of the sector the designated fold's travel direction (env frame, the way the moving
+    piece goes) is drawn in at reset; 360 = the sheet's own uniform yaw."""
+
+    sector_centre_deg: float = 180.0
+    """Centre of that sector. 180 = -x, the travel direction of the half fold at yaw 0."""
+
+    sector_margin_deg: float = 0.0
+    """Left free at each end of the sector."""
+
+    def check(self, init_fold_prob: float) -> None:
+        """Called by the backend: a configclass's ``__post_init__`` does not see YAML overrides."""
+        if self.mode not in ("off", "half_fold", "any_fold"):
+            raise ValueError(f"fold_pool.goal_task.mode must be off, half_fold or any_fold, got {self.mode!r}")
+        if not 0.0 < float(self.sector_deg) <= 360.0:
+            raise ValueError(f"fold_pool.goal_task.sector_deg must be in (0, 360], got {self.sector_deg}")
+        if self.mode == "any_fold" and float(init_fold_prob) > 0.0:
+            raise ValueError("fold_pool.goal_task.mode=any_fold draws its own folded starts; set init_fold_prob to 0")
+        if self.mode == "off" and (self.accept_lookalike or float(self.sector_deg) < 360.0):
+            raise ValueError("fold_pool.goal_task.accept_lookalike / sector_deg need mode half_fold or any_fold")
+
+
+@configclass
 class FoldPoolCfg:
     shapes: list[str] = list(fs.DEFAULT_SHAPES)
     """Pool members, by ``fold_shapes.POOL`` name. Each env carries ALL of them every episode and
@@ -339,6 +382,9 @@ class FoldPoolCfg:
     * ``other``: ``FoldShape.start_poses`` -- every legal combination of the NON-target single-stage
       folds (corners, strips, diagonals, bottom-up), each part at its own angle. A shape whose only
       fold is the target (``box2``) starts flat."""
+
+    goal_task: GoalTaskCfg = GoalTaskCfg()
+    """One-fold goal tasks, the look-alike criterion and the travel sector (``GoalTaskCfg``)."""
 
     def __post_init__(self) -> None:
         if not 0.0 <= float(self.init_fold_prob) <= 1.0:

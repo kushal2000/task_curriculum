@@ -47,6 +47,7 @@ class SheetLayout:
     object_scale: torch.Tensor  # (N, 3) the observed sheet size, normalised (``object_scales``)
     xy_scale: torch.Tensor | None = None  # (N,) per-env in-plane size factor
     env_size: torch.Tensor | None = None  # (N,) per-env side length [m]
+    goal_tasks: object | None = None  # one-fold goal tasks (``goal_tasks.GoalTasks``), rigid pool only
 
 
 @dataclass
@@ -65,4 +66,7 @@ class FoldView:
     object_quat_w: torch.Tensor  # (N, 4) its rotation from rest, Kabsch-fitted to the corners
     object_lin_vel_w: torch.Tensor  # (N, 3) the corners' mean velocity
     object_ang_vel_w: torch.Tensor  # (N, 3) zero
+    # With goal tasks (``fold_pool.goal_task``) only; then ``fold_error`` is the smaller of the two.
+    designated_error: torch.Tensor | None = None  # (N,) against the task's own goal
+    lookalike_error: torch.Tensor | None = None  # (N,) against the nearest look-alike goal, +inf if none
 
