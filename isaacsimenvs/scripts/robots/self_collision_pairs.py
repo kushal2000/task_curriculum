@@ -1,9 +1,8 @@
 """Which of a robot's link pairs to exclude from self-collision, measured from its URDF.
 
-Tasks with ``robot_self_collision`` on (PlaySelfCollision, PlayFlexivWuji) let every robot body
-collide except the pairs in ``RobotSpec.self_collision_filter``, as SimToolReal does in Isaac Gym
-with its hand-written ``adjacent_links.py``. The Kuka + Sharpa uses that file verbatim. This
-derives the list for a new robot:
+Tasks with ``robot_self_collision`` on let every robot body collide except the pairs in
+``RobotSpec.self_collision_filter``, as SimToolReal does in Isaac Gym with its hand-written
+``adjacent_links.py`` for the Kuka + Sharpa. This derives the list from a robot's URDF:
 
   1. every jointed pair -- a moving body and the body its joint hangs off;
   2. every other pair whose collision hulls overlap at the reset pose (gen_mechanics'
@@ -12,18 +11,14 @@ derives the list for a new robot:
      either joint's range (one joint swept at a time from the reset pose). SimToolReal filters
      these on the Sharpa: palm to proximal phalanx across each MCP.
 
-On the Kuka + Sharpa this reproduces 33 of SimToolReal's 35 pairs. It misses palm-middle PP and
-pinky MC-PP, which do not touch in its one-joint-at-a-time sweep, and adds the iiwa wrist
-(link5-link7, which SimToolReal leaves colliding). Hence the Kuka keeps the upstream list.
+On the Kuka + Sharpa this reproduced 33 of SimToolReal's 35 pairs (it misses palm-middle PP and
+pinky MC-PP, which do not touch in its one-joint-at-a-time sweep).
 
 Bodies are the ones left after the importer's ``merge_fixed_joints`` (a link joins the body its
 fixed joint hangs off), named as Isaac Lab names them. The reset pose is the spec's default arm
 pose with the hand at 0, which is what ``reset_utils`` puts the robot in.
 
-    .venv_isaaclab3/bin/python isaacsimenvs/scripts/robots/self_collision_pairs.py flexiv_wuji
-    .venv_isaaclab3/bin/python isaacsimenvs/scripts/robots/self_collision_pairs.py kuka_sharpa --compare-simtoolreal
-
-``tests/test_robot_specs.py`` reruns this for the Flexiv and checks the spec's list against it.
+    .venv_isaaclab3/bin/python isaacsimenvs/scripts/robots/self_collision_pairs.py flexiv_wuji_right_human_like
 """
 
 from __future__ import annotations
@@ -37,18 +32,13 @@ import numpy as np
 import trimesh
 import yourdfpy
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import flexiv_wuji as fw  # noqa: E402
-
-sys.path.insert(0, str(fw.REPO_ROOT / "isaacsimenvs"))
+REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO_ROOT / "isaacsimenvs"))
 import robots  # noqa: E402  (stdlib-only; imported by path so Isaac Lab is not needed)
 
 URDFS = {
-    "kuka_sharpa": fw.KUKA_SHARPA_URDF,
-    "flexiv_wuji": fw.COMPOSED_URDF,
-    "flexiv_wuji_human_like": fw.HUMAN_LIKE_URDF,
-    "flexiv_sharpa": fw.FLEXIV_SHARPA_URDF,
+    "flexiv_wuji_right_human_like": REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
+    "flexiv_wuji_right_real": REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
 }
 #: Deeper than this counts as overlapping (onboard.py's threshold).
 OVERLAP_M = 5e-4
@@ -159,13 +149,6 @@ def derive(robot: str) -> tuple[dict[str, tuple[str, ...]], dict[tuple[str, str]
     return {k: tuple(sorted(v)) for k, v in sorted(adjacency.items())}, extra
 
 
-def _simtoolreal_left_map() -> dict[str, tuple[str, ...]]:
-    path = fw.REPO_ROOT.parent / "simtoolreal" / "isaacgymenvs" / "tasks" / "simtoolreal" / "adjacent_links.py"
-    scope: dict = {}
-    exec(path.read_text(), scope)
-    return {k: tuple(sorted(v)) for k, v in scope["LEFT_SHARPA_KUKA_LINK_TO_ADJACENT_LINKS"].items()}
-
-
 def _pairs(adjacency) -> set[frozenset]:
     return {frozenset((a, b)) for a, bs in adjacency.items() for b in bs}
 
@@ -173,8 +156,6 @@ def _pairs(adjacency) -> set[frozenset]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("robot", choices=sorted(URDFS))
-    parser.add_argument("--compare-simtoolreal", action="store_true",
-                        help="diff against SimToolReal's hand-written map (kuka_sharpa only)")
     args = parser.parse_args()
 
     adjacency, overlapping = derive(args.robot)
@@ -192,11 +173,6 @@ def main() -> None:
         same = _pairs(spec_map) == _pairs(adjacency)
         print(f"# robots.{args.robot.upper()}.self_collision_filter "
               + ("matches" if same else "DIFFERS from this"))
-    if args.compare_simtoolreal:
-        ours, theirs = _pairs(adjacency), _pairs(_simtoolreal_left_map())
-        print(f"# vs SimToolReal LEFT map: {len(ours & theirs)} shared, "
-              f"only derived {sorted(map(sorted, ours - theirs))}, "
-              f"only SimToolReal {sorted(map(sorted, theirs - ours))}")
 
 
 if __name__ == "__main__":

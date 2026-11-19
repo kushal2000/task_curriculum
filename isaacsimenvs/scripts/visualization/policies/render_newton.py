@@ -26,6 +26,7 @@ import os
 import sys
 from pathlib import Path
 
+from isaacsimenvs import PRETRAINED_CHECKPOINT, PRETRAINED_CONFIG
 from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
 
 #: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums. Both this
@@ -580,8 +581,8 @@ def main() -> None:
         help="aim point relative to the filmed env's origin. Default is roughly the object's "
         "start height (table_reset_z 0.38 + table_object_z_offset 0.25).",
     )
-    parser.add_argument("--checkpoint", default="/share/portal/kk837/simtoolreal/pretrained_policy/model.pth")
-    parser.add_argument("--policy_config", default="/share/portal/kk837/simtoolreal/pretrained_policy/config.yaml")
+    parser.add_argument("--checkpoint", default=str(PRETRAINED_CHECKPOINT))
+    parser.add_argument("--policy_config", default=str(PRETRAINED_CONFIG))
     parser.add_argument(
         "--sapg_expl_coef", type=float, default=50.0,
         help="SAPG block conditioning: 50.0 = block 0, 0.0 = last block. See eval/player.py.",

@@ -301,7 +301,7 @@ def write_pose_viewer_html(path: Path, payload: dict, *, title: str) -> str:
 
     robot_urdf_url = (
         github_raw_base
-        + "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
+        + "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
     )
     # Placeholder object mesh for the HTML viewer (Stage-1 play uses procedurally
     # generated objects, so this is only a stand-in glyph in the rollout viewer).

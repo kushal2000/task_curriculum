@@ -53,8 +53,7 @@ VBD_CLOTH_CFG = ["isaacsimenvs/tasks/cloth/backends/vbd/config.py", *CLOTH_CFG]
 # (yaml, root configclass, modules). Modules are searched in order and the first
 # definition of a class name wins.
 CASES = [
-    pytest.param("isaacsimenvs/scripts/configs/task/Play.yaml", "PlayEnvCfg", [PLAY_CFG], id="Play"),
-    pytest.param("isaacsimenvs/scripts/configs/task/PlayFlexivWujiRightHumanLike.yaml", "PlayFlexivWujiRightHumanLikeEnvCfg", [PLAY_CFG], id="PlayFlexivWujiRightHumanLike"),
+    pytest.param("isaacsimenvs/scripts/configs/task/PlayFlexivWujiRightHumanLike.yaml", "PlayEnvCfg", [PLAY_CFG], id="PlayFlexivWujiRightHumanLike"),
     pytest.param("isaacsimenvs/scripts/configs/task/RigidCloth.yaml", "RigidClothEnvCfg", RIGID_CLOTH_CFG, id="RigidCloth"),
     pytest.param("isaacsimenvs/scripts/configs/task/Cloth.yaml", "VbdClothEnvCfg", VBD_CLOTH_CFG, id="Cloth"),
 ]

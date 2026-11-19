@@ -8,7 +8,6 @@ import torch
 
 from isaaclab.utils.math import convert_quat, quat_apply, quat_from_angle_axis, quat_mul
 
-from isaacsimenvs.robots import KUKA_SHARPA
 from .point_dr import push_and_read, refit_points, simple_lags
 
 
@@ -17,16 +16,9 @@ from .point_dr import push_and_read, refit_points, simple_lags
 # ----------------------------------------------------------------------------
 
 
-# The Kuka + Sharpa's values (robots/); the env reads its own robot's from env.robot_spec.
-NUM_JOINTS: int = KUKA_SHARPA.num_joints
+# The robot's joint count, palm centre and fingertip pads come from env.robot_spec.
 NUM_FINGERTIPS: int = 5
 NUM_KEYPOINTS: int = 4
-
-# Policy was trained against the palm center, not the raw wrist body.
-PALM_CENTER_OFFSET: tuple[float, float, float] = KUKA_SHARPA.palm_center_offset
-
-# Shift fingertip body origins to the approximate pad centers.
-FINGERTIP_OFFSET: tuple[float, float, float] = KUKA_SHARPA.fingertip_offset
 
 # Where Play puts the robot base (scene_utils default); palm_pos is observed relative to it.
 PLAY_ROBOT_ROOT_POS: tuple[float, float, float] = (0.0, 0.8, 0.0)
@@ -39,13 +31,11 @@ KEYPOINT_CORNERS: tuple[tuple[int, int, int], ...] = (
     (-1, -1, -1),
 )
 
-#: Fields with one entry per robot joint; their size follows the robot.
+#: Fields with one entry per robot joint; their size follows the robot (compute_obs_dim).
 _PER_JOINT_FIELDS = ("joint_pos", "joint_vel", "prev_action_targets")
 
+#: Sizes of the fields that do not depend on the robot.
 OBS_FIELD_SIZES: dict[str, int] = {
-    "joint_pos": NUM_JOINTS,
-    "joint_vel": NUM_JOINTS,
-    "prev_action_targets": NUM_JOINTS,
     "palm_pos": 3,
     "palm_rot": 4,
     "palm_vel": 6,
@@ -64,7 +54,7 @@ OBS_FIELD_SIZES: dict[str, int] = {
 }
 
 
-def compute_obs_dim(field_list, num_joints: int = NUM_JOINTS) -> int:
+def compute_obs_dim(field_list, num_joints: int) -> int:
     """Return total tensor dim for an ordered list of obs field names."""
     sizes = {**OBS_FIELD_SIZES, **{f: num_joints for f in _PER_JOINT_FIELDS}}
     return sum(sizes[f] for f in field_list)
@@ -624,7 +614,6 @@ def build_student_observations(env) -> dict[str, torch.Tensor]:
 
 
 __all__ = [
-    "NUM_JOINTS",
     "NUM_FINGERTIPS",
     "NUM_KEYPOINTS",
     "KEYPOINT_CORNERS",

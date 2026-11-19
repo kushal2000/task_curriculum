@@ -1,7 +1,7 @@
 """Run a fold policy LIVE in a browser (viser), with its knobs on sliders.
 
-    experiments/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser --task Isaacsimenvs-Cloth-Direct-v0
-    experiments/viewer.sh --task Isaacsimenvs-Cloth-Direct-v0   # on a GPU machine; prints the host to tunnel to
+    experiments/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser --task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0
+    experiments/viewer.sh --task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0   # on a GPU machine; prints the host to tunnel to
 
 The env runs on the GPU exactly as `episodes.py` runs it (same reset, same zero-action tick, same
 player), a handful of envs at once; one of them is drawn. What can change WITHOUT a restart:
@@ -58,16 +58,14 @@ from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
 
 ROOT = Path(__file__).resolve().parents[4]
 
-#: Display name -> (checkpoint, default SAPG coef). Paths are relative to the repo root.
-#: The best seed of each 2026-10-06 PhysX run (generic prior, 24576 envs, 7.47e8 steps), picked by
-#: held folds on the VBD cloth summed over 4/1.5 cm x pinned/rand (docs/reports/4_physx/physx_generic_prior_runs.md);
-#: label = its cloth score at 4 cm, pinned / randomised.
+#: Display name -> (checkpoint, default SAPG coef). Paths are relative to the repo root; more come
+#: from $LIVE_VISER_POLICIES (below).
 POLICIES = {
-    "Flexiv + Wuji Play prior (human-like limits; untrained on folds)": ("pretrained_policy/flexiv_wuji.pth", 0.0),
-    "run 2: flat pool (s3; cloth 78/66%)": ("outputs/2026-10-06/14-53-54/0_pxpool_one_flat_s3_158376/nn/0_pxpool_one_flat_s3_158376.pth", 0.0),
-    "run 1: pool + folded starts (s1; cloth 56/50%)": ("outputs/2026-10-06/14-33-35/0_pxpool_one_initfold_s1_158375/nn/0_pxpool_one_initfold_s1_158375.pth", 0.0),
-    "run 3: box3-mid (s3; cloth 61/64%)": ("outputs/2026-10-06/13-32-04/0_pxchain_box3_s3_158324/nn/0_pxchain_box3_s3_158324.pth", 0.0),
-    "previous best: PhysX stage 1 -> 2 (157622 s1; cloth 88/63%)": ("outputs/2026-10-05/23-51-55/0_pxpool_pxs1_arm1e3_e6144_s1_157622/nn/0_pxpool_pxs1_arm1e3_e6144_s1_157622.pth", 0.0),
+    "Play prior nov8 (right Wuji; untrained on folds)": (
+        "pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth", 0.0),
+    "rigid_cloth_right_wuji s1 ep1500 (flat7RW_base)": (
+        "outputs/2026-11-11/02-51-52/0_pxpool_flat7RW_base_s1_277681/nn/"
+        "snap_0_pxpool_flat7RW_base_s1_277681_ep_1500.pth", 0.0),
 }
 
 #: Extra menu entries from a JSON file {display name: [checkpoint, coef(, [task menu names])]} named by
@@ -92,45 +90,27 @@ def policies_for(task_name: str) -> list[str]:
     """Menu entries usable with the task menu entry `task_name` (all of them if none is task-bound)."""
     return [k for k in POLICIES if k not in POLICY_TASKS or task_name in POLICY_TASKS[k]] or list(POLICIES)
 
-#: Not in the menu; add one back to POLICIES to show it.
-ARCHIVED_POLICIES = {
-    "stage-2 pool, box3-mid prior s3 (Newton)": ("outputs/2026-10-04/20-17-57/0_fp_box3_s3_156746/nn/0_fp_box3_s3_156746.pth", 0.0),
-    "stage-1 box3-mid chain (Newton rc2 fixdr s2)": ("outputs/2026-09-30/17-12-24/0_rc2_box3-mid_fixdr_s2_155349/nn/0_rc2_box3-mid_fixdr_s2_155349.pth", 0.0),
-    "cloth-trained reference (VBD)": ("outputs/2026-09-23/17-31-13/0_pretrained_s1_resume_150911/nn/0_pretrained_s1_resume_150911.pth", 0.0),
-    "generic tool-use prior (untrained on folds)": ("pretrained_policy/model.pth", 50.0),
-}
-
 #: Display name -> (gym task, extra hydra overrides). Newton; PHYSX_TASKS for the PhysX viewer.
 TASKS = {
     "VBD cloth, Flexiv + right Wuji human-like (real setup)": ("Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0", []),
-    "VBD cloth, Flexiv + Wuji human-like": ("Isaacsimenvs-ClothFlexivWujiHumanLike-Direct-v0", []),
-    "VBD cloth, Flexiv + Wuji vendor limits": ("Isaacsimenvs-ClothFlexivWuji-Direct-v0", []),
-    "VBD cloth": ("Isaacsimenvs-Cloth-Direct-v0", []),
+    "VBD cloth, Flexiv + right Wuji identified hand (real setup)": ("Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0", []),
 }
+_POOL7 = ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
+          "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"]
 PHYSX_TASKS = {
-    "fold pool 7 shapes flat (flat7), Flexiv + right Wuji human-like (real setup)": (
-        "Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHumanLike-Direct-v0",
-        ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
-         "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
+    "fold pool 7 shapes flat, Flexiv + right Wuji, real limits (rigid_cloth_right_wuji)": (
+        "Isaacsimenvs-RigidCloth-Direct-v0",
+        ["env.robot_setup=flexiv_wuji_right_hl_reallimits", "env.cloth.start_height=0.20", *_POOL7],
     ),
-    "fold pool 7 shapes flat (flat7), Flexiv + Wuji human-like": (
-        "Isaacsimenvs-FoldPoolPhysxFlexivWujiHumanLike-Direct-v0",
-        ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
-         "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
+    "fold pool 7 shapes flat, Flexiv + right Wuji human-like (real setup)": (
+        "Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHumanLike-Direct-v0", _POOL7,
     ),
-    "fold pool 7 shapes flat (flat7), Flexiv + Wuji vendor limits": (
-        "Isaacsimenvs-FoldPoolPhysxFlexivWuji-Direct-v0",
-        ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
-         "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"],
-    ),
-    "fold pool (5 shapes, 10-20 cm)": ("Isaacsimenvs-FoldPoolPhysx-Direct-v0", []),
-    # Run 1's training setup: 80% of episodes start partly folded, hinge damping 0.02.
-    "fold pool + folded starts (run 1 setup)": (
-        "Isaacsimenvs-FoldPoolPhysx-Direct-v0",
-        ["env.fold_pool.init_fold_prob=0.8", "env.rigid_cloth.joint_damping=0.02"],
+    "fold pool (5 shapes, 10-20 cm), Flexiv + right Wuji, real limits": (
+        "Isaacsimenvs-RigidCloth-Direct-v0",
+        ["env.robot_setup=flexiv_wuji_right_hl_reallimits", "env.cloth.start_height=0.20"],
     ),
 }
-#: VBD cloth size -> hydra overrides (the large-cloth evals' settings, scripts/cluster/bos14_cloth_size_sweep.sh):
+#: VBD cloth size -> hydra overrides (the large-cloth evals' settings):
 #: grid spacing closest to the calibrated 16.67 mm (and >= the 16 mm particle thickness), reset centre
 #: moved toward the robot by (size - 0.10) * sqrt(2) / 2 like the pool's reach_shift.
 CLOTH_SIZES = {
@@ -185,7 +165,7 @@ PC_NOISE_LABELS = {
 
 def _parse():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--task", default="Isaacsimenvs-Cloth-Direct-v0")
+    p.add_argument("--task", default="Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0")
     p.add_argument("--policy", default=next(iter(POLICIES)), choices=list(POLICIES))
     p.add_argument("--num_envs", type=int, default=8)
     p.add_argument("--port", type=int, default=8080)

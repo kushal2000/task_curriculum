@@ -1,6 +1,6 @@
 """Mean goals per episode, sampled one episode per environment.
 
-    python isaacsimenvs/scripts/evaluation/eval.py --task Isaacsimenvs-Play-Direct-v0 --num_envs 64
+    python isaacsimenvs/scripts/evaluation/eval.py --task Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 --num_envs 64
 
 The metric is the number of sequential goals a policy reaches in one episode. The episode is the
 honest unit here because the deadline **resets on every goal hit**
@@ -39,8 +39,10 @@ from isaacsimenvs.scripts.evaluation.protocol import disable_randomization, set_
 #: can be diffed step by step instead of reasoned about.
 _TRACE = int(os.environ.get("RC_TRACE", "0") or 0)
 
-DEFAULT_CHECKPOINT = "/share/portal/kk837/simtoolreal/pretrained_policy/model.pth"
-DEFAULT_POLICY_CFG = "/share/portal/kk837/simtoolreal/pretrained_policy/config.yaml"
+from isaacsimenvs import PRETRAINED_CHECKPOINT, PRETRAINED_CONFIG  # noqa: E402
+
+DEFAULT_CHECKPOINT = str(PRETRAINED_CHECKPOINT)
+DEFAULT_POLICY_CFG = str(PRETRAINED_CONFIG)
 
 # Termination causes published by `play/utils/logging_utils.py`. Reported as a histogram: two
 # backends can agree on the mean while failing for entirely different reasons, and that is not
@@ -88,7 +90,7 @@ def main() -> None:
     from isaaclab.app import AppLauncher
 
     parser = argparse.ArgumentParser(description="Mean goals per episode, one episode per env.")
-    parser.add_argument("--task", default="Isaacsimenvs-Play-Direct-v0")
+    parser.add_argument("--task", default="Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0")
     parser.add_argument("--num_envs", type=int, default=64)
     parser.add_argument(
         "--max_steps",

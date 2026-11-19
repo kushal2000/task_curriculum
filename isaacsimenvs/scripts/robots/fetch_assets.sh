@@ -4,17 +4,13 @@
 #   flexiv_description/  github.com/flexivrobotics/flexiv_description: the Rizon 4s xacro expanded
 #                        to urdf/Rizon4s.urdf with upstream's own create_urdf.py, and its meshes.
 #   wuji_hand2/          github.com/wuji-technology/wuji-description, hand2/hand2_beta2/body: the
-#                        vendor URDFs (with and without the wrist mount), meshes, and MJCF (the
-#                        source of the provisional hand gains in isaacsimenvs/robots/,
-#                        which tests/test_robot_specs.py checks against it). Beta 2
-#                        at the commit wuji-hand-teleop's wujihand_urdf was copied from, so the
-#                        hand matches assets/g1_wuji2_description/.
+#                        vendor URDFs (with and without the wrist mount), meshes, and MJCF. Beta 2
+#                        at the commit wuji-hand-teleop's wujihand_urdf was copied from.
 #
-# Both are fetched verbatim at pinned commits. The left-hand robot's files are committed (the
-# training-time pose viewer loads them from raw GitHub); the right hand is gitignored. Mesh paths in the
-# generated Rizon4s.urdf are rewritten relative to the file, so the tree can move. Last, the two
-# are joined into rizon4s_left_wuji.urdf (flexiv_wuji.py, at its MOUNT_*), the model the
-# Isaacsimenvs-PlayFlexivWuji-Direct-v0 task loads.
+# Both are fetched verbatim at pinned commits into those two directories (replaced, nothing else
+# under assets/flexiv_wuji/ is touched). Mesh paths in the generated Rizon4s.urdf are rewritten
+# relative to the file, so the tree can move. The robot URDFs the tasks load
+# (rizon4s_right_wuji_{human_like_joint_limits,real_limits}.urdf) are committed and point into them.
 #
 #   isaacsimenvs/scripts/robots/fetch_assets.sh
 #   FLEXIV_SHA=<sha> WUJI_SHA=<sha> isaacsimenvs/scripts/robots/fetch_assets.sh
@@ -98,12 +94,11 @@ tree.write(path, encoding="utf-8", xml_declaration=True)
 print(f"wrapped loose inertia elements in <inertial> on {wrapped} links")
 EOF
 
-rm -rf "$DEST"
+rm -rf "$DEST/flexiv_description" "$DEST/wuji_hand2"
 mkdir -p "$DEST/flexiv_description/urdf" "$DEST/wuji_hand2"
 cp "$urdf" "$DEST/flexiv_description/urdf/"
 cp -r "$tmp/flexiv_description/meshes" "$DEST/flexiv_description/"
 cp -r "$tmp/wuji/$WUJI_SRC/urdf" "$tmp/wuji/$WUJI_SRC/meshes" "$tmp/wuji/$WUJI_SRC/mjcf" "$DEST/wuji_hand2/"
 
 printf '%s %s\n%s %s\n' "$FLEXIV_REPO" "$FLEXIV_SHA" "$WUJI_REPO" "$WUJI_SHA" > "$DEST/UPSTREAM"
-python3 "$ROOT/isaacsimenvs/scripts/robots/flexiv_wuji.py"
 echo "Rizon 4s @ ${FLEXIV_SHA:0:12} + Wuji Hand 2 @ ${WUJI_SHA:0:12} -> ${DEST#$ROOT/}"

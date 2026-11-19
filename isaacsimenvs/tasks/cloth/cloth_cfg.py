@@ -514,7 +514,7 @@ class ClothCfg:
         deformable solver -- a body selector would match nothing and the cloth would be integrated
         by nobody, presenting as a sheet frozen in mid-air.
 
-        ``robot_spec`` (a ``robots.RobotSpec``, the Kuka + Sharpa when omitted) names the hand
+        ``robot_spec`` (a ``robots.RobotSpec``, the right Wuji human-like spec when omitted) names the hand
         bodies the cloth couples to.
         """
         from isaaclab_contrib.coupling import (
@@ -530,9 +530,9 @@ class ClothCfg:
             NewtonShapeCfg,
         )
 
-        from isaacsimenvs.robots import KUKA_SHARPA
+        from isaacsimenvs.robots import FLEXIV_WUJI_RIGHT_HUMAN_LIKE
 
-        robot_spec = robot_spec or KUKA_SHARPA
+        robot_spec = robot_spec or FLEXIV_WUJI_RIGHT_HUMAN_LIKE
         rigid_bodies = [r"/World/envs/env_.*/Robot"]
         robot = r"/World/envs/env_.*/Robot/"
         segments = ("distal",) if self.proxy_links == "tips" else ("distal", "middle", "proximal")

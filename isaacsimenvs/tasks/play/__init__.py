@@ -1,20 +1,16 @@
-"""Play task registration: rigid-object pretraining (play2perfect / SimToolReal).
+"""Play task registration: rigid-object goal reaching (play2perfect / SimToolReal), the pretraining
+task of every cloth policy's prior.
 
-One env class (``PlayEnv``); the cfg class picks the robot and self-collision:
+One env class (``PlayEnv``) and config (``PlayEnvCfg``), on the Flexiv Rizon 4s + right Wuji Hand 2
+in the real setup's table and goal geometry:
 
-    Isaacsimenvs-Play-Direct-v0                       Kuka iiwa14 + Sharpa (SimToolReal's robot)
-
-Legacy, kept for their checkpoints (the left-hand setups; the right-hand robot trains Play on
-another branch):
-
-    Isaacsimenvs-PlaySelfCollision-Direct-v0          the Kuka with robot self-collision on
-    Isaacsimenvs-PlayFlexivWuji-Direct-v0             Flexiv Rizon 4s + left Wuji Hand 2
-    Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0    that robot with human-like joint limits
-    Isaacsimenvs-PlayFlexivSharpa-Direct-v0           the Rizon carrying the Kuka's Sharpa
+    Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0   HAND2_DRIVE hand, human-like limits
+    Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0        the identified hand (robot setup
+                                                          flexiv_wuji_right_real_play), an alias
 
 Entry points:
 - ``env_cfg_entry_point``           → PlayEnvCfg (typed defaults in code)
-- ``env_cfg_yaml_entry_point``      → configs/task/Play.yaml overlay
+- ``env_cfg_yaml_entry_point``      → configs/task/PlayFlexivWujiRightHumanLike.yaml overlay
 - ``rl_games_cfg_entry_point``      → configs/train/PlayPPO.yaml (baseline)
 - ``rl_games_sapg_cfg_entry_point`` → configs/train/PlaySAPG.yaml (default)
 """
@@ -70,10 +66,7 @@ def _register(task_id: str, cfg_class: str, task_yaml: str) -> None:
     )
 
 
-_register("Isaacsimenvs-Play-Direct-v0", "PlayEnvCfg", "Play.yaml")
-# Flexiv + right Wuji with human-like joint limits, in the real setup's table and goal geometry.
-_register("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0", "PlayFlexivWujiRightHumanLikeEnvCfg",
-          "PlayFlexivWujiRightHumanLike.yaml")
+_register("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0", "PlayEnvCfg", "PlayFlexivWujiRightHumanLike.yaml")
 # The same task with the identified right hand (robot setup flexiv_wuji_right_real_play: sysid
 # dynamics, real joint limits), as an alias like the cloth tasks' robot-suffixed ids.
 gym.register(
@@ -87,9 +80,3 @@ gym.register(
         "robot_setup": "flexiv_wuji_right_real_play",
     },
 )
-
-# --- legacy
-_register("Isaacsimenvs-PlaySelfCollision-Direct-v0", "PlaySelfCollisionEnvCfg", "Play.yaml")
-_register("Isaacsimenvs-PlayFlexivWuji-Direct-v0", "PlayFlexivWujiEnvCfg", "PlayFlexivWuji.yaml")
-_register("Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0", "PlayFlexivWujiHumanLikeEnvCfg", "PlayFlexivWujiHumanLike.yaml")
-_register("Isaacsimenvs-PlayFlexivSharpa-Direct-v0", "PlayFlexivSharpaEnvCfg", "PlayFlexivSharpa.yaml")

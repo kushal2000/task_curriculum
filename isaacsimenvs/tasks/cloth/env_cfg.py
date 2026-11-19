@@ -31,7 +31,7 @@ __all__ = [
 class AssetsCfg:
     """The robot and table URDFs, and their contact frictions."""
 
-    robot_urdf: str = "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
+    robot_urdf: str = "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
     table_urdf: str = "assets/urdf/table_narrow.urdf"
     robot_friction: float = 0.5
     finger_tip_friction: float = 1.5
@@ -191,7 +191,7 @@ def _physx_sim_cfg() -> SimulationCfg:
 class ClothEnvCfg(DirectRLEnvCfg):
     """The fold task, with the robot of ``robot``."""
 
-    robot: str = "kuka_sharpa"
+    robot: str = "flexiv_wuji_right_human_like"
     """A key of ``isaacsimenvs.robots.ROBOT_SPECS``; ``assets.robot_urdf`` must be its URDF."""
     robot_setup: str = ""
     """A file stem in ``configs/robot/`` (robot, URDF, self-collision, base position), applied by the

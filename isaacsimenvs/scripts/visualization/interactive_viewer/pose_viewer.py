@@ -20,12 +20,11 @@ import numpy as np
 
 from isaacsimenvs.scripts.visualization.interactive_viewer import create_html, make_embedded_robot, make_url_robot
 
-from isaacsimenvs.robots import KUKA_SHARPA
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FALLBACK_GITHUB_RAW_BASE = "https://raw.githubusercontent.com/kushal2000/depthbasedRL/main/"
-ROBOT_URDF_RELATIVE_PATH = "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
+ROBOT_URDF_RELATIVE_PATH = "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
 TABLE_URDF_PATH = REPO_ROOT / "assets" / "urdf" / "table_narrow.urdf"
 
 
@@ -237,7 +236,7 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
     if hasattr(env, "_perm_lab_to_canon"):
         joint_pos = env.robot.data.joint_pos[env_id, env._perm_lab_to_canon]
         spec = getattr(env, "robot_spec", None)
-        joint_names = list(spec.joint_names_canonical if spec else KUKA_SHARPA.joint_names_canonical)
+        joint_names = list(spec.joint_names_canonical) if spec else list(env.robot.data.joint_names)
     else:
         joint_pos = env.robot.data.joint_pos[env_id]
         joint_names = list(env.robot.data.joint_names)

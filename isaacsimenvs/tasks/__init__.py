@@ -9,6 +9,6 @@ sheet (Newton) or on the fold-shape pool of hinged plates (PhysX).
 """
 
 from . import cloth  # gym.register("Isaacsimenvs-Cloth-Direct-v0" / "-RigidCloth-" / aliases)
-from . import play   # gym.register("Isaacsimenvs-Play-Direct-v0" / "-PlayFlexivWuji-" / ...)
+from . import play   # gym.register("Isaacsimenvs-PlayFlexivWujiRight{HumanLike,Real}-Direct-v0")
 
 __all__ = ["cloth", "play"]

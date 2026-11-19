@@ -1,7 +1,7 @@
 """PlayEnvCfg — typed defaults for the Play goal-pose-reaching task.
 
 Organized into sectioned sub-configclasses that mirror the YAML overlay
-in configs/task/Play.yaml 1:1:
+in configs/task/PlayFlexivWujiRightHumanLike.yaml 1:1:
 
     sim                     → isaaclab.sim.SimulationCfg (+ PhysxCfg)
     scene                   → PlaySceneCfg(InteractiveSceneCfg)
@@ -54,9 +54,7 @@ from isaaclab.utils import configclass
 
 @configclass
 class AssetsCfg:
-    robot_urdf: str = (
-        "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf"
-    )
+    robot_urdf: str = "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
     table_urdf: str = "assets/urdf/table_narrow.urdf"
     # Per-env scale ranges applied to the table mesh at scene-build time.
     # Sampled independently per env: sx ~ U(table_scale_range_x), sy ~ U(table_scale_range_y).
@@ -238,13 +236,13 @@ class StudentObsCfg:
         # `/visuals` group; multi-link URDFs (fabrica) match each link's
         # `/visuals` group independently, which is what we want.
         "/World/envs/env_.*/Object/.*/visuals",
-        # iiwa arm + sharpa hand link visuals. Explicit prefixes (not a
+        # Rizon arm + Wuji hand link visuals. Explicit prefixes (not a
         # broad `/Robot/.*/visuals`) so the parser doesn't try to make
         # rigid-body views for non-link prims like `/Robot/Looks` /
         # `/Robot/joints` (those stall sensor init for several minutes
         # with PhysX retries before timing out).
-        "/World/envs/env_.*/Robot/iiwa14_link_.*/visuals",
-        "/World/envs/env_.*/Robot/left_.*/visuals",
+        "/World/envs/env_.*/Robot/(base_link|link[1-7])/visuals",
+        "/World/envs/env_.*/Robot/r_.*/visuals",
     )
     # Rays that don't intersect any mesh return max_distance (instead of NaN)
     # when `depth_clipping_behavior == "max"`. Keep at the rasterizer's default
@@ -596,22 +594,21 @@ def _default_sim_cfg() -> SimulationCfg:
 class PlayEnvCfg(DirectRLEnvCfg):
     """Top-level configclass for the Play goal-pose-reaching env.
 
-    Structure mirrors ``configs/task/Play.yaml`` exactly — YAML overlay
+    Structure mirrors ``configs/task/PlayFlexivWujiRightHumanLike.yaml`` exactly — YAML overlay
     key paths resolve to these fields via ``configclass.from_dict``.
     """
 
     # Robot embodiment, a key of robots.ROBOT_SPECS. Fixed per registered task; assets.robot_urdf
     # must be its URDF. PlayEnv sets action_space (and the obs sizes) from it.
-    robot: str = "kuka_sharpa"
+    robot: str = "flexiv_wuji_right_human_like"
     # Robot setup: a file stem in configs/robot/ (robot spec, URDF, self-collision, base position),
     # applied by the config loader (scripts/configs/loader) between the task YAML and the run recipe.
     # Set it in a recipe (`env.robot_setup`), on the command line, or through an alias task id.
     # Empty: the task's own robot.
     robot_setup: str = ""
     # Robot self-collision, minus robots.RobotSpec.self_collision_filter: SimToolReal's Isaac Gym
-    # setup. Off here, where this port has always run (docs/phase1_baseline.md), so the Kuka eval
-    # and the tasks built on Play are unchanged; the tasks that train from scratch turn it on.
-    robot_self_collision: bool = False
+    # setup, which the right-hand Play priors were trained with.
+    robot_self_collision: bool = True
     # Which robot pairs self-collision checks when it is on: "all" (above), "hand" (palm + finger
     # segments only, no arm links) or "tips" (distal / middle of different fingers + thumb vs palm);
     # robots.usd.self_collision_keep. MJWarp (Newton) is ~26x slower with "all" on the Flexiv.
@@ -625,7 +622,7 @@ class PlayEnvCfg(DirectRLEnvCfg):
     # --- DirectRLEnvCfg required fields ---
     decimation: int = 2  # 2 physics substeps per policy step
     episode_length_s: float = 10.0  # 600 policy steps * 2 * (1/120) = 10s
-    action_space: int = 29  # 7-DOF IIWA + 22-DOF SHARPA hand
+    action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
     # Obs/state sizes are derived from obs.obs_list / obs.state_list at env init.
     # Placeholder keeps the configclass instantiable before the env computes the
     # final spaces.
@@ -672,82 +669,8 @@ class PlayEnvCfg(DirectRLEnvCfg):
     domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg()
 
 
-@configclass
-class PlayFlexivWujiRightHumanLikeEnvCfg(PlayEnvCfg):
-    """Play on the Flexiv Rizon 4s + right Wuji Hand 2 with human-like limits, as the real robot is
-    set up (``Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0``): human-like limits on the r_
-    joints, the hand turned 180 deg on the flange so its palm faces the table at the same arm pose,
-    robot self-collision on. The real table and goal geometry are in its task YAML.
-    """
-
-    robot: str = "flexiv_wuji_right_human_like"
-    robot_self_collision: bool = True
-    action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
-    assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf")
-
-
-@configclass
-class PlayFlexivWujiEnvCfg(PlayEnvCfg):
-    """Play on a Flexiv Rizon 4s + left Wuji Hand 2 (``Isaacsimenvs-PlayFlexivWuji-Direct-v0``).
-
-    The same task as ``PlayEnvCfg`` except the robot, and robot self-collision, which is on (as for
-    its Kuka control, ``PlaySelfCollisionEnvCfg``). The URDF is composed by
-    ``isaacsimenvs/scripts/robots/fetch_assets.sh``. Note ``student_obs.raycast_dynamic_prim_exprs``
-    still names the Kuka's links, so the raycaster student camera does not see this robot yet.
-    """
-
-    robot: str = "flexiv_wuji"
-    robot_self_collision: bool = True
-    action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
-    assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji.urdf")
-
-
-
-@configclass
-class PlayFlexivWujiHumanLikeEnvCfg(PlayFlexivWujiEnvCfg):
-    """``PlayFlexivWujiEnvCfg`` on the Wuji with human-like joint limits
-    (``Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0``): backward finger bend cut and finger
-    abduction held to +-2 deg (``scripts/flexiv_wuji/flexiv_wuji.py`` HUMAN_LIKE_LIMITS_DEG).
-    Everything else, self-collision included, is the Flexiv task's.
-    """
-
-    robot: str = "flexiv_wuji_human_like"
-    assets: AssetsCfg = AssetsCfg(
-        robot_urdf="assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf"
-    )
-
-
-@configclass
-class PlayFlexivSharpaEnvCfg(PlayEnvCfg):
-    """Play on a Flexiv Rizon 4s carrying the Kuka's left Sharpa (``Isaacsimenvs-PlayFlexivSharpa-Direct-v0``).
-
-    The Flexiv tasks' arm and the Kuka's hand; robot self-collision on, as for both. The URDF is
-    written by ``scripts/flexiv_wuji/flexiv_wuji.py``.
-    """
-
-    robot: str = "flexiv_sharpa"
-    robot_self_collision: bool = True
-    assets: AssetsCfg = AssetsCfg(robot_urdf="assets/flexiv_wuji/rizon4s_left_sharpa.urdf")
-
-
-@configclass
-class PlaySelfCollisionEnvCfg(PlayEnvCfg):
-    """Play on the Kuka + Sharpa with robot self-collision on (``Isaacsimenvs-PlaySelfCollision-Direct-v0``).
-
-    SimToolReal's recipe as Isaac Gym ran it: the control for the Flexiv + Wuji, which has
-    self-collision on too. Reads ``Play.yaml``, which does not set the field.
-    """
-
-    robot_self_collision: bool = True
-
-
 __all__ = [
     "PlayEnvCfg",
-    "PlayFlexivWujiRightHumanLikeEnvCfg",
-    "PlayFlexivWujiEnvCfg",
-    "PlayFlexivWujiHumanLikeEnvCfg",
-    "PlayFlexivSharpaEnvCfg",
-    "PlaySelfCollisionEnvCfg",
     "AssetsCfg",
     "ObsCfg",
     "StudentObsCfg",

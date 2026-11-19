@@ -45,12 +45,6 @@ for _base in _TASKS:
 # --- aliases: the ids before the robot became a config field (old recipes and launchers use them).
 _ALIAS_BASE = {"Cloth": "Cloth", "FoldPoolPhysx": "RigidCloth"}
 _ALIAS_SETUP = {
-    "FlexivWuji": "flexiv_wuji",
-    "FlexivWujiHumanLike": "flexiv_wuji_human_like",
-    "FlexivWujiHumanLikeS2R": "flexiv_wuji_human_like_s2r",
-    "FlexivSharpa": "flexiv_sharpa",
-    "FlexivWujiHumanLikeSharpaGain": "flexiv_wuji_human_like_sharpagain",
-    "FlexivSharpaWujiGain": "flexiv_sharpa_wujigain",
     "FlexivWujiRightHumanLike": "flexiv_wuji_right_human_like",
     "FlexivWujiRightReal": "flexiv_wuji_right_real",
     "FlexivWujiRightS2REff": "flexiv_wuji_right_s2r_eff",

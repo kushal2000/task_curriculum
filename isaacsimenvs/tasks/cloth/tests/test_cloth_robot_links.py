@@ -13,18 +13,13 @@ from pathlib import Path
 import pytest
 
 from isaacsimenvs.conftest import REPO_ROOT
-from isaacsimenvs.robots import (
-    FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_RIGHT_HUMAN_LIKE, KUKA_SHARPA,
-)
+from isaacsimenvs.robots import FLEXIV_WUJI_RIGHT_HUMAN_LIKE
 
 REPO = REPO_ROOT
 URDFS = {
-    "kuka_sharpa": "assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf",
-    "flexiv_wuji": "assets/flexiv_wuji/rizon4s_left_wuji.urdf",
-    "flexiv_wuji_human_like": "assets/flexiv_wuji/rizon4s_left_wuji_human_like_joint_limits.urdf",
     "flexiv_wuji_right_human_like": "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
 }
-SPECS = [KUKA_SHARPA, FLEXIV_WUJI, FLEXIV_WUJI_HUMAN_LIKE, FLEXIV_WUJI_RIGHT_HUMAN_LIKE]
+SPECS = [FLEXIV_WUJI_RIGHT_HUMAN_LIKE]
 
 
 def _bodies(spec) -> set[str]:
@@ -41,12 +36,11 @@ def test_finger_segments_are_the_finger_bodies(spec):
     fingers = {b for b in bodies if pattern.fullmatch(b)}
     for segment, regex in spec.finger_segment_regex.items():
         assert any(re.fullmatch(regex, b) for b in bodies), f"{spec.name}: no {segment} body"
-    hand = {b for b in bodies if b.startswith(("left_", "l_", "r_"))}
+    hand = {b for b in bodies if b.startswith("r_")}
     palm_side = {spec.palm_body_name, *spec.palm_side_link_names}
     assert palm_side <= bodies, f"{spec.name}: palm-side bodies {palm_side - bodies} are not bodies"
-    # Every hand body is a finger segment or palm-side, bar the Sharpa's knuckle-joint links (*_VL),
-    # which carry no collision.
-    left = {b for b in hand - fingers - palm_side if not b.endswith("_VL")}
+    # Every hand body is a finger segment or palm-side.
+    left = hand - fingers - palm_side
     assert not left, f"{spec.name}: hand bodies in no segment: {sorted(left)}"
 
 
@@ -62,18 +56,3 @@ def test_cloth_proxies_follow_the_robot(spec):
     expected = {b for b in _bodies(spec) if fingers.fullmatch(b)} | {spec.palm_body_name, *spec.palm_side_link_names}
     assert matched == expected
 
-
-def test_kuka_proxies_unchanged():
-    """The Kuka's proxy patterns are the ones written out before the spec carried them."""
-    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
-
-    cfg = VbdClothEnvCfg()
-    physics = cfg.cloth.build_physics(cfg.newton, 32)
-    proxy = [re.compile(b) for p in physics.solver_cfg.proxies for b in p.bodies]
-    old = [
-        re.compile(r"/World/envs/env_.*/Robot/left_(thumb|index|middle|ring|pinky)_(DP|MP|PP)"),
-        re.compile(r"/World/envs/env_.*/Robot/(iiwa14_link_7|left_thumb_MC|left_pinky_MC)"),
-    ]
-    for b in _bodies(KUKA_SHARPA):
-        path = f"/World/envs/env_7/Robot/{b}"
-        assert any(p.fullmatch(path) for p in proxy) == any(p.fullmatch(path) for p in old), b

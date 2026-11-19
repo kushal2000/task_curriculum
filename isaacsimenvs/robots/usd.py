@@ -28,7 +28,7 @@ from isaaclab.sim.converters import UrdfConverter, UrdfConverterCfg
 from isaaclab.sim.spawners.from_files import UsdFileCfg
 from isaaclab.sim.spawners.wrappers import MultiUsdFileCfg
 
-from isaacsimenvs.robots import KUKA_SHARPA, RobotSpec
+from isaacsimenvs.robots import RobotSpec
 
 __all__ = [
     "apply_self_collision_filters",
@@ -60,7 +60,7 @@ _PHYSICS_SPECS: dict[str, tuple[str, str, str]] = {
 
 def build_robot_articulation_usd_cfg(
     usd_path: str,
-    spec: RobotSpec = KUKA_SHARPA,
+    spec: RobotSpec,
     root_pos: tuple[float, float, float] = (0.0, 0.8, 0.0),
 ) -> ArticulationCfg:
     return ArticulationCfg(

@@ -52,11 +52,8 @@ if _WEBSOCKETS.is_dir():
 
 #: (robot, robot_self_collision) in a run's config -> the task it trained on.
 TASK_FOR = {
-    ("kuka_sharpa", False): "Isaacsimenvs-Play-Direct-v0",
-    ("kuka_sharpa", True): "Isaacsimenvs-PlaySelfCollision-Direct-v0",
-    ("flexiv_wuji", True): "Isaacsimenvs-PlayFlexivWuji-Direct-v0",
-    ("flexiv_wuji_human_like", True): "Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0",
-    ("flexiv_sharpa", True): "Isaacsimenvs-PlayFlexivSharpa-Direct-v0",
+    ("flexiv_wuji_right_human_like", True): "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0",
+    ("flexiv_wuji_right_real", True): "Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0",
 }
 #: SAPG's per-block coefficients: linspace(50, 0, num_actors // expl_coef_block_size)
 #: (rl_games a2c_common.py:342).
@@ -78,7 +75,7 @@ class Run:
         # Resolved: the agent config interpolates into the env's (num_actors: ${....env.scene.num_envs}).
         self.config = OmegaConf.to_container(OmegaConf.load(self.config_path), resolve=True)
         env = self.config["env"]
-        self.robot = env.get("robot") or "kuka_sharpa"  # configs from before the field: the Kuka
+        self.robot = env.get("robot")  # None: a config from before the field (a Kuka run; not playable)
         self.self_collision = bool(env.get("robot_self_collision", False))
         self.task = TASK_FOR.get((self.robot, self.self_collision))
         # Two jobs started in the same second share one outputs/<date>/<time>/ and so one

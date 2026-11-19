@@ -16,7 +16,7 @@ Pipeline:
 
 CLI shape:
     python isaacsimenvs/scripts/training/train.py \
-        --task Isaacsimenvs-Play-Direct-v0 \
+        --task Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0 \
         --agent rl_games_sapg_cfg_entry_point \   # or rl_games_cfg_entry_point
         --headless --capture_viewer \
         --wandb_activate --wandb_project X --wandb_name Y \
