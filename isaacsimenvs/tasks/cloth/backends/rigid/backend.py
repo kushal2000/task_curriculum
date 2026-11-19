@@ -177,7 +177,15 @@ class RigidBackend(ClothBackend):
 
     def begin_reset(self, env_ids: torch.Tensor) -> None:
         if self.started:
-            pool_scene.draw_episode(self, env_ids)
+            self.draw_episode(env_ids)
+
+    def draw_episode(self, env_ids: torch.Tensor) -> None:
+        """The episode's shape and folded start for ``env_ids`` (a viewer may override it)."""
+        pool_scene.draw_episode(self, env_ids)
+
+    def draw_start_folds(self, env_ids: torch.Tensor, shapes: torch.Tensor) -> None:
+        """The folded start of ``env_ids``, running ``shapes``."""
+        pool_scene.draw_start_folds(self, env_ids, shapes)
 
     def end_reset(self, env_ids: torch.Tensor) -> None:
         if self.physics_dr is not None and self.physics_dr.enabled:

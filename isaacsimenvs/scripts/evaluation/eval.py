@@ -229,6 +229,8 @@ def main() -> None:
         obs, _ = env.reset()
         obs, *_ = env.step(torch.zeros((num_envs, inner.cfg.action_space), device=device))
 
+        # The cloth env keeps its episode state on its task (ClothTask); Play keeps it on the env.
+        task = getattr(inner, "task", None)
         goals = torch.full((num_envs,), -1, dtype=torch.long, device=device)
         length = torch.zeros(num_envs, dtype=torch.long, device=device)
         steps_alive = torch.zeros(num_envs, dtype=torch.long, device=device)
@@ -277,7 +279,7 @@ def main() -> None:
               # that finished early keeps stepping until the others catch up, and counting those later
               # lifts would report a statistic about a set of episodes no other number here describes.
               scoring = ~contributed & (ep_done >= skip)
-              lifted |= inner._lifted_object.bool() & scoring
+              lifted |= (task.lifted_object if task is not None else inner._lifted_object).bool() & scoring
               # The cloth env's object is the sheet's moving half; Play's is a rigid tool.
               obj_pos_w = inner.object_pos_w() if hasattr(inner, "object_pos_w") else inner.object.data.root_pos_w
               obj_z = (obj_pos_w - inner.scene.env_origins)[:, 2]
@@ -361,7 +363,7 @@ def main() -> None:
         # A strict lower bound: count every censored env at the goals it had banked when the
         # budget ran out. Reported alongside, never instead of, the completed-only mean -- if the
         # two disagree materially, the budget is too small and the headline is not trustworthy.
-        partial = inner._successes.cpu()
+        partial = (task.successes if task is not None else inner._successes).cpu()
         lb_goals = goals_l + partial[~done_mask].tolist()
 
         result = {
@@ -402,9 +404,9 @@ def main() -> None:
             result["per_env_extra_done"] = {
                 name: [bool(v) for v in t.cpu()] for name, t in sorted(extra_done.items())
             }
-        if hasattr(inner, "_env_size"):
+        if hasattr(getattr(inner, "backend", None), "env_size"):
             # The fold pool's per-env sheet side [m], fixed for the run.
-            result["per_env_sheet_size"] = [round(float(v), 4) for v in inner._env_size.cpu()]
+            result["per_env_sheet_size"] = [round(float(v), 4) for v in inner.backend.env_size.cpu()]
 
         if best_fold_err is not None:
             fe = best_fold_err.cpu()

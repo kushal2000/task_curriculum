@@ -360,8 +360,9 @@ def _restrict_triangles_to_world(viewer, model, world: int, inner=None) -> None:
     groups: dict[str, object] = {}
     if inner is not None and hasattr(inner, "_moving_idx"):
         base = int(np.argmax(mine))  # first particle of this world; env indices are world-local
-        moving = set((inner._moving_idx + base).tolist())
-        stationary = set((inner._stationary_idx + base).tolist())
+        geometry = inner.task.geometry
+        moving = set((geometry.moving_idx + base).tolist())
+        stationary = set((geometry.stationary_idx + base).tolist())
         # Assign by MAJORITY vertex, not by "all three". `half_indices` excludes the hinge row from
         # both halves, so an all-three test leaves every triangle touching that row unclassified --
         # 32 of 128, a quarter of the sheet, drawn as a third colour. That reads as three stripes

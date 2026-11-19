@@ -20,7 +20,7 @@ and two things are deliberately NOT drawn. The Play viewer renders the spawned r
 `object_pose` and a green copy of it at `goal_pose`. For cloth the tool pool is still built
 (`Cloth.yaml` pins `handle_head_types: ["hammer"]`) but the sheet replaces the spawned object, so
 both are hammers: one inert, one a green hammer sitting at a `goal_viz` marker that
-`ClothEnv._drive_goal_marker` overwrites every step. `draw_rigid_object=False` suppresses them.
+`ClothEnv` moves every step. `draw_rigid_object=False` suppresses them.
 This is the same confusion the offscreen renderer had before `_hide_goal_viz`.
 """
 
@@ -49,10 +49,10 @@ def capture_cloth_viewer_frame(env, env_id: int) -> dict[str, Any]:
     frame = capture_pose_viewer_frame(env, env_id)
     origin = env.scene.env_origins[env_id]
 
-    parts = env._particles_w()[env_id] - origin
+    parts = env.cloth_points_w()[env_id] - origin
     frame["cloth_vertices"] = parts.detach().cpu().numpy().tolist()
     # The ghost is the goal, over every particle of the moving half rather than the four scored
-    # keypoints -- `folded_half_w` shares `_folded_w` with `fold_targets_w`, so the drawing cannot
+    # keypoints -- `folded_half_w` shares its construction with `fold_targets_w`, so the drawing cannot
     # drift from the criterion.
     ghost = env.folded_half_w()[env_id] - origin
     frame["goal_vertices"] = ghost.detach().cpu().numpy().tolist()

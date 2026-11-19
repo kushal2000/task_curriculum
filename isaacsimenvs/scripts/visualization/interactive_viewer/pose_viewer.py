@@ -233,8 +233,11 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
 
     origin = env.scene.env_origins[env_id]
 
-    if hasattr(env, "_perm_lab_to_canon"):
-        joint_pos = env.robot.data.joint_pos[env_id, env._perm_lab_to_canon]
+    # The policy's joint order: the cloth env's robot layout, or Play's permutation.
+    layout = getattr(env, "robot_layout", None)
+    perm = layout.perm_lab_to_canon if layout is not None else getattr(env, "_perm_lab_to_canon", None)
+    if perm is not None:
+        joint_pos = env.robot.data.joint_pos[env_id, perm]
         spec = getattr(env, "robot_spec", None)
         joint_names = list(spec.joint_names_canonical) if spec else list(env.robot.data.joint_names)
     else:
@@ -242,7 +245,6 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
         joint_names = list(env.robot.data.joint_names)
 
     robot_root_pos = env.robot.data.root_pos_w[env_id] - origin
-    object_pos = env.object.data.root_pos_w[env_id] - origin
     goal_pos = env.goal_viz.data.root_pos_w[env_id] - origin
     table_pos = env.table.data.root_pos_w[env_id] - origin
     hole = getattr(env, "hole", None)
@@ -252,10 +254,13 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
         "robot_joint_names": joint_names,
         "robot_joint_pos": _to_numpy(joint_pos),
         "robot_base_pose": _pose_xyzw(robot_root_pos, env.robot.data.root_quat_w[env_id]),
-        "object_pose": _pose_xyzw(object_pos, env.object.data.root_quat_w[env_id]),
         "goal_pose": _pose_xyzw(goal_pos, env.goal_viz.data.root_quat_w[env_id]),
         "table_pose": _pose_xyzw(table_pos, env.table.data.root_quat_w[env_id]),
     }
+    # A rigid manipuland (Play's tool); the cloth env's sheet is drawn by the cloth viewer instead.
+    obj = getattr(env, "object", None)
+    if obj is not None:
+        frame["object_pose"] = _pose_xyzw(obj.data.root_pos_w[env_id] - origin, obj.data.root_quat_w[env_id])
     if hole is not None:
         hole_pos = hole.data.root_pos_w[env_id] - origin
         frame["hole_pose"] = _pose_xyzw(hole_pos, hole.data.root_quat_w[env_id])
@@ -323,8 +328,8 @@ def build_pose_viewer_html(
     # puts a hammer at `object_pose` and a GREEN hammer at `goal_pose` -- and the green is close
     # enough to the fold ghost's green to read as part of the goal. Both are meaningless for
     # cloth: the tool is inert, and `goal_viz` is a pure rendering artefact that
-    # `ClothEnv._drive_goal_marker` overwrites every step. The sheet supplies its own object and
-    # goal as deformable channels.
+    # `ClothEnv` moves every step. The sheet supplies its own object and goal as deformable
+    # channels.
     if draw_rigid_object:
         robots.append(make_embedded_robot(name="object", urdf_text=object_urdf_text))
         robots.append(

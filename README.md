@@ -71,7 +71,7 @@ See [`isaacsimenvs/scripts/configs/README.md`](isaacsimenvs/scripts/configs/READ
 
 ```text
 isaacsimenvs/
-  tasks/cloth/      the fold task: mdp/ (task, obs, actions, rewards, DR), backends/{rigid,vbd}, perception/
+  tasks/cloth/      the fold task: ClothEnv owning a backend (backends/{rigid,vbd}) and mdp/ (task, obs, actions, DR), perception/
   tasks/play/       the Play task (the prior)
   robots/           the robot specs and the URDF -> USD pipeline
   scripts/

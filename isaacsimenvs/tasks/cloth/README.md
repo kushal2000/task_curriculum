@@ -17,42 +17,63 @@ the command line. The older ids stay registered as aliases that carry their setu
 
 ```text
 cloth/
-  __init__.py         task registration (canonical ids + aliases)
-  cloth_env.py        ClothEnv(DirectRLEnv): the lifecycle hooks, wired to mdp/
+  __init__.py         task registration (canonical ids + aliases); make_env, the gym entry point
+  cloth_env.py        ClothEnv(DirectRLEnv): owns a backend and the four task parts below
   env_cfg.py          ClothEnvCfg: robot, obs, action, reward, reset, termination, DR, cloth
   cloth_cfg.py        ClothCfg: the sheet the task is defined on
   mdp/                the task, simulator-independent
-    task.py           the fold: targets, error, criterion, goal pose (ClothTaskMixin)
-    robot.py          joint orders and limits, reset pose, the hand's passive spring
-    actions.py        policy action -> joint targets
-    observations.py   policy and critic observations, observation DR
-    rewards.py        reward terms and the reward guard
-    terminations.py   fold, fall, hand far, divergence, timeout
-    reset.py          table, sheet and tracker resets
-    randomization.py  per-episode DR draws (delays, biases, point DR, PD gains, hand dynamics)
+    state.py          SimState, SheetLayout, FoldView: what the parts hand each other
+    robot.py          RobotLayout: body and joint indices, joint orders, limits, passive spring
+    actions.py        JointController: policy action -> joint targets, action DR, reset joints
+    fold.py           FoldGeometry: targets, stationary frame, fold error, footprint, goal pose,
+                      the moving half as a rigid object
+    task.py           ClothTask: episode start (table, sheet), dones, reward, the goal as state
+    observations.py   ObservationBuilder: policy and critic vectors, observation DR
+    randomization.py  DomainRandomization: per-episode DR draws (fixed order); DelayLine
     point_dr.py       point-level observation DR
-    tracker.py        tracker observation DR (TrackerMixin) and the pipeline it replays
+    tracker.py        the cloth tracker pipeline (ClothTracker) and its observation (TrackerObservation)
     geometry/         grid.py (sheet grid, keypoints, fold targets), fold_shapes.py (pool shapes),
                       quat.py (the quaternion helpers, one place for the Newton backend to wrap)
   backends/
+    base.py           ClothBackend: build the scene, read the sheet's points, write resets;
+                      reset_yaw / sheet_yaw
     scene.py          robot, table, goal marker, ground, light; then the backend's sheet
-    adapter.py        ClothAsRigidObject: the sheet as the rigid object the observation encodes
-    rigid/            RigidClothEnv: env.py, config.py, scene.py, contacts.py, randomization.py,
-                      checks.py (startup proofs), physx.py, pool.py (adapter), assets.py, usd.py
-    vbd/              VbdClothEnv: env.py, config.py, newton_setup.py, pierce.py,
+    rigid/            RigidBackend (backend.py) on PhysX: config.py, pool.py (PlatePool), scene.py
+                      (building the pool, shape draws, folded starts), contacts.py,
+                      randomization.py (PlateRandomization), checks.py (startup proofs), physx.py,
+                      assets.py, usd.py
+    vbd/              VbdBackend (backend.py) on Newton: config.py, newton_setup.py, pierce.py,
                       newton_support/ (Isaac Lab 3.0 compat, patches, USD cache)
   perception/         point clouds for the point-cloud students (pointcloud, scene_pointcloud,
                       robot_surface)
   tests/
 ```
 
+Each hook of `ClothEnv` reads the simulator once (`sim_state()`), derives the fold from it
+(`fold_view()`), and hands both to the parts:
+
+```text
+_pre_physics_step   controller.process                       (+ backend.pre_physics_step)
+_apply_action       targets + passive spring to the robot    (every physics step)
+_get_dones          task.compute_dones(state, view)
+_get_rewards        task.compute_reward(state, view)
+_reset_idx          backend.begin_reset -> controller / task draws, written to the scene
+                    -> dr.reset -> goal -> backend.end_reset
+_get_observations   task.update_goal, observations.build
+```
+
+For evaluation and viewers the env answers `fold_error()`, `fold_targets_w()`,
+`cloth_keypoints_w()`, `footprint_ratio()`, `is_folded()`, `folded_half_w()`, `cloth_points_w()`,
+`object_pos_w()`; anything else is on `env.task`, `env.backend` or `env.robot_layout`.
+
 Robots (`RobotSpec`s and the URDF -> USD pipeline) are `isaacsimenvs/robots/`, shared with the Play
-task; the training-time interactive viewer is `isaacsimenvs/scripts/visualization/interactive_viewer/`. The fold shapes are YAML designs with a PNG each in `isaacsimenvs/scripts/configs/rigid_cloth_designs/`
+task; the training-time interactive viewer is `isaacsimenvs/scripts/visualization/interactive_viewer/`.
+The fold shapes are YAML designs with a PNG each in `isaacsimenvs/scripts/configs/rigid_cloth_designs/`
 (regenerate the PNGs with `isaacsimenvs/scripts/visualization/rigid_cloth/render_designs.py`).
 
 The observation is the encoding the Play prior was trained on: the sheet's moving half as a rigid
-object (`backends/adapter.py`), the fold goal as a pose (`ClothTaskMixin._update_goal`), so every
-cloth checkpoint, and the Play prior, reads the same vector.
+object (`FoldView.object_*`), the fold goal as a pose (`ClothTask.goal_*`), so every cloth
+checkpoint, and the Play prior, reads the same vector.
 
 ## Training
 

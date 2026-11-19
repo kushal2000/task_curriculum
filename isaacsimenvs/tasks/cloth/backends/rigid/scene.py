@@ -247,7 +247,7 @@ def draw_episode(b, env_ids: torch.Tensor) -> None:
         draw = torch.multinomial(b.shape_weights, int(env_ids.numel()), replacement=True)
     b.pool.select(env_ids, draw.to(b.pool.active.device))
     if b.start_tables is not None:
-        draw_start_folds(b, env_ids, draw.to(b.device))
+        b.draw_start_folds(env_ids, draw.to(b.device))
 
 
 def init_start_folds(b) -> None:

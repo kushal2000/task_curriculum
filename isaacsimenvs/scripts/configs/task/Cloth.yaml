@@ -69,7 +69,7 @@ action:
   dof_speed_scale: 1.5
 
 # -----------------------------------------------------------------------------
-# 5) reward — fold progress + fold bonus + fingertip approach + joint-speed penalties (mdp/rewards.py)
+# 5) reward — fold progress + fold bonus + fingertip approach + joint-speed penalties (mdp/task.py, ClothTask.compute_reward)
 # -----------------------------------------------------------------------------
 reward:
   keypoint_rew_scale: 1500.0             # was 200: a perfect fold paid ~20 vs ~64 of action penalty (docs/reports/1_vbd_cloth/cloth_finetune_reward_imbalance.md)
@@ -114,7 +114,7 @@ reset:
   table_object_z_offset: 0.25
 
 # -----------------------------------------------------------------------------
-# 7) termination — the fold criterion's hold (mdp/terminations.py)
+# 7) termination — the fold criterion's hold (mdp/task.py, ClothTask.compute_dones)
 # -----------------------------------------------------------------------------
 termination:
   success_steps: 1                    # lump-sum bonus on FIRST entry, as in the finetune launchers

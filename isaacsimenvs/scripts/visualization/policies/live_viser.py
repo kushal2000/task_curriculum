@@ -11,7 +11,7 @@ player), a handful of envs at once; one of them is drawn. What can change WITHOU
 * start pose: pinned (`disable_randomization`'s reset) or the training reset distribution
 * fold tolerance (`cloth.keypoint_tolerance`, read by `is_folded` every step)
 * rigid manipulands only: slat / fingertip friction, hinge damping and stiffness, contact margin,
-  mass -- written through `RigidClothEnv._randomize_physics`, the same in-place path the training
+  mass -- written through the rigid backend's `physics_dr.draw`, the same in-place path the training
   DR uses, so they take effect on the very next step
 
 What needs a RESTART (the "Restart" button re-execs this process with the new task, ~2-3 min):
@@ -452,7 +452,7 @@ def main() -> None:
         reset_pin = {k: getattr(rs, k) for k in reset_rand}
 
         if args.even_sizes and hasattr(env_cfg, "fold_pool"):
-            # The per-env size draw is backends/rigid/scene.SceneMixin._draw_env_sizes_raw.
+            # The per-env size draw is backends/rigid/scene.draw_env_sizes_raw.
             from isaacsimenvs.tasks.cloth.backends.rigid import scene as fpe
 
             class _Even:
@@ -471,12 +471,14 @@ def main() -> None:
         n_env, device = inner.num_envs, inner.device
 
         origins = inner.scene.env_origins.detach().cpu().numpy()
-        pool = [sh.name for sh in getattr(inner, "_pool", [])]
+        # The rigid backend's fold-shape pool (None on VBD).
+        rb = inner.backend if hasattr(inner.backend, "pool") else None
+        pool = [sh.name for sh in rb.shapes] if rb is not None else []
         # One shape per env (PhysX ``fold_pool.one_shape_per_env``): env w can only run the shapes
         # with carried[shape, w]. None when every env carries every shape.
-        carried = getattr(getattr(inner.object, "_mesh", None), "carried", None) if pool else None
+        carried = rb.pool.carried if rb is not None else None
         carried = None if carried is None or bool(carried.all()) else carried.cpu().numpy()
-        sizes = getattr(inner, "_env_size_np", None)
+        sizes = getattr(inner.backend, "env_size_np", None)
 
         if physx:
             px = _PhysxScene(inner)
@@ -529,7 +531,7 @@ def main() -> None:
         if model is not None and getattr(model, "tri_count", 0) and getattr(model, "particle_world", None) is not None:
             owner = model.particle_world.numpy()
             tri = model.tri_indices.numpy()
-            mv = set(inner._moving_idx.tolist()) if hasattr(inner, "_moving_idx") else set()
+            mv = set(inner.task.geometry.moving_idx.tolist())
             for w in range(n_env):
                 pidx = np.nonzero(owner == w)[0]
                 base = int(pidx[0])
@@ -558,8 +560,8 @@ def main() -> None:
         )
         # Partly folded starts (fold pool with fold_pool.init_fold_prob > 0): per shape, its start
         # folds in the order of the env's (sign-calibrated) direction table.
-        start_tabs = getattr(inner, "_start_tables", None)
-        fold_names = list(inner._start_names) if start_tabs is not None else []
+        start_tabs = rb.start_tables if rb is not None else None
+        fold_names = list(rb.start_names) if start_tabs is not None else []
         # One FIXED option list ("<shape>: <fold>"): changing a dropdown's options while switching envs
         # let the browser echo a stale value back over the env's choice.
         fold_label = {f"{pool[s]}: {f}": (s, k) for s, names in enumerate(fold_names) for k, f in enumerate(names)}
@@ -587,7 +589,7 @@ def main() -> None:
 
         # Fold pool: honour the GUI's per-env shape at each reset.
         if pool:
-            orig_draw = inner._draw
+            orig_draw = rb.draw_episode
 
             def draw(env_ids):
                 orig_draw(env_ids)  # random draw first, then override the pinned envs
@@ -598,15 +600,15 @@ def main() -> None:
                 if forced:
                     ids = torch.tensor([e for e, _ in forced], device=device)
                     shp = torch.tensor([k for _, k in forced], device=device)
-                    inner.object.select(ids, shp)
+                    rb.pool.select(ids, shp)
                     if start_tabs is not None:  # the random draw drew start folds for other shapes
-                        inner._draw_start_folds(ids, shp)
+                        rb.draw_start_folds(ids, shp)
                 if start_tabs is not None:
                     for e in env_ids.tolist():
                         fc, ang = S.fold_choice[e], S.angle_choice[e]
                         if fc == "random" and ang is None:
                             continue
-                        s = int(inner.object.active[e])
+                        s = int(rb.pool.active[e])
                         tab = start_tabs[s]
                         if fc == "flat":
                             q, folded = torch.zeros(tab.shape[1], device=device), False
@@ -615,28 +617,28 @@ def main() -> None:
                                 fs_, k = fold_label[fc]
                                 if fs_ != s:
                                     continue  # (the shape choice pins it; this cannot normally happen)
-                            elif bool(inner._start_folded[e]):
+                            elif bool(rb.start_folded[e]):
                                 k = start_info(e)[1]  # keep the drawn fold, change only its angle
                             else:
                                 continue  # a flat draw and no fold named: stays flat
                             if ang is not None:
-                                a = torch.full((inner._start_num_parts,), math.radians(ang), device=device)
+                                a = torch.full((rb.start_num_parts,), math.radians(ang), device=device)
                             else:  # each part of the start its own angle, as the training draw
                                 a = torch.deg2rad(torch.tensor(np.random.uniform(
-                                    *inner.cfg.fold_pool.init_fold_deg, size=inner._start_num_parts),
+                                    *inner.cfg.fold_pool.init_fold_deg, size=rb.start_num_parts),
                                     device=device, dtype=torch.float32))
-                            q, folded = tab[k] * a[inner._start_parts[s][k]], True
-                        inner.object.set_start_joints(s, torch.tensor([e], device=device), q.unsqueeze(0))
-                        inner._start_folded[e] = folded
+                            q, folded = tab[k] * a[rb.start_parts[s][k]], True
+                        rb.pool.set_start_joints(s, torch.tensor([e], device=device), q.unsqueeze(0))
+                        rb.start_folded[e] = folded
 
-            inner._draw = draw
+            rb.draw_episode = draw
 
         def start_info(e):
             """(shape index, start-fold index or None, angle [deg]) env ``e`` started its episode at."""
-            s = int(inner.object.active[e])
-            if start_tabs is None or not bool(inner._start_folded[e]) or s not in inner.object._start_q:
+            s = int(rb.pool.active[e])
+            if start_tabs is None or not bool(rb.start_folded[e]) or s not in rb.pool._start_q:
                 return s, None, 0.0
-            q = inner.object._start_q[s][e]
+            q = rb.pool._start_q[s][e]
             tab = start_tabs[s]
             cos = (tab @ q) / (tab.norm(dim=1) * q.norm()).clamp(min=1e-9)
             return s, int(cos.argmax()), math.degrees(float(q.abs().max()))
@@ -1134,7 +1136,7 @@ def main() -> None:
                 sel = sel & ok & bool(g_pc_show[name].value)
                 put_points(name, xyz[sel], rgb[sel], size)
 
-            true = inner._particles_w()[w].detach().cpu().numpy() - o if g_pc_true.value else np.zeros((0, 3))
+            true = inner.cloth_points_w()[w].detach().cpu().numpy() - o if g_pc_true.value else np.zeros((0, 3))
             put_points("true", true, np.tile((90, 90, 90), (len(true), 1)), 0.003)
 
             if g_pc_cams.value:
@@ -1184,7 +1186,7 @@ def main() -> None:
                 f"**{g_task.value if g_task else args.task}** -- {S.policy_name}, coef {S.coef:g}",
                 f"env {w}" + (f", {sizes[w] * 100:.1f} cm" if sizes is not None
                               else f", sheet {float(inner.cfg.cloth.size) * 100:g} cm")
-                + (f", shape **{pool[int(inner.object.active[w])]}**" if pool else ""),
+                + (f", shape **{pool[int(rb.pool.active[w])]}**" if pool else ""),
                 f"step {int(inner.episode_length_buf[w])} / {int(inner.max_episode_length)}",
                 *([(lambda si: f"start: **{fold_names[si[0]][si[1]]}** at {si[2]:.0f} deg"
                     if si[1] is not None else "start: **flat**")(start_info(w))] if start_tabs is not None else []),
@@ -1226,8 +1228,8 @@ def main() -> None:
                         f"depth std {float(pc.depth_std[w]) * 1e3:.1f} mm, drop {float(pc.drop_p[w]) * 100:.0f}%, "
                         f"fingertip hole {float(pc.tip_r[w]) * 1e3:.0f} mm, capsule margin {float(pc.margin[w]) * 1e3:.0f} mm",
                     ]
-            if rigid and hasattr(inner, "dr_sample"):
-                d = {k: float(v[w]) for k, v in inner.dr_sample.items()}
+            if rb is not None and rb.physics_dr is not None:
+                d = {k: float(v[w]) for k, v in rb.physics_dr.sample.items()}
                 lines.append(
                     f"physics: slat mu {d['slat_friction']:.3f}, tip mu {d['fingertip_friction']:.3f}, "
                     f"damping {d['hinge_damping']:.3g}, stiffness {d['hinge_stiffness']:.2g}, "
@@ -1266,7 +1268,7 @@ def main() -> None:
                 sync_noise_gui()
                 S.rebuild = True  # the sheet is translucent under a student only
             if rigid and S.physics_dirty:
-                inner._randomize_physics(torch.arange(n_env, device=device))
+                rb.physics_dr.draw(torch.arange(n_env, device=device))
                 S.physics_dirty = False
             if S.reset_all:
                 obs, _ = env.reset()
