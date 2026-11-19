@@ -270,7 +270,7 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
 def build_pose_viewer_html(
     *,
     frames: list[dict[str, Any]],
-    object_urdf_text: str,
+    object_urdf_text: str | None,
     table_urdf_text: str,
     hole_urdf_text: str | None = None,
     object_urdf_path: Path | None = None,
@@ -295,7 +295,7 @@ def build_pose_viewer_html(
     raw_base = _normalize_raw_base(github_raw_base)
     robot_urdf_url = raw_base + robot_urdf_relative_path
     _check_url(robot_urdf_url, url_check)
-    if object_urdf_path is not None:
+    if object_urdf_path is not None and object_urdf_text is not None:
         object_urdf_text = _rewrite_embedded_urdf_mesh_urls(
             object_urdf_text,
             source_urdf_path=object_urdf_path,
@@ -388,9 +388,11 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         self.wandb_key = wandb_key
         self.github_raw_base = github_raw_base
         self.url_check = url_check
-        self._object_urdf_text, self._object_urdf_path = object_urdf_for_env(
-            inner, self.env_id
-        )
+        # Play's procedural tool. The cloth env has none (its sheet is drawn as deformable channels
+        # with draw_rigid_object=False), so there is nothing to look up.
+        self._object_urdf_text, self._object_urdf_path = None, None
+        if getattr(inner, "_object_urdf_paths", None) is not None:
+            self._object_urdf_text, self._object_urdf_path = object_urdf_for_env(inner, self.env_id)
         self._table_urdf_text, self._table_urdf_path = table_urdf_for_env(
             inner, self.env_id
         )

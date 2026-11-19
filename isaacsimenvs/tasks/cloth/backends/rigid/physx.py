@@ -21,7 +21,6 @@ orientation is the true one's components relabelled (x, y, z, w) -> read as (w, 
 
 from __future__ import annotations
 
-
 from isaacsimenvs.tasks.cloth.backends.rigid.usd import bulk_edit_layer
 
 __all__ = [

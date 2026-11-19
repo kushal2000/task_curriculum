@@ -12,7 +12,8 @@ hooks to four parts, which hand each other the dataclasses of ``mdp/state.py``:
     _apply_action       targets + spring effort to the robot (every physics step)
     _get_dones          task.compute_dones(state, view)
     _get_rewards        task.compute_reward(state, view)
-    _reset_idx          controller / task draws, written to the scene; DR draws
+    _reset_idx          backend.begin_reset, controller / task draws written to the scene, DR draws,
+                        backend.end_reset
     _get_observations   task.update_goal, observations.build
 
 The simulator side is a backend object (``backends/base.ClothBackend``) the env owns:
@@ -52,7 +53,9 @@ class ClothEnv(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)  # builds the scene (_setup_scene)
         self._check_env_order()
         dev, n = self.device, self.num_envs
-        self.robot_layout = RobotLayout(self.robot, self.robot_spec, num_joints=n_joints, robot_urdf=cfg.assets.robot_urdf, device=dev)
+        self.robot_layout = RobotLayout(
+            self.robot, self.robot_spec, num_joints=n_joints, robot_urdf=cfg.assets.robot_urdf, device=dev
+        )
         layout = self.backend.sheet_layout()
         self.task = ClothTask(
             cfg, layout, self.robot_layout, num_envs=n, device=dev, env_origins=self.scene.env_origins,
@@ -60,7 +63,9 @@ class ClothEnv(DirectRLEnv):
         )
         # Observed by the critic (`reward`) from the first reset on, before any step has paid one.
         self.reward_buf = torch.zeros(n, device=dev)
-        self.dr = DomainRandomization(cfg, self.robot_layout, self.robot, num_envs=n, num_keypoints=len(layout.keypoint_idx), device=dev)
+        self.dr = DomainRandomization(
+            cfg, self.robot_layout, self.robot, num_envs=n, num_keypoints=len(layout.keypoint_idx), device=dev
+        )
         self.controller = JointController(cfg, self.robot_layout, self.dr, step_dt=self.step_dt, num_envs=n, device=dev)
         self.observations = ObservationBuilder(
             cfg, self.robot_layout, self.controller, self.task, self.dr, num_envs=n, device=dev,
