@@ -1,5 +1,5 @@
 """rigid2deform's perception: the nodes that run in a camera environment and publish what the policy
-reads. main.py starts the one the config needs (policy.checkpoint's kind, object.name's perception).
+reads. main.py starts the one config.yaml's `mode` needs (../mode.py).
 
 | file               | what                                                                             |
 |--------------------|----------------------------------------------------------------------------------|

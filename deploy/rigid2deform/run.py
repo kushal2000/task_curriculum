@@ -1,14 +1,15 @@
 """rigid2deform: the one entry point. The shared nodes (deploy/nodes/) + policy.py on config.yaml;
-config.yaml's `task` picks what the policy does (fold, so far), `object.name` the sheet, whose
-`perception` says which perception node perception/main.py starts (foundationpose: deploy/nodes/perception.py).
+config.yaml's `task` picks what the policy does (fold, so far), `mode` (mode.py: pc_label | pc_goal |
+foundationpose | cotracker) the perception perception/main.py starts and the default network.
 deploy/utils/runner.py has what starts when and how it all stops.
 
     PY=.venv_deploy/bin/python; R=deploy/rigid2deform/run.py; ARM="robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>"
     $PY $R robot.mode=home       $ARM    # 1. move to home (or free_drive: move it there by hand)
-    (start perception)                   # 2. deploy/rigid2deform/perception/main.py, the same object.name
+    (start perception)                   # 2. deploy/rigid2deform/perception/main.py, the same mode
                                          #    (perception.source=fake: no camera)
     $PY $R $ARM                          # 3. robot.mode=policy (the default): task=fold
-        policy.checkpoint=deploy/rigid2deform/policy/box2RW_allDR.pth    another of the five runs
+        mode=pc_goal                     another mode (the default: config.yaml's, pc_label)
+        policy.checkpoint=deploy/rigid2deform/policy/box2RW_allDR.pth    not the mode's default network
         record.name=fold_try1            record it (recordings/<date>/<date>_<time>_fold_try1.jsonl)
         run.viewer=false, ...            any other config key
 """

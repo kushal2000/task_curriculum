@@ -14,7 +14,7 @@ parts:
 | [policy.py](policy.py) | the policy loop of each task and kind of network (`TASKS`): keypoints: perception → sheet particles → observation → LSTM → joint targets; point cloud: point_cloud (live cloud + the reference taken at the start) → proprio + cloud → PointNet + LSTM → joint targets |
 | [fold.py](fold.py) | task=fold: the sheet's grid points → what the policy observes, and the success test |
 | [sheets/](sheets/__init__.py) | where the grid points come from, by the object's `perception`: `rigid_plates.py` (two FoundationPose plates), `cloth_points.py` (CoTracker cloth: placeholder) |
-| [perception/](perception/__init__.py) | the perception nodes (each in its camera environment). [main.py](perception/main.py) is the entry: it starts the node the config needs, by policy.checkpoint's kind and object.name's perception (FoundationPose: `deploy/nodes/perception.py`; CoTracker: `perception/cloth_tracker.py` / `perception/stereo_tracker.py`; point cloud: `perception/cloud_camera.py`, its start `perception/cloud_reference.py`), or with `perception.source=fake` `fake_sheet.py` / `fake_cloud.py` (no camera) |
+| [perception/](perception/__init__.py) | the perception nodes (each in its camera environment). [main.py](perception/main.py) is the entry: it starts the node config.yaml's `mode` needs ([mode.py](mode.py): `pc_label` / `pc_goal` / `foundationpose` / `cotracker`; FoundationPose: `deploy/nodes/perception.py`; CoTracker: `perception/cloth_tracker.py` / `perception/stereo_tracker.py`; point cloud: `perception/cloud_camera.py`, its start `perception/cloud_reference.py`), or with `perception.source=fake` `fake_sheet.py` / `fake_cloud.py` (no camera) |
 | [cloud_obs.py](cloud_obs.py) | the point-cloud policies' cloud input: base-frame points → the network's points + mask (the network: `deploy/utils/pointcloud_net.py`) |
 | [config.yaml](config.yaml) | every setting, complete (not an overlay of SimToolReal's) |
 | `spec/` | the fold spec json + the robot URDF with the real joint limits |
@@ -26,6 +26,21 @@ Every node reads config.yaml: run.py and policy.py directly, the shared nodes be
 `config=deploy/rigid2deform/config.yaml` (start one by hand with that argument too). Override any value
 on the command line with dotted keys. To print the merged config:
 `.venv_deploy/bin/python deploy/utils/config.py config=deploy/rigid2deform/config.yaml <overrides>`.
+
+## Mode
+
+`mode` in config.yaml (default `pc_label`) picks the perception and, while `policy.checkpoint` is null,
+the network (`policy.default_checkpoint`):
+
+| mode | perception | default network |
+|---|---|---|
+| `pc_label` | point cloud (`perception/cloud_camera.py`), the reference | `policy/pc/rigidcloth_pc_label_noiseDR_dagger.pth` |
+| `pc_goal` | point cloud, the goal | `policy/pc/rigidcloth_pc_goal_dagger.pth` |
+| `foundationpose` | two plates (`deploy/nodes/perception.py`) | `policy/flat7RW_base.pth` |
+| `cotracker` | a cloth, `object.name=[cloth]` (`perception/cloth_tracker.py`) | `policy/flat7RW_base.pth` |
+
+Give perception/main.py and run.py the same `mode` (or set it in config.yaml). A `policy.checkpoint` given
+on the command line must be of the mode's kind (and point-cloud mode): policy.py refuses another.
 
 ## Objects and perception
 
@@ -39,13 +54,13 @@ for every sheet.
 | `foundationpose` | `[moving plate, stationary plate]`, two rigid plates taped along one edge | `deploy/nodes/perception.py` (`object_poses`), one per plate | the sheet size and the hinge axis from the plates' meshes; `fold.hinge_z` (null: half the thickness), `fold.max_hinge_gap_m` |
 | `cotracker` | `[cloth]` | `deploy/nodes/point_tracker.py` (`object_points`): not written yet | `fold.sheet_size` (required; more with the node) |
 
-A point-cloud checkpoint (`policy.checkpoint`, `policy/pc/`) ignores this table: perception/main.py runs
+`mode=pc_label` / `pc_goal` ignores this table: perception/main.py runs
 perception/cloud_camera.py instead, in the foundationstereo environment for either `depth` (it opens a window:
 `.venv_deploy`'s OpenCV cannot); `perception.source=fake`: `perception/fake_cloud.py`, a still flat sheet.
 
-At its start, the non-live group of points the network gets from step 12 on, which the checkpoint's
-mode says (`label` | `goal`; the checkpoint stores it as `pc_args.goal`, training's names `first` |
-`scene`; the node reads it from `policy.checkpoint`):
+At its start, the non-live group of points the network gets from step 12 on, which the mode says
+(`pc_label`: the reference | `pc_goal`: the goal; the network's own, `pc_args.goal`, training's names
+`first` | `scene`, must agree):
 
 Both from the flat cloth (the robot at home, hands away, nothing touching the cloth at table height:
 keep it 1 cm from the tape): SPACE in the window freezes both cameras, then ONE click on the half that
@@ -79,8 +94,8 @@ brightest - darkest channel <= 35, and brightest <= 100, or <= 140 if not warm: 
 not the brown wood), so a black or grey cloth would be removed with it.
 
 ```bash
-~/miniconda3/envs/foundationstereo/bin/python deploy/rigid2deform/perception/main.py \
-    policy.checkpoint=deploy/rigid2deform/policy/pc/rigidcloth_pc_label_noiseDR_dagger.pth [perception.pointcloud.depth=raw]
+~/miniconda3/envs/foundationstereo/bin/python deploy/rigid2deform/perception/main.py [mode=pc_goal] [perception.pointcloud.depth=raw]
+.venv_deploy/bin/python deploy/rigid2deform/run.py robot.arm=<ROBOT_SN> robot.hand=<HAND_SN> [mode=pc_goal] record.name=pc_try1
 ```
 
 `cloth` is in the config as a placeholder: `object.name=[cloth]` stops with "not implemented yet".
@@ -95,9 +110,9 @@ PY=.venv_deploy/bin/python; D=deploy/rigid2deform
 ARM="robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>"
 $PY $D/run.py robot.mode=home $ARM
 # perception: both plates, the MOVING one first (one box to click per plate)
-~/miniconda3/envs/foundationpose/bin/python $D/perception/main.py
+~/miniconda3/envs/foundationpose/bin/python $D/perception/main.py mode=foundationpose
 # the run (flat7RW_base by default; any of the five: policy.checkpoint=deploy/rigid2deform/policy/<name>.pth)
-$PY $D/run.py $ARM record.name=fold_try1
+$PY $D/run.py $ARM mode=foundationpose record.name=fold_try1
 ```
 
 Other plates: `object.name=[plate7_brown,plate7_white]` (no spaces), given to perception/main.py and run.py
@@ -110,11 +125,11 @@ flat, side by side, taped edge to edge, about where training put the sheet: cent
 the base (base frame (0, −0.51)) ± 10 cm, any heading. The policy refuses to start otherwise
 (`start_frames` in `sheets/rigid_plates.py`).
 
-Without hardware (MuJoCo arm, fake hand, a still sheet; the viewer at http://localhost:8091):
+Without hardware (MuJoCo arm, fake hand, a still sheet; the viewer at http://localhost:8091), any mode:
 
 ```bash
-$PY $D/perception/main.py perception.source=fake
-$PY $D/run.py robot.arm=mujoco robot.hand=fake run.duration_s=30
+$PY $D/perception/main.py perception.source=fake mode=foundationpose
+$PY $D/run.py robot.arm=mujoco robot.hand=fake mode=foundationpose run.duration_s=30
 ```
 
 What the policy sees ([fold.py](fold.py), from the sheet's 7 x 7 grid points as training computes it;

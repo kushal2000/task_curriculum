@@ -2,15 +2,14 @@
 without cameras: a still, flat, square sheet, as point_cloud messages (deploy/utils/link.py send_cloud).
 
     .venv_deploy/bin/python deploy/rigid2deform/perception/fake_cloud.py [overrides]
-    .venv_deploy/bin/python deploy/rigid2deform/run.py robot.arm=mujoco robot.hand=fake \
-        policy.checkpoint=deploy/rigid2deform/policy/pc/rigidcloth_pc_label_noiseDR_dagger.pth
+    .venv_deploy/bin/python deploy/rigid2deform/run.py robot.arm=mujoco robot.hand=fake [mode=pc_goal]
 
 The sheet: side fold.sheet_size (null: 0.15 m), at perception.fake_pose_base (the sheet's pose: hinge
 line middle, mid-plane, robot base frame; sheet x across the hinge, the moving half at x > 0), at
 perception.fake_hz. Each message:
   xyz         the live cloud: the sheet's surface on a 5 mm grid (the voxel size), at most 1024 points
               at random, 1 mm depth noise (no robot points: the real cloud has the hand and the arm)
-  and, the same in every message, what policy.checkpoint's mode (cloud_obs.mode_of) needs:
+  and, the same in every message, what config.yaml's mode (pc_label | pc_goal) needs:
     label: ref_xyz (192, 3) random points of the sheet, ref_moving (192,) True on the half that folds
            over (x > 0), ref_corners (4, 3) the sheet's: S far A, S far B, M far B, M far A
     goal:  goal_xyz (192, 3) the sheet folded: the moving half turned over onto the stationary one
@@ -25,13 +24,13 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
-from deploy.rigid2deform.cloud_obs import BOX_HI_BASE, BOX_LO_BASE, N_POINTS, N_REF, mode_of   # noqa: E402
+from deploy.rigid2deform.cloud_obs import BOX_HI_BASE, BOX_LO_BASE, N_POINTS, N_REF   # noqa: E402
+from deploy.rigid2deform.mode import cloud_mode, resolve                     # noqa: E402
 from deploy.rigid2deform.fold import quat_to_mat                             # noqa: E402
-from deploy.utils.config import load_config, repo_path                       # noqa: E402
+from deploy.utils.config import load_config                                  # noqa: E402
 from deploy.utils.link import CLOUD_PORT, open_publisher, send_cloud         # noqa: E402
 
 CONFIG = HERE.parent / "config.yaml"
@@ -70,7 +69,9 @@ def corners(size: float, pose_base) -> np.ndarray:
 def main() -> None:
     cfg = load_config(path=CONFIG)
     size = float(cfg.fold.sheet_size or 0.15)
-    mode = mode_of(torch.load(repo_path(cfg.policy.checkpoint), map_location="cpu", weights_only=False)["pc_args"])
+    mode = cloud_mode(resolve(cfg))
+    if mode is None:
+        raise SystemExit(f"[fake_cloud] mode={cfg.mode} is not a point-cloud mode (pc_label | pc_goal)")
     sheet, moving, folded = sheet_points(size, cfg.perception.fake_pose_base)
     inside = crop_mask(sheet)
     if not inside.all():

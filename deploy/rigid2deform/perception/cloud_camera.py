@@ -1,14 +1,14 @@
 """The point-cloud policies' perception node: both D415s -> the live cloud the policy sees -> point_cloud.
 
-Usually started by perception/main.py (policy.checkpoint a point-cloud policy); on its own:
+Usually started by perception/main.py (mode pc_label | pc_goal); on its own:
 
     ~/miniconda3/envs/foundationstereo/bin/python deploy/rigid2deform/perception/cloud_camera.py \
-        [perception.pointcloud.depth=raw|foundationstereo]
+        [mode=pc_label|pc_goal] [perception.pointcloud.depth=raw|foundationstereo]
 
 Runs in the foundationstereo environment (pyrealsense2, TensorRT, torch, cv2 with a window; + pyzmq);
 .venv_deploy's cv2 cannot open the window. Every setting: config.yaml perception.pointcloud.
 
-First the non-live group of points, which policy.checkpoint's mode says (cloud_obs.mode_of; cloud_reference.py), in a
+First the non-live group of points, which config.yaml's mode says (pc_label | pc_goal; cloud_reference.py), in a
 window with the first camera's image; nothing is sent before it is accepted, then every point_cloud
 message carries the same one. To take it again, restart. Either mode: put the cloth flat, SPACE
 freezes, click once on the half that folds over, SPACE accepts.
@@ -54,7 +54,8 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
 from deploy.rigid2deform.perception import cloud_reference                                       # noqa: E402
-from deploy.rigid2deform.cloud_obs import BOX_HI_BASE, BOX_LO_BASE, N_POINTS, ROOT_ENV, TABLE_Z_ENV, mode_of   # noqa: E402
+from deploy.rigid2deform.cloud_obs import BOX_HI_BASE, BOX_LO_BASE, N_POINTS, ROOT_ENV, TABLE_Z_ENV   # noqa: E402
+from deploy.rigid2deform.mode import cloud_mode, resolve                               # noqa: E402
 from deploy.utils.config import load_config, repo_path                                  # noqa: E402
 from deploy.utils.depth_camera import (DepthCamera, FoundationStereo, color_at, depth_edges,  # noqa: E402
                                        pixel_rays, transform, valid_depth, voxel_downsample)
@@ -187,22 +188,12 @@ class FrameStream(threading.Thread):
             pub.close(linger=0)
 
 
-def checkpoint_mode(cfg) -> str:
-    """policy.checkpoint's mode (label | goal): which non-live group the policy needs (cloud_reference.py)."""
-    import torch
-
-    path = repo_path(cfg.policy.checkpoint)
-    ckpt = torch.load(path, map_location="cpu", weights_only=False)
-    if not isinstance(ckpt, dict) or "pc_args" not in ckpt:
-        raise SystemExit(f"[cloud_camera] {path.name} has no pc_args (not a distilled point-cloud student): "
-                         "which non-live group (reference or goal) it needs is unknown")
-    return mode_of(ckpt["pc_args"])
-
-
 def main() -> None:
     cfg = load_config(path=CONFIG)
     p, pc = cfg.perception, cfg.perception.pointcloud
-    mode = checkpoint_mode(cfg)
+    mode = cloud_mode(resolve(cfg))
+    if mode is None:
+        raise SystemExit(f"[cloud_camera] mode={cfg.mode} is not a point-cloud mode (pc_label | pc_goal)")
     depth = str(pc.depth)
     fs = None
     if depth == "foundationstereo":

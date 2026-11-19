@@ -9,6 +9,7 @@
 # run.py and policy.py read this file; run.py hands it to the shared nodes (deploy/nodes/) as
 # config=deploy/rigid2deform/config.yaml. Override any value on the command line with dotted keys, e.g.
 #   python run.py robot.mode=home robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>
+#   python run.py mode=pc_goal record.name=fold_try1
 #   python run.py policy.checkpoint=deploy/rigid2deform/policy/box2RW_allDR.pth record.name=fold_try1
 # A key that is not in this file is an error. deploy/utils/config.py prints the merged config.
 #
@@ -17,6 +18,11 @@
 
 task: fold                  # fold: turn one plate of a taped two-plate sheet over onto the other (fold.py)
 spec_path: deploy/rigid2deform/spec/spec_flexiv_wuji_right_fold.json   # robot URDF next to it
+mode: pc_label              # pc_label | pc_goal (point cloud: perception/cloud_camera.py, the reference | the goal)
+                            #   | foundationpose (object.name: two plates) | cotracker (object.name=[cloth]).
+                            #   Picks the perception (perception/main.py) and, with policy.checkpoint null,
+                            #   the network (policy.default_checkpoint); see mode.py. Give run.py and
+                            #   perception/main.py the same one (both read this file)
 
 # ------------------------------------------------------------------------------------------- bus
 # The processes talk over ZMQ (deploy/utils/link.py). Each publisher binds its own port; anyone may subscribe.
@@ -39,12 +45,15 @@ run:
 # --------------------------------------------------------------------------------------- policy
 # The five runs in policy/ (flat7RW_base, _fricition, _sysid, _allDR, box2RW_allDR; the README says
 # what each trained on) share every spec number the deploy code reads (checks/export_fold_spec.py --compare).
-# The checkpoint's kind decides the network and the perception (deploy/utils/policy_net.py, read from the
-# file): keypoints (rl_games: those five) -> object.name's perception; pointcloud (policy/pc/: distilled
-# point-cloud students) -> the two-camera cloud (perception/cloud_camera.py). perception/main.py
-# reads this key too: give it the same checkpoint as run.py.
+# The point-cloud students are in policy/pc/. The network must be of the kind `mode` says (keypoints: the
+# five; pointcloud: policy/pc/, and its pc_args.goal the mode's label | goal): policy.py refuses another.
 policy:
-  checkpoint: deploy/rigid2deform/policy/flat7RW_base.pth
+  checkpoint: null          # null = default_checkpoint[mode]; or a path, e.g. deploy/rigid2deform/policy/box2RW_allDR.pth
+  default_checkpoint:
+    pc_label: deploy/rigid2deform/policy/pc/rigidcloth_pc_label_noiseDR_dagger.pth
+    pc_goal: deploy/rigid2deform/policy/pc/rigidcloth_pc_goal_dagger.pth
+    foundationpose: deploy/rigid2deform/policy/flat7RW_base.pth
+    cotracker: deploy/rigid2deform/policy/flat7RW_base.pth
   config: pretrained_policy/config.yaml   # keypoint checkpoints only (rl_games' network config)
   expl_coef: 0.0            # keypoint checkpoints only: SAPG block; 0 = the last block (task reward only)
   joint_state_max_age_s: 0.05   # stop when the newest joint_state is older (robot.py died / stalled)

@@ -2,8 +2,8 @@
 
     .venv_deploy/bin/python deploy/rigid2deform/policy.py config=deploy/rigid2deform/config.yaml [overrides]
 Usually started by run.py (with the robot, viewer and recorder, deploy/nodes/). config.yaml's `task`
-and the kind of policy.checkpoint (deploy/utils/policy_net.py: keypoints | pointcloud) pick the loop
-(TASKS below).
+and `mode` (mode.py: the kind of network, keypoints | pointcloud; policy.checkpoint, null = the mode's
+default, must be of that kind) pick the loop (TASKS below).
 
 task=fold, a keypoint checkpoint (run_fold_keypoints): a fold-pool policy. The objects' perception (object.name) picks the sheet source
 (sheets/: two FoundationPose plates on object_poses, or CoTracker cloth points), which turns each
@@ -43,8 +43,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
 from deploy.rigid2deform import cloud_obs                                                            # noqa: E402
+from deploy.rigid2deform.mode import cloud_mode, kind_of, resolve                                  # noqa: E402
 from deploy.rigid2deform.fold import fold_geometry, observe, score                                  # noqa: E402
-from deploy.rigid2deform.sheets import sheet_source                                                 # noqa: E402
+from deploy.rigid2deform.sheets import sheet_perception, sheet_source                                                 # noqa: E402
 from deploy.utils.config import load_config, repo_path                                              # noqa: E402
 from deploy.utils.link import (CLOUD_PORT, CLOUD_TOPIC, age, open_publisher, open_subscriber,      # noqa: E402
                                recv_cloud, recv_latest, send)
@@ -282,20 +283,30 @@ TASKS = {"fold": {"keypoints": run_fold_keypoints, "pointcloud": run_fold_cloud}
 
 
 def check(cfg) -> None:
-    """The config's task, checkpoint and object, before anything starts (run.py calls it too)."""
+    """The config's task, mode, checkpoint and object, before anything starts (run.py calls it too)."""
     if cfg.task not in TASKS:
         raise SystemExit(f"[policy] task={cfg.task}: {' | '.join(TASKS)}")
-    kind = checkpoint_kind(repo_path(cfg.policy.checkpoint))   # the network decides the perception
+    mode = resolve(cfg)
+    kind = checkpoint_kind(repo_path(cfg.policy.checkpoint))
+    if kind != kind_of(mode):
+        raise SystemExit(f"[policy] mode={mode} takes a {kind_of(mode)} network; {cfg.policy.checkpoint} is a {kind} "
+                         "one: give another mode, or policy.checkpoint=null for the mode's default")
     if kind not in TASKS[cfg.task]:
         raise SystemExit(f"[policy] task={cfg.task} has no loop for a {kind} policy ({cfg.policy.checkpoint})")
     if kind == "keypoints":
         sheet_source(cfg).check(cfg)   # object.name: one implemented perception, the objects it needs
+        if sheet_perception(cfg) != mode:
+            raise SystemExit(f"[policy] mode={mode}, but object.name={list(cfg.object.name)} is tracked by "
+                             f"{sheet_perception(cfg)}: give mode={sheet_perception(cfg)} or other objects")
         return
     if CLOUD_PORT not in cfg.bus:
         raise SystemExit(f"[policy] a point-cloud policy needs bus.{CLOUD_PORT} (its perception's port)")
     spec = load_spec(repo_path(cfg.spec_path))
     net = load_policy_net(cfg, num_actions=len(spec["joint_names"]), kinds=("pointcloud",))
     cloud_obs.check_supported(net.pc_args, net.point_dim)   # a cloud cloud_obs.py builds
+    if cloud_obs.mode_of(net.pc_args) != cloud_mode(mode):
+        raise SystemExit(f"[policy] mode={mode}, but {cfg.policy.checkpoint} is a {cloud_obs.mode_of(net.pc_args)} "
+                         f"network: give mode=pc_{cloud_obs.mode_of(net.pc_args)} or policy.checkpoint=null")
 
 
 def main() -> None:
