@@ -23,7 +23,7 @@ def set_present(section, **values) -> None:
 def disable_randomization(cfg) -> None:
     """Turn off every DR and reset-noise source, and pin the object's start pose.
 
-    Domain randomisation is *on* by default in ``configs/task/Play.yaml`` because that is the
+    Domain randomisation is *on* by default in ``PlayEnvCfg`` because that is the
     training regime. For evaluation it has to be off: obs/action delays, object-state noise and
     random wrench impulses all inject variance that has nothing to do with the policy under
     test.

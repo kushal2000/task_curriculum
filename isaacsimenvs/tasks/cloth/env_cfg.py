@@ -1,9 +1,9 @@
 """``ClothEnvCfg``: the fold task's configuration, shared by both backends.
 
-The task YAMLs (``configs/task/RigidCloth.yaml``, ``configs/task/Cloth.yaml``) override these defaults
-section by section; a backend's config adds its own blocks (``backends/rigid/config.py``,
-``backends/vbd/config.py``). The robot comes from ``robot`` (a ``RobotSpec`` name) and
-``assets.robot_urdf``, both set by a robot setup (``configs/robot/<robot_setup>.yaml``).
+These defaults are the task: a backend's config adds its own blocks and changes what differs for it
+(``backends/rigid/config.py``, ``backends/vbd/config.py``). The robot comes from ``robot`` (a
+``RobotSpec`` name) and ``assets.robot_urdf``, both set by a robot setup
+(``configs/robot/<robot_setup>.yaml``); a run recipe (``configs/runs/``) changes the rest.
 """
 
 from __future__ import annotations
@@ -170,7 +170,7 @@ class DomainRandomizationCfg:
 def _physx_sim_cfg() -> SimulationCfg:
     """60 Hz policy / 120 Hz physics, PhysX TGS. (The Newton backend replaces ``physics``.)"""
     return SimulationCfg(
-        dt=1.0 / 120.0,
+        dt=0.00833333333,  # 1/120 to 11 digits, as every policy was trained (bit-identical replays)
         render_interval=2,
         gravity=(0.0, 0.0, -9.81),
         physx=PhysxCfg(
@@ -195,7 +195,7 @@ class ClothEnvCfg(DirectRLEnvCfg):
     """A key of ``isaacsimenvs.robots.ROBOT_SPECS``; ``assets.robot_urdf`` must be its URDF."""
     robot_setup: str = ""
     """A file stem in ``configs/robot/`` (robot, URDF, self-collision, base position), applied by the
-    config loader (``scripts/configs/loader``) between the task YAML and the recipe. Empty: the task's."""
+    config loader (``scripts/configs/loader``) onto these defaults, before the recipe. Empty: the task's."""
     robot_self_collision: bool = False
     """Robot self-collision, minus ``RobotSpec.self_collision_filter``."""
     robot_self_collision_scope: str = "all"

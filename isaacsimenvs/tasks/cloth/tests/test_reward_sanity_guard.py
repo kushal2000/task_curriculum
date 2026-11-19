@@ -8,11 +8,9 @@ untouched. `nonfinite_reward` read 0.0000 throughout.
 
 from __future__ import annotations
 
-import torch
-import yaml
-from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
-
 from types import SimpleNamespace
+
+import torch
 
 from isaacsimenvs.tasks.cloth.mdp.task import REWARD_SANITY_LIMIT as LIMIT
 from isaacsimenvs.tasks.cloth.mdp.task import ClothTask
@@ -49,10 +47,15 @@ def test_guard_zeroes_the_observed_blow_ups():
     assert torch.count_nonzero(guarded) == 0
 
 
+def _reach_goal_bonus() -> float:
+    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
+
+    return float(VbdClothEnvCfg().reward.reach_goal_bonus)
+
+
 def test_guard_does_not_touch_legitimate_rewards():
     """A fold pays reach_goal_bonus in a single step. That must survive untouched."""
-    cfg = yaml.safe_load(open(REPO_ROOT / "isaacsimenvs/scripts/configs/task/Cloth.yaml"))
-    bonus = float(cfg["reward"]["reach_goal_bonus"])
+    bonus = _reach_goal_bonus()
     legit = torch.tensor([0.0, -50.0, 12.5, bonus, bonus + 250.0, -bonus])
     guarded, insane = _apply_guard(legit)
     assert not bool(insane.any()), f"legitimate rewards flagged: {legit[insane].tolist()}"
@@ -60,8 +63,7 @@ def test_guard_does_not_touch_legitimate_rewards():
 
 
 def test_limit_leaves_headroom_over_anything_the_task_can_pay():
-    cfg = yaml.safe_load(open(REPO_ROOT / "isaacsimenvs/scripts/configs/task/Cloth.yaml"))
-    bonus = float(cfg["reward"]["reach_goal_bonus"])
+    bonus = _reach_goal_bonus()
     # Bonus plus generous shaping; the limit should sit well above it but far below the blow-ups.
     plausible_max = bonus + 1000.0
     assert LIMIT > plausible_max, "limit must not clip a legitimate fold"

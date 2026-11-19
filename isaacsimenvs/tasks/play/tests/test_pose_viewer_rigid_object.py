@@ -1,7 +1,7 @@
 """The cloth viewer must not draw the spawned rigid tool.
 
-`Cloth.yaml` still builds the rigid tool pool (`handle_head_types: ["hammer"]`) because the sheet
-replaces the spawned object only *after* the scene is built. The Play viewer draws that tool at
+The cloth scene used to build Play's rigid tool pool (`handle_head_types: ["hammer"]`), the sheet
+replacing the spawned object only *after* the scene was built. The Play viewer draws that tool at
 `object_pose` and a green copy of it at `goal_pose`; for cloth both are hammers, and the green one
 is close enough to the fold ghost's green to read as part of the goal. Regression test for that.
 """

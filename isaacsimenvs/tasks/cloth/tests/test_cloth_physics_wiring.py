@@ -1,8 +1,8 @@
-"""Every cloth physics setting in `Cloth.yaml` actually reaches the solver.
+"""Every cloth physics setting of the VBD task (`VbdClothEnvCfg`'s defaults) actually reaches the solver.
 
 This file exists because the failure mode it guards has already happened here twice. A field can be
-declared on `ClothCfg`, pinned in the task YAML, and read back correctly by anything that inspects
-the config -- while never being passed to `SolverVBD` at all. It looks configured and does nothing.
+declared on `ClothCfg`, given a value, and read back correctly by anything that inspects the
+config -- while never being passed to `SolverVBD` at all. It looks configured and does nothing.
 
 Three distinct ways that happens, all covered below:
 
@@ -18,20 +18,16 @@ Three distinct ways that happens, all covered below:
     (solver_vbd.py:677) and the kernel then reads `k_floor = avg_ke` (rigid_vbd_kernels.py:3395).
     It sat at 1.0e2 doing nothing for the whole cable-inherited history of this task.
 
-The YAML is loaded here rather than relying on `ClothCfg` defaults so that a value pinned in the
-task file but misspelled, or typed as a string by YAML's exponent rules, fails the test.
+The expected values are written out below, so a default that changes, or a value typed as a string
+by YAML's exponent rules in an overlay, fails the test.
 """
 
 from __future__ import annotations
 
 import inspect
-from pathlib import Path
 
 import pytest
 import yaml
-from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
-
-_YAML = REPO_ROOT / "isaacsimenvs" / "scripts" / "configs" / "task" / "Cloth.yaml"
 
 
 @pytest.fixture(scope="module")
@@ -43,7 +39,6 @@ def solver_kwargs():
     from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
 
     cfg = VbdClothEnvCfg()
-    cfg.from_dict(yaml.safe_load(_YAML.read_text()))
     physics = cfg.cloth.build_physics(cfg.newton, num_envs=32)
 
     entry = next(e for e in physics.solver_cfg.entries if e.name == "cloth")
@@ -111,18 +106,35 @@ def test_thickness_and_resolution_stay_on_the_guard_boundary(solver_kwargs):
     """16 mm particles need >= 16.7 mm spacing; resolution 7 is the finest grid that admits it.
 
     These two are one decision, and the guard only runs in `__post_init__` -- it does NOT re-run
-    after the YAML overlay is applied. So a YAML that raised `resolution` without lowering
-    `thickness` would produce a sheet that self-collides at rest, with no error.
+    after a YAML overlay (robot setup, recipe) is applied. So a recipe that raised `resolution`
+    without lowering `thickness` would produce a sheet that self-collides at rest, with no error.
     """
     c = solver_kwargs["cloth"]
     assert c.thickness <= c.spacing + 1e-9
     assert c.resolution <= c.max_resolution_for_thickness
 
 
+def _cloth_overlays():
+    """``(file, cloth block)`` of every YAML that can set cloth values: run recipes and study
+    recipes (under ``env:``), DR blocks and robot setups (env overlays themselves)."""
+    from isaacsimenvs.conftest import REPO_ROOT
+
+    configs = REPO_ROOT / "isaacsimenvs" / "scripts" / "configs"
+    recipes = [*(configs / "runs").glob("*.yaml"), *(REPO_ROOT / "experiments").rglob("*.yaml")]
+    overlays = [*(configs / "dr").glob("*.yaml"), *(configs / "robot").glob("*.yaml")]
+    for path in recipes:
+        yield path, ((yaml.safe_load(path.read_text()) or {}).get("env") or {}).get("cloth") or {}
+    for path in overlays:
+        yield path, (yaml.safe_load(path.read_text()) or {}).get("cloth") or {}
+
+
 def test_yaml_numbers_are_numbers():
     """YAML 1.1 parses `1.0e2` as a STRING -- the exponent needs a sign. Caught this in review."""
-    block = yaml.safe_load(_YAML.read_text())["cloth"]
-    for key, value in block.items():
-        if key in ("proxy_mode",):
-            continue
-        assert not isinstance(value, str), f"cloth.{key} = {value!r} parsed as str, not a number"
+    from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
+
+    defaults = ClothCfg()
+    for path, block in _cloth_overlays():
+        for key, value in block.items():
+            default = getattr(defaults, key, None)
+            if isinstance(default, (int, float)) and not isinstance(default, bool):
+                assert not isinstance(value, str), f"{path.name}: cloth.{key} = {value!r} parsed as str, not a number"

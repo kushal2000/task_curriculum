@@ -17,9 +17,8 @@ Three things are drawn that the Play viewer has no notion of:
   criterion are computed from, so what is on screen is what is being optimised
 
 and two things are deliberately NOT drawn. The Play viewer renders the spawned rigid tool at
-`object_pose` and a green copy of it at `goal_pose`. For cloth the tool pool is still built
-(`Cloth.yaml` pins `handle_head_types: ["hammer"]`) but the sheet replaces the spawned object, so
-both are hammers: one inert, one a green hammer sitting at a `goal_viz` marker that
+`object_pose` and a green copy of it at `goal_pose`. The cloth scene used to build that tool pool
+(`handle_head_types: ["hammer"]`), the sheet replacing the spawned object, so both were hammers: one inert, one a green hammer sitting at a `goal_viz` marker that
 `ClothEnv` moves every step. `draw_rigid_object=False` suppresses them.
 This is the same confusion the offscreen renderer had before `_hide_goal_viz`.
 """

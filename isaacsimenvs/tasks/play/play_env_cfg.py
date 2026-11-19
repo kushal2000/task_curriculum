@@ -1,7 +1,8 @@
 """PlayEnvCfg — typed defaults for the Play goal-pose-reaching task.
 
-Organized into sectioned sub-configclasses that mirror the YAML overlay
-in configs/task/PlayFlexivWujiRightHumanLike.yaml 1:1:
+The defaults are the task: the Flexiv Rizon 4s + right Wuji Hand 2 in the real setup's table and
+goal geometry, as the Play priors (kushal/2026-10-30_pretraining_real, run 41213) were trained. A
+robot setup (configs/robot/) or a run recipe changes them. Organized into sectioned sub-configclasses:
 
     sim                     → isaaclab.sim.SimulationCfg (+ PhysxCfg)
     scene                   → PlaySceneCfg(InteractiveSceneCfg)
@@ -55,7 +56,7 @@ from isaaclab.utils import configclass
 @configclass
 class AssetsCfg:
     robot_urdf: str = "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
-    table_urdf: str = "assets/urdf/table_narrow.urdf"
+    table_urdf: str = "assets/urdf/table_narrow_flexiv.urdf"  # table_narrow.urdf as a 4 cm slab
     # Per-env scale ranges applied to the table mesh at scene-build time.
     # Sampled independently per env: sx ~ U(table_scale_range_x), sy ~ U(table_scale_range_y).
     # Z is held at 1.0 so the table surface height stays at table_reset_z (which the
@@ -368,12 +369,14 @@ class ResetCfg:
     reset_dof_pos_random_interval_fingers: float = 0.1
     reset_dof_vel_random_interval: float = 0.5
 
-    # Table reset geometry
-    table_reset_z: float = 0.38
+    # Table reset geometry: the real setup's table, measured from the robot frame (robot root at
+    # (0, 0.8, 0)): top 0.28 m above it, near side 0.31 m in front. The 4 cm slab is centred at
+    # y = 0.8 - 0.31 - 0.4/2 = 0.29, z = 0.28 - 0.02 = 0.26. Objects start 0.10 m above the top.
+    table_reset_z: float = 0.26
     table_reset_z_range: float = 0.01
-    table_object_z_offset: float = 0.25
-    # Table centre in env XY; objects spawn around it (the Flexiv tasks move it to the real setup's).
-    table_reset_xy: tuple[float, float] = (0.0, 0.0)
+    table_object_z_offset: float = 0.12
+    # Table centre in env XY; objects spawn around it.
+    table_reset_xy: tuple[float, float] = (0.0, 0.29)
     # Per-env XY position noise applied at reset (uniform half-widths in m).
     # Default (0, 0) keeps the table centered on the env origin (legacy behavior).
     table_reset_xy_range_m: tuple[float, float] = (0.0, 0.0)
@@ -385,14 +388,16 @@ class ResetCfg:
     goal_sampling_type: str = "delta"  # "delta" | "absolute"
     delta_goal_distance: float = 0.1
     delta_rotation_degrees: float = 90.0
-    target_volume_mins: tuple[float, float, float] = (-0.35, -0.2, 0.6)
-    target_volume_maxs: tuple[float, float, float] = (0.35, 0.2, 0.95)
+    # The goal volume keeps Play's place relative to the table top centre, but for y_min, taken out
+    # to 0 (0.49 m past the table's near side).
+    target_volume_mins: tuple[float, float, float] = (-0.35, 0.0, 0.35)
+    target_volume_maxs: tuple[float, float, float] = (0.35, 0.49, 0.7)
     target_volume_region_scale: float = 1.0
     # When on, each sampled goal's z is raised (past target_volume_maxs if need be) until the
     # object at the goal orientation is goal_table_clearance_m above the table top
     # (utils/goal_table_clearance.py). Off leaves goals where the sampler puts them. (A switch and
-    # a float, not an optional float: the YAML overlay types each field by its default.)
-    use_goal_table_clearance: bool = False
+    # a float, not an optional float: a YAML overlay types each field by its default.)
+    use_goal_table_clearance: bool = True
     goal_table_clearance_m: float = 0.01
 
     # Debug only — when set, every reset writes this exact env-local pose
@@ -568,7 +573,7 @@ class DomainRandomizationCfg:
 def _default_sim_cfg() -> SimulationCfg:
     """60 Hz policy control / 120 Hz physics (matches legacy dt=1/60 + substeps=2)."""
     return SimulationCfg(
-        dt=1.0 / 120.0,
+        dt=0.00833333333,  # 1/120 to 11 digits, as the Play priors were trained (bit-identical replays)
         render_interval=2,
         gravity=(0.0, 0.0, -9.81),
         physx=PhysxCfg(
@@ -594,15 +599,14 @@ def _default_sim_cfg() -> SimulationCfg:
 class PlayEnvCfg(DirectRLEnvCfg):
     """Top-level configclass for the Play goal-pose-reaching env.
 
-    Structure mirrors ``configs/task/PlayFlexivWujiRightHumanLike.yaml`` exactly — YAML overlay
-    key paths resolve to these fields via ``configclass.from_dict``.
+    Robot setups and run recipes are YAML overlays onto these fields (``configclass.from_dict``).
     """
 
     # Robot embodiment, a key of robots.ROBOT_SPECS. Fixed per registered task; assets.robot_urdf
     # must be its URDF. PlayEnv sets action_space (and the obs sizes) from it.
     robot: str = "flexiv_wuji_right_human_like"
     # Robot setup: a file stem in configs/robot/ (robot spec, URDF, self-collision, base position),
-    # applied by the config loader (scripts/configs/loader) between the task YAML and the run recipe.
+    # applied by the config loader (scripts/configs/loader) onto these defaults, before the run recipe.
     # Set it in a recipe (`env.robot_setup`), on the command line, or through an alias task id.
     # Empty: the task's own robot.
     robot_setup: str = ""

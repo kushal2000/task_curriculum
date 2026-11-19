@@ -108,7 +108,7 @@ def main() -> None:
         "defaults to 4, and its tables call 6x4 the 'full pool'), and it is part of the task "
         "definition rather than a performance knob: `generate_handle_head_urdfs` shuffles the "
         "whole pool under a fixed seed, so changing the count changes *which* objects the envs "
-        "get, not just how many exist. configs/task/Play.yaml ships 100 for training.",
+        "get, not just how many exist. PlayEnvCfg ships 100 for training.",
     )
     parser.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
     parser.add_argument("--policy_config", default=DEFAULT_POLICY_CFG)

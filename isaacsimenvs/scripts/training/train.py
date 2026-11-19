@@ -5,7 +5,7 @@ Pipeline:
         ↓
     AppLauncher (boots Kit; must precede any isaaclab.* import)
         ↓
-    @hydra_task_config_with_yaml  (configclass defaults ← task YAML overlay ← Hydra CLI)
+    @hydra_task_config_with_yaml  (configclass defaults ← robot setup ← run recipe ← Hydra CLI)
         ↓
     gym.make(task_id, cfg=env_cfg)  → DirectRLEnv wrapped by gym.Wrapper
         ↓
@@ -111,7 +111,7 @@ def main() -> None:
         "--experiment",
         default=None,
         help="A run recipe: a name in isaacsimenvs/scripts/configs/runs/ (e.g. rigid_cloth_right_wuji) or a "
-        "YAML path; layered between the task YAML and the Hydra CLI overrides (configs/recipes.py).",
+        "YAML path; layered between the task defaults (and robot setup) and the Hydra CLI overrides (configs/recipes.py).",
     )
     # --- Runtime toggles ---
     parser.add_argument("--test", action="store_true", help="Run inference (player) instead of training")
@@ -224,7 +224,7 @@ def main() -> None:
         hydra_run_dir = HydraConfig.get().runtime.output_dir
 
         # sim_device CLI flag still wins — it's a launcher-level concern, not
-        # something we expect in the task YAML.
+        # something we expect in the env config.
         # Under torchrun each rank MUST bind its own device. torchrun sets LOCAL_RANK but not
         # CUDA_VISIBLE_DEVICES, and both --rl_device and --sim_device default to cuda:0 -- so
         # without this every rank puts its whole scene on GPU 0 and dies in Warp's allocator,

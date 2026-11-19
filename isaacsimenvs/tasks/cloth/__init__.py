@@ -16,10 +16,10 @@ import gymnasium as gym
 
 from isaacsimenvs import CONFIG_DIR as _CFG_DIR
 
-# task -> (backend, its config class, its task YAML)
+# task -> (backend, its config class: the task's defaults)
 _TASKS = {
-    "Cloth": ("vbd", "backends.vbd.config:VbdClothEnvCfg", "Cloth.yaml"),
-    "RigidCloth": ("rigid", "backends.rigid.config:RigidClothEnvCfg", "RigidCloth.yaml"),
+    "Cloth": ("vbd", "backends.vbd.config:VbdClothEnvCfg"),
+    "RigidCloth": ("rigid", "backends.rigid.config:RigidClothEnvCfg"),
 }
 
 
@@ -38,7 +38,7 @@ def make_env(cfg, render_mode: str | None = None, *, backend: str, **kwargs):
 
 
 def _register(task_id: str, base: str, **extra) -> None:
-    backend, cfg, task_yaml = _TASKS[base]
+    backend, cfg = _TASKS[base]
     gym.register(
         id=task_id,
         entry_point="isaacsimenvs.tasks.cloth:make_env",
@@ -47,7 +47,6 @@ def _register(task_id: str, base: str, **extra) -> None:
         kwargs={
             "backend": backend,
             "env_cfg_entry_point": f"isaacsimenvs.tasks.cloth.{cfg}",
-            "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / task_yaml),
             "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
             "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
             **extra,

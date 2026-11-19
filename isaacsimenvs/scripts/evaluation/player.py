@@ -157,7 +157,7 @@ class PretrainedPlayer:
             raise ValueError(
                 f"expected a {self.num_observations}-dim observation, got {obs.shape[-1]}. "
                 "The checkpoint's input normalization is baked against the exact layout in "
-                "configs/task/Play.yaml obs_list -- a different width means a different env, not a "
+                "the task's obs.obs_list -- a different width means a different env, not a "
                 "reshape."
             )
         obs = obs.to(self.device)

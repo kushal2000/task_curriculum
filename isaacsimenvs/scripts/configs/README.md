@@ -1,11 +1,11 @@
 # Run configurations
 
 Python configclasses beside each environment hold every parameter with its default and its
-documentation. The YAML files here only change those defaults for a task, a robot or a run.
+documentation; the defaults are the task (`RigidClothEnvCfg`, `VbdClothEnvCfg`, `PlayEnvCfg`). The
+YAML files here only change them for a robot or a run.
 
 | Directory | Contents |
 | --- | --- |
-| `task/` | One overlay per task id: only what differs from the configclass defaults |
 | `robot/` | Robot setups (`env.robot_setup`): robot spec, URDF, self-collision, base position |
 | `runs/` | Run recipes; `rigid_cloth_right_wuji.yaml` is the base of every right-Wuji PhysX run |
 | `dr/` | DR blocks: named env overlays a recipe switches on with `dr: [...]` |
@@ -16,11 +16,11 @@ documentation. The YAML files here only change those defaults for a task, a robo
 
 A run's config is composed in this order; each layer overrides the ones before it:
 
-1. configclass defaults (Python)
-2. `task/<Task>.yaml`, chosen by the gym task id
-3. `robot/<setup>.yaml`, chosen by `env.robot_setup` (command line, else the recipe, else an alias task id)
-4. the run recipe (`--experiment`): its `base:` recipe, then its DR blocks in order, then its own `env:` / `agent:`
-5. command-line overrides (`env.scene.num_envs=512`)
+1. configclass defaults (Python), chosen by the gym task id: what the task is, for training, evaluation
+   and viewers alike
+2. `robot/<setup>.yaml`, chosen by `env.robot_setup` (command line, else the recipe, else an alias task id)
+3. the run recipe (`--experiment`): its `base:` recipe, then its DR blocks in order, then its own `env:` / `agent:`
+4. command-line overrides (`env.scene.num_envs=512`)
 
 `loader.py` applies the layers; `recipes.py` composes a recipe (plain YAML, no simulator needed).
 

@@ -9,8 +9,7 @@ in the real setup's table and goal geometry:
                                                           flexiv_wuji_right_real_play), an alias
 
 Entry points:
-- ``env_cfg_entry_point``           → PlayEnvCfg (typed defaults in code)
-- ``env_cfg_yaml_entry_point``      → configs/task/PlayFlexivWujiRightHumanLike.yaml overlay
+- ``env_cfg_entry_point``           → PlayEnvCfg (typed defaults in code: the task)
 - ``rl_games_cfg_entry_point``      → configs/train/PlayPPO.yaml (baseline)
 - ``rl_games_sapg_cfg_entry_point`` → configs/train/PlaySAPG.yaml (default)
 """
@@ -51,7 +50,7 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def _register(task_id: str, cfg_class: str, task_yaml: str) -> None:
+def _register(task_id: str, cfg_class: str) -> None:
     gym.register(
         id=task_id,
         entry_point="isaacsimenvs.tasks.play.play_env:PlayEnv",
@@ -59,14 +58,13 @@ def _register(task_id: str, cfg_class: str, task_yaml: str) -> None:
         disable_env_checker=True,
         kwargs={
             "env_cfg_entry_point": f"isaacsimenvs.tasks.play.play_env_cfg:{cfg_class}",
-            "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / task_yaml),
             "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
             "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
         },
     )
 
 
-_register("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0", "PlayEnvCfg", "PlayFlexivWujiRightHumanLike.yaml")
+_register("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0", "PlayEnvCfg")
 # The same task with the identified right hand (robot setup flexiv_wuji_right_real_play: sysid
 # dynamics, real joint limits), as an alias like the cloth tasks' robot-suffixed ids.
 gym.register(

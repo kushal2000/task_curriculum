@@ -19,7 +19,20 @@ __all__ = ["ClothCfg"]
 
 @configclass
 class ClothCfg:
-    """Cloth geometry, material, the fold definition, and the coupling that lets the hand feel it."""
+    """Cloth geometry, material, the fold definition, and the coupling that lets the hand feel it.
+
+    The material, contact and self-contact values are SIM1's calibrated cloth physics (arXiv
+    2604.08544 Table 2, cross-checked against InternRobotics/SIM1 @ 973476b), adopted rather than
+    measured here; each field says what it displaced. Two things are deliberately NOT copied:
+
+    * the AVBD edge strain limit (xi = 0.05 and its ramping constants). Newton 1.5 has no per-edge
+      strain constraint for cloth -- its AVBD is joints and contacts -- so that needs a solver port,
+      not a config line. It does not run in SIM1's released env either: the limit is read from
+      ``spring_control``, ``add_cloth_mesh`` hardcodes ``control=0.0``, and their env never passes
+      ``add_springs``, so ``spring_count == 0`` and every AVBD kernel is guarded out.
+    * Table 2's robot / table frictions (1.5 / 0.0), which their env overwrites to 1.0 on every shape
+      right after building the table.
+    """
 
     # --- geometry -------------------------------------------------------------------------
     size: float = 0.10

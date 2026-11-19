@@ -1,24 +1,21 @@
-"""Hydra decorator variant: configclass defaults + YAML overlay + CLI overrides.
+"""Hydra decorator variant: configclass defaults + robot setup + run recipe + CLI overrides.
 
-Isaac Lab's stock `hydra_task_config` uses `configclass defaults` as the sole
-source; task-level YAML presets are not supported. We want the isaacgymenvs
-composition pattern — a task YAML file sits between the configclass defaults
-and the Hydra CLI — so this decorator adds that middle layer.
+Isaac Lab's stock `hydra_task_config` takes the configclass defaults and the Hydra CLI. This
+decorator puts two YAML layers between them.
 
 Precedence (lowest → highest):
-    1. the env configclass defaults (Python)
-    2. configs/task/<Task>.yaml overlay (via the gym kwarg `env_cfg_yaml_entry_point`)
-    3. configs/robot/<setup>.yaml, the robot setup (`env.robot_setup`), chosen by the command line, else
+    1. the env configclass defaults (Python): the task itself
+    2. configs/robot/<setup>.yaml, the robot setup (`env.robot_setup`), chosen by the command line, else
        the run recipe, else an alias task id (see `resolve_task`)
-    4. the run recipe (optional, `train.py --experiment <name or path>`; see recipes.py): its base
+    3. the run recipe (optional, `train.py --experiment <name or path>`; see recipes.py): its base
        recipe, its DR blocks (configs/dr/), then its own `env:` and `agent:` overrides, so the recipe
        lives in the repo rather than in a launcher
-    5. Hydra CLI overrides (e.g. `env.scene.num_envs=4096`)
+    4. Hydra CLI overrides (e.g. `env.scene.num_envs=4096`)
 
 Implementation mirrors `isaaclab_tasks.utils.hydra.register_task_to_hydra` /
-`hydra_task_config`, with one inserted `env_cfg.from_dict(yaml_overlay)` step
-before the ConfigStore write. The wrapped function receives `(env_cfg, agent_cfg)`
-exactly as Isaac Lab's own decorator does.
+`hydra_task_config`, with the `env_cfg.from_dict(...)` steps of layers 2 and 3 inserted before the
+ConfigStore write. The wrapped function receives `(env_cfg, agent_cfg)` exactly as Isaac Lab's own
+decorator does.
 """
 
 from __future__ import annotations
@@ -65,11 +62,10 @@ def _cli_value(key: str) -> str | None:
 def hydra_task_config_with_yaml(
     task_name: str,
     agent_cfg_entry_point: str,
-    yaml_entry_point: str = "env_cfg_yaml_entry_point",
     experiment: str | None = None,
 ) -> Callable:
-    """Like `isaaclab_tasks.utils.hydra.hydra_task_config`, but layers a task YAML
-    overlay on top of the configclass defaults before Hydra CLI merging.
+    """Like `isaaclab_tasks.utils.hydra.hydra_task_config`, but layers the robot setup and the run
+    recipe onto the configclass defaults before Hydra CLI merging.
 
     Args:
         task_name: Gym task id (e.g. ``"Isaacsimenvs-Cartpole-Direct-v0"``). A colon-separated
@@ -77,9 +73,6 @@ def hydra_task_config_with_yaml(
         agent_cfg_entry_point: Key in ``gym.register(..., kwargs=...)`` whose value
             is the agent (rl_games) config entry point. Typically
             ``"rl_games_cfg_entry_point"`` or ``"rl_games_sapg_cfg_entry_point"``.
-        yaml_entry_point: Key in the task's gym kwargs pointing to the task YAML
-            overlay. If absent from the registered kwargs, no overlay is applied
-            and behavior matches Isaac Lab's stock decorator.
         experiment: A run recipe (a name in ``configs/runs/`` or a path; see recipes.py), or ``None``.
     """
 
@@ -94,17 +87,6 @@ def hydra_task_config_with_yaml(
                 if agent_cfg_entry_point
                 else None
             )
-            # Overlay the task YAML onto the configclass defaults (if registered).
-            # `gym.spec(...).kwargs` is where `gym.register(kwargs=...)` puts them.
-            yaml_path = gym.spec(short_name).kwargs.get(yaml_entry_point)
-            if yaml_path:
-                with open(yaml_path) as f:
-                    overlay = yaml.safe_load(f) or {}
-                # `configclass.from_dict` walks the dict and applies it onto the
-                # typed configclass, recursing into nested configclasses — exactly
-                # what our hand-rolled `apply_task_overrides` walker does, but
-                # upstream-supported.
-                env_cfg.from_dict(overlay)
             canonical, setup = resolve_task(short_name)
             exp = load_recipe(experiment) if experiment else {}
             if exp:

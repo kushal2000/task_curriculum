@@ -12,8 +12,9 @@ import math
 
 from isaaclab.utils import configclass
 
+from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
+from isaacsimenvs.tasks.cloth.env_cfg import AssetsCfg, ClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
-from isaacsimenvs.tasks.cloth.env_cfg import ClothEnvCfg
 
 __all__ = ["FoldPoolCfg", "PhysxChainCfg", "RigidClothCfg", "RigidClothEnvCfg", "RigidClothRandomizationCfg"]
 
@@ -128,33 +129,36 @@ class RigidClothRandomizationCfg:
     than on one chain. Every range is a multiplier on (or an offset from) the matched value, so the
     centre of the distribution is the deterministic configuration.
 
-    Uniform draws unless marked log-uniform. Off by default: the deterministic arm and the
-    randomised arm differ in this block only.
+    Uniform draws unless marked log-uniform. By default only the contact shell is randomised
+    (``contact_margin_offset``); every other term is pinned neutral, and the DR blocks
+    (``configs/dr/``) turn them on: ``friction``, ``hinge_mass``.
     """
 
-    enabled: bool = False
-    slat_friction_scale: tuple[float, float] = (0.7, 1.4)
-    """Multiplies ``slat_friction`` (slat vs table and non-fingertip links)."""
-    fingertip_friction_scale: tuple[float, float] = (0.7, 1.4)
-    """Multiplies ``fingertip_slat_friction``. Written on the fingertips, so with
+    enabled: bool = True
+    slat_friction_scale: tuple[float, float] = (1.0, 1.0)
+    """Multiplies ``slat_friction`` (slat vs table and non-fingertip links). DR block ``friction``:
+    0.7-1.5."""
+    fingertip_friction_scale: tuple[float, float] = (1.0, 1.0)
+    """Multiplies ``fingertip_slat_friction``. DR block ``friction``: 0.7-1.3. Written on the fingertips, so with
     ``friction_priority`` it also moves that env's fingertip-table friction by the same factor.
     Under PhysX ``physx_chain.friction_model: cloth_min`` it multiplies the WHOLE robot's friction
     (``assets.finger_tip_friction``), drawn once per env at startup."""
     table_friction_scale: tuple[float, float] = (1.0, 1.0)
     """PhysX ``physx_chain.friction_model: cloth_min`` only: multiplies ``assets.table_friction``,
     drawn once per env at startup."""
-    hinge_damping_scale: tuple[float, float] = (0.5, 3.0)
-    """Log-uniform multiplier on ``joint_damping``. The floor is 0.5, not lower: the hinge is only
+    hinge_damping_scale: tuple[float, float] = (1.0, 1.0)
+    """Log-uniform multiplier on ``joint_damping``; DR block ``hinge_mass``: 0.5-3. The floor is 0.5, not lower: the hinge is only
     stable at ``dt = 1/120`` because of this damping, and at a 0.3 floor one env in 32 went
     non-finite in a forced 180 deg fold of a two-plate chain (not reproduced in 128 at 0.3, none at 0.5 or above)."""
-    hinge_stiffness: tuple[float, float] = (0.0, 5.0e-4)
-    """Hinge spring [N m / rad]. For scale: a 10 g plate's weight at 25 mm is 2.5e-3 N m, and the
+    hinge_stiffness: tuple[float, float] = (0.0, 0.0)
+    """Hinge spring [N m / rad]; ``(0, 0)`` also keeps the actuator velocity-only, as with DR off.
+    DR block ``hinge_mass``: 0-5e-4. For scale: a 10 g plate's weight at 25 mm is 2.5e-3 N m, and the
     top of the range returns 0.8e-3 N m at a 90 deg bend -- a third of that, so still a limp sheet."""
     contact_margin_offset: tuple[float, float] = (-0.003, 0.003)
     """Added to ``contact_margin`` [m]: where the surface a fingertip meets sits, +-3 mm."""
-    mass_scale: tuple[float, float] = (0.7, 1.5)
+    mass_scale: tuple[float, float] = (1.0, 1.0)
     """Multiplies every slat's mass and inertia together (the shape of the mass distribution is
-    kept)."""
+    kept). DR block ``hinge_mass``: 0.7-1.5."""
 
 
 @configclass
@@ -279,8 +283,9 @@ class FoldPoolCfg:
     park_height: float = 2.0
     """Height of the parked shapes above the env origin [m]."""
 
-    size_range: list[float] = [0.10, 0.10]
-    """Sheet side length [m], drawn ONCE PER ENV at startup and fixed for the whole run.
+    size_range: list[float] = [0.10, 0.20]
+    """Sheet side length [m], drawn ONCE PER ENV at startup and fixed for the whole run. Up to 20 cm:
+    the arm cannot reach the far side of a 30 cm sheet.
 
     Not per episode: each env references a USD of its own size (``physx_chain.size_quantum``), built
     before the simulator starts. Every shape in an env shares its size. The task -- fold targets,
@@ -361,7 +366,8 @@ class FoldPoolCfg:
             lo, hi = (float(v) for v in getattr(self, name))
             if not 0.0 < lo <= hi:
                 raise ValueError(f"fold_pool.{name} must be 0 < lo <= hi, got {[lo, hi]}")
-        if self.park_spacing <= 1.5 * float(self.size_range[1]):
+        # Two square sheets whose centres are further apart than the diagonal never overlap, at any yaw.
+        if self.park_spacing <= math.sqrt(2.0) * float(self.size_range[1]):
             raise ValueError(
                 f"park_spacing {self.park_spacing} m would let parked sheets of up to "
                 f"{self.size_range[1]} m overlap"
@@ -372,6 +378,10 @@ class FoldPoolCfg:
 class RigidClothEnvCfg(ClothEnvCfg):
     """The fold task on the fold-shape pool, on PhysX."""
 
+    # 0.6 x 0.4 m: wider in x only -- extending the table toward the robot pins the arm's elbow.
+    assets: AssetsCfg = AssetsCfg(table_urdf="assets/urdf/table_fold_pool.urdf")
+    # A fixed 1.5 cm at every sheet size (the VBD cloth keeps 4 cm; experiments/eval.sh passes both cutoffs).
+    cloth: ClothCfg = ClothCfg(keypoint_tolerance=0.015)
     rigid_cloth: RigidClothCfg = RigidClothCfg()
     physx_chain: PhysxChainCfg = PhysxChainCfg()
     fold_pool: FoldPoolCfg = FoldPoolCfg()
