@@ -23,6 +23,8 @@ from pathlib import Path
 import torch
 from torch import nn
 
+from isaacsimenvs.scripts.distillation.student import canonical_pc_args
+
 __all__ = ["attach_student_obs", "register_network", "student_from_rl", "load_student_any", "write_pc_args", "patch_gradient_step"]
 
 FEAT_DIM = 64
@@ -192,10 +194,11 @@ def student_from_rl(model_state: dict, block: int = -1) -> dict:
 
 def load_student_any(path: str) -> dict:
     """A student checkpoint ``{model, pc_args, net_args, ...}`` from either a ``distill_pc`` file or
-    an rl_games checkpoint of the point-cloud actor (its ``pc_args.json`` is in the run directory)."""
+    an rl_games checkpoint of the point-cloud actor (its ``pc_args.json`` is in the run directory);
+    ``pc_args`` under the current names (``student.canonical_pc_args``)."""
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
     if "pc_args" in ckpt:
-        return ckpt
+        return {**ckpt, "pc_args": canonical_pc_args(ckpt["pc_args"])}
     ckpt = ckpt[0] if 0 in ckpt else ckpt
     if "a2c_network.pointnet.out.0.weight" not in ckpt.get("model", {}):
         raise ValueError(f"{path} is neither a distilled student nor a point-cloud RL checkpoint")
@@ -203,6 +206,6 @@ def load_student_any(path: str) -> dict:
         side = folder / "pc_args.json"
         if side.exists():
             meta = json.loads(side.read_text())
-            return {"model": student_from_rl(ckpt["model"]), "pc_args": meta["pc_args"], "net_args": {},
+            return {"model": student_from_rl(ckpt["model"]), "pc_args": canonical_pc_args(meta["pc_args"]), "net_args": {},
                     "iter": ckpt.get("epoch"), "teacher": meta.get("teacher"), "from_rl": True}
     raise FileNotFoundError(f"no pc_args.json next to {path}")

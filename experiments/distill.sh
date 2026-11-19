@@ -10,7 +10,8 @@
 #
 # TEACHER (required): the state policy's checkpoint; EXPERIMENT (default rigid_cloth_right_wuji): its
 # training recipe, which builds the PhysX env. The VBD env is the Cloth task at the ns6 protocol.
-# Train: NAME, VIS (cams|none), GOAL (g0|g3|g1|gl|first|none), NOISE=1, G3_NOISE=1, ENVS (4096),
+# Train: NAME, VIS (cams|none), GOAL (g0|g3|g1|gl with the cloth_hand_only cloud; none|label|goal_fixed|goal_any
+#        with EXTRA="--cloud scene ..."), NOISE=1, G3_NOISE=1, ENVS (4096),
 #        ITERS (2000), SEED (default INDEX + 1), EXTRA (more distill_pc args). Writes outputs/distill/<NAME>_s<seed>_<job>/.
 # Eval:  SIM (physx|vbd), POLICY (student|teacher), STUDENT, TAG, START (pinned|rand), CUT (0.015),
 #        EVAL_ENVS, EVAL_SEED. Writes docs/results/distill/<TAG>__on_<sim>__<start>_s<seed>.json.
@@ -97,7 +98,7 @@ smoke)
         evaluate physx teacher "" "docs/results/distill/${S}_teacher_px.json" rand 322 1; echo "[smoke] teacher eval exit=$?" ;;
     scene)   # the scene cloud (everything in the box, xyz only)
         SC="--cloud scene --aux_coef 0"; DL="--pc_delay 6 --proprio_delay 3 --action_delay 3"
-        GOAL=first NOISE=1 EXTRA="$SC $DL --fk_points 128" train "${S}_small" 256 30 --save_every 15 --log_every 5 --beta_iters 10; echo "[smoke] small train exit=$?"
+        GOAL=label NOISE=1 EXTRA="$SC $DL --fk_points 128" train "${S}_small" 256 30 --save_every 15 --log_every 5 --beta_iters 10; echo "[smoke] small train exit=$?"
         evaluate physx student "outputs/distill/${S}_small/student_last.pth" "docs/results/distill/${S}_student_px.json" rand 64 1 --max_steps 300
         echo "[smoke] student px eval exit=$?"
         evaluate vbd student "outputs/distill/${S}_small/student_last.pth" "docs/results/distill/${S}_student_vbd.json" pinned 32 1 --max_steps 200

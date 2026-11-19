@@ -304,9 +304,11 @@ def main() -> None:
             from isaacsimenvs.scripts.distillation.distill_pc import StudentObs
             from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import SceneCloudCfg, scene_noise_preset
 
-            pc_args = {"cloud": "scene", "goal": "none", "noise": False, "n_points": 1024, "fk_points": 0,
-                       "ref_step": 0, "pc_delay": 0, "proprio_delay": 0, "action_delay": 0,
-                       **json.loads(args_cli.pc_args)}
+            from isaacsimenvs.scripts.distillation.student import canonical_pc_args
+
+            pc_args = canonical_pc_args({"cloud": "scene", "goal": "none", "noise": False, "n_points": 1024,
+                                         "fk_points": 0, "ref_step": 0, "pc_delay": 0, "proprio_delay": 0,
+                                         "action_delay": 0, **json.loads(args_cli.pc_args)})
             if pc_args["cloud"] != "scene":
                 raise ValueError("--pc_args: only the scene cloud is supported")
             pc_cfg = SceneCloudCfg(n_points=int(pc_args["n_points"]), goal_mode=pc_args["goal"],

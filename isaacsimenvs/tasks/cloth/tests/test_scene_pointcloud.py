@@ -96,7 +96,7 @@ def test_points_are_drawn_in_proportion_to_area():
 
 
 def test_first_frame_reference_and_fk_labels():
-    cloud = _make(goal_mode="first", fk_points=16)
+    cloud = _make(goal_mode="label", fk_points=16)
     assert cloud.labels == ("live", "ref_moving", "ref_stationary", "fk") and cloud.point_dim == 7
     pos, quat = _bodies(2)
     p0, m0 = cloud.observe(torch.zeros(2, dtype=torch.long), _grid(2), pos, quat)
@@ -112,6 +112,35 @@ def test_first_frame_reference_and_fk_labels():
     cloud.reset(torch.tensor([1]))
     p2, _ = cloud.observe(torch.tensor([2, 0]), shifted, pos, quat)
     assert torch.equal(p2[0, ref], p0[0, ref]) and not torch.equal(p2[1, ref], p0[1, ref])
+
+
+def test_goal_clouds():
+    """goal_fixed: the goal sheet where it is, taken at ref_step and frozen; goal_any: its shape about
+    the box centre at a random yaw, there from the first step. One ``goal`` label."""
+    pos, quat = _bodies(2)
+    goal_now = _grid(2, at=CENTRE + torch.tensor([0.03, -0.02, 0.0]))
+    goal_rest = _grid(2, at=torch.zeros(3))
+    goal_rest[:, :, 0] *= 0.5                                                  # a folded sheet: half as wide
+    for mode in ("goal_fixed", "goal_any"):
+        cloud = _make(goal_mode=mode, ref_step=3)
+        assert cloud.labels == ("live", "goal") and cloud.point_dim == 5
+        ref = slice(1024, 1024 + 192)
+        p0, m0 = cloud.observe(torch.zeros(2, dtype=torch.long), _grid(2), pos, quat, goal_now=goal_now, goal_rest=goal_rest)
+        assert p0.shape == (2, 1024 + 192, 5)
+        if mode == "goal_fixed":
+            assert not m0[:, ref].any()                                        # not before ref_step
+            p0, m0 = cloud.observe(torch.full((2,), 3), _grid(2), pos, quat, goal_now=goal_now, goal_rest=goal_rest)
+        assert m0[:, ref].all() and (p0[:, ref, 4] == 1).all()
+        xyz = _xyz(cloud, p0)[:, ref]
+        if mode == "goal_fixed":                                               # in place
+            assert (xyz[..., :2].mean(dim=1) - goal_now[:, :, :2].mean(dim=1)).abs().max() < 5e-3
+        else:                                                                  # about the box centre, its extent
+            assert (xyz[..., :2].mean(dim=1) - cloud.centre[:2]).abs().max() < 5e-3
+            r = (xyz[..., :2] - cloud.centre[:2]).norm(dim=-1).amax(dim=1)
+            assert (r < (0.25 * SIZE**2 + 0.0625 * SIZE**2) ** 0.5 + 1e-4).all()
+        moved = _grid(2, at=CENTRE + torch.tensor([0.05, 0.0, 0.0]))
+        p1, _ = cloud.observe(torch.full((2,), 5), moved, pos, quat, goal_now=moved, goal_rest=goal_rest)
+        assert torch.equal(p1[:, ref], p0[:, ref])                             # frozen for the episode
 
 
 def test_delay_returns_the_cloud_of_lag_steps_ago():

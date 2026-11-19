@@ -90,3 +90,14 @@ def test_pointnet_ignores_masked_points_and_order():
     pts2[:, 8:] = 100.0
     perm = torch.cat((torch.randperm(8), torch.arange(8, 12)))
     assert torch.allclose(a, net(pts2[:, perm], mask), atol=1e-6)
+
+
+def test_old_pc_args_names():
+    """Checkpoints from before 2026-11-19 name the clouds and goals the old way."""
+    from isaacsimenvs.scripts.distillation.student import canonical_pc_args
+
+    assert canonical_pc_args({"vis": "cams", "goal": "g1"}) == {"vis": "cams", "goal": "g1", "cloud": "cloth_hand_only"}
+    assert canonical_pc_args({"cloud": "legacy", "goal": "g3"})["cloud"] == "cloth_hand_only"
+    for old, new in (("first", "label"), ("scene", "goal_fixed"), ("shape", "goal_any"), ("none", "none")):
+        assert canonical_pc_args({"cloud": "scene", "goal": old}) == {"cloud": "scene", "goal": new}
+    assert canonical_pc_args({"cloud": "scene", "goal": "goal_any"})["goal"] == "goal_any"

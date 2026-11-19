@@ -17,8 +17,14 @@ says what it belongs to. Built from the sim's state without rendering:
 
 Optional extra groups, each with its own label column (none of them when unused, so the plain
 cloud is ``xyz`` only):
-  ``goal_mode="first"``  the cloth points of the first frame with moving / stationary labels,
-                         frozen for the episode (says WHICH half folds);
+  ``goal_mode="label"``       the cloth points of the first frame with moving / stationary labels,
+                              frozen for the episode (says WHICH half folds);
+  ``goal_mode="goal_fixed"``  the FOLDED sheet where it belongs in the scene (samples on the goal
+                              state carried on the sheet's pose at ``ref_step``), frozen, one
+                              ``goal`` label; needs ``fold_pool.goal_task``;
+  ``goal_mode="goal_any"``    the folded sheet's shape only: the same samples about the box centre
+                              on the table plane, turned by a random yaw per episode (says nothing
+                              about where the sheet is or which way to fold);
   ``fk_points > 0``      points on the forearm and hand from forward kinematics (no camera error).
 
 Every point is ``(xyz - box centre) * scale`` (+ a one-hot label when there is more than one
@@ -32,7 +38,11 @@ from dataclasses import dataclass
 
 import torch
 
-__all__ = ["SceneCloudCfg", "SceneCloud", "LagBuffer", "scene_noise_preset", "look_at", "quat_rotate"]
+__all__ = ["GOAL_MODES", "SceneCloudCfg", "SceneCloud", "LagBuffer", "scene_noise_preset", "look_at", "quat_rotate"]
+
+#: The goal group of the cloud (module doc). Checkpoints from before 2026-11-19 name them first /
+#: scene / shape (``scripts/distillation/student.canonical_pc_args`` translates).
+GOAL_MODES = ("none", "label", "goal_fixed", "goal_any")
 
 
 @dataclass
@@ -42,7 +52,8 @@ class SceneCloudCfg:
     n_cloth_cand: int = 768
     """Cloth candidates per step (also the cloth's share of the z-buffer occluders)."""
     goal_mode: str = "none"
-    """``none`` or ``first`` (first-frame cloth cloud with moving / stationary labels)."""
+    """``none``, ``label`` (first-frame cloth cloud with moving / stationary labels), ``goal_fixed``
+    or ``goal_any`` (a cloud of the folded goal sheet, in place / as a bare shape at any yaw)."""
     n_ref: int = 192
     ref_step: int = 0
     fk_points: int = 0
@@ -91,15 +102,17 @@ class SceneCloudCfg:
     """The live cloud is this many policy steps old at most (per-episode lag, uniform in 0..max)."""
 
     def __post_init__(self) -> None:
-        if self.goal_mode not in ("none", "first"):
-            raise ValueError(f"goal_mode must be none or first, got {self.goal_mode!r}")
+        if self.goal_mode not in GOAL_MODES:
+            raise ValueError(f"goal_mode must be one of {GOAL_MODES}, got {self.goal_mode!r}")
 
     @property
     def labels(self) -> tuple[str, ...]:
         """The label columns; empty when the cloud has one group only."""
         out = ["live"]
-        if self.goal_mode == "first":
+        if self.goal_mode == "label":
             out += ["ref_moving", "ref_stationary"]
+        if self.goal_mode in ("goal_fixed", "goal_any"):
+            out.append("goal")
         if self.fk_points > 0:
             out.append("fk")
         return tuple(out) if len(out) > 1 else ()
@@ -110,7 +123,7 @@ class SceneCloudCfg:
 
     @property
     def num_points(self) -> int:
-        return int(self.n_points) + (int(self.n_ref) if self.goal_mode == "first" else 0) + int(self.fk_points)
+        return int(self.n_points) + (int(self.n_ref) if self.goal_mode != "none" else 0) + int(self.fk_points)
 
 
 def scene_noise_preset(cfg: SceneCloudCfg, delay: bool = True) -> SceneCloudCfg:
@@ -352,8 +365,26 @@ class SceneCloud:
 
     # ------------------------------------------------------------------ the observation
 
-    def observe(self, step, particles, body_pos, body_quat, fk_pos=None, fk_quat=None):
+    def _sample_sheet(self, grid: torch.Tensor, k: int) -> torch.Tensor:
+        """``(n, k, 3)`` uniform samples on a sheet given as its particle grid ``(n, R*R, 3)``."""
+        n, r = grid.shape[0], self.r
+        uv = torch.rand(n, k, 2, device=grid.device) * (r - 1)
+        i0 = uv.floor().clamp(max=r - 2).long()
+        f = uv - i0
+        base = i0[..., 0] * r + i0[..., 1]
+        idx = torch.stack((base, base + r, base + 1, base + r + 1), dim=-1)
+        wgt = torch.stack(
+            ((1 - f[..., 0]) * (1 - f[..., 1]), f[..., 0] * (1 - f[..., 1]), (1 - f[..., 0]) * f[..., 1], f[..., 0] * f[..., 1]),
+            dim=-1,
+        )
+        corners = torch.gather(grid, 1, idx.view(n, -1, 1).expand(-1, -1, 3)).view(n, k, 4, 3)
+        return (corners * wgt.unsqueeze(-1)).sum(dim=2)
+
+    def observe(self, step, particles, body_pos, body_quat, fk_pos=None, fk_quat=None, goal_now=None, goal_rest=None):
         """``(points (N, M, point_dim), mask (N, M))``.
+
+        ``goal_now`` / ``goal_rest`` ``(N, R*R, 3)`` (``goal_mode`` goal_fixed / goal_any): the goal sheet's
+        particle grid where it belongs now (env frame) and in its own frame (flat, z = 0).
 
         ``step`` ``(N,)`` episode step; ``particles`` ``(N, R*R, 3)``; ``body_pos`` ``(N, B, 3)`` and
         ``body_quat`` ``(N, B, 4)`` (wxyz) the robot's body poses, env frame. ``fk_pos`` /
@@ -371,7 +402,7 @@ class SceneCloud:
         self.last_count = mask.float().sum(dim=1)
         self.last_cloth_share = (is_cloth & mask).float().sum(dim=1) / self.last_count.clamp(min=1.0)
 
-        if c.goal_mode == "first":          # before the delay: the reference is the first frame as it was
+        if c.goal_mode == "label":          # before the delay: the reference is the first frame as it was
             take = ~self.ref_valid & (step >= int(c.ref_step))
             if bool(take.any()):
                 key = torch.where(cl_ok, torch.rand(cl_ok.shape, device=dev), torch.full(cl_ok.shape, -1.0, device=dev))
@@ -379,6 +410,24 @@ class SceneCloud:
                 self.ref_pts[take] = torch.gather(cl_pts, 1, idx.unsqueeze(-1).expand(-1, -1, 3))[take]
                 self.ref_mask[take] = (top >= 0.0)[take]
                 self.ref_moving[take] = torch.gather(cl_moving, 1, idx)[take]
+                self.ref_valid[take] = True
+
+        if c.goal_mode in ("goal_fixed", "goal_any"):
+            # goal_fixed: taken once the sheet has landed (ref_step); goal_any: there from the first step.
+            take = ~self.ref_valid & ((step >= int(c.ref_step)) | (c.goal_mode == "goal_any"))
+            if bool(take.any()):
+                if c.goal_mode == "goal_fixed":
+                    pts = self._sample_sheet(goal_now, int(c.n_ref))
+                    ok = ((pts >= self.box_lo) & (pts <= self.box_hi)).all(dim=-1) & torch.isfinite(pts).all(dim=-1)
+                else:
+                    pts = self._sample_sheet(goal_rest, int(c.n_ref))
+                    pts = pts - goal_rest.mean(dim=1, keepdim=True)
+                    yaw = 2.0 * math.pi * torch.rand(n, device=dev)
+                    cy, sy = torch.cos(yaw).unsqueeze(1), torch.sin(yaw).unsqueeze(1)
+                    pts = torch.stack((cy * pts[..., 0] - sy * pts[..., 1], sy * pts[..., 0] + cy * pts[..., 1], pts[..., 2]), dim=-1)
+                    pts = pts + self.centre
+                    ok = torch.isfinite(pts).all(dim=-1)
+                self.ref_pts[take], self.ref_mask[take] = pts[take], ok[take]
                 self.ref_valid[take] = True
 
         if c.delay_max > 0:                 # stored relative to the box centre (float16)
@@ -389,8 +438,10 @@ class SceneCloud:
 
         # (xyz, mask, label) per group; the label is an index into ``self.labels``.
         groups = [(xyz, mask, torch.zeros(mask.shape, dtype=torch.long, device=dev))]
-        if c.goal_mode == "first":
+        if c.goal_mode == "label":
             groups.append((self.ref_pts, self.ref_mask, torch.where(self.ref_moving, 1, 2)))
+        if c.goal_mode in ("goal_fixed", "goal_any"):
+            groups.append((self.ref_pts, self.ref_mask, torch.ones(self.ref_mask.shape, dtype=torch.long, device=dev)))
         if c.fk_points > 0:
             fk = self.robot_points(body_pos if fk_pos is None else fk_pos, body_quat if fk_quat is None else fk_quat, self.fk_idx)
             groups.append((fk, torch.ones(fk.shape[:2], dtype=torch.bool, device=dev),

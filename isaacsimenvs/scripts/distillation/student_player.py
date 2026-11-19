@@ -32,7 +32,7 @@ class StudentPlayer:
 
         ckpt = load_student_any(checkpoint_path)             # a distilled student or an RL-trained one
         a = self.pc_args = ckpt["pc_args"]
-        self.scene = a.get("cloud", "legacy") == "scene"
+        self.scene = a["cloud"] == "scene"
         if self.scene:                                       # everything in the box over the table, xyz only
             cfg = SceneCloudCfg(n_points=int(a["n_points"]), goal_mode=a["goal"], ref_step=int(a["ref_step"]),
                                 fk_points=int(a["fk_points"]))

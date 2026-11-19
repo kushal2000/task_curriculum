@@ -317,6 +317,25 @@ class FoldGeometry:
     def observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
         return self._observed_goal_quat(rot)
 
+    # ------------------------------------------------------------------ goal tasks: the goal sheet
+
+    def goal_sheet(self, points_w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """For a goal point cloud: ``(goal sheet now (N, P, 3) world, goal sheet in its own frame
+        (N, P, 3), flat at z = 0)`` of each env's designated goal, at each env's size. The first is
+        the goal state carried on the live pose of the part the fold leaves in place."""
+        g = self._active_goal_tasks()
+        if g is None:
+            raise ValueError("a goal point cloud needs fold_pool.goal_task.mode half_fold or any_fold")
+        s3 = self._scale3()
+        goal, _ = g.goal_particles(g.task, s3, points_w)
+        return goal, g.p_goal[g.task] * s3
+
+    def goal_travel_direction(self, points_w: torch.Tensor) -> torch.Tensor:
+        """``(N,)`` env-frame direction [rad] the designated fold carries its piece."""
+        g = self._active_goal_tasks()
+        r, _ = g.frame(g.task, self._scale3(), points_w)
+        return torch.atan2(r[:, 1, 0], r[:, 0, 0]) + g.direction[g.task]
+
     # ------------------------------------------------------------------ the ghost of the folded half
 
     def folded_half_w(self, view: FoldView) -> torch.Tensor:

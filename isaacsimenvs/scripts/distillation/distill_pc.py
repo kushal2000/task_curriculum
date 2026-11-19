@@ -17,9 +17,23 @@ its deterministic action, and the student regresses that action plus -- from an 
 the keypoint observations the teacher read. Truncated BPTT over ``--horizon`` steps, the teacher's
 ``seq_length``.
 
-Student input: the teacher's proprioceptive observation columns and a point cloud
-(``tasks/cloth/perception/pointcloud.py``) in place of the tracker columns. The network is the
-teacher's LSTM + MLP with a PointNet in front (``distill/student.py``).
+Student input: the teacher's proprioceptive observation columns and a point cloud in place of the
+tracker columns. The network is the teacher's LSTM + MLP with a PointNet in front
+(``scripts/distillation/student.py``). Two clouds:
+
+* ``--cloud cloth_hand_only`` (``tasks/cloth/perception/pointcloud.py``): labelled cloth + hand
+  points, goal inputs g0 / g3 / g1 / gl.
+* ``--cloud scene`` (``tasks/cloth/perception/scene_pointcloud.py``): everything in the box over the
+  table (cloth, hand, arm) as bare xyz, ``--goal none``, ``label`` (the first-frame cloth cloud with
+  moving / stationary labels, taken at ``--ref_step``), ``goal_fixed`` (the folded goal sheet in
+  place) or ``goal_any`` (its shape only, at any yaw); goal_fixed / goal_any need
+  ``fold_pool.goal_task`` (recipes rigidcloth_pc_half_fold / rigidcloth_pc_any_fold). Optional
+  ``--fk_points``. ``--noise`` adds version C; ``--pc_delay`` / ``--proprio_delay`` /
+  ``--action_delay`` the per-episode delays (an eval uses the student's own unless ``--eval_clean``).
+
+A student is fine-tuned by RL with ``train.py --pc_args`` (``pc_rl.py``); ``--student`` also takes
+such an rl_games checkpoint. Checkpoints from before 2026-11-19 carry the old names (cloud legacy,
+goal first / scene / shape); ``student.canonical_pc_args`` translates them.
 """
 
 from __future__ import annotations
@@ -179,8 +193,13 @@ class StudentObs:
             body = torch.cat((pos - origins.unsqueeze(1), quat), dim=-1)
             old = self.body_buf.push(body, self.p_lag, self.fresh)      # what the delayed joint angles give
             self.fresh[:] = False
+            goal_now = goal_rest = None
+            if self.pc.cfg.goal_mode in ("goal_fixed", "goal_any"):
+                goal_now, goal_rest = inner.task.geometry.goal_sheet(view.points_w)
+                goal_now = goal_now - origins.unsqueeze(1)
             points, mask = self.pc.observe(
-                inner.episode_length_buf, parts, body[..., :3], body[..., 3:], old[..., :3], old[..., 3:]
+                inner.episode_length_buf, parts, body[..., :3], body[..., 3:], old[..., :3], old[..., 3:],
+                goal_now=goal_now, goal_rest=goal_rest,
             )
             return {"proprio": proprio, "points": points, "mask": mask, "aux": aux}
         self.fresh[:] = False
@@ -232,10 +251,11 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=1)
     # point cloud
     p.add_argument("--vis", choices=("cams", "none"), default="cams")
-    p.add_argument("--cloud", choices=("legacy", "scene"), default="legacy",
-                   help="legacy: labelled cloth + hand points; scene: everything in the box over the table, xyz only")
-    p.add_argument("--goal", choices=("g0", "g3", "g1", "gl", "none", "first"), default="g0",
-                   help="legacy: g0 g3 g1 gl; scene: none | first (first-frame cloth cloud, moving / stationary)")
+    p.add_argument("--cloud", choices=("cloth_hand_only", "scene"), default="cloth_hand_only",
+                   help="cloth_hand_only: labelled cloth + hand points; scene: everything in the box over the table, xyz only")
+    p.add_argument("--goal", choices=("g0", "g3", "g1", "gl", "none", "label", "goal_fixed", "goal_any"), default="g0",
+                   help="cloth_hand_only: g0 g3 g1 gl; scene: none | label (first-frame cloth cloud, moving / "
+                        "stationary) | goal_fixed (the folded goal sheet in place) | goal_any (its shape only, any yaw)")
     p.add_argument("--n_points", type=int, default=1024, help="scene: live points")
     p.add_argument("--dump_cloud", default=None, help="eval, scene: save envs 0-3's cloud at steps 0/60/150 to this .npz")
     p.add_argument("--fk_points", type=int, default=0, help="scene: forward-kinematics points (forearm + hand)")
@@ -292,7 +312,7 @@ def main() -> None:
     from isaacsimenvs.scripts.distillation.student import StudentNet, TeacherNet
     from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
     from isaacsimenvs.tasks.cloth.perception.pointcloud import PointCloudCfg, g3_noise_preset, noise_preset
-    from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import SceneCloudCfg, scene_noise_preset
+    from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import GOAL_MODES, SceneCloudCfg, scene_noise_preset
     from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
 
     def delays_of(a: dict) -> tuple[int, int]:
@@ -306,7 +326,7 @@ def main() -> None:
         return pc_d, pr_d
 
     def pc_cfg_from(a: dict):
-        if a.get("cloud", "legacy") == "scene":
+        if a["cloud"] == "scene":
             cfg = SceneCloudCfg(
                 n_points=int(a["n_points"]), goal_mode=a["goal"], ref_step=int(a["ref_step"]),
                 fk_points=int(a["fk_points"]), chunk=int(args.pc_chunk),
@@ -379,8 +399,8 @@ def main() -> None:
                        n_cloth=args.n_cloth, ref_step=args.ref_step, hand_cam=args.hand_cam,
                        cloud=args.cloud, n_points=args.n_points, fk_points=args.fk_points,
                        pc_delay=args.pc_delay, proprio_delay=args.proprio_delay, action_delay=args.action_delay)
-        if args.cloud == "scene" and args.goal not in ("none", "first"):
-            raise ValueError("--cloud scene takes --goal none or first")
+        if args.cloud == "scene" and args.goal not in GOAL_MODES:
+            raise ValueError(f"--cloud scene takes --goal {' | '.join(GOAL_MODES)}")
         net_args = dict(use_rnn_state=not args.no_rnn_state)
         if student_ckpt is not None and not train:
             pc_args, net_args = student_ckpt["pc_args"], student_ckpt["net_args"]   # the student's own input
@@ -444,6 +464,12 @@ def main() -> None:
                 capture_cm = capture_fd_output()
                 capture = capture_cm.__enter__()
             done_once = torch.zeros(n, dtype=torch.bool, device=device)
+            # Goal tasks (fold_pool.goal_task): which task each env's first episode is, and the env-frame
+            # direction its designated fold travels.
+            geo = inner.task.geometry
+            gt = geo.goal_tasks if geo.goal_tasks is not None and geo.goal_tasks.task is not None else None
+            ep_task = gt.task.clone() if gt is not None else None
+            ep_travel = geo.goal_travel_direction(inner.cloth_points_w()) if gt is not None else None
             goals = torch.full((n,), -1, dtype=torch.long, device=device)
             length = torch.zeros(n, dtype=torch.long, device=device)
             reasons: dict[str, torch.Tensor] = {}
@@ -549,6 +575,35 @@ def main() -> None:
                 "per_env_success": [int(v > 0) if v >= 0 else None for v in goals.cpu().tolist()],
                 "per_env_max_drag_xy_m": [round(float(v), 4) for v in ep_drag_xy.cpu()],
             }
+            if gt is not None:
+                ok = (goals > 0).float()
+                by_shape = {}
+                for s_id, sh in enumerate(inner.backend.shapes):
+                    on = done_once & (gt.task_shape[ep_task] == s_id)
+                    if bool(on.any()):
+                        by_shape[sh.name] = [round(float(ok[on].mean()), 4), int(on.sum())]
+                deg = torch.rad2deg(torch.atan2(torch.sin(ep_travel), torch.cos(ep_travel))) % 360.0
+                by_dir = {}
+                for lo in range(0, 360, 45):
+                    on = done_once & (deg >= lo) & (deg < lo + 45)
+                    if bool(on.any()):
+                        by_dir[f"{lo}-{lo + 45}"] = [round(float(ok[on].mean()), 4), int(on.sum())]
+                flat = gt.q_start[ep_task].abs().amax(dim=1) < 1e-6
+
+                def share(sel):
+                    sel = done_once & sel
+                    return [round(float(ok[sel].mean()), 4), int(sel.sum())] if bool(sel.any()) else None
+
+                gcfg = inner.cfg.fold_pool.goal_task
+                result["goal_task"] = {
+                    "mode": gt.mode, "accept_lookalike": gt.accept_lookalike,
+                    "sector_deg": float(gcfg.sector_deg), "sector_centre_deg": float(gcfg.sector_centre_deg),
+                    "sector_margin_deg": float(gcfg.sector_margin_deg),
+                    "success_by_shape": by_shape, "success_by_travel_deg": by_dir,
+                    "success_flat_start": share(flat), "success_folded_start": share(~flat),
+                }
+                result["per_env_task"] = [gt.names[int(t)] for t in ep_task.cpu()]
+                result["per_env_travel_deg"] = [round(float(v), 1) for v in deg.cpu()]
             if student is not None:
                 result["aux_err_cm"] = {"keypoints_rel_palm": round(float(err_sum[0] / cnt), 3),
                                         "keypoints_rel_goal": round(float(err_sum[1] / cnt), 3)}

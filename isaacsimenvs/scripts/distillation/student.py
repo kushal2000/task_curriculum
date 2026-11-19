@@ -18,7 +18,22 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-__all__ = ["VISION_FIELDS", "split_columns", "PointNet", "TeacherNet", "StudentNet"]
+__all__ = ["VISION_FIELDS", "canonical_pc_args", "split_columns", "PointNet", "TeacherNet", "StudentNet"]
+
+#: Point-cloud settings renamed on 2026-11-19; checkpoints written before keep the old names.
+_OLD_CLOUD = {"legacy": "cloth_hand_only"}
+_OLD_GOAL = {"first": "label", "scene": "goal_fixed", "shape": "goal_any"}
+
+
+def canonical_pc_args(pc_args: dict) -> dict:
+    """A student's point-cloud settings (``pc_args``) under the current names: ``cloud`` legacy ->
+    cloth_hand_only (also the default when absent); scene-cloud ``goal`` first / scene / shape ->
+    label / goal_fixed / goal_any. The cloth-and-hand cloud's goals (g0 g3 g1 gl) are unchanged."""
+    a = dict(pc_args)
+    a["cloud"] = _OLD_CLOUD.get(a.get("cloud", "legacy"), a.get("cloud", "legacy"))
+    if a["cloud"] == "scene" and "goal" in a:
+        a["goal"] = _OLD_GOAL.get(a["goal"], a["goal"])
+    return a
 
 #: Observation fields that come from the cloth tracker on the robot; the student does not get them.
 VISION_FIELDS = ("object_rot", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales")
