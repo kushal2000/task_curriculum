@@ -6,6 +6,8 @@
 #   TEACHER=<pth> MODE=eval SIM=vbd STUDENT=<pth> TAG=<tag> START=rand experiments/distill.sh
 #   TEACHER=<pth> MODE=evalall STUDENT=<pth> TAG=<tag> experiments/distill.sh   (PhysX rand + VBD pinned/rand x 2 seeds)
 #   TEACHER=<pth> MODE=evalx STUDENT=<pth> TAG=<tag> SIMS="physx vbd" SEEDS="1 2 3" EVAL_ARGS="--eval_noise ..." ...
+#        (PX_EVAL_ENVS: PhysX episodes, default 322; goal tasks: EXPERIMENT=<goal recipe>, e.g.
+#        experiments/nov17_goal_pointcloud/rigidcloth_pc_any_fold)
 #   TEACHER=<pth> MODE=smoke [PART=physx|scene|vbd] experiments/distill.sh
 #
 # TEACHER (required): the state policy's checkpoint; EXPERIMENT (default rigid_cloth_right_wuji): its
@@ -79,7 +81,7 @@ evalx)  # stress / extra seeds: SIMS, PX_STARTS, STARTS, SEEDS, EVAL_ARGS (e.g. 
     for SIM in ${SIMS:-physx vbd}; do
         if [ "$SIM" = physx ]; then
             for START in ${PX_STARTS:-rand}; do
-                evaluate physx "$P" "$ST" "${D}__on_physx__${START}_s1.json" "$START" 322 1 "${eargs[@]}"; echo "[evalx] physx $START exit=$?"
+                evaluate physx "$P" "$ST" "${D}__on_physx__${START}_s1.json" "$START" "${PX_EVAL_ENVS:-322}" 1 "${eargs[@]}"; echo "[evalx] physx $START exit=$?"
             done
         else
             for ES in ${SEEDS:-1 2}; do for START in ${STARTS:-pinned rand}; do

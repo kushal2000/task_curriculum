@@ -1,0 +1,11 @@
+# rigidcloth_any_fold_teacher (was gpH_teacher; its runs and checkpoints keep that name, e.g.
+# gpH_teacher_ft): the keypoint (state) teacher for hard mode -- rigidcloth_pc_any_fold with the
+# DESIGNATED fold as the only success, so the teacher's fold is one a student can be told. The
+# teacher used (gpH_teacher_ft) was fine-tuned from flat7RW_base ep3052 weights at lr 8.8e-6.
+base: rigid_cloth_right_wuji
+
+env:
+  fold_pool:
+    goal_task:
+      mode: any_fold
+      accept_lookalike: false

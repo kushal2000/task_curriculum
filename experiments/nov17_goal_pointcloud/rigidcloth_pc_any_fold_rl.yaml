@@ -1,0 +1,9 @@
+# rigidcloth_pc_any_fold_rl (was pcRW_scratch_gpH; its runs keep that name): SAPG from scratch with the
+# point-cloud actor on hard mode (rigidcloth_pc_any_fold). 11-17/18: did not learn (<= 8%).
+base: experiments/nov17_pointcloud_rl/rigidcloth_pc_rl
+
+env:
+  fold_pool:
+    goal_task:
+      mode: any_fold
+      accept_lookalike: true

@@ -27,6 +27,7 @@ cloth/
     fold.py           FoldGeometry: targets, stationary frame, fold error, footprint, goal pose,
                       the moving half as a rigid object
     task.py           ClothTask: episode start (table, sheet), dones, reward, the goal as state
+    goal_tasks.py     GoalTasks: one-fold goal tasks on the rigid pool (fold_pool.goal_task)
     observations.py   ObservationBuilder: policy and critic vectors, observation DR
     randomization.py  DomainRandomization: per-episode DR draws (fixed order); DelayLine
     point_dr.py       point-level observation DR
@@ -138,3 +139,20 @@ LIST=my_list.txt TARGETS=vbd INDEX=<k> experiments/eval.sh        # k = 0 .. 2 x
 - Output: `docs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json`;
   `isaacsimenvs/scripts/evaluation/matrix_summary.py <tag>` tabulates them.
 - `EVAL_SEEDS="3 4 5 6 7 8"` re-tests a picked checkpoint on fresh seeds.
+
+## Goal tasks (rigid pool)
+
+`fold_pool.goal_task` gives each env a start state and, as its goal, that state plus one more fold
+(`mdp/goal_tasks.py`, states from `mdp/geometry/fold_states.py`), so a point-cloud student can be told
+the goal as a cloud of the folded sheet (`perception/scene_pointcloud.py`, `goal_fixed` / `goal_any`):
+
+- `mode`: `off` (the stage-1 task), `half_fold` (the stage-1 task with the goal tables built),
+  `any_fold` (a random reachable folded start, flat included, plus one more fold; the observed
+  keypoints, the target, the frame, the error and the goal pose follow the task);
+- `accept_lookalike`: a folded state that looks like the goal from above also counts;
+- `sector_deg` / `sector_centre_deg` / `sector_margin_deg`: the designated fold's travel direction
+  drawn in a sector instead of at any yaw.
+
+Recipes in `experiments/nov17_goal_pointcloud/` (`rigidcloth_pc_half_fold`, `rigidcloth_pc_any_fold`,
+the hard-mode teacher `rigidcloth_any_fold_teacher`); `distill_pc` evaluations then report success
+per shape, per travel direction and by flat / folded start.

@@ -1,0 +1,11 @@
+# rigidcloth_pc_any_fold (was gpH; its runs and checkpoints keep that name): goal point cloud, hard
+# mode. The 7 shapes, every episode from a random reachable folded state (each hinge flat or fully
+# folded, flat included), goal = that state plus ONE more fold; accept_lookalike. For DAgger /
+# evaluation of point-cloud students (teacher: rigidcloth_any_fold_teacher).
+base: rigid_cloth_right_wuji
+
+env:
+  fold_pool:
+    goal_task:
+      mode: any_fold
+      accept_lookalike: true

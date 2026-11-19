@@ -1,8 +1,9 @@
-# pcRW_ft: SAPG on the base fold pool starting from a distilled point-cloud student
+# rigidcloth_pc_dagger_rl (was pcRW_ft; its runs and checkpoints keep that name, e.g. M3px / M3vbd /
+# M3mix): SAPG on the base fold pool starting from a distilled point-cloud student
 # (--pc_init_student, --pc_init_sigma <teacher>, --critic_checkpoint <teacher full checkpoint>).
 # lr starts at 8.8e-6, the converged state runs' final adaptive lr: at 1e-4 a finetune from a
 # converged policy wipes it in one update (first-epoch KL 84-134). The critic keeps 1e-4.
-base: pcRW_scratch
+base: rigidcloth_pc_rl
 
 agent:
   params:

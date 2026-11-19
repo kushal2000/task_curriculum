@@ -1,0 +1,11 @@
+# rigidcloth_pc_half_fold_rl (was pcRW_scratch_gpE; its runs keep that name): SAPG from scratch with the
+# point-cloud actor (rigidcloth_pc_rl) on easy mode with the goal tables and accept_lookalike
+# (rigidcloth_pc_half_fold). Goal input through --pc_args goal=goal_fixed|goal_any. 11-17/18: did not
+# learn in 3052 epochs (best: goal_any in the 90 deg sector, 25%).
+base: experiments/nov17_pointcloud_rl/rigidcloth_pc_rl
+
+env:
+  fold_pool:
+    goal_task:
+      mode: half_fold
+      accept_lookalike: true

@@ -1,0 +1,11 @@
+# rigidcloth_pc_half_fold_friction (was gpE_fric; its runs and checkpoints keep that name):
+# rigidcloth_pc_half_fold on the flat7RW_fric env (the 11-10 contact frictions and their per-env DR),
+# for DAgger from the flat7RW_fric teacher.
+base: rigid_cloth_right_wuji
+dr: [friction]
+
+env:
+  fold_pool:
+    goal_task:
+      mode: half_fold
+      accept_lookalike: true
