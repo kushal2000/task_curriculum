@@ -15,9 +15,10 @@ hooks to four parts, which hand each other the dataclasses of ``mdp/state.py``:
     _reset_idx          controller / task draws, written to the scene; DR draws
     _get_observations   task.update_goal, observations.build
 
-A backend subclasses this env and supplies the sheet: ``backends/rigid/env.RigidClothEnv`` (PhysX,
-hinged plates) and ``backends/vbd/env.VbdClothEnv`` (Newton, a VBD cloth). The scene (robot, table,
-goal marker) is ``backends/scene.py``; it ends with the backend's ``_install_cloth``.
+The simulator side is a backend object (``backends/base.ClothBackend``) the env owns:
+``backends/rigid/backend.RigidBackend`` (PhysX, the fold-shape pool of hinged plates) or
+``backends/vbd/backend.VbdBackend`` (Newton, a VBD cloth). It builds the scene (robot, table, goal
+marker, sheet), reads the sheet's points and writes resets; the task never sees which one it is.
 """
 
 from __future__ import annotations
@@ -27,12 +28,12 @@ from isaaclab.envs import DirectRLEnv
 
 from isaacsimenvs.robots import get_robot_spec
 
-from .backends import scene
+from .backends.base import ClothBackend
 from .mdp.actions import JointController
 from .mdp.observations import ObservationBuilder, obs_dim
 from .mdp.randomization import DomainRandomization
 from .mdp.robot import RobotLayout, to_torch
-from .mdp.state import FoldView, SheetLayout, SimState
+from .mdp.state import FoldView, SimState
 from .mdp.task import ClothTask
 
 __all__ = ["ClothEnv"]
@@ -41,20 +42,21 @@ __all__ = ["ClothEnv"]
 class ClothEnv(DirectRLEnv):
     """Fold half a sheet onto the other half, with the robot of ``cfg.robot``."""
 
-    def __init__(self, cfg, render_mode: str | None = None, **kwargs) -> None:
+    def __init__(self, cfg, render_mode: str | None = None, *, backend: type[ClothBackend], **kwargs) -> None:
         self.robot_spec = get_robot_spec(cfg.robot)
         n_joints = self.robot_spec.num_joints
         cfg.action_space = n_joints
         cfg.observation_space = obs_dim(cfg.obs.obs_list, n_joints)
         cfg.state_space = obs_dim(cfg.obs.state_list, n_joints)
-        super().__init__(cfg, render_mode, **kwargs)  # builds the scene
+        self.backend = backend(cfg, self.robot_spec)
+        super().__init__(cfg, render_mode, **kwargs)  # builds the scene (_setup_scene)
         self._check_env_order()
         dev, n = self.device, self.num_envs
         self.robot_layout = RobotLayout(self.robot, self.robot_spec, num_joints=n_joints, robot_urdf=cfg.assets.robot_urdf, device=dev)
-        layout = self._sheet_layout()
+        layout = self.backend.sheet_layout()
         self.task = ClothTask(
             cfg, layout, self.robot_layout, num_envs=n, device=dev, env_origins=self.scene.env_origins,
-            extras=self.extras, observed_goal_quat=self._observed_goal_quat,
+            extras=self.extras, observed_goal_quat=self.backend.observed_goal_quat,
         )
         # Observed by the critic (`reward`) from the first reset on, before any step has paid one.
         self.reward_buf = torch.zeros(n, device=dev)
@@ -64,12 +66,13 @@ class ClothEnv(DirectRLEnv):
             cfg, self.robot_layout, self.controller, self.task, self.dr, num_envs=n, device=dev,
             env_origins=self.scene.env_origins, extras=self.extras,
         )
-        self._finish_backend_setup()
+        self.backend.finish_setup()
         view = self._derive_sheet()
         # Fold error of a flat sheet: the stand-in for a non-finite one (ClothTask.compute_reward).
         self.task.flat_fold_err = float(view.fold_error.nan_to_num(nan=0.0).max().item())
         self._write_goal(view)
         self._step_state: tuple[SimState, FoldView] | None = None
+        self.backend.start(self._reset_table)
 
     def _check_env_order(self) -> None:
         """Row i of every PhysX asset view must be env i: Isaac Lab indexes asset data by env id."""
@@ -82,37 +85,25 @@ class ClothEnv(DirectRLEnv):
             if wrong:
                 raise RuntimeError(f"{name}: PhysX view rows are not in env order, e.g. row {wrong[0][0]} is {wrong[0][1]}")
 
-    # ------------------------------------------------------------------ backend hooks
+    # ------------------------------------------------------------------ the scene, as the backend built it
 
-    def _sheet_layout(self) -> SheetLayout:
-        raise NotImplementedError
+    @property
+    def robot(self):
+        return self.backend.robot
 
-    def _read_points(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """``(points_w, points_vel_w)``, each (N, P, 3): the sheet's grid points now."""
-        raise NotImplementedError
+    @property
+    def table(self):
+        return self.backend.table
 
-    def _observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
-
-    def _finish_backend_setup(self) -> None:
-        """Runs once the assets are live, before the task first reads the sheet."""
-
-    def _begin_reset(self, env_ids: torch.Tensor) -> None:
-        """First thing in a reset, before any of the task's draws."""
-
-    def _end_reset(self, env_ids: torch.Tensor) -> None:
-        """Last thing in a reset."""
-
-    def _write_sheet(self, env_ids: torch.Tensor, pose_w: torch.Tensor) -> None:
-        """Lay the sheet flat at ``pose_w`` (n, 7): its xy and its yaw; at rest."""
-        self.object.write_root_pose_to_sim(pose_w, env_ids=env_ids)
-        self.object.write_root_velocity_to_sim(torch.zeros(env_ids.numel(), 6, device=self.device), env_ids=env_ids)
+    @property
+    def goal_viz(self):
+        return self.backend.goal_viz
 
     # ------------------------------------------------------------------ state reads
 
     def _read_state(self) -> SimState:
         data = self.robot.data
-        points, velocities = self._read_points()
+        points, velocities = self.backend.read_points()
         return SimState(
             joint_pos=to_torch(data.joint_pos),
             joint_vel=to_torch(data.joint_vel),
@@ -133,7 +124,7 @@ class ClothEnv(DirectRLEnv):
 
     def _derive_sheet(self) -> FoldView:
         """The fold from the sheet alone (no robot read): at startup and after a reset's writes."""
-        return self.task.geometry.derive(*self._read_points())
+        return self.task.geometry.derive(*self.backend.read_points())
 
     def _write_goal(self, view: FoldView) -> None:
         """Refresh the goal pose and move the goal marker onto it (all envs)."""
@@ -142,11 +133,11 @@ class ClothEnv(DirectRLEnv):
     # ------------------------------------------------------------------ Isaac Lab hooks
 
     def _setup_scene(self) -> None:
-        # Through the module: the Newton backend wraps it with the scene replication.
-        scene.setup_scene(self)
+        self.backend.build_scene(self.scene, self.sim)
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         self.controller.process(actions, self.task.episode_start(self.episode_length_buf))
+        self.backend.pre_physics_step()
 
     def _apply_action(self) -> None:
         # Every physics step (decimation times per policy step).
@@ -160,31 +151,37 @@ class ClothEnv(DirectRLEnv):
         state = self._read_state()
         view = self.task.derive(state)
         self._step_state = (state, view)
-        return self.task.compute_dones(state, view, self.episode_length_buf, self.max_episode_length)
+        dones = self.task.compute_dones(state, view, self.episode_length_buf, self.max_episode_length)
+        self.backend.add_termination_reasons(self.task.termination_reasons)
+        return dones
 
     def _get_rewards(self) -> torch.Tensor:
         state, view = self._step_state
         reward = self.task.compute_reward(state, view)
         self._publish_metrics()
+        self.backend.add_episode_final(
+            self.extras["episode_final"], self.task.termination_reasons, self.episode_length_buf,
+            self.observations.tracker.episode_stats(),
+        )
         return reward
 
     def _reset_idx(self, env_ids) -> None:
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
         ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long).reshape(-1)
-        self._begin_reset(ids)
+        self.backend.begin_reset(ids)
         super()._reset_idx(env_ids)
         # Draws in a fixed order (it sets the random stream): robot, table, sheet, then DR.
         joint_pos, joint_vel = self.controller.sample_reset(ids)
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=ids)
         self.controller.reset(ids, joint_pos)
         self._reset_table(ids)
-        self._write_sheet(ids, self._to_world(ids, self.task.sample_sheet(ids)))
+        self.backend.write_sheet(ids, self._to_world(ids, self.task.sample_sheet(ids)))
         self.task.reset(ids)
         self.dr.reset(ids)
         self.observations.reset(ids)
         self._write_goal(self._derive_sheet())
-        self._end_reset(ids)
+        self.backend.end_reset(ids)
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
         state = self._read_state()
@@ -240,9 +237,17 @@ class ClothEnv(DirectRLEnv):
 
     def cloth_points_w(self) -> torch.Tensor:
         """``(N, P, 3)`` the sheet's grid points."""
-        return self._read_points()[0]
+        return self.backend.read_points()[0]
 
     # ------------------------------------------------------------------ old names (scripts; removed in S6)
+
+    @property
+    def object(self):
+        return self.backend.object
+
+    @property
+    def _env_size(self) -> torch.Tensor:
+        return self.backend.env_size
 
     def _particles_w(self) -> torch.Tensor:
         return self.cloth_points_w()

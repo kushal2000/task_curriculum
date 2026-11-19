@@ -92,9 +92,9 @@ def test_goal_quaternion_is_newtons_relabelling():
     newton_xyzw = true_wxyz[[1, 2, 3, 0]]                 # IL3 quat_from_matrix output
     stored_xyzw = torch.cat((newton_xyzw[1:4], newton_xyzw[0:1]))  # write patch: "wxyz" -> xyzw
     task_reads = torch.cat((stored_xyzw[3:4], stored_xyzw[0:3]))   # read patch: xyzw -> wxyz
-    physx_writes = true_wxyz[[1, 2, 3, 0]]               # RigidClothEnv._observed_goal_quat
+    physx_writes = true_wxyz[[1, 2, 3, 0]]               # RigidBackend.observed_goal_quat
     assert torch.equal(task_reads, physx_writes)
-    src = (REPO / "isaacsimenvs/tasks/cloth/backends/rigid/env.py").read_text()
+    src = (REPO / "isaacsimenvs/tasks/cloth/backends/rigid/backend.py").read_text()
     assert "quat_from_matrix(rot)[..., [1, 2, 3, 0]]" in src
 
 

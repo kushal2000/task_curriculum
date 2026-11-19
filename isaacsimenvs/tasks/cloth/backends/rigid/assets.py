@@ -20,7 +20,7 @@ indexing see a familiar articulation::
 Every plate's body frame sits at the SHEET origin (identity), and its mesh is the plate's polygon in
 sheet coordinates -- the convention ``fold_shapes`` uses throughout -- so the articulation's root pose
 IS the sheet's pose and no root offset has to be carried. Joints are named for their child plate;
-the ``slat_`` prefixes are the stage-1 ones, so ``RigidClothEnv``'s prefix-based model indexing picks
+the ``slat_`` prefixes are the stage-1 ones, so the rigid backend's prefix-based model indexing picks
 the pool's bodies and hinges up unchanged, and the ``seam_`` prefix keeps loop joints out of it.
 """
 

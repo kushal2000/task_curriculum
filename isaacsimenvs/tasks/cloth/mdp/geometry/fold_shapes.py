@@ -36,7 +36,7 @@ PNG diagram beside it (``isaacsimenvs/scripts/visualization/rigid_cloth/render_d
 side); that is the membership rule for the pool. Shapes that only fold some other way (a diagonal,
 thirds) were tried and dropped.
 
-**Plate-plate contact is not modelled.** ``RigidClothEnv`` already removes every slat-slat contact
+**Plate-plate contact is not modelled.** The rigid backend already removes every slat-slat contact
 pair (its 7 mm contact margin would otherwise hold folded plies 14 mm apart); folded plates are
 held only by joint limits. The pool follows the same rule.
 """

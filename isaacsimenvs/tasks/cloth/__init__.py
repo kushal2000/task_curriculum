@@ -1,4 +1,4 @@
-"""Cloth folding tasks: one fold task (``mdp/``) on two backends (``backends/``).
+"""Cloth folding tasks: one fold task (``ClothEnv`` + ``mdp/``) on two backends (``backends/``).
 
     Isaacsimenvs-Cloth-Direct-v0       VBD cloth sheet, Newton (``.venv_isaaclab3``)
     Isaacsimenvs-RigidCloth-Direct-v0  fold-shape pool of hinged plates, PhysX (``.venv_isaacsim``)
@@ -16,20 +16,36 @@ import gymnasium as gym
 
 from isaacsimenvs import CONFIG_DIR as _CFG_DIR
 
+# task -> (backend, its config class, its task YAML)
 _TASKS = {
-    "Cloth": ("backends.vbd.env:VbdClothEnv", "backends.vbd.config:VbdClothEnvCfg", "Cloth.yaml"),
-    "RigidCloth": ("backends.rigid.env:RigidClothEnv", "backends.rigid.config:RigidClothEnvCfg", "RigidCloth.yaml"),
+    "Cloth": ("vbd", "backends.vbd.config:VbdClothEnvCfg", "Cloth.yaml"),
+    "RigidCloth": ("rigid", "backends.rigid.config:RigidClothEnvCfg", "RigidCloth.yaml"),
 }
 
 
+def make_env(cfg, render_mode: str | None = None, *, backend: str, **kwargs):
+    """The gym entry point: ``ClothEnv`` with the named backend. Imports stay lazy until here (the
+    Newton backend's Isaac Lab 3.0 shims must load before any other Isaac Lab module)."""
+    if backend == "vbd":
+        from .backends.vbd.backend import VbdBackend as Backend
+    elif backend == "rigid":
+        from .backends.rigid.backend import RigidBackend as Backend
+    else:
+        raise ValueError(f"unknown cloth backend {backend!r}; expected rigid or vbd")
+    from .cloth_env import ClothEnv
+
+    return ClothEnv(cfg, render_mode, backend=Backend, **kwargs)
+
+
 def _register(task_id: str, base: str, **extra) -> None:
-    env, cfg, task_yaml = _TASKS[base]
+    backend, cfg, task_yaml = _TASKS[base]
     gym.register(
         id=task_id,
-        entry_point=f"isaacsimenvs.tasks.cloth.{env}",
+        entry_point="isaacsimenvs.tasks.cloth:make_env",
         order_enforce=False,
         disable_env_checker=True,
         kwargs={
+            "backend": backend,
             "env_cfg_entry_point": f"isaacsimenvs.tasks.cloth.{cfg}",
             "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / task_yaml),
             "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),

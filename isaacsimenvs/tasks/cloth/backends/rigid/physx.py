@@ -14,9 +14,9 @@ is a PhysX rest offset of ``rigid_cloth.contact_margin`` on every plate; plate-p
 
 **Conventions.** Two Newton quirks reach the observation and every policy was trained under them, so
 they are reproduced (``tests/test_physx_cloth_conventions.py``): the task's root-pose writes to
-``env.object`` arrive reordered wxyz -> xyzw (``reorder_object_pose_writes``), and the fold goal's
+the sheet arrive reordered wxyz -> xyzw (``reorder_object_pose_writes``), and the fold goal's
 orientation is the true one's components relabelled (x, y, z, w) -> read as (w, x, y, z)
-(``RigidClothEnv._goal_quat_from_matrix``).
+(``RigidBackend.observed_goal_quat``).
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def prepare_collider_asset(
     """De-instance a USD file's colliders and set their PhysX rest / contact offsets, in place.
 
     Returns the number of colliders. Offsets live in the asset, so every env that references it
-    carries them; friction does NOT -- see ``ContactsMixin._bind_contact_materials`` for why materials are bound
+    carries them; friction does NOT -- see ``contacts.bind_contact_materials`` for why materials are bound
     per env to ONE scene-level material instead. ``max_depenetration_velocity > 0`` also caps how
     fast PhysX may push each rigid body of the asset out of a penetration [m/s].
     """

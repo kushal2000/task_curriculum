@@ -1,17 +1,12 @@
-"""``VbdClothEnv``: the fold task with a VBD cloth sheet, on Isaac Lab 3.0 + Newton.
+"""``VbdBackend``: the fold task's sheet as a VBD cloth, on Isaac Lab 3.0 + Newton.
 
-The task is ``cloth_env.ClothEnv`` and ``mdp/``, shared with the rigid backend; this class adds the
-sheet and constructs the env on Newton (``newton_setup.py``: the patches around the scene build, and
-the coupled MJWarp robot + VBD cloth solver).
+The env is constructed on Newton in two windows (``newton_setup.py``): the patches that must be in
+place before the scene is built -- the coupled MJWarp (robot) + VBD (cloth) solver among them --
+installed by ``__init__``, and the ones that need live assets, by :meth:`finish_setup`.
 
 The sheet is authored as a flat ``UsdGeom.Mesh`` grid before the environments are replicated --
-`DeformableObject` infers ``surface`` (cloth) from a ``UsdGeom.Mesh`` and ``volume`` from a
-``UsdGeom.TetMesh``, so the prim type *is* the switch.
-
-State is the position of a few keypoints on the moving half; the goal is their mirror image across
-the fold line. See ``mdp/geometry/grid.py`` for both, kept separate so the fold is testable
-without a simulator.
-
+``DeformableObject`` infers ``surface`` (cloth) from a ``UsdGeom.Mesh`` and ``volume`` from a
+``UsdGeom.TetMesh``, so the prim type *is* the switch. Its grid points are the particles.
 """
 
 from __future__ import annotations
@@ -22,36 +17,34 @@ import torch
 from isaaclab.utils.math import quat_from_matrix
 
 from isaacsimenvs.tasks.cloth.backends.adapter import ClothAsRigidObject
-from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
-from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
+from isaacsimenvs.tasks.cloth.backends.base import ClothBackend
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
     install_post_construction_patches,
     install_pre_construction_patches,
 )
-from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
+from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
 from isaacsimenvs.tasks.cloth.mdp.state import SheetLayout
-from isaacsimenvs.robots import get_robot_spec
 
-__all__ = ["VbdClothEnv"]
+__all__ = ["VbdBackend"]
 
 
-class VbdClothEnv(ClothEnv):
-    """The fold task with a VBD cloth sheet."""
+class VbdBackend(ClothBackend):
+    """A VBD cloth sheet, coupled to the robot on Newton."""
 
-    cfg: VbdClothEnvCfg
-
-    def __init__(self, cfg: VbdClothEnvCfg, render_mode: str | None = None, **kwargs) -> None:
+    def __init__(self, cfg, robot_spec) -> None:
+        super().__init__(cfg, robot_spec)
         install_pre_construction_patches(
             cfg,
             # Coupled MJWarp (robot) + VBD (cloth), sized for this env count.
-            physics_cfg=cfg.cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), get_robot_spec(cfg.robot)),
+            physics_cfg=cfg.cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), robot_spec),
         )
-        super().__init__(cfg, render_mode, **kwargs)
 
-    def _finish_backend_setup(self) -> None:
+    def finish_setup(self) -> None:
         install_post_construction_patches(self)
 
-    def _sheet_layout(self) -> SheetLayout:
+    # ------------------------------------------------------------------ the sheet, for the task
+
+    def sheet_layout(self) -> SheetLayout:
         c = self.cfg.cloth
         return SheetLayout(
             rest_local=self._cloth_rest_local,
@@ -62,13 +55,13 @@ class VbdClothEnv(ClothEnv):
             # Two plies settle one SELF-contact radius apart; the particle radius is the cloth-RIGID
             # offset and has no say in a fold (``mdp/fold.py``).
             fold_lift=c.self_contact_radius,
-            object_scale=self._object_scale_per_env,
+            object_scale=self.object_scale,
         )
 
-    def _read_points(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def read_points(self) -> tuple[torch.Tensor, torch.Tensor]:
         return self.object._particles(), self.object._velocities()
 
-    def _observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
+    def observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
         """``isaaclab.utils.math.quat_from_matrix``, unpatched: under Isaac Lab 3.0 it returns
         (x, y, z, w), which the task has always read as (w, x, y, z) -- the true quaternion's
         components relabelled -- and every policy was trained on that."""
@@ -79,14 +72,16 @@ class VbdClothEnv(ClothEnv):
         c = self.cfg.cloth
         base = float(self.cfg.reward.object_base_size)
         bbox = torch.tensor([c.size, c.size, c.thickness], device=self.device, dtype=torch.float32)
-        self._object_scale_per_env[:] = bbox / base
+        self.object_scale[:] = bbox / base
         print(
             f"[cloth] object_scale = {[round(float(v), 2) for v in bbox / base]} "
             f"(bbox {[round(float(v), 3) for v in bbox]} m / base {base})",
             flush=True,
         )
 
-    def _install_cloth(self) -> None:
+    # ------------------------------------------------------------------ the scene
+
+    def install_sheet(self) -> None:
         """Author the sheet and register it as a deformable.
 
         Runs at the end of the scene setup, before replication -- which is also when Newton imports
