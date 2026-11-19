@@ -133,7 +133,7 @@ class RigidClothRandomizationCfg:
 
     Uniform draws unless marked log-uniform. By default only the contact shell is randomised
     (``contact_margin_offset``); every other term is pinned neutral, and the DR blocks
-    (``configs/dr/``) turn them on: ``friction``, ``hinge_mass``.
+    (``tasks/cloth/config/dr/``) turn them on: ``friction``, ``hinge_mass``.
     """
 
     enabled: bool = True

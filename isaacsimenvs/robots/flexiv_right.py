@@ -14,7 +14,7 @@ from .spec import RobotSpec
 # at the same arm pose; Wuji's HAND2_DRIVE on the hand (_WUJI_S2R_DRIVE, no joint friction,
 # 100 rad/s); the real robot's home pose; per-finger pad offsets (thumb 22.9 mm, the same 77% of its
 # longer distal link). Where the table sits relative to it is the env's ``robot_root_pos``
-# (configs/robot/flexiv_wuji_right_human_like.yaml).
+# (robots/setups/flexiv_wuji_right_human_like.yaml).
 # ----------------------------------------------------------------------------
 
 _RIZON_JOINTS = tuple(f"joint{i}" for i in range(1, 8))
@@ -134,7 +134,7 @@ FLEXIV_WUJI_RIGHT_HUMAN_LIKE = RobotSpec(
 
 # ----------------------------------------------------------------------------
 # FLEXIV_WUJI_RIGHT_HUMAN_LIKE with the real hand's identified joint dynamics and the real robot's
-# limits (the "real" variant; configs/robot/flexiv_wuji_right_real.yaml):
+# limits (the "real" variant; robots/setups/flexiv_wuji_right_real.yaml):
 #   * hand armature, joint friction and passive damping from the sysid of the deployed right hand
 #     (firmware 2.10.0; aiowuji sysid_fit.py MuJoCo fit of the 2026-09-30 fingers-up and 2026-10-09
 #     palm-down runs, assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json, kept out of git).

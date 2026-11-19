@@ -2,7 +2,7 @@
 
 The defaults are the task: the Flexiv Rizon 4s + right Wuji Hand 2 in the real setup's table and
 goal geometry, as the Play priors (kushal/2026-10-30_pretraining_real, run 41213) were trained. A
-robot setup (configs/robot/) or a run recipe changes them. Organized into sectioned sub-configclasses:
+robot setup (robots/setups/) or a run recipe changes them. Organized into sectioned sub-configclasses:
 
     sim                     → isaaclab.sim.SimulationCfg (+ PhysxCfg)
     scene                   → PlaySceneCfg(InteractiveSceneCfg)
@@ -605,8 +605,8 @@ class PlayEnvCfg(DirectRLEnvCfg):
     # Robot embodiment, a key of robots.ROBOT_SPECS. Fixed per registered task; assets.robot_urdf
     # must be its URDF. PlayEnv sets action_space (and the obs sizes) from it.
     robot: str = "flexiv_wuji_right_human_like"
-    # Robot setup: a file stem in configs/robot/ (robot spec, URDF, self-collision, base position),
-    # applied by the config loader (scripts/configs/loader) onto these defaults, before the run recipe.
+    # Robot setup: a file stem in robots/setups/ (robot spec, URDF, self-collision, base position),
+    # applied by the config loader (tasks/loader) onto these defaults, before the run recipe.
     # Set it in a recipe (`env.robot_setup`), on the command line, or through an alias task id.
     # Empty: the task's own robot.
     robot_setup: str = ""

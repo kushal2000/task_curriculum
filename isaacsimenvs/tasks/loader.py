@@ -5,10 +5,10 @@ decorator puts two YAML layers between them.
 
 Precedence (lowest → highest):
     1. the env configclass defaults (Python): the task itself
-    2. configs/robot/<setup>.yaml, the robot setup (`env.robot_setup`), chosen by the command line, else
+    2. robots/setups/<setup>.yaml, the robot setup (`env.robot_setup`), chosen by the command line, else
        the run recipe, else an alias task id (see `resolve_task`)
     3. the run recipe (optional, `train.py --experiment <name or path>`; see recipes.py): its base
-       recipe, its DR blocks (configs/dr/), then its own `env:` and `agent:` overrides, so the recipe
+       recipe, its DR blocks (tasks/cloth/config/dr/), then its own `env:` and `agent:` overrides, so the recipe
        lives in the repo rather than in a launcher
     4. Hydra CLI overrides (e.g. `env.scene.num_envs=4096`)
 
@@ -36,10 +36,8 @@ from isaaclab.envs.utils.spaces import (
 from isaaclab.utils import replace_slices_with_strings, replace_strings_with_slices
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
-from isaacsimenvs import CONFIG_DIR
-from isaacsimenvs.scripts.configs.recipes import deep_merge, load_recipe
-
-ROBOT_DIR = CONFIG_DIR / "robot"
+from isaacsimenvs import ROBOT_SETUPS_DIR as ROBOT_DIR
+from isaacsimenvs.tasks.recipes import deep_merge, load_recipe
 
 
 def resolve_task(task_id: str) -> tuple[str, str]:
@@ -73,7 +71,7 @@ def hydra_task_config_with_yaml(
         agent_cfg_entry_point: Key in ``gym.register(..., kwargs=...)`` whose value
             is the agent (rl_games) config entry point. Typically
             ``"rl_games_cfg_entry_point"`` or ``"rl_games_sapg_cfg_entry_point"``.
-        experiment: A run recipe (a name in ``configs/runs/`` or a path; see recipes.py), or ``None``.
+        experiment: A run recipe (a name in ``tasks/cloth/config/runs/`` or a path; see recipes.py), or ``None``.
     """
 
     def decorator(func):

@@ -10,8 +10,8 @@ in the real setup's table and goal geometry:
 
 Entry points:
 - ``env_cfg_entry_point``           → PlayEnvCfg (typed defaults in code: the task)
-- ``rl_games_cfg_entry_point``      → configs/train/PlayPPO.yaml (baseline)
-- ``rl_games_sapg_cfg_entry_point`` → configs/train/PlaySAPG.yaml (default)
+- ``rl_games_cfg_entry_point``      → config/PlayPPO.yaml (baseline)
+- ``rl_games_sapg_cfg_entry_point`` → config/PlaySAPG.yaml (default)
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 import gymnasium as gym
 
-from isaacsimenvs import CONFIG_DIR as _CFG_DIR
+from isaacsimenvs import PLAY_CONFIG_DIR
 
 if TYPE_CHECKING:
     from .play_env import PlayEnv
@@ -58,8 +58,8 @@ def _register(task_id: str, cfg_class: str) -> None:
         disable_env_checker=True,
         kwargs={
             "env_cfg_entry_point": f"isaacsimenvs.tasks.play.play_env_cfg:{cfg_class}",
-            "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
-            "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "PlaySAPG.yaml"),
+            "rl_games_cfg_entry_point": str(PLAY_CONFIG_DIR / "PlayPPO.yaml"),
+            "rl_games_sapg_cfg_entry_point": str(PLAY_CONFIG_DIR / "PlaySAPG.yaml"),
         },
     )
 

@@ -46,4 +46,4 @@ Keep a cluster's own settings (partition, GPU type, nodes to avoid, chained subm
 ## Studies
 
 `<date>_<study>/` holds the run recipes of one study (base recipe + DR blocks, see
-`isaacsimenvs/scripts/configs/README.md`); pass one with `--experiment <path>`.
+`isaacsimenvs/tasks/cloth/config/README.md`); pass one with `--experiment <path>`.

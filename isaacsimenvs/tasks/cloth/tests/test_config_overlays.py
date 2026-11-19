@@ -83,15 +83,15 @@ def _resolve(classes: dict, name: str, seen=None) -> tuple[set, dict] | None:
     return out_fields, out_ann
 
 
-# --- run recipes (configs/runs/, experiments/) and DR blocks (configs/dr/) ----------------------
+# --- run recipes (config/runs/, experiments/) and DR blocks (config/dr/) ----------------------
 
-from isaacsimenvs.scripts.configs.recipes import DR_DIR, RUNS_DIR, load_recipe  # noqa: E402
+from isaacsimenvs.tasks.recipes import DR_DIR, RUNS_DIR, load_recipe  # noqa: E402
 
 RECIPES = sorted(
     [str(p.relative_to(REPO_ROOT)) for p in RUNS_DIR.glob("*.yaml")]
     + [str(p.relative_to(REPO_ROOT)) for p in (REPO_ROOT / "experiments").rglob("*.yaml")]
 )
-_CLOTH_SAPG = "isaacsimenvs/scripts/configs/train/ClothSAPG.yaml"
+_CLOTH_SAPG = "isaacsimenvs/tasks/cloth/config/ClothSAPG.yaml"
 # Per task id: env root configclass, its modules, and the SAPG agent YAML.
 EXPERIMENT_TASKS = {
     "Isaacsimenvs-RigidCloth-Direct-v0": ("RigidClothEnvCfg", RIGID_CLOTH_CFG, _CLOTH_SAPG),

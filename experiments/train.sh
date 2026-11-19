@@ -72,7 +72,7 @@ EXPERIMENT="$(printf '%s\n' "${ARGS[@]}" | grep -A1 -x -- '--experiment' | tail 
 [ "$EXPERIMENT" = "--experiment" ] && EXPERIMENT=""
 read -r ENVS EPOCHS MINIBATCH DR < <("${PY[@]}" - "$EXPERIMENT" "${ARGS[@]}" <<'PY' 2>/dev/null
 import re, sys
-from isaacsimenvs.scripts.configs.recipes import load_recipe
+from isaacsimenvs.tasks.recipes import load_recipe
 exp, args = sys.argv[1], sys.argv[2:]
 r = load_recipe(exp) if exp else {"env": {}, "agent": {}, "dr": []}
 cfg = r["agent"].get("params", {}).get("config", {})

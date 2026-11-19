@@ -403,13 +403,13 @@ def main() -> None:
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
     from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
-    from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
+    from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
 
     server = viser.ViserServer(host="0.0.0.0", port=args.port)
     server.scene.set_up_direction("+z")
     status = server.gui.add_markdown(f"**Building `{args.task}` with {args.num_envs} envs...** (~2-3 min)")
 
-    # $LIVE_VISER_EXPERIMENT: build the env from a configs/runs/ recipe (as train.py --experiment does).
+    # $LIVE_VISER_EXPERIMENT: build the env from a run recipe (as train.py --experiment does).
     experiment = os.environ.get("LIVE_VISER_EXPERIMENT") or None
     if experiment:
         print(f"[live] experiment recipe {experiment}", flush=True)

@@ -1,4 +1,4 @@
-"""Run recipe composition (configs/recipes.py): base, DR blocks, own overrides, lookup, errors."""
+"""Run recipe composition (tasks/recipes.py): base, DR blocks, own overrides, lookup, errors."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
-from isaacsimenvs.scripts.configs import recipes  # noqa: E402
+from isaacsimenvs.tasks import recipes  # noqa: E402
 
 
 @pytest.fixture
 def tree(tmp_path, monkeypatch):
-    """A repo root with configs/runs/, configs/dr/ and experiments/x/; returns a writer."""
+    """A repo root with runs/, dr/ and experiments/x/; returns a writer."""
     runs, dr, exp = tmp_path / "runs", tmp_path / "dr", tmp_path / "experiments" / "x"
     for d in (runs, dr, exp):
         d.mkdir(parents=True)

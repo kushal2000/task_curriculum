@@ -3,10 +3,10 @@
     Isaacsimenvs-Cloth-Direct-v0       VBD cloth sheet, Newton (``.venv_isaaclab3``)
     Isaacsimenvs-RigidCloth-Direct-v0  fold-shape pool of hinged plates, PhysX (``.venv_isaacsim``)
 
-The robot is a config field, ``env.robot_setup`` (a file stem in ``configs/robot/``), set in the run
+The robot is a config field, ``env.robot_setup`` (a file stem in ``robots/setups/``), set in the run
 recipe or on the command line. The older ids -- ``FoldPoolPhysx`` and one per robot, e.g.
 ``Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0`` -- stay registered as aliases: each
-names its canonical task and robot setup (``scripts/configs/loader.resolve_task``). Start with
+names its canonical task and robot setup (``tasks/loader.resolve_task``). Start with
 ``README.md``.
 """
 
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import gymnasium as gym
 
-from isaacsimenvs import CONFIG_DIR as _CFG_DIR
+from isaacsimenvs import CLOTH_CONFIG_DIR, PLAY_CONFIG_DIR
 
 # task -> (backend, its config class: the task's defaults)
 _TASKS = {
@@ -47,8 +47,8 @@ def _register(task_id: str, base: str, **extra) -> None:
         kwargs={
             "backend": backend,
             "env_cfg_entry_point": f"isaacsimenvs.tasks.cloth.{cfg}",
-            "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "PlayPPO.yaml"),
-            "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "ClothSAPG.yaml"),
+            "rl_games_cfg_entry_point": str(PLAY_CONFIG_DIR / "PlayPPO.yaml"),  # Play's PPO, as the prior
+            "rl_games_sapg_cfg_entry_point": str(CLOTH_CONFIG_DIR / "ClothSAPG.yaml"),
             **extra,
         },
     )

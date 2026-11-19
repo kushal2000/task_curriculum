@@ -4,16 +4,16 @@ A recipe has up to five keys:
 
     task:  Isaacsimenvs-RigidCloth-Direct-v0   # the gym id it is written for
     base:  rigid_cloth_right_wuji              # another recipe underneath it (optional)
-    dr:    [sysid, friction]                   # DR blocks from configs/dr/, in order (optional)
+    dr:    [sysid, friction]                   # DR blocks from tasks/cloth/config/dr/, in order (optional)
     env:   {...}                               # overrides of the env config
     agent: {...}                               # overrides of the learner config
 
 `load_recipe` composes them as base -> each DR block -> this recipe's own `env` / `agent`, so a
 recipe's own values win. A DR block is a plain env overlay (the same keys as a recipe's `env:`).
 
-A recipe is named by a file stem in `configs/runs/` or by a path, absolute or relative to the repo
-root (e.g. `experiments/nov15_cloth_tracker/flat7RW_trkA.yaml`). A `base:` is looked up next to the
-recipe first, then in `configs/runs/`.
+A recipe is named by a file stem in `tasks/cloth/config/runs/` or by a path, absolute or relative to the
+repo root (e.g. `experiments/nov15_cloth_tracker/flat7RW_trkA.yaml`). A `base:` is looked up next to
+the recipe first, then in `tasks/cloth/config/runs/`.
 
 Kit-free (plain YAML), so tests and tools can compose recipes without booting a simulator.
 """
@@ -24,10 +24,10 @@ from pathlib import Path
 
 import yaml
 
-from isaacsimenvs import CONFIG_DIR, REPO_ROOT
+from isaacsimenvs import CLOTH_CONFIG_DIR, REPO_ROOT
 
-RUNS_DIR = CONFIG_DIR / "runs"
-DR_DIR = CONFIG_DIR / "dr"
+RUNS_DIR = CLOTH_CONFIG_DIR / "runs"
+DR_DIR = CLOTH_CONFIG_DIR / "dr"
 
 RECIPE_KEYS = {"task", "base", "dr", "env", "agent"}
 
@@ -50,7 +50,7 @@ def _yaml(path: Path) -> dict:
 def recipe_path(name: str, near: Path | None = None) -> Path:
     """The file a recipe name or path refers to. ``near``: the recipe naming it as its ``base``; that
     recipe's directory is searched first (skipping the recipe itself, so ``base: x`` in ``.../x.yaml``
-    means ``configs/runs/x.yaml``)."""
+    means ``runs/x.yaml``)."""
     path = Path(name).expanduser()
     if not path.suffix:
         path = path.with_suffix(".yaml")
@@ -65,7 +65,7 @@ def recipe_path(name: str, near: Path | None = None) -> Path:
 
 
 def dr_block(name: str) -> dict:
-    """``configs/dr/<name>.yaml``: an env overlay."""
+    """``tasks/cloth/config/dr/<name>.yaml``: an env overlay."""
     path = DR_DIR / f"{name}.yaml"
     if not path.is_file():
         known = sorted(p.stem for p in DR_DIR.glob("*.yaml"))

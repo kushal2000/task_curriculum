@@ -2,7 +2,7 @@
 
 One robot, the Flexiv Rizon 4s + right Wuji Hand 2 as the real robot is set up, in four drive
 variants (``flexiv_right.py``). A task's config names one by ``robot`` (set by a robot setup,
-``configs/robot/``); ``assets.robot_urdf`` must be the matching URDF, and the env checks that its
+``robots/setups/``); ``assets.robot_urdf`` must be the matching URDF, and the env checks that its
 joints are exactly the spec's.
 
 Kit-free on purpose (stdlib only), so tests and scripts can read a spec without booting Isaac.

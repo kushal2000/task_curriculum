@@ -3,7 +3,7 @@
 These defaults are the task: a backend's config adds its own blocks and changes what differs for it
 (``backends/rigid/config.py``, ``backends/vbd/config.py``). The robot comes from ``robot`` (a
 ``RobotSpec`` name) and ``assets.robot_urdf``, both set by a robot setup
-(``configs/robot/<robot_setup>.yaml``); a run recipe (``configs/runs/``) changes the rest.
+(``robots/setups/<robot_setup>.yaml``); a run recipe (``config/runs/``) changes the rest.
 """
 
 from __future__ import annotations
@@ -194,8 +194,8 @@ class ClothEnvCfg(DirectRLEnvCfg):
     robot: str = "flexiv_wuji_right_human_like"
     """A key of ``isaacsimenvs.robots.ROBOT_SPECS``; ``assets.robot_urdf`` must be its URDF."""
     robot_setup: str = ""
-    """A file stem in ``configs/robot/`` (robot, URDF, self-collision, base position), applied by the
-    config loader (``scripts/configs/loader``) onto these defaults, before the recipe. Empty: the task's."""
+    """A file stem in ``robots/setups/`` (robot, URDF, self-collision, base position), applied by the
+    config loader (``tasks/loader``) onto these defaults, before the recipe. Empty: the task's."""
     robot_self_collision: bool = False
     """Robot self-collision, minus ``RobotSpec.self_collision_filter``."""
     robot_self_collision_scope: str = "all"

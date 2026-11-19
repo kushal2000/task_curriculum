@@ -73,7 +73,7 @@ def main() -> None:
     import isaacsimenvs  # noqa: F401
     from isaacsimenvs.scripts.evaluation.protocol import disable_randomization, use_single_object_variant
     from isaacsimenvs.scripts.evaluation.contact_guard import capture_fd_output, raise_if_overflowed
-    from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
+    from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
 
     @hydra_task_config_with_yaml(args_cli.task, "")
     def run(env_cfg, agent_cfg):

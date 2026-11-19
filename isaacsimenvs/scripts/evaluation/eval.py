@@ -185,7 +185,7 @@ def main() -> None:
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
     from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
-    from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
+    from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
 
     @hydra_task_config_with_yaml(args_cli.task, "")
     def run(env_cfg, agent_cfg) -> None:

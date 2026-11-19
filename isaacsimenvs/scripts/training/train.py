@@ -25,8 +25,8 @@ CLI shape:
         agent.params.config.minibatch_size=16384 \
         agent.params.seed=42
 
-    A run recipe instead of the overrides (a name in isaacsimenvs/scripts/configs/runs/ or a path,
-    see configs/recipes.py):
+    A run recipe instead of the overrides (a name in isaacsimenvs/tasks/cloth/config/runs/ or a path,
+    see tasks/recipes.py):
     python -m isaacsimenvs.scripts.training.train \
         --task Isaacsimenvs-RigidCloth-Direct-v0 --agent rl_games_sapg_cfg_entry_point --headless \
         --experiment experiments/nov11_right_wuji_dr_ablation/flat7RW_fric.yaml \
@@ -110,8 +110,8 @@ def main() -> None:
     parser.add_argument(
         "--experiment",
         default=None,
-        help="A run recipe: a name in isaacsimenvs/scripts/configs/runs/ (e.g. rigid_cloth_right_wuji) or a "
-        "YAML path; layered between the task defaults (and robot setup) and the Hydra CLI overrides (configs/recipes.py).",
+        help="A run recipe: a name in isaacsimenvs/tasks/cloth/config/runs/ (e.g. rigid_cloth_right_wuji) or a "
+        "YAML path; layered between the task defaults (and robot setup) and the Hydra CLI overrides (tasks/recipes.py).",
     )
     # --- Runtime toggles ---
     parser.add_argument("--test", action="store_true", help="Run inference (player) instead of training")
@@ -212,7 +212,7 @@ def main() -> None:
     from rl_games.torch_runner import Runner
 
     import isaacsimenvs  # noqa: F401  triggers gym.register side effects
-    from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
+    from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
     from isaacsimenvs.scripts.training.rlgames import (
         EnvStatsAlgoObserver,
         MultiObserver,

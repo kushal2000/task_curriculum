@@ -1,16 +1,17 @@
-# Run configurations
+# Cloth task configuration (YAML)
 
-Python configclasses beside each environment hold every parameter with its default and its
-documentation; the defaults are the task (`RigidClothEnvCfg`, `VbdClothEnvCfg`, `PlayEnvCfg`). The
-YAML files here only change them for a robot or a run.
+Python configclasses beside the code hold every parameter with its default and its documentation;
+the defaults are the task (`RigidClothEnvCfg`, `VbdClothEnvCfg`; Play: `PlayEnvCfg`). The YAML files
+only change them for a robot or a run.
 
-| Directory | Contents |
+| Path | Contents |
 | --- | --- |
-| `robot/` | Robot setups (`env.robot_setup`): robot spec, URDF, self-collision, base position |
 | `runs/` | Run recipes; `rigid_cloth_right_wuji.yaml` is the base of every right-Wuji PhysX run |
 | `dr/` | DR blocks: named env overlays a recipe switches on with `dr: [...]` |
-| `rigid_cloth_designs/` | The fold-pool shapes (plates, hinges, seams, folds) with PNG diagrams |
-| `train/` | Learner settings (PPO, SAPG) |
+| `designs/` | The fold-pool shapes (plates, hinges, seams, folds) with PNG diagrams |
+| `ClothSAPG.yaml` | Learner settings (SAPG); PPO is Play's (`tasks/play/config/`) |
+| `isaacsimenvs/robots/setups/` | Robot setups (`env.robot_setup`), shared with Play: robot spec, URDF, self-collision, base position |
+| `experiments/<date>_<study>/` | The recipes of one study, beside its launchers |
 
 ## Order
 
@@ -18,11 +19,13 @@ A run's config is composed in this order; each layer overrides the ones before i
 
 1. configclass defaults (Python), chosen by the gym task id: what the task is, for training, evaluation
    and viewers alike
-2. `robot/<setup>.yaml`, chosen by `env.robot_setup` (command line, else the recipe, else an alias task id)
+2. `robots/setups/<setup>.yaml`, chosen by `env.robot_setup` (command line, else the recipe, else an
+   alias task id)
 3. the run recipe (`--experiment`): its `base:` recipe, then its DR blocks in order, then its own `env:` / `agent:`
 4. command-line overrides (`env.scene.num_envs=512`)
 
-`loader.py` applies the layers; `recipes.py` composes a recipe (plain YAML, no simulator needed).
+`tasks/loader.py` applies the layers; `tasks/recipes.py` composes a recipe (plain YAML, no simulator
+needed).
 
 ## Recipes
 

@@ -1,4 +1,4 @@
-"""Render the fold-pool YAML designs (``isaacsimenvs/scripts/configs/rigid_cloth_designs/``) as PNG schematics.
+"""Render the fold-pool YAML designs (``isaacsimenvs/tasks/cloth/config/designs/``) as PNG schematics.
 
     .venv_isaaclab3/bin/python isaacsimenvs/scripts/visualization/rigid_cloth/render_designs.py [--only box2-mid ...]
 

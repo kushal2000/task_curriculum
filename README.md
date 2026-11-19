@@ -27,7 +27,7 @@ the network config in `pretrained_policy/config.yaml`.
 | `RigidCloth` | PhysX | fold a pool of 7 hinged-plate shapes (10-20 cm) |
 | `Cloth` | Newton | fold a VBD particle cloth |
 
-The cloth tasks take the robot from `env.robot_setup` (a file in `isaacsimenvs/scripts/configs/robot/`);
+The cloth tasks take the robot from `env.robot_setup` (a file in `isaacsimenvs/robots/setups/`);
 the robot-suffixed ids (e.g. `ClothFlexivWujiRightReal`) are aliases that set it. See
 [`isaacsimenvs/tasks/cloth/README.md`](isaacsimenvs/tasks/cloth/README.md).
 
@@ -65,7 +65,7 @@ base: rigid_cloth_right_wuji
 dr: [sysid, friction, contact_shell, proprio_noise, object_points]
 ```
 
-See [`isaacsimenvs/scripts/configs/README.md`](isaacsimenvs/scripts/configs/README.md).
+See [`isaacsimenvs/tasks/cloth/config/README.md`](isaacsimenvs/tasks/cloth/config/README.md).
 
 ## Layout
 

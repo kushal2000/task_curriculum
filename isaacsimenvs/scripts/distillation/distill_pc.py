@@ -223,7 +223,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Point-cloud student distillation (DAgger) and evaluation.")
     p.add_argument("--mode", choices=("train", "eval"), required=True)
     p.add_argument("--task", required=True)
-    p.add_argument("--experiment", default=None, help="configs/runs recipe (the teacher's), train mode")
+    p.add_argument("--experiment", default=None, help="run recipe (the teacher's), train mode")
     p.add_argument("--teacher", required=True, help="teacher checkpoint (.pth)")
     p.add_argument("--student", default=None, help="student checkpoint: eval, or a train warm start")
     p.add_argument("--policy", choices=("student", "teacher"), default="student", help="eval: who drives")
@@ -293,7 +293,7 @@ def main() -> None:
     from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
     from isaacsimenvs.tasks.cloth.perception.pointcloud import PointCloudCfg, g3_noise_preset, noise_preset
     from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import SceneCloudCfg, scene_noise_preset
-    from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml
+    from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
 
     def delays_of(a: dict) -> tuple[int, int]:
         """(cloud, proprio) delay for these pc_args; eval flags override what the student trained with."""

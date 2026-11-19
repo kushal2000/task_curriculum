@@ -8,7 +8,7 @@ thing on both, so a policy trained on the rigid pool is evaluated on the VBD clo
 | `Cloth` | `backends/vbd` | Newton (`.venv_isaaclab3`) | VBD particle cloth |
 | `RigidCloth` | `backends/rigid` | PhysX (`.venv_isaacsim`) | pool of 7 hinged-plate fold shapes |
 
-The robot is `env.robot_setup` (a file stem in `isaacsimenvs/scripts/configs/robot/`), set in the run recipe or on
+The robot is `env.robot_setup` (a file stem in `isaacsimenvs/robots/setups/`), set in the run recipe or on
 the command line. The older ids stay registered as aliases that carry their setup:
 `FoldPoolPhysx<Robot>` -> `RigidCloth`, `Cloth<Robot>` -> `Cloth`, e.g.
 `Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0` = `RigidCloth` + `flexiv_wuji_right_real`.
@@ -69,7 +69,7 @@ For evaluation and viewers the env answers `fold_error()`, `fold_targets_w()`,
 
 Robots (`RobotSpec`s and the URDF -> USD pipeline) are `isaacsimenvs/robots/`, shared with the Play
 task; the training-time interactive viewer is `isaacsimenvs/scripts/visualization/interactive_viewer/`.
-The fold shapes are YAML designs with a PNG each in `isaacsimenvs/scripts/configs/rigid_cloth_designs/`
+The fold shapes are YAML designs with a PNG each in `isaacsimenvs/tasks/cloth/config/designs/`
 (regenerate the PNGs with `isaacsimenvs/scripts/visualization/rigid_cloth/render_designs.py`).
 
 The observation is the encoding the Play prior was trained on: the sheet's moving half as a rigid
@@ -90,7 +90,7 @@ RUN_TAG=base WANDB=1 experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-
 ```
 
 - The recipe supplies env count, epochs, minibatch and the robot setup; DR comes from its `dr:` blocks
-  (`isaacsimenvs/scripts/configs/README.md`). Override anything with hydra arguments.
+  (`config/README.md`). Override anything with hydra arguments.
 - `--checkpoint` loads model + normalizers only (`--checkpoint_load_mode weights`, the default here);
   `LOAD_MODE=resume` also loads the optimizer and epoch counter, `max_epochs` is then the total.
 - `PRIORS="<s1> <s2> <s3>"` gives each array index its own start checkpoint.

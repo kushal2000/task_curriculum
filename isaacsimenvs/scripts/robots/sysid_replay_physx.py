@@ -54,7 +54,7 @@ import torch  # noqa: E402
 
 import isaacsimenvs  # noqa: E402, F401
 from isaacsimenvs.scripts.evaluation.protocol import disable_randomization  # noqa: E402
-from isaacsimenvs.scripts.configs.loader import hydra_task_config_with_yaml  # noqa: E402
+from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sysid_replay_data import FRAME_DT, JOINT_NAMES, WINDOW_FRAMES, load_trials, make_windows  # noqa: E402

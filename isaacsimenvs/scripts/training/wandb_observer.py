@@ -12,7 +12,7 @@ from datetime import datetime
 
 from rl_games.common.algo_observer import AlgoObserver
 
-from isaacsimenvs.scripts.configs.formatting import omegaconf_to_dict
+from isaacsimenvs.scripts.training.formatting import omegaconf_to_dict
 
 
 def _retry(times: int, exceptions: tuple):
