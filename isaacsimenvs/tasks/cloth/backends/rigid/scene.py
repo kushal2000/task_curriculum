@@ -1,6 +1,6 @@
 """Building the pool: every fold shape as a PhysX articulation (one USD per shape and per-env sheet
-size, referenced from each env that carries the shape), the pool adapter as the backend's
-``object``, the per-episode shape draw, and the folded-start tables. Functions of the
+size, referenced from each env that carries the shape) gathered in the backend's ``pool``
+(``pool.PlatePool``), the per-episode shape draw, and the folded-start tables. Functions of the
 ``RigidBackend`` (``b``)."""
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from isaacsimenvs.tasks.cloth.backends.rigid import assets as fsa
 from isaacsimenvs.tasks.cloth.backends.rigid import checks
 from isaacsimenvs.tasks.cloth.backends.rigid import contacts
 from isaacsimenvs.tasks.cloth.backends.rigid.physx import author_articulation_props, prepare_collider_asset
-from isaacsimenvs.tasks.cloth.backends.rigid.pool import PoolAsClothMesh, PoolAsRigidObject
+from isaacsimenvs.tasks.cloth.backends.rigid.pool import PlatePool
 from isaacsimenvs.tasks.cloth.backends.rigid.usd import bulk_edit_layer
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
@@ -124,8 +124,8 @@ def _spawn_shape(b, s: int, shape, usd_dir: Path, park_local):
 
 
 def install_pool(b) -> None:
-    """Spawn every pool shape as its own articulation, all parked, and the pool adapter. Sets
-    ``arts``, ``mesh``, ``object``, ``rest_local``, ``keypoint_idx``, ``xy_scale``, ``env_size``."""
+    """Spawn every pool shape as its own articulation, all parked, and the pool. Sets ``arts``,
+    ``pool``, ``rest_local``, ``keypoint_idx``, ``xy_scale``, ``env_size``."""
     from isaaclab.actuators import ImplicitActuatorCfg
     from isaaclab.assets import ArticulationCfg
 
@@ -185,33 +185,24 @@ def install_pool(b) -> None:
     growth = (b.env_size - float(c.size)).clamp(min=0.0) * (0.5 * math.sqrt(2.0))
     centre_offset = growth.unsqueeze(1) * reach.unsqueeze(0)
 
-    mesh = PoolAsClothMesh(
+    carried = None
+    if b.env_shape_np is not None:
+        shape_of = torch.as_tensor(b.env_shape_np, device=b.device)
+        carried = shape_of.unsqueeze(0) == torch.arange(len(b.shapes), device=b.device).unsqueeze(1)
+    pool = PlatePool(
         arts,
         mappings=[fs.grid_plate_map(sh, c.resolution) for sh in b.shapes],
         body_prefix=fsa.BODY_PREFIX,
         num_envs=b.num_envs,
         device=b.device,
         xy_scale=b.xy_scale,
-    )
-    if b.env_shape_np is not None:
-        shape_of = torch.as_tensor(b.env_shape_np, device=b.device)
-        mesh.set_carried(shape_of.unsqueeze(0) == torch.arange(len(b.shapes), device=b.device).unsqueeze(1))
-    b.mesh = mesh
-    spawn_z = float(b.cfg.reset.table_reset_z) + c.start_height
-    b.object = PoolAsRigidObject(
-        mesh,
-        articulations=arts,
-        env_origins=lambda: b.scene.env_origins,
         park_local=park,
         centre_offset=centre_offset,
-        num_envs=b.num_envs,
-        rest_local=verts,
-        keypoint_idx=b.keypoint_idx,
-        corner_idx=b.keypoint_idx,
-        corner_rest=[verts[i] for i in b.keypoint_idx],
-        spawn_z=spawn_z,
-        device=b.device,
+        spawn_z=float(b.cfg.reset.table_reset_z) + c.start_height,
+        env_origins=lambda: b.scene.env_origins,
+        carried=carried,
     )
+    b.pool = pool
     _write_object_scale(b)
     print(
         "[fold_pool] pool: "
@@ -251,10 +242,10 @@ def draw_episode(b, env_ids: torch.Tensor) -> None:
     """The episode's shape (drawn by ``fold_pool.weights``, or the env's own) and folded start."""
     if b.env_shape_np is not None:
         # One shape per env: the env's own, every episode.
-        draw = b.object.first_carried()[env_ids.to(b.object.active.device)]
+        draw = b.pool.first_carried()[env_ids.to(b.pool.active.device)]
     else:
         draw = torch.multinomial(b.shape_weights, int(env_ids.numel()), replacement=True)
-    b.object.select(env_ids, draw.to(b.object.active.device))
+    b.pool.select(env_ids, draw.to(b.pool.active.device))
     if b.start_tables is not None:
         draw_start_folds(b, env_ids, draw.to(b.device))
 
@@ -321,8 +312,8 @@ def draw_start_folds(b, env_ids: torch.Tensor, draw: torch.Tensor) -> None:
             continue
         if table.shape[0] == 0:  # no start but the target's: flat
             folded &= ~on
-            b.object.set_start_joints(s, ids, torch.zeros((ids.numel(), table.shape[1]), device=b.device))
+            b.pool.set_start_joints(s, ids, torch.zeros((ids.numel(), table.shape[1]), device=b.device))
             continue
         k = torch.randint(table.shape[0], (ids.numel(),), device=b.device)
-        b.object.set_start_joints(s, ids, table[k] * torch.gather(ang[on], 1, part[k]))
+        b.pool.set_start_joints(s, ids, table[k] * torch.gather(ang[on], 1, part[k]))
     b.start_folded[env_ids] = folded

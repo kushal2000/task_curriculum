@@ -14,7 +14,7 @@ marker, sheet), what the task reads from it and what it writes to it.
 
 The scene builder (``backends/scene.py``) and the Newton patches read the backend the way they read
 an env: ``cfg``, ``device``, ``num_envs``, ``robot_spec``, ``scene``, ``sim``, and the assets
-``robot``, ``table``, ``goal_viz``, ``object``.
+``robot``, ``table``, ``goal_viz``.
 """
 
 from __future__ import annotations
@@ -22,9 +22,28 @@ from __future__ import annotations
 import torch
 
 from ..mdp.state import SheetLayout
-from . import scene as scene_builder
 
-__all__ = ["ClothBackend"]
+__all__ = ["ClothBackend", "reset_yaw", "sheet_yaw"]
+
+
+def sheet_yaw(quat_wxyz: torch.Tensor) -> torch.Tensor:
+    """``(n, 4) -> (n,)``: the heading (rotation about +z) of wxyz quaternions."""
+    qw, qx, qy, qz = quat_wxyz[:, 0], quat_wxyz[:, 1], quat_wxyz[:, 2], quat_wxyz[:, 3]
+    return torch.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+
+
+def reset_yaw(quat_wxyz: torch.Tensor) -> torch.Tensor:
+    """``(n, 4) -> (n,)``: the heading a sheet starts at for a reset pose's wxyz quaternion.
+
+    **Not** :func:`sheet_yaw` of it: the quaternion's components are first reordered (x, y, z, w),
+    as Isaac Lab 3.0's pose-write conversion reorders every root-pose write on Newton, and the
+    heading is decoded from that. For the random draws of training this is harmless -- a uniform
+    SO(3) draw relabelled is still uniform, so the heading is still uniform on [0, 2 pi) -- but a
+    pure yaw arrives as (0, 0, sin, cos) and decodes to 180 deg, so the pinned evaluation start
+    (identity) puts the sheet at 180 deg. Kept on both backends: every cloth result so far was
+    produced under it, and fixing it would move the pinned start.
+    """
+    return sheet_yaw(torch.cat((quat_wxyz[..., 1:4], quat_wxyz[..., 0:1]), dim=-1))
 
 
 class ClothBackend:
@@ -38,11 +57,13 @@ class ClothBackend:
         """Spawn every asset; the scene builder ends with :meth:`install_sheet`."""
         self.scene, self.sim = scene, sim
         self.device, self.num_envs = sim.device, scene.num_envs
+        from . import scene as scene_builder
+
         # Through the module: the Newton backend wraps it with the scene replication.
         scene_builder.setup_scene(self)
 
     def install_sheet(self) -> None:
-        """Author the sheet; set ``object`` and fill ``object_scale`` (N, 3)."""
+        """Author the sheet and fill ``object_scale`` (N, 3)."""
         raise NotImplementedError
 
     def finish_setup(self) -> None:
@@ -65,9 +86,9 @@ class ClothBackend:
         raise NotImplementedError
 
     def write_sheet(self, env_ids: torch.Tensor, pose_w: torch.Tensor) -> None:
-        """Lay the sheet flat at ``pose_w`` (n, 7): its xy and its yaw; at rest."""
-        self.object.write_root_pose_to_sim(pose_w, env_ids=env_ids)
-        self.object.write_root_velocity_to_sim(torch.zeros(env_ids.numel(), 6, device=self.device), env_ids=env_ids)
+        """Lay the sheet flat, at rest, at ``pose_w`` (n, 7, world, wxyz): at its xy (plus the
+        backend's own offset), the spawn height, and the heading :func:`reset_yaw` decodes."""
+        raise NotImplementedError
 
     # ------------------------------------------------------------------ per reset / per step
 

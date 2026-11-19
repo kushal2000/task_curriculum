@@ -1,26 +1,28 @@
-"""Present the POOL of fold-shape articulations as the one cloth the fold task knows how to score.
+"""The POOL of fold-shape articulations, as one sheet per env.
 
 One policy trains on several shapes at once. Each shape is its own articulation; an env carries every
 shape (one ACTIVE on the table, the others PARKED -- hovering metres away, where nothing can touch
 them) or, with ``fold_pool.one_shape_per_env``, just one.
 
-:class:`PoolAsClothMesh` reconstructs the ``resolution x resolution`` particle cloud from the ACTIVE
-shape's body poses (``fold_shapes.grid_plate_map``), so the task code sees a cloth;
-:class:`PoolAsRigidObject` is ``env.object``. Reads are the inherited ``ClothAsRigidObject`` ones;
-writes place the active shape and park the rest.
+:class:`PlatePool` reads the ``resolution x resolution`` grid of the ACTIVE shape from its body poses
+(``fold_shapes.grid_plate_map``) -- the points the task scores, the same layout for every shape --
+and writes resets: the active shape placed, the rest parked.
 
 Isaac Lab 2.3 on PhysX: wxyz quaternions on reads and writes; ``write_joint_state_to_sim`` takes
-``env_ids`` normally. The layout is still MEASURED at startup (``detect_quat_layout``); the default
-only matters before that. Pure torch, no Isaac imports -- testable on a CPU.
+``env_ids`` normally. The read layout is still MEASURED at startup (``detect_quat_layout``); the
+default only matters before that. Pure torch, no Isaac imports -- testable on a CPU.
 """
 
 from __future__ import annotations
 
 import torch
 
-from isaacsimenvs.tasks.cloth.backends.adapter import ClothAsRigidObject, _to_torch, task_yaw
+__all__ = ["PlatePool", "to_torch"]
 
-__all__ = ["PoolAsClothMesh", "PoolAsRigidObject", "xyzw_pose_to_wxyz"]
+
+def to_torch(value):
+    """Isaac Lab 3.0 hands back warp-backed ProxyArrays; the task code wants torch."""
+    return value.torch if hasattr(value, "torch") else value
 
 
 def _quat_apply(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
@@ -31,18 +33,20 @@ def _quat_apply(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     return v + w * t + torch.cross(xyz, t, dim=-1)
 
 
+
 def _sim_quat_to_wxyz(q: torch.Tensor, layout: str) -> torch.Tensor:
     """``(..., 4)`` quaternion as the articulation API reports it (``layout``), as wxyz.
 
     The resting value is ambiguous between the two layouts -- ``(0, 0, 0, 1)`` is the xyzw identity
     and also the wxyz half-turn about z -- and reading the wrong one mirrors every plate (a 100 mm
-    sheet read as 47 mm). Hence the measurement in ``PoolAsClothMesh.detect_quat_layout``.
+    sheet read as 47 mm). Hence the measurement in ``PlatePool.detect_quat_layout``.
     """
     if layout == "wxyz":
         return q
     if layout != "xyzw":
         raise ValueError(f"unknown quaternion layout {layout!r}; expected 'xyzw' or 'wxyz'")
     return torch.cat((q[..., 3:4], q[..., 0:3]), dim=-1)
+
 
 
 def _yaw_quat(yaw: torch.Tensor) -> torch.Tensor:
@@ -54,19 +58,14 @@ def _yaw_quat(yaw: torch.Tensor) -> torch.Tensor:
     return out
 
 
-def xyzw_pose_to_wxyz(pose_xyzw: torch.Tensor) -> torch.Tensor:
-    """``(n, 7)`` position + (x, y, z, w) quaternion -> position + (w, x, y, z)."""
-    out = pose_xyzw.clone()
-    out[:, 3] = pose_xyzw[:, 6]
-    out[:, 4:7] = pose_xyzw[:, 3:6]
-    return out
 
-
-class PoolAsClothMesh:
-    """The active shape of each env, seen as the cloth's particle grid.
+class PlatePool:
+    """Every pool shape's articulation in every env, presented as one sheet per env.
 
     ``mappings[s]`` is ``fold_shapes.grid_plate_map(shapes[s], resolution)`` -- the same ordering
-    for every shape, so the cloud has one layout whatever shape an env is running.
+    for every shape, so the grid has one layout whatever shape an env is running. ``park_local`` is
+    ``(S, 3)``: where each shape hovers when parked, relative to its env origin -- far from
+    everything in the env and from each other (worlds never collide, so not from OTHER envs).
     """
 
     def __init__(
@@ -78,6 +77,11 @@ class PoolAsClothMesh:
         num_envs: int,
         device,
         xy_scale: torch.Tensor | None = None,
+        park_local: torch.Tensor,
+        centre_offset: torch.Tensor | None = None,
+        spawn_z: float,
+        env_origins,
+        carried: torch.Tensor | None = None,
     ) -> None:
         if len(articulations) != len(mappings):
             raise ValueError("one grid mapping per articulation")
@@ -89,7 +93,6 @@ class PoolAsClothMesh:
         self._prefix = body_prefix
         self._num_envs = int(num_envs)
         self._device = device
-        self.data = _PoolMeshData(self)
         # (S, P, 3) local points, in each plate's body frame (= sheet frame at rest).
         self._local = torch.tensor(
             [[pt for _, pt in m] for m in mappings], device=device, dtype=torch.float32
@@ -104,21 +107,43 @@ class PoolAsClothMesh:
         self._scale3 = torch.stack((scale, scale, torch.ones_like(scale)), dim=-1).unsqueeze(1)
         self._body_idx: list[torch.Tensor] | None = None
         self._quat_layout = "wxyz"
-        #: Which shape each env is running. Set by ``PoolAsRigidObject.select``.
+        #: Which shape each env is running. Set by :meth:`select`.
         self.active = torch.zeros(self._num_envs, device=device, dtype=torch.long)
         #: Per shape, which envs carry it, as ``(S, N)`` bool. Every env carries every shape unless
-        #: the env says otherwise (``set_carried``: one shape per env on PhysX). Resolved against the
-        #: simulator's own instance order on first use (``_resolve_members``).
-        self.carried = torch.ones((len(self._arts), self._num_envs), device=device, dtype=torch.bool)
+        #: ``carried`` says otherwise (one shape per env). Resolved against the simulator's own
+        #: instance order on first use (``_resolve_members``).
+        self.carried = (
+            torch.ones((len(self._arts), self._num_envs), device=device, dtype=torch.bool)
+            if carried is None
+            else carried.to(device, torch.bool)
+        )
         self._members: list[torch.Tensor] | None = None
         self._local_of: torch.Tensor | None = None
         self._identity: list[bool] = []
 
-    def set_carried(self, carried: torch.Tensor) -> None:
-        """``(S, N)`` bool: which envs carry each shape. Before first use (membership is resolved once)."""
-        if self._members is not None:
-            raise RuntimeError("pool membership already resolved; set_carried must come first")
-        self.carried = carried.to(self._device, torch.bool)
+        self._spawn_z = float(spawn_z)
+        #: ``env_origins`` may be a tensor or a zero-argument callable returning one -- the backend
+        #: builds the pool inside the scene hook, before its origins exist.
+        self._origins_src = env_origins
+        self._park_local = park_local.to(self._device, torch.float32)
+        #: (N, 3) world-frame shift of each env's reset centre -- e.g. toward the robot, so a large
+        #: sheet's far edge stays within reach. Not rotated by the yaw draw: it moves the sheet, it
+        #: is not part of it.
+        self._centre_offset = (
+            torch.zeros((self._num_envs, 3), device=self._device)
+            if centre_offset is None
+            else centre_offset.to(self._device, torch.float32)
+        )
+        # Every plate frame sits at the sheet origin, so the root pose IS the sheet pose and the
+        # offset starts at zero. Kept, and calibrated at startup, because an analytically-zero
+        # offset once turned out to be off by twice its own value.
+        self._root_offset = torch.zeros((len(self._arts), 3), device=self._device)
+        #: Per shape, ``(N, num_joints)`` hinge angles the active shape starts the episode at (see
+        #: :meth:`set_start_joints`); zero = flat. Created on first use, when joint counts exist.
+        self._start_q: dict[int, torch.Tensor] = {}
+        self._parked: list[torch.Tensor] = []
+        self._parked_local: list[torch.Tensor] | None = None
+        self.select(torch.arange(self._num_envs, device=self._device), self.first_carried())
 
     def _resolve_members(self) -> list[torch.Tensor]:
         """Per shape, the global env id of each of its articulation's instances, in instance order.
@@ -214,7 +239,7 @@ class PoolAsClothMesh:
         scores = {}
         for layout in ("xyzw", "wxyz"):
             self._quat_layout = layout
-            got = self._positions()[0]
+            got = self.positions()[0]
             got = got - got.mean(dim=0, keepdim=True)
             scores[layout] = float((got[:, :2] - want[:, :2]).norm(dim=-1).max())
         best = min(scores, key=scores.get)
@@ -246,10 +271,10 @@ class PoolAsClothMesh:
         pos = getattr(data, "body_pos_w", None)
         quat = getattr(data, "body_quat_w", None)
         if pos is None or quat is None:
-            state = _to_torch(data.body_state_w)
+            state = to_torch(data.body_state_w)
             pos, quat = state[..., 0:3], state[..., 3:7]
         else:
-            pos, quat = _to_torch(pos), _to_torch(quat)
+            pos, quat = to_torch(pos), to_torch(quat)
         return pos, _sim_quat_to_wxyz(quat, self._quat_layout)
 
     def shape_positions(self, s: int) -> torch.Tensor:
@@ -260,7 +285,7 @@ class PoolAsClothMesh:
         local = self._local[s].unsqueeze(0) * self._scale3[self.members(s)]
         return self._full(s, pos[:, idx, :] + _quat_apply(quat[:, idx, :], local))
 
-    def _positions(self) -> torch.Tensor:
+    def positions(self) -> torch.Tensor:
         """``(num_envs, P, 3)``: each env's ACTIVE shape. Every shape is evaluated and selected --
         five gathers of 49 points beat a data-dependent branch inside a captured step."""
         out = None
@@ -270,7 +295,7 @@ class PoolAsClothMesh:
             out = p if out is None else torch.where(sel, p, out)
         return out
 
-    def _velocities(self) -> torch.Tensor:
+    def velocities(self) -> torch.Tensor:
         """``(num_envs, P, 3)`` world velocities ``v + omega x r`` of the active shape."""
         out = None
         for s, art in enumerate(self._arts):
@@ -282,77 +307,14 @@ class PoolAsClothMesh:
             if ang is None:
                 ang = data.body_com_ang_vel_w
             idx = self._resolve_bodies()[s]
-            lin = _to_torch(lin)[:, idx, :]
-            ang = _to_torch(ang)[:, idx, :]
+            lin = to_torch(lin)[:, idx, :]
+            ang = to_torch(ang)[:, idx, :]
             quat = self._pose(art)[1][:, idx, :]
             local = self._local[s].unsqueeze(0) * self._scale3[self.members(s)]
             v = self._full(s, lin + torch.cross(ang, _quat_apply(quat, local), dim=-1))
             sel = (self.active == s).view(-1, 1, 1)
             out = v if out is None else torch.where(sel, v, out)
         return out
-
-    def write_nodal_pos_to_sim_index(self, target, env_ids) -> None:
-        raise NotImplementedError("the pool is repositioned by root pose -- see PoolAsRigidObject")
-
-    def write_nodal_velocity_to_sim_index(self, target, env_ids) -> None:
-        raise NotImplementedError("the pool is stopped by zeroing root and joint velocities")
-
-
-class _PoolMeshData:
-    def __init__(self, owner: PoolAsClothMesh) -> None:
-        self._owner = owner
-
-    @property
-    def nodal_pos_w(self) -> torch.Tensor:
-        return self._owner._positions().reshape(-1, 3)
-
-    @property
-    def nodal_vel_w(self) -> torch.Tensor:
-        return self._owner._velocities().reshape(-1, 3)
-
-
-class PoolAsRigidObject(ClothAsRigidObject):
-    """``env.object`` for the pool: places the active shape, parks the others.
-
-    ``park_local`` is ``(S, 3)``: where each shape hovers when parked, relative to its env origin.
-    The offsets must be far from everything in the env and from each other; worlds never collide, so
-    they need not be far from OTHER envs. ``env_origins`` may be a tensor or a zero-argument callable
-    returning one -- the env builds this object inside the scene hook, before its origins exist.
-    """
-
-    def __init__(
-        self,
-        mesh: PoolAsClothMesh,
-        *,
-        articulations,
-        env_origins: torch.Tensor,
-        park_local: torch.Tensor,
-        centre_offset: torch.Tensor | None = None,
-        **kwargs,
-    ):
-        super().__init__(mesh, **kwargs)
-        self._mesh = mesh
-        self._arts = list(articulations)
-        self._origins_src = env_origins
-        self._park_local = park_local.to(self._device, torch.float32)
-        #: (N, 3) world-frame shift of each env's reset centre -- e.g. toward the robot, so a large
-        #: sheet's far edge stays within reach. Not rotated by the yaw draw: it moves the sheet, it
-        #: is not part of it.
-        self._centre_offset = (
-            torch.zeros((self._num_envs, 3), device=self._device)
-            if centre_offset is None
-            else centre_offset.to(self._device, torch.float32)
-        )
-        # Every plate frame sits at the sheet origin, so the root pose IS the sheet pose and the
-        # offset starts at zero. Kept, and calibrated at startup, because an analytically-zero
-        # offset once turned out to be off by twice its own value.
-        self._root_offset = torch.zeros((mesh.num_shapes, 3), device=self._device)
-        #: Per shape, ``(N, num_joints)`` hinge angles the active shape starts the episode at (see
-        #: :meth:`set_start_joints`); zero = flat. Created on first use, when joint counts exist.
-        self._start_q: dict[int, torch.Tensor] = {}
-        self._parked: list[torch.Tensor] = []
-        self._parked_local: list[torch.Tensor] | None = None
-        self.select(torch.arange(self._num_envs, device=self._device), self.first_carried())
 
     # ------------------------------------------------------------ selection
 
@@ -361,17 +323,17 @@ class PoolAsRigidObject(ClothAsRigidObject):
 
         Recomputes the per-shape parked env lists here, at reset time, so :meth:`park` -- which runs
         every step -- does no data-dependent indexing of its own. An env can only run a shape it
-        carries (``PoolAsClothMesh.carried``).
+        carries (``carried``).
         """
-        shape_ids = shape_ids.to(self._mesh.active.device, self._mesh.active.dtype)
-        env_ids = torch.as_tensor(env_ids, device=self._mesh.active.device, dtype=torch.long)
-        carried = self._mesh.carried
+        shape_ids = shape_ids.to(self.active.device, self.active.dtype)
+        env_ids = torch.as_tensor(env_ids, device=self.active.device, dtype=torch.long)
+        carried = self.carried
         if not bool(carried.all()) and not bool(carried[shape_ids, env_ids].all()):
             raise ValueError("select: an env was asked to run a pool shape it does not carry")
-        self._mesh.active[env_ids] = shape_ids
+        self.active[env_ids] = shape_ids
         parked = [
-            ((self._mesh.active != s) & carried[s]).nonzero(as_tuple=True)[0]
-            for s in range(self._mesh.num_shapes)
+            ((self.active != s) & carried[s]).nonzero(as_tuple=True)[0]
+            for s in range(self.num_shapes)
         ]
         self._parked = parked
         self._parked_counts = [int(p.numel()) for p in parked]
@@ -379,11 +341,7 @@ class PoolAsRigidObject(ClothAsRigidObject):
 
     def first_carried(self) -> torch.Tensor:
         """``(N,)`` each env's lowest-index carried shape: 0 everywhere unless one shape per env."""
-        return self._mesh.carried.to(torch.int8).argmax(dim=0).to(self._mesh.active.device, torch.long)
-
-    @property
-    def active(self) -> torch.Tensor:
-        return self._mesh.active
+        return self.carried.to(torch.int8).argmax(dim=0).to(self.active.device, torch.long)
 
     @property
     def _origins(self) -> torch.Tensor:
@@ -392,32 +350,31 @@ class PoolAsRigidObject(ClothAsRigidObject):
 
     # ------------------------------------------------------------ writes
 
-    def write_root_pose_to_sim(self, root_pose: torch.Tensor, env_ids=None) -> None:
-        """Active shape flat at the requested XY and yaw (``task_yaw``); the rest parked. Every shape
-        of ``env_ids`` is stopped and flattened."""
-        if env_ids is None:
-            env_ids = torch.arange(self._num_envs, device=self._device)
+    def place(self, env_ids: torch.Tensor, centre_xy: torch.Tensor, yaw: torch.Tensor) -> None:
+        """Lay the active shape of ``env_ids`` at ``centre_xy`` (n, 2, world) and heading ``yaw``
+        (n,), at the spawn height, at rest -- at its start angles (:meth:`set_start_joints`), else
+        flat; park the rest of each env's shapes, flat and at rest."""
         env_ids = torch.as_tensor(env_ids, device=self._device, dtype=torch.long)
         n = env_ids.shape[0]
 
-        centre = root_pose[:, :3] + self._centre_offset[env_ids]
+        centre = torch.zeros((n, 3), device=self._device)
+        centre[:, :2] = centre_xy
+        centre = centre + self._centre_offset[env_ids]
         centre[:, 2] = self._spawn_z
-        quat = _yaw_quat(task_yaw(root_pose))  # wxyz
-        active = self._mesh.active[env_ids]
+        quat = _yaw_quat(yaw)  # wxyz
+        active = self.active[env_ids]
         park_q = torch.zeros((n, 4), device=self._device)
         park_q[:, 0] = 1.0
         for s, art in enumerate(self._arts):
             on = (active == s).unsqueeze(1)
             placed = centre + _quat_apply(quat, self._root_offset[s].expand(n, -1))
             parked = self._origins[env_ids] + self._park_local[s]
-            pos = torch.where(on, placed, parked)
-            q = torch.where(on, quat, park_q)
-            pose = torch.cat((pos, q[:, 1:4], q[:, 0:1]), dim=-1)  # xyzw out, as documented
-            keep, local = self._mesh.local_rows(s, env_ids)
+            pose = torch.cat((torch.where(on, placed, parked), torch.where(on, quat, park_q)), dim=-1)
+            keep, local = self.local_rows(s, env_ids)
             if keep is not None:
                 pose = pose[keep]
             if local.numel():
-                self._write_root_pose(art, pose, local)
+                art.write_root_pose_to_sim(pose, local)
             self._stop(s, env_ids)
 
     def park(self) -> None:
@@ -429,30 +386,22 @@ class PoolAsRigidObject(ClothAsRigidObject):
         per env nothing is ever parked and this writes nothing.
         """
         if self._parked_local is None:
-            self._parked_local = [self._mesh.local_rows(s, p)[1] for s, p in enumerate(self._parked)]
+            self._parked_local = [self.local_rows(s, p)[1] for s, p in enumerate(self._parked)]
         for s, art in enumerate(self._arts):
             if self._parked_counts[s] == 0:
                 continue
             ids, local = self._parked[s], self._parked_local[s]
             pose = torch.zeros((ids.shape[0], 7), device=self._device)
             pose[:, :3] = self._origins[ids] + self._park_local[s]
-            pose[:, 6] = 1.0
-            self._write_root_pose(art, pose, local)
+            pose[:, 3] = 1.0  # identity, wxyz
+            art.write_root_pose_to_sim(pose, local)
             art.write_root_velocity_to_sim(torch.zeros((ids.shape[0], 6), device=self._device), local)
-
-    def write_root_velocity_to_sim(self, root_velocity: torch.Tensor, env_ids=None) -> None:
-        if env_ids is None:
-            env_ids = torch.arange(self._num_envs, device=self._device)
-        env_ids = torch.as_tensor(env_ids, device=self._device, dtype=torch.long)
-        for s in range(len(self._arts)):
-            self._stop(s, env_ids)
 
     def _stop(self, s: int, env_ids: torch.Tensor) -> None:
         """Shape ``s`` at rest in ``env_ids``: flat, or -- where it is the active shape -- at its start
-        angles. The reset writes root pose and then root velocity, and both stop every shape, so the
-        start angles must come from here or the second write would flatten them again."""
+        angles."""
         art = self._arts[s]
-        keep, local = self._mesh.local_rows(s, env_ids)
+        keep, local = self.local_rows(s, env_ids)
         if keep is not None:
             env_ids = env_ids[keep]
         if local.numel() == 0:
@@ -461,7 +410,7 @@ class PoolAsRigidObject(ClothAsRigidObject):
         zeros = torch.zeros((env_ids.shape[0], art.num_joints), device=self._device)
         q = zeros
         if s in self._start_q:
-            on = (self._mesh.active[env_ids] == s).unsqueeze(1)
+            on = (self.active[env_ids] == s).unsqueeze(1)
             q = torch.where(on, self._start_q[s][env_ids], zeros)
         self._write_joints(art, q, zeros, local)
         if hasattr(art, "set_joint_position_target"):
@@ -481,7 +430,7 @@ class PoolAsRigidObject(ClothAsRigidObject):
         if env_ids is None:
             env_ids = torch.arange(self._num_envs, device=self._device)
         env_ids = torch.as_tensor(env_ids, device=self._device, dtype=torch.long)
-        keep, local = self._mesh.local_rows(shape, env_ids)
+        keep, local = self.local_rows(shape, env_ids)
         if keep is not None:
             position = position[keep]
         self._write_joints(self._arts[shape], position, torch.zeros_like(position), local)
@@ -499,10 +448,7 @@ class PoolAsRigidObject(ClothAsRigidObject):
     def centre_offset(self) -> torch.Tensor:
         return self._centre_offset
 
-    # The two sim writes (PhysX: wxyz in, ``env_ids`` as given).
-
-    def _write_root_pose(self, art, pose_xyzw: torch.Tensor, env_ids: torch.Tensor) -> None:
-        art.write_root_pose_to_sim(xyzw_pose_to_wxyz(pose_xyzw), env_ids)
+    # PhysX: wxyz in, ``env_ids`` as given.
 
     def _write_joints(self, art, position, velocity, env_ids: torch.Tensor) -> None:
         """``env_ids`` are the articulation's own instance indices (see ``local_rows``)."""

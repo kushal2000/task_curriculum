@@ -235,15 +235,15 @@ class ClothEnv(DirectRLEnv):
     def folded_half_topology(self) -> list[int]:
         return self.task.geometry.folded_half_topology()
 
+    def object_pos_w(self) -> torch.Tensor:
+        """``(N, 3)`` the moving half's centre: the sheet as the policy's rigid object."""
+        return self._now().object_pos_w
+
     def cloth_points_w(self) -> torch.Tensor:
         """``(N, P, 3)`` the sheet's grid points."""
         return self.backend.read_points()[0]
 
     # ------------------------------------------------------------------ old names (scripts; removed in S6)
-
-    @property
-    def object(self):
-        return self.backend.object
 
     @property
     def _env_size(self) -> torch.Tensor:

@@ -13,15 +13,14 @@ is a PhysX rest offset of ``rigid_cloth.contact_margin`` on every plate; plate-p
 (articulation self-collision disabled) whenever that margin is nonzero.
 
 **Conventions.** Two Newton quirks reach the observation and every policy was trained under them, so
-they are reproduced (``tests/test_physx_cloth_conventions.py``): the task's root-pose writes to
-the sheet arrive reordered wxyz -> xyzw (``reorder_object_pose_writes``), and the fold goal's
+they are reproduced (``tests/test_physx_cloth_conventions.py``): a reset's sheet heading is decoded
+from the quaternion reordered wxyz -> xyzw (``backends/base.reset_yaw``), and the fold goal's
 orientation is the true one's components relabelled (x, y, z, w) -> read as (w, x, y, z)
 (``RigidBackend.observed_goal_quat``).
 """
 
 from __future__ import annotations
 
-import torch
 
 from isaacsimenvs.tasks.cloth.backends.rigid.usd import bulk_edit_layer
 
@@ -33,7 +32,6 @@ __all__ = [
     "collider_paths",
     "define_scene_material",
     "prepare_collider_asset",
-    "reorder_object_pose_writes",
     "size_gpu_buffers",
 ]
 
@@ -214,26 +212,6 @@ def author_articulation_props(
         roots += 1
     stage.GetRootLayer().Save()
     return roots
-
-
-def reorder_object_pose_writes(obj) -> None:
-    """Mirror Newton's ``patches.install_pose_write_conversion`` on ``env.object``: wxyz -> xyzw.
-
-    The adapters decode the reset yaw as wxyz from what they RECEIVE, and on Newton they receive the
-    task's quaternion reordered. Reproducing the reorder keeps the decoded heading -- for a random
-    draw and for the pinned start -- identical across the two simulators.
-    """
-    for method in ("write_root_pose_to_sim", "write_root_state_to_sim", "write_root_link_pose_to_sim"):
-        original = getattr(obj, method, None)
-        if original is None:
-            continue
-
-        def converted(value, *args, _orig=original, **kwargs):
-            value = value.clone()
-            value[..., 3:7] = torch.cat((value[..., 4:7], value[..., 3:4]), dim=-1)
-            return _orig(value, *args, **kwargs)
-
-        setattr(obj, method, converted)
 
 
 def size_gpu_buffers(cfg) -> None:

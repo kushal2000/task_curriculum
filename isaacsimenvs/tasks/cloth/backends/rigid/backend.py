@@ -6,7 +6,7 @@ Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv_isaacsim``). The backend owns the pool an
     contacts.py        friction materials and contact offsets (PhysX USD, see physx.py)
     randomization.py   per-env physics DR at every reset
     checks.py          startup proofs
-    pool.py            the adapter that presents the active shape as the sheet's grid points
+    pool.py            PlatePool: the active shape's grid points, placing and parking the shapes
 
 Every env carries every pool shape (one active, the rest parked far away) unless
 ``fold_pool.one_shape_per_env``, where each env carries one. Each env's sheets are built at its own
@@ -21,11 +21,11 @@ import numpy as np
 import torch
 from isaaclab.utils.math import quat_from_matrix
 
-from isaacsimenvs.tasks.cloth.backends.base import ClothBackend
+from isaacsimenvs.tasks.cloth.backends.base import ClothBackend, reset_yaw
 from isaacsimenvs.tasks.cloth.backends.rigid import checks, contacts
 from isaacsimenvs.tasks.cloth.backends.rigid import scene as pool_scene
 from isaacsimenvs.tasks.cloth.backends.rigid.config import RigidClothEnvCfg
-from isaacsimenvs.tasks.cloth.backends.rigid.physx import DEFAULT_MU, reorder_object_pose_writes, size_gpu_buffers
+from isaacsimenvs.tasks.cloth.backends.rigid.physx import DEFAULT_MU, size_gpu_buffers
 from isaacsimenvs.tasks.cloth.backends.rigid.randomization import PlateRandomization
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 from isaacsimenvs.tasks.cloth.mdp.state import SheetLayout
@@ -107,7 +107,6 @@ class RigidBackend(ClothBackend):
     def build_scene(self, scene, sim) -> None:
         super().build_scene(scene, sim)  # ends with install_sheet
         contacts.bind_contact_materials(self)
-        reorder_object_pose_writes(self.object)
 
     def install_sheet(self) -> None:
         pool_scene.install_pool(self)
@@ -160,7 +159,10 @@ class RigidBackend(ClothBackend):
         )
 
     def read_points(self) -> tuple[torch.Tensor, torch.Tensor]:
-        return self.object._particles(), self.object._velocities()
+        return self.pool.positions(), self.pool.velocities()
+
+    def write_sheet(self, env_ids: torch.Tensor, pose_w: torch.Tensor) -> None:
+        self.pool.place(env_ids, pose_w[:, :2], reset_yaw(pose_w[:, 3:7]))
 
     def observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
         # Isaac Lab 2.3's helper is wxyz; hand the task the (x, y, z, w) relabelling Newton does.
@@ -182,7 +184,7 @@ class RigidBackend(ClothBackend):
             self.physics_dr.draw(env_ids)
 
     def pre_physics_step(self) -> None:
-        self.object.park()
+        self.pool.park()
 
     # ------------------------------------------------------------------ the pool's articulations
 
@@ -195,13 +197,13 @@ class RigidBackend(ClothBackend):
     def pool_rows(self, s: int, ids: torch.Tensor):
         """``(keep, local)``: which of env ``ids`` carry shape ``s`` (``None`` = all) and their
         instance indices in its articulation."""
-        return self.mesh.local_rows(s, ids)
+        return self.pool.local_rows(s, ids)
 
     # ------------------------------------------------------------------ logging
 
     def add_termination_reasons(self, reasons: dict[str, torch.Tensor]) -> None:
         entered = reasons["fold"]
-        active = self.object.active
+        active = self.pool.active
         for s, sh in enumerate(self.shapes):
             on = active == s
             # Averaged over finished episodes by the logger: `shape_<n>` is the share of episodes on

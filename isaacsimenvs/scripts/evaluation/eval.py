@@ -278,7 +278,9 @@ def main() -> None:
               # lifts would report a statistic about a set of episodes no other number here describes.
               scoring = ~contributed & (ep_done >= skip)
               lifted |= inner._lifted_object.bool() & scoring
-              obj_z = (inner.object.data.root_pos_w - inner.scene.env_origins)[:, 2]
+              # The cloth env's object is the sheet's moving half; Play's is a rigid tool.
+              obj_pos_w = inner.object_pos_w() if hasattr(inner, "object_pos_w") else inner.object.data.root_pos_w
+              obj_z = (obj_pos_w - inner.scene.env_origins)[:, 2]
               max_obj_z = torch.where(scoring, torch.maximum(max_obj_z, obj_z), max_obj_z)
               steps_alive += scoring.long()
 

@@ -118,7 +118,7 @@ class ClothCfg:
     that argument as "the density per-area of the mesh". The old 100.0 was written as though it
     were volumetric: it made the 0.1 x 0.1 m sheet weigh **1 kg**, a handkerchief with the mass of
     a litre of water, and it disagreed by 83x with the ``area_density = density * thickness``
-    that ``cloth_env`` computes for the ``ClothAsRigidObject`` mass proxy.
+    the env then computed for a rigid-object mass proxy of the sheet.
 
     2.0 kg/m^2 is SIM1 Table 2. Still heavy for cloth -- real cotton sheeting is 0.15-0.3 kg/m^2 --
     but it is their calibrated value and it is 50x lighter than what this ran before."""

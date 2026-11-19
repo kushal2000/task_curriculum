@@ -12,7 +12,8 @@ import math
 
 import torch
 
-from isaacsimenvs.tasks.cloth.backends.adapter import _to_torch
+from isaacsimenvs.tasks.cloth.backends.base import sheet_yaw
+from isaacsimenvs.tasks.cloth.backends.rigid.pool import to_torch
 
 __all__ = ["calibrate_start_signs", "verify_placement", "verify_start_folds"]
 
@@ -21,7 +22,7 @@ def _plate_mass(b) -> torch.Tensor:
     """``(N,)`` total plate mass per env, every shape it carries."""
     total = torch.zeros(b.num_envs, device=b.device)
     for s, a in enumerate(b.arts):
-        total[b.mesh.members(s)] += a.root_physx_view.get_masses().sum(dim=1).to(b.device)
+        total[b.pool.members(s)] += a.root_physx_view.get_masses().sum(dim=1).to(b.device)
     return total
 
 
@@ -35,7 +36,7 @@ def verify_placement(b, reset_table) -> None:
     placed the sheet 51 mm off centre. The yawed checks catch a rotation-convention error on the
     write side, which a centroid check cannot see.
     """
-    obj = b.object
+    pool = b.pool
     n = b.num_envs
     dt = float(b.cfg.sim.dt)
     origins = b.scene.env_origins
@@ -43,14 +44,14 @@ def verify_placement(b, reset_table) -> None:
     want = torch.tensor(b.rest_local, device=b.device, dtype=torch.float32)
     # (N, P, 3): each env's own flat sheet, centred.
     ref = (want - want.mean(dim=0, keepdim=True)).unsqueeze(0) * b.scale3()
-    target = origins + obj.centre_offset
+    target = origins + pool.centre_offset
 
     # The per-env sizes reached the SIMULATOR, in the right env: total plate mass per env is
     # every pool shape at density x size^2. A world/env mix-up in the build hook would show up
     # here and nowhere else -- the cloud above is built from the same scale table it would be
     # checked against.
     mass = _plate_mass(b)
-    carried = b.mesh.carried
+    carried = b.pool.carried
     want_mass = carried.sum(dim=0).float() * float(b.cfg.rigid_cloth.density) * b.env_size**2
     mass_err = float(((mass - want_mass).abs() / want_mass).max())
     if mass_err > 1e-3:
@@ -64,9 +65,8 @@ def verify_placement(b, reset_table) -> None:
         pose[:, :3] = origins
         pose[:, 3] = math.cos(0.5 * yaw)
         pose[:, 6] = math.sin(0.5 * yaw)
-        # The CLASS method, bypassing the instance wrapper (`reorder_object_pose_writes`).
-        type(obj).write_root_pose_to_sim(obj, pose)
-        obj.write_root_velocity_to_sim(torch.zeros((n, 6), device=b.device))
+        # The pose's own yaw (not a reset's: see `base.reset_yaw`).
+        pool.place(all_ids, pose[:, :2], sheet_yaw(pose[:, 3:7]))
         b.sim.step(render=False)
         b.scene.update(dt)
         return b.read_points()[0]
@@ -85,16 +85,16 @@ def verify_placement(b, reset_table) -> None:
 
     one_shape = b.env_shape_np is not None
     if one_shape:
-        obj.select(all_ids, obj.first_carried())
+        pool.select(all_ids, pool.first_carried())
     for s, sh in enumerate(b.shapes):
         ids = carried[s].nonzero(as_tuple=True)[0]  # the envs this shape is checked in
         if not one_shape:
-            obj.select(all_ids, torch.full((n,), s, device=b.device, dtype=torch.long))
+            pool.select(all_ids, torch.full((n,), s, device=b.device, dtype=torch.long))
         cloud = place(0.0)
         if s == 0:
             # Env 0's OWN sheet: with size DR it is not the nominal grid.
-            layout = b.mesh.detect_quat_layout((want.unsqueeze(0) * b.scale3())[0])
-            sc = b.mesh._quat_layout_scores
+            layout = b.pool.detect_quat_layout((want.unsqueeze(0) * b.scale3())[0])
+            sc = b.pool._quat_layout_scores
             print(
                 f"[fold_pool] quaternion layout = {layout} (flat-grid error: xyzw "
                 f"{sc['xyzw'] * 1e3:.2f} mm, wxyz {sc['wxyz'] * 1e3:.2f} mm)",
@@ -107,14 +107,14 @@ def verify_placement(b, reset_table) -> None:
             residual = float(err.norm(dim=-1).max())
             if residual < 1.0e-4:
                 break
-            obj.calibrate_root_offset(s, err[0])
+            pool.calibrate_root_offset(s, err[0])
         if residual is None or residual > 1.0e-4:
             raise RuntimeError(
                 f"[fold_pool] {sh.name}: centroid {residual * 1e3:.2f} mm off after 3 passes"
             )
 
         art = b.arts[s]
-        hinge = math.degrees(float(_to_torch(art.data.joint_pos).abs().max()))
+        hinge = math.degrees(float(to_torch(art.data.joint_pos).abs().max()))
         if hinge > 1.0:
             raise RuntimeError(
                 f"[fold_pool] {sh.name} is not flat at reset: hinge {hinge:.2f} deg"
@@ -136,17 +136,17 @@ def verify_placement(b, reset_table) -> None:
             raise RuntimeError(
                 f"[fold_pool] {sh.name}: cloud is not the placed flat sheet -- shape "
                 f"{shape_err * 1e3:.2f} mm, yawed shape {yaw_err * 1e3:.2f} mm, yawed centroid "
-                f"{cent_err * 1e3:.2f} mm (tolerance 1 mm); layout {b.mesh.quat_layout}"
+                f"{cent_err * 1e3:.2f} mm (tolerance 1 mm); layout {b.pool.quat_layout}"
             )
 
         # The parked shapes really are parked: nowhere near this env's table. (With one shape per
         # env nothing is parked.)
         for k in range(len(b.shapes)):
-            rows = (carried[k] & (obj.active != k)).nonzero(as_tuple=True)[0]
+            rows = (carried[k] & (pool.active != k)).nonzero(as_tuple=True)[0]
             if k == s or rows.numel() == 0:
                 continue
             far = (
-                (b.mesh.shape_positions(k)[rows].mean(dim=1) - origins[rows]).norm(dim=-1).min()
+                (b.pool.shape_positions(k)[rows].mean(dim=1) - origins[rows]).norm(dim=-1).min()
             )
             if float(far) < 0.5 * b.cfg.fold_pool.park_distance:
                 raise RuntimeError(
@@ -158,7 +158,7 @@ def verify_placement(b, reset_table) -> None:
         print(
             f"[fold_pool] {sh.name}: placed within {residual * 1e6:.0f} um, flat cloud within "
             f"{shape_err * 1e6:.0f} um, yawed within {yaw_err * 1e6:.0f} um, root offset "
-            f"{[round(float(v) * 1e3, 2) for v in obj.root_offset[s]]} mm",
+            f"{[round(float(v) * 1e3, 2) for v in pool.root_offset[s]]} mm",
             flush=True,
         )
     _verify_arm_clear(b, reset_table)
@@ -181,14 +181,14 @@ def _verify_arm_clear(b, reset_table, steps: int = 30, tol_deg: float = 2.0) -> 
     # fingers reads as a drifting arm (7-shape pool: 0.7 deg in every run, 6 and 13 deg twice).
     _reset_all_to(b, 0, torch.zeros((b.num_envs, int(b.arts[0].num_joints)), device=b.device), dy=-0.5)
     arm = [i for i, name in enumerate(robot.joint_names) if name in b.robot_spec.arm_joint_names]
-    home = _to_torch(robot.data.default_joint_pos).clone()
+    home = to_torch(robot.data.default_joint_pos).clone()
     robot.write_joint_state_to_sim(home, torch.zeros_like(home))
     robot.set_joint_position_target(home)
     for _ in range(steps):
         robot.write_data_to_sim()
         b.sim.step(render=False)
         b.scene.update(dt)
-    drift = math.degrees(float((_to_torch(robot.data.joint_pos) - home)[:, arm].abs().max()))
+    drift = math.degrees(float((to_torch(robot.data.joint_pos) - home)[:, arm].abs().max()))
     if drift > tol_deg:
         raise RuntimeError(
             f"[fold_pool] the arm cannot hold its home pose: a joint drifted {drift:.1f} deg in "
@@ -203,7 +203,7 @@ def _verify_pool_joint_writes(b, s: int) -> None:
     silently dropped leaves a sheet that ended an episode folded starting the next one folded."""
 
     # In the articulation's own instance order: rows [0, m/2) are `half`, the rest are not.
-    ids = b.mesh.members(s)
+    ids = b.pool.members(s)
     m = int(ids.numel())
     if m < 2:
         return
@@ -212,13 +212,13 @@ def _verify_pool_joint_writes(b, s: int) -> None:
     half = ids[: m // 2]
     test = 0.3
     q = torch.full((half.shape[0], nj), test, device=b.device, dtype=torch.float32)
-    b.object.write_joint_positions(s, q, env_ids=half)
+    b.pool.write_joint_positions(s, q, env_ids=half)
     b.sim.step(render=False)
     b.scene.update(float(b.cfg.sim.dt))
-    got = _to_torch(art.data.joint_pos)
+    got = to_torch(art.data.joint_pos)
     moved = float(got[: m // 2].abs().max())
     untouched = float(got[m // 2 :].abs().max())
-    b.object.write_joint_positions(s, torch.zeros((m, nj), device=b.device), env_ids=ids)
+    b.pool.write_joint_positions(s, torch.zeros((m, nj), device=b.device), env_ids=ids)
     b.sim.step(render=False)
     b.scene.update(float(b.cfg.sim.dt))
     if moved < 0.5 * test:
@@ -238,7 +238,7 @@ def _fold_index(b, s: int, F: int) -> torch.Tensor:
     carrying ``s``, mod ``F``. Not ``env % F``: with one shape per env (shape = ``env % S``) that
     aliases -- every box2x8 env (S=5, F=5) got the same fold and the other four went untested."""
     k = torch.zeros(b.num_envs, device=b.device, dtype=torch.long)
-    ids = b.mesh.members(s)
+    ids = b.pool.members(s)
     k[ids] = torch.arange(ids.numel(), device=b.device) % F
     return k
 
@@ -248,19 +248,18 @@ def _reset_all_to(b, s: int, q: torch.Tensor, dy: float = 0.0) -> None:
     y, via the reset path. ``dy < 0`` is away from the robot: the startup checks of the start
     folds use -0.5 m, off the table's far edge in free air, so that a tall flap at spawn height
     cannot touch the hand resting at its home pose."""
-    obj, n = b.object, b.num_envs
+    pool, n = b.pool, b.num_envs
     all_ids = torch.arange(n, device=b.device)
     pose = torch.zeros((n, 7), device=b.device, dtype=torch.float32)
     pose[:, :3] = b.scene.env_origins
     pose[:, 1] += dy
     pose[:, 3] = 1.0
     if b.env_shape_np is None:
-        obj.select(all_ids, torch.full((n,), s, device=b.device, dtype=torch.long))
+        pool.select(all_ids, torch.full((n,), s, device=b.device, dtype=torch.long))
     else:  # every env keeps its own shape; only the envs carrying `s` are measured
-        obj.select(all_ids, obj.first_carried())
-    obj.set_start_joints(s, all_ids, q)
-    type(obj).write_root_pose_to_sim(obj, pose)
-    obj.write_root_velocity_to_sim(torch.zeros((n, 6), device=b.device))
+        pool.select(all_ids, pool.first_carried())
+    pool.set_start_joints(s, all_ids, q)
+    pool.place(all_ids, pose[:, :2], sheet_yaw(pose[:, 3:7]))
 
 
 def calibrate_start_signs(b, probe_deg: float = 15.0) -> None:
@@ -288,8 +287,8 @@ def calibrate_start_signs(b, probe_deg: float = 15.0) -> None:
         z = b.read_points()[0][..., 2]
         rise = z.amax(dim=1) - z0.amax(dim=1)
         sink = z0.amin(dim=1) - z.amin(dim=1)
-        b.object.set_start_joints(s, all_ids, torch.zeros((n, table.shape[1]), device=b.device))
-        carried = b.mesh.carried[s]
+        b.pool.set_start_joints(s, all_ids, torch.zeros((n, table.shape[1]), device=b.device))
+        carried = b.pool.carried[s]
         signs = []
         for k in range(F):
             on = (kof == k) & carried
@@ -333,8 +332,8 @@ def verify_start_folds(b, angle: float, tol_deg: float = 2.0, share: float = 0.9
         b.sim.step(render=False)
         b.scene.update(dt)
         # Instance order: row i of the articulation is env members[i].
-        rows = b.mesh.members(s)
-        d = _to_torch(art.data.joint_pos) - want[rows]
+        rows = b.pool.members(s)
+        d = to_torch(art.data.joint_pos) - want[rows]
         # Wrapped: a full 180 deg start may read back as -180.
         err = torch.rad2deg(torch.atan2(torch.sin(d), torch.cos(d)).abs().amax(dim=1))
         ok = float((err < tol_deg).float().mean())
@@ -355,7 +354,7 @@ def verify_start_folds(b, angle: float, tol_deg: float = 2.0, share: float = 0.9
     # Back to the startup state: every env on shape 0, flat, no start angles left anywhere. The
     # first trainer reset redraws.
     for s, table in enumerate(b.start_tables):
-        b.object.set_start_joints(s, all_ids, torch.zeros((n, table.shape[1]), device=b.device))
+        b.pool.set_start_joints(s, all_ids, torch.zeros((n, table.shape[1]), device=b.device))
     _reset_all_to(b, 0, torch.zeros((n, b.start_tables[0].shape[1]), device=b.device))
     b.sim.step(render=False)
     b.scene.update(dt)

@@ -1,7 +1,7 @@
 """Init yaw is randomised, and everything scored survives the rotation.
 
 The sheet used to spawn axis-aligned every episode: `reset_utils` drew a Haar-uniform SO(3)
-quaternion and `ClothAsRigidObject.write_root_pose_to_sim` discarded it. The policy therefore only
+quaternion and the sheet's reset write discarded it. The policy therefore only
 ever saw one sheet heading.
 
 Turning that on required two other fixes first, both covered here, because each silently breaks on
@@ -73,7 +73,7 @@ def test_world_axis_footprint_is_NOT_rotation_invariant():
 
 
 def test_yaw_extracted_from_uniform_so3_is_uniform():
-    """The adapter takes the yaw of the existing SO(3) draw rather than opening a new RNG stream.
+    """The reset takes the yaw of the existing SO(3) draw rather than opening a new RNG stream.
 
     That is only legitimate if the yaw marginal of a Haar-uniform rotation is itself uniform.
     """
@@ -87,12 +87,12 @@ def test_yaw_extracted_from_uniform_so3_is_uniform():
     assert float((hist - 1 / 12).abs().max()) < 0.005, hist.tolist()
 
 
-def test_adapter_yaw_matches_an_explicit_rotation():
-    """The adapter's inlined yaw rotation must equal composing the rotation matrix directly."""
+def test_reset_yaw_rotation_matches_an_explicit_rotation():
+    """The reset write's inlined yaw rotation must equal composing the rotation matrix directly."""
     rest = _rest()
     for deg in ANGLES_DEG:
         theta = math.radians(deg)
-        # As written in ClothAsRigidObject.write_root_pose_to_sim.
+        # As written in VbdBackend.write_sheet.
         cos_y = torch.tensor([[math.cos(theta)]])
         sin_y = torch.tensor([[math.sin(theta)]])
         rx, ry, rz = rest[:, 0].unsqueeze(0), rest[:, 1].unsqueeze(0), rest[:, 2].unsqueeze(0)
@@ -104,7 +104,7 @@ def test_adapter_yaw_matches_an_explicit_rotation():
 
 
 def test_yaw_extraction_recovers_a_known_yaw():
-    """A pure-yaw quaternion must round-trip through the adapter's atan2 extraction."""
+    """A pure-yaw quaternion must round-trip through the atan2 extraction (``base.sheet_yaw``)."""
     for deg in ANGLES_DEG:
         theta = math.radians(deg)
         # (w, x, y, z) for a rotation of theta about z.

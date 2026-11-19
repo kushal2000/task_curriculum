@@ -23,65 +23,47 @@ REPO = REPO_ROOT
 
 
 @pytest.fixture(scope="module")
-def adapters():
-    return pytest.importorskip("isaacsimenvs.tasks.cloth.backends.rigid.pool")
-
-
-@pytest.fixture(scope="module")
-def cloth_adapter():
-    return pytest.importorskip("isaacsimenvs.tasks.cloth.backends.adapter")
+def base():
+    return pytest.importorskip("isaacsimenvs.tasks.cloth.backends.base")
 
 
 def _yaw_wxyz(yaw: float) -> torch.Tensor:
     return torch.tensor([math.cos(yaw / 2), 0.0, 0.0, math.sin(yaw / 2)])
 
 
-def test_root_pose_writes_go_out_wxyz(adapters):
-    pose = torch.tensor([[1.0, 2.0, 3.0, 0.1, 0.2, 0.3, 0.9]])  # xyzw
-    out = adapters.xyzw_pose_to_wxyz(pose)
-    assert out[0, :3].tolist() == [1.0, 2.0, 3.0]
-    assert out[0, 3:].tolist() == pytest.approx([0.9, 0.1, 0.2, 0.3])
-
-
 def _newton_object_write(value: torch.Tensor) -> torch.Tensor:
-    """What ``patches.install_pose_write_conversion`` hands ``env.object`` on Newton."""
+    """What ``patches.install_pose_write_conversion`` handed the sheet's root-pose write on Newton."""
     out = value.clone()
     out[..., 3:7] = torch.cat((value[..., 4:7], value[..., 3:4]), dim=-1)
     return out
 
 
-class _Recorder:
-    def __init__(self):
-        self.seen = None
-
-    def write_root_pose_to_sim(self, value, env_ids=None):
-        self.seen = value
+def _old_decode(root_pose: torch.Tensor) -> torch.Tensor:
+    """The heading both sheets decoded from the root pose they received (the old adapters' task_yaw)."""
+    qw, qx, qy, qz = root_pose[:, 3], root_pose[:, 4], root_pose[:, 5], root_pose[:, 6]
+    return torch.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
 
 
-def test_object_pose_reorder_matches_newton(cloth_adapter):
-    """The decoded reset heading is the same on both simulators, for a draw and for the pin."""
-    src = (REPO / "isaacsimenvs/tasks/cloth/backends/rigid/physx.py").read_text()
-    start = src.index("def reorder_object_pose_writes")
-    end = src.index("def size_gpu_buffers")
-    ns = {"torch": torch}
-    exec(src[start:end], ns)
-
-    obj = _Recorder()
-    ns["reorder_object_pose_writes"](obj)
+def test_reset_heading_is_the_reordered_decode(base):
+    """``reset_yaw`` is, bit for bit, the heading the sheet started at when its reset pose went
+    through Newton's write conversion: for a draw, and for the pinned start (180 deg)."""
     gen = torch.Generator().manual_seed(0)
     for _ in range(16):
         q = torch.randn(4, generator=gen)
         q = q / q.norm()
         pose = torch.cat((torch.zeros(3), q)).unsqueeze(0)
-        obj.write_root_pose_to_sim(pose)
-        assert torch.equal(obj.seen, _newton_object_write(pose))
-        assert float(cloth_adapter.task_yaw(obj.seen)) == pytest.approx(
-            float(cloth_adapter.task_yaw(_newton_object_write(pose)))
-        )
-    # The pinned start (identity, wxyz) decodes to 180 degrees on Newton, so it must here too.
+        assert torch.equal(base.reset_yaw(pose[:, 3:7]), _old_decode(_newton_object_write(pose)))
     pin = torch.tensor([[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]])
-    obj.write_root_pose_to_sim(pin)
-    assert abs(float(cloth_adapter.task_yaw(obj.seen))) == pytest.approx(math.pi)
+    assert abs(float(base.reset_yaw(pin[:, 3:7]))) == pytest.approx(math.pi)
+
+
+def test_sheet_yaw_is_the_plain_decode(base):
+    """``sheet_yaw`` decodes a quaternion as it is: what the startup placement proofs use."""
+    for deg in (0.0, 30.0, 90.0, -120.0):
+        q = _yaw_wxyz(math.radians(deg)).unsqueeze(0)
+        pose = torch.cat((torch.zeros(1, 3), q), dim=-1)
+        assert torch.equal(base.sheet_yaw(q), _old_decode(pose))
+        assert float(base.sheet_yaw(q)) == pytest.approx(math.radians(deg))
 
 
 def test_goal_quaternion_is_newtons_relabelling():

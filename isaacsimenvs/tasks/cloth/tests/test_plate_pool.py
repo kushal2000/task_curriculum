@@ -1,9 +1,9 @@
-"""The pool adapter shows each env's ACTIVE shape as the cloth grid, and parks the others.
+"""``PlatePool`` reads each env's ACTIVE shape as the sheet's grid, places it, and parks the others.
 
 Against fakes that speak the REAL backend's API (Isaac Lab 2.3 on PhysX: wxyz quaternions on reads
 and writes, ``env_ids`` as given) with body poses computed from ``fold_shapes``' own kinematics -- so a
 wrong grid map, a wrong shape selection or a wrong park write shows up as a wrong cloud, not as a
-passing test against a fake that agrees with the adapter. Recorded root poses are kept as xyzw.
+passing test against a fake that agrees with the pool. Recorded root poses are kept as xyzw.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ SHAPES = [fs.POOL[n] for n in fs.DEFAULT_SHAPES]
 
 
 @pytest.fixture(scope="module")
-def pool_adapter():
+def pool_mod():
     return pytest.importorskip("isaacsimenvs.tasks.cloth.backends.rigid.pool")
 
 
@@ -88,19 +88,36 @@ class _Art:
         self.joint_writes.append((pos.clone(), env_ids))
 
 
-def _pool(adapter, num_envs, *, angles=None, offsets=None, shuffle=False):
+def _origins(n):
+    return torch.tensor([[10.0 * e, 0.0, 0.0] for e in range(n)])
+
+
+def _park(num_shapes):
+    return torch.tensor([[0.0, 3.0 + 0.3 * s, 2.0] for s in range(num_shapes)])
+
+
+def _make(mod, arts, n, *, carried=None, xy_scale=None, centre_offset=None, origins=None):
+    return mod.PlatePool(
+        arts,
+        mappings=[fs.grid_plate_map(sh, RES) for sh in SHAPES],
+        body_prefix="slat_",
+        num_envs=n,
+        device=torch.device("cpu"),
+        xy_scale=xy_scale,
+        park_local=_park(len(arts)),
+        centre_offset=centre_offset,
+        spawn_z=0.6,
+        env_origins=_origins(n) if origins is None else origins,
+        carried=carried,
+    )
+
+
+def _pool(mod, num_envs, *, angles=None, offsets=None, shuffle=False):
     arts = [
         _Art(sh, num_envs, (angles or {}).get(s), (offsets or {}).get(s, (0, 0, 0)), shuffle)
         for s, sh in enumerate(SHAPES)
     ]
-    mesh = adapter.PoolAsClothMesh(
-        arts,
-        mappings=[fs.grid_plate_map(sh, RES) for sh in SHAPES],
-        body_prefix="slat_",
-        num_envs=num_envs,
-        device=torch.device("cpu"),
-    )
-    return arts, mesh
+    return arts, _make(mod, arts, num_envs)
 
 
 def _grid():
@@ -110,84 +127,55 @@ def _grid():
     )
 
 
-def test_every_shape_reproduces_the_flat_sheet(pool_adapter):
-    _arts, mesh = _pool(pool_adapter, len(SHAPES), shuffle=True)
-    mesh.active[:] = torch.arange(len(SHAPES))
-    cloud = mesh._positions()
+def test_every_shape_reproduces_the_flat_sheet(pool_mod):
+    _arts, pool = _pool(pool_mod, len(SHAPES), shuffle=True)
+    pool.active[:] = torch.arange(len(SHAPES))
+    cloud = pool.positions()
     for s in range(len(SHAPES)):
         torch.testing.assert_close(cloud[s], _grid(), atol=1e-6, rtol=0)
 
 
-def test_the_cloud_follows_each_envs_active_shape(pool_adapter):
+def test_the_cloud_follows_each_envs_active_shape(pool_mod):
     """Shapes posed at different offsets: env e must read shape active[e]'s offset, no other."""
     n = len(SHAPES)
     offsets = {s: (0.0, 0.0, 0.1 * (s + 1)) for s in range(n)}
-    _arts, mesh = _pool(pool_adapter, n, offsets=offsets)
-    mesh.active[:] = torch.tensor([(e + 2) % n for e in range(n)])
-    z = mesh._positions()[:, :, 2].mean(dim=1)
+    _arts, pool = _pool(pool_mod, n, offsets=offsets)
+    pool.active[:] = torch.tensor([(e + 2) % n for e in range(n)])
+    z = pool.positions()[:, :, 2].mean(dim=1)
     for e in range(n):
         assert abs(float(z[e]) - 0.1 * ((e + 2) % n + 1)) < 1e-6
 
 
-def test_a_half_folded_shape_reads_as_a_half_folded_sheet(pool_adapter):
+def test_a_half_folded_shape_reads_as_a_half_folded_sheet(pool_mod):
     """Every grid point of the moving half lands on its mirror image across x = 0."""
     n = len(SHAPES)
     angles = {s: {0: SHAPES[s].fold_angles(fs.HALF_FOLD)} for s in range(n)}
-    _arts, mesh = _pool(pool_adapter, 1, angles=angles)
+    _arts, pool = _pool(pool_mod, 1, angles=angles)
     rest = _grid()
     moving = rest[:, 0] > 1e-9
     for s in range(n):
-        mesh.active[:] = s
-        cloud = mesh._positions()[0]
+        pool.active[:] = s
+        cloud = pool.positions()[0]
         want = rest[moving].clone()
         want[:, 0] = -want[:, 0]
         torch.testing.assert_close(cloud[moving], want, atol=1e-6, rtol=0)
         torch.testing.assert_close(cloud[~moving], rest[~moving], atol=1e-6, rtol=0)
 
 
-def _obj(adapter, mesh, arts, n):
-    origins = torch.tensor([[10.0 * e, 0.0, 0.0] for e in range(n)])
-    park = torch.tensor([[0.0, 3.0 + 0.3 * s, 2.0] for s in range(len(arts))])
-    grid = _grid()
-    kp = [42, 48, 35, 41]
-    return (
-        adapter.PoolAsRigidObject(
-            mesh,
-            articulations=arts,
-            env_origins=origins,
-            park_local=park,
-            num_envs=n,
-            rest_local=grid.tolist(),
-            keypoint_idx=kp,
-            corner_idx=kp,
-            corner_rest=[grid[i].tolist() for i in kp],
-            spawn_z=0.6,
-            device=torch.device("cpu"),
-        ),
-        origins,
-        park,
-    )
-
-
-def test_reset_places_the_active_shape_and_parks_the_rest(pool_adapter):
+def test_reset_places_the_active_shape_and_parks_the_rest(pool_mod):
     n = 4
-    arts, mesh = _pool(pool_adapter, n)
-    obj, origins, park = _obj(pool_adapter, mesh, arts, n)
+    arts, pool = _pool(pool_mod, n)
+    origins, park = _origins(n), _park(len(arts))
     ids = torch.arange(n)
-    obj.select(ids, torch.tensor([0, 2, 4, 2]))
-    yaw = 0.7
-    # The task's reset pose, in the layout `task_yaw` decodes (see `cloth_adapter.task_yaw`).
-    req = torch.zeros((n, 7))
-    req[:, :3] = origins + torch.tensor([0.01, -0.02, 0.9])
-    req[:, 3] = math.cos(0.5 * yaw)
-    req[:, 6] = math.sin(0.5 * yaw)
-    obj.write_root_pose_to_sim(req, ids)
-    want_yaw = float(pool_adapter.task_yaw(req)[0])
+    pool.select(ids, torch.tensor([0, 2, 4, 2]))
+    want_yaw = 0.7
+    req = origins + torch.tensor([0.01, -0.02, 0.9])
+    pool.place(ids, req[:, :2], torch.full((n,), want_yaw))
     for s, art in enumerate(arts):
         pose, env_ids = art.pose_writes[-1]
         assert env_ids.tolist() == ids.tolist()
         for e in range(n):
-            if int(obj.active[e]) == s:
+            if int(pool.active[e]) == s:
                 assert torch.allclose(pose[e, :2], req[e, :2])
                 assert abs(float(pose[e, 2]) - 0.6) < 1e-6
                 # xyzw yaw quaternion about +z
@@ -200,14 +188,14 @@ def test_reset_places_the_active_shape_and_parks_the_rest(pool_adapter):
         assert art.joint_writes[-1][0].abs().max() == 0.0
 
 
-def test_park_writes_only_parked_envs(pool_adapter):
+def test_park_writes_only_parked_envs(pool_mod):
     n = 5
-    arts, mesh = _pool(pool_adapter, n)
-    obj, origins, park = _obj(pool_adapter, mesh, arts, n)
-    obj.select(torch.arange(n), torch.tensor([1, 1, 3, 0, 1]))
+    arts, pool = _pool(pool_mod, n)
+    origins, park = _origins(n), _park(len(arts))
+    pool.select(torch.arange(n), torch.tensor([1, 1, 3, 0, 1]))
     for a in arts:
         a.pose_writes.clear()
-    obj.park()
+    pool.park()
     for s, art in enumerate(arts):
         parked = [e for e, a in enumerate([1, 1, 3, 0, 1]) if a != s]
         assert len(art.pose_writes) == 1
@@ -216,29 +204,25 @@ def test_park_writes_only_parked_envs(pool_adapter):
         assert torch.allclose(pose[:, :3], origins[parked] + park[s])
 
 
-def test_start_angles_survive_both_reset_writes_on_the_active_shape_only(pool_adapter):
+def test_start_angles_land_on_the_active_shape_only(pool_mod):
     n = 4
-    arts, mesh = _pool(pool_adapter, n)
-    obj, origins, _park = _obj(pool_adapter, mesh, arts, n)
+    arts, pool = _pool(pool_mod, n)
+    origins = _origins(n)
     ids = torch.arange(n)
-    obj.select(ids, torch.tensor([1, 1, 4, 0]))
+    pool.select(ids, torch.tensor([1, 1, 4, 0]))
     q1 = torch.full((2, arts[1].num_joints), 0.5)
-    obj.set_start_joints(1, torch.tensor([0, 1]), q1)
+    pool.set_start_joints(1, torch.tensor([0, 1]), q1)
     # Env 2 also gets start angles for shape 1 -- it is not its active shape, so they must not land.
-    obj.set_start_joints(1, torch.tensor([2]), torch.full((1, arts[1].num_joints), 0.9))
-    req = torch.zeros((n, 7))
-    req[:, :3] = origins
-    req[:, 3] = 1.0
-    obj.write_root_pose_to_sim(req, ids)
-    obj.write_root_velocity_to_sim(torch.zeros((n, 6)), ids)  # the reset's second write
+    pool.set_start_joints(1, torch.tensor([2]), torch.full((1, arts[1].num_joints), 0.9))
+    pool.place(ids, origins[:, :2], torch.zeros(n))
     pos, env_ids = arts[1].joint_writes[-1]
     assert env_ids is None or env_ids.tolist() == ids.tolist()
     assert torch.allclose(pos[:2], q1) and pos[2:].abs().max() == 0.0
     for s in (0, 2, 3, 4):
         assert arts[s].joint_writes[-1][0].abs().max() == 0.0
     # Back to flat once cleared.
-    obj.set_start_joints(1, ids, torch.zeros((n, arts[1].num_joints)))
-    obj.write_root_velocity_to_sim(torch.zeros((n, 6)), ids)
+    pool.set_start_joints(1, ids, torch.zeros((n, arts[1].num_joints)))
+    pool.place(ids, origins[:, :2], torch.zeros(n))
     assert arts[1].joint_writes[-1][0].abs().max() == 0.0
 
 
@@ -259,7 +243,7 @@ class _View:
         self.prim_paths = paths
 
 
-def _subset_pool(adapter, n, carriers, angles=None):
+def _subset_pool(mod, n, carriers, angles=None):
     """One shape per env: shape ``s`` exists only in ``carriers[s]`` (global env ids), its instances
     in that (deliberately shuffled) order, posed with ``angles[env]`` when given."""
     arts = []
@@ -268,21 +252,13 @@ def _subset_pool(adapter, n, carriers, angles=None):
         art = _Art(sh, len(envs), {i: (angles or {}).get(e) for i, e in enumerate(envs)})
         art.root_physx_view = _View([f"/World/envs/env_{e}/FoldPool{s}/slat_x" for e in envs])
         arts.append(art)
-    mesh = adapter.PoolAsClothMesh(
-        arts,
-        mappings=[fs.grid_plate_map(sh, RES) for sh in SHAPES],
-        body_prefix="slat_",
-        num_envs=n,
-        device=torch.device("cpu"),
-    )
     carried = torch.zeros((len(SHAPES), n), dtype=torch.bool)
     for s, envs in enumerate(carriers):
         carried[s, envs] = True
-    mesh.set_carried(carried)
-    return arts, mesh
+    return arts, _make(mod, arts, n, carried=carried)
 
 
-def test_one_shape_per_env_reads_each_envs_own_instance(pool_adapter):
+def test_one_shape_per_env_reads_each_envs_own_instance(pool_mod):
     n = 10
     shape_of = [e % 5 for e in range(n)]
     carriers = [[e for e in reversed(range(n)) if shape_of[e] == s] for s in range(5)]
@@ -292,36 +268,32 @@ def test_one_shape_per_env_reads_each_envs_own_instance(pool_adapter):
         sh = SHAPES[shape_of[e]]
         angles[e] = {h.child: 0.0 for h in sh.hinges}
         angles[e][next(iter(sh.folds[fs.HALF_FOLD][0]))] = 0.1 * (e + 1)
-    arts, mesh = _subset_pool(pool_adapter, n, carriers, angles)
-    obj, _origins, _park = _obj(pool_adapter, mesh, arts, n)
-    obj.select(torch.arange(n), torch.tensor(shape_of))
-    got = mesh._positions()
-    full_arts, full_mesh = _pool(pool_adapter, n, angles={s: angles for s in range(5)})
-    full_mesh.active[:] = torch.tensor(shape_of)
-    want = full_mesh._positions()
+    arts, pool = _subset_pool(pool_mod, n, carriers, angles)
+    pool.select(torch.arange(n), torch.tensor(shape_of))
+    got = pool.positions()
+    full_arts, full_pool = _pool(pool_mod, n, angles={s: angles for s in range(5)})
+    full_pool.active[:] = torch.tensor(shape_of)
+    want = full_pool.positions()
     assert torch.allclose(got, want, atol=1e-6)
 
 
-def test_one_shape_per_env_writes_land_on_local_rows_only(pool_adapter):
+def test_one_shape_per_env_writes_land_on_local_rows_only(pool_mod):
     n = 10
     shape_of = [e % 5 for e in range(n)]
     carriers = [[e for e in reversed(range(n)) if shape_of[e] == s] for s in range(5)]
-    arts, mesh = _subset_pool(pool_adapter, n, carriers)
-    obj, origins, _park = _obj(pool_adapter, mesh, arts, n)
-    obj.select(torch.arange(n), torch.tensor(shape_of))
+    arts, pool = _subset_pool(pool_mod, n, carriers)
+    origins = _origins(n)
+    pool.select(torch.arange(n), torch.tensor(shape_of))
     with pytest.raises(ValueError):
-        obj.select(torch.tensor([0]), torch.tensor([1]))  # env 0 carries shape 0 only
+        pool.select(torch.tensor([0]), torch.tensor([1]))  # env 0 carries shape 0 only
     ids = torch.tensor([2, 7, 3])
     q = torch.full((1, arts[2].num_joints), 0.4)
-    obj.set_start_joints(2, torch.tensor([2]), q)
-    req = torch.zeros((3, 7))
-    req[:, :3] = origins[ids]
-    req[:, 3] = 1.0
+    pool.set_start_joints(2, torch.tensor([2]), q)
+    req = origins[ids]
     for a in arts:
         a.pose_writes.clear()
         a.joint_writes.clear()
-    obj.write_root_pose_to_sim(req, ids)
-    obj.write_root_velocity_to_sim(torch.zeros((3, 6)), ids)
+    pool.place(ids, req[:, :2], torch.zeros(3))
     # env 2 and env 7 run shape 2 (instances in reversed env order: 7 -> 0, 2 -> 1); env 3 runs shape 3.
     pose, local = arts[2].pose_writes[-1]
     assert sorted(local.tolist()) == [0, 1] and local.tolist() == [1, 0]
@@ -337,60 +309,43 @@ def test_one_shape_per_env_writes_land_on_local_rows_only(pool_adapter):
     # Nothing is ever parked.
     for a in arts:
         a.pose_writes.clear()
-    obj.park()
+    pool.park()
     assert all(not a.pose_writes for a in arts)
 
 
-def test_a_subset_articulation_must_match_its_carriers(pool_adapter):
+def test_a_subset_articulation_must_match_its_carriers(pool_mod):
     n = 10
     carriers = [[e for e in range(n) if e % 5 == s] for s in range(5)]
-    arts, mesh = _subset_pool(pool_adapter, n, carriers)
+    arts = []
+    for s, sh in enumerate(SHAPES):
+        envs = carriers[s]
+        art = _Art(sh, len(envs))
+        art.root_physx_view = _View([f"/World/envs/env_{e}/FoldPool{s}/slat_x" for e in envs])
+        arts.append(art)
     arts[1].root_physx_view = _View([f"/World/envs/env_{e}/FoldPool1/x" for e in (1, 6, 7)][:2] + ["/World/envs/env_7/FoldPool1/x"])
+    carried = torch.zeros((len(SHAPES), n), dtype=torch.bool)
+    for s, envs in enumerate(carriers):
+        carried[s, envs] = True
     with pytest.raises(RuntimeError):
-        mesh._positions()
+        _make(pool_mod, arts, n, carried=carried).positions()
 
 
-def test_per_env_size_scales_the_grid_and_reset_shifts_the_centre(pool_adapter):
+def test_per_env_size_scales_the_grid_and_reset_shifts_the_centre(pool_mod):
     """Env e reads a sheet ``xy_scale[e]`` times the base grid, and resets at origin + offset."""
     n = 3
     arts = [_Art(sh, n) for sh in SHAPES]
     scale = torch.tensor([1.0, 1.5, 2.0])
-    mesh = pool_adapter.PoolAsClothMesh(
-        arts,
-        mappings=[fs.grid_plate_map(sh, RES) for sh in SHAPES],
-        body_prefix="slat_",
-        num_envs=n,
-        device=torch.device("cpu"),
-        xy_scale=scale,
-    )
-    mesh.active[:] = torch.tensor([0, 3, 4])
-    cloud = mesh._positions()
+    offset = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.03, 0.0], [0.0, 0.07, 0.0]])
+    pool = _make(pool_mod, arts, n, xy_scale=scale, centre_offset=offset, origins=torch.zeros((n, 3)))
+    pool.active[:] = torch.tensor([0, 3, 4])
+    cloud = pool.positions()
     base = _grid()
     for e in range(n):
         want = base.clone()
         want[:, :2] *= float(scale[e])
         torch.testing.assert_close(cloud[e], want, atol=1e-6, rtol=0)
-    offset = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.03, 0.0], [0.0, 0.07, 0.0]])
-    grid = _grid()
-    kp = [42, 48, 35, 41]
-    obj = pool_adapter.PoolAsRigidObject(
-        mesh,
-        articulations=arts,
-        env_origins=torch.zeros((n, 3)),
-        park_local=torch.tensor([[0.0, 3.0 + 0.3 * s, 2.0] for s in range(len(arts))]),
-        centre_offset=offset,
-        num_envs=n,
-        rest_local=grid.tolist(),
-        keypoint_idx=kp,
-        corner_idx=kp,
-        corner_rest=[grid[i].tolist() for i in kp],
-        spawn_z=0.6,
-        device=torch.device("cpu"),
-    )
-    obj.select(torch.arange(n), torch.tensor([0, 3, 4]))
-    req = torch.zeros((n, 7))
-    req[:, 3] = 1.0
-    obj.write_root_pose_to_sim(req, torch.arange(n))
+    pool.select(torch.arange(n), torch.tensor([0, 3, 4]))
+    pool.place(torch.arange(n), torch.zeros((n, 2)), torch.zeros(n))
     for e, s in enumerate([0, 3, 4]):
         pose, _ = arts[s].pose_writes[-1]
         torch.testing.assert_close(pose[e, :2], offset[e, :2])
