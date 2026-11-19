@@ -37,6 +37,10 @@ imports websockets).
 network reads -- the cloud by label or by source camera, the two cameras, the auxiliary head's keypoint
 and goal estimates against the truth -- over the true sheet (made translucent), and the "Point-cloud
 noise" folder switches the parts of the version C noise (new per-episode draws, so it resets the envs).
+
+**Goal tasks** (`fold_pool.goal_task`, e.g. `LIVE_VISER_EXPERIMENT=rigidcloth_pc_any_fold`): a green
+ghost shows the goal state the fold criterion matches best now (the task's own goal, or a look-alike
+with `accept_lookalike`), for any policy; the HUD names the task and both errors.
 """
 
 from __future__ import annotations
@@ -689,9 +693,10 @@ def main() -> None:
                 "cloth": server.gui.add_checkbox("cloth points (what the cameras see)", True),
                 "hand": server.gui.add_checkbox("hand points (forward kinematics)", True),
                 "handcam": server.gui.add_checkbox("hand points as the cameras see them (hand_cam)", True),
-                "ref": server.gui.add_checkbox("goal corners / first-frame reference cloud", True),
+                "ref": server.gui.add_checkbox("goal cloud (pink) / goal corners / first-frame reference cloud", True),
             }
-            g_pc_aux = server.gui.add_checkbox("aux head: estimated keypoints + goal", True)
+            g_pc_ghost = server.gui.add_checkbox("goal tasks: matched goal state (green ghost)", True)
+            g_pc_aux = server.gui.add_checkbox("aux head: estimated keypoints + goal", False)
             g_pc_cams = server.gui.add_checkbox("cameras", True)
             g_pc_true = server.gui.add_checkbox("true sheet particles (grey)", False)
             g_opac = server.gui.add_slider("true sheet opacity", 0.05, 1.0, 0.05, 0.4)
@@ -700,6 +705,10 @@ def main() -> None:
                 "by label: white = cloth, pink / blue = moving / stationary half (gl), black = hand (FK), "
                 "purple = hand seen by the cameras, light pink / light blue = first-frame reference "
                 "moving / stationary (g1), green = goal corners (g0, g3).  \n"
+                "scene cloud: white = live points (cloth + hand + arm), light pink = goal cloud as the student "
+                "gets it (goal_fixed: folded sheet in place; goal_any: bare shape about the box centre, random "
+                "yaw; label: light pink / light blue = moving / stationary); green ghost = the goal state the "
+                "fold criterion matches best now.  \n"
                 "by camera: cyan = camera A, magenta = camera B, grey = no camera.  \n"
                 "aux head: magenta = estimated keypoints, teal = estimated goal, lines go to the truth "
                 "(orange / green, 'show keypoints / targets').")
@@ -1010,6 +1019,7 @@ def main() -> None:
             frames.clear()
             clouds.clear()
             pc_nodes.clear()
+            ghost_nodes.clear()
             cam_key[0] = None
             opac = sheet_opacity()
             w = scene_w[0] = S.world
@@ -1080,6 +1090,7 @@ def main() -> None:
             else:
                 for h in clouds.values():
                     h.visible = False
+            draw_ghost()
             draw_cloud()
 
         def put_points(name, pts, rgb, size):
@@ -1100,6 +1111,45 @@ def main() -> None:
             x = x / max(float(np.linalg.norm(x)), 1e-9)
             return vtf.SO3.from_matrix(np.stack((x, np.cross(z, x), z), axis=1)).wxyz
 
+        ghost_faces = [None]
+        ghost_nodes: dict[str, object] = {}
+
+        def goal_task_info(w):
+            """``fold_pool.goal_task``: env ``w``'s task name, designated / look-alike errors and the
+            matched goal state's grid (world). None without goal tasks."""
+            geo = inner.task.geometry
+            gt = geo.goal_tasks
+            if gt is None or gt.task is None:
+                return None
+            view = inner.fold_view()
+            grid, lookalike = geo.matched_goal_sheet(view)
+            return {"name": gt.names[int(gt.task[w])], "des": float(view.designated_error[w]),
+                    "alt": float(view.lookalike_error[w]),
+                    "matched": "look-alike" if bool(lookalike[w]) else "designated",
+                    "grid": grid[w].detach().cpu().numpy()}
+
+        def draw_ghost():
+            """Goal tasks: the goal state the fold criterion matches best now (any policy)."""
+            w = scene_w[0]
+            info = goal_task_info(w) if g_pc_ghost is not None and g_pc_ghost.value else None
+            if info is None:
+                for nm in ("ghost", "ghost_pts"):
+                    if nm in ghost_nodes:
+                        ghost_nodes[nm].visible = False
+                return
+            grid = info["grid"] - origins[w]
+            if ghost_faces[0] is None or ghost_faces[0][0] != len(grid):
+                r = int(round(len(grid) ** 0.5))
+                ij = np.arange(r * r).reshape(r, r)
+                a, b, c, d = ij[:-1, :-1].ravel(), ij[:-1, 1:].ravel(), ij[1:, :-1].ravel(), ij[1:, 1:].ravel()
+                ghost_faces[0] = (len(grid), np.concatenate((np.stack((a, b, d), 1), np.stack((a, d, c), 1))).astype(np.int32))
+            ghost_nodes["ghost"] = server.scene.add_mesh_simple(
+                "/w/pc_ghost", grid.astype(np.float32), ghost_faces[0][1], color=(40, 200, 90),
+                side="double", opacity=0.35)
+            ghost_nodes["ghost_pts"] = server.scene.add_point_cloud(
+                "/w/pc_ghost_pts", grid.astype(np.float32), np.tile((20, 150, 60), (len(grid), 1)).astype(np.uint8),
+                point_size=0.004, point_shape="circle", precision="float32")
+
         def draw_cloud():
             """What the active student read at its latest step, in the drawn env."""
             pl, w = stu(), scene_w[0]
@@ -1113,7 +1163,7 @@ def main() -> None:
             if getattr(pl, "scene", False):
                 # scene cloud: its own label set -> the legacy indices the colours and groups use
                 # (live -> cloth 0, first-frame reference -> 4 / 5, forward kinematics -> hand 3)
-                to_legacy = {"live": 0, "ref_moving": 4, "ref_stationary": 5, "fk": 3}
+                to_legacy = {"live": 0, "ref_moving": 4, "ref_stationary": 5, "fk": 3, "goal": 4}
                 names = pc.labels or ("live",)
                 lab = np.array([to_legacy[k] for k in names])[lab]
             ok = pc.last_mask[w].cpu().numpy() & np.isfinite(xyz).all(axis=1)
@@ -1191,6 +1241,11 @@ def main() -> None:
                 f"{sum(s['episodes'] for s in S.stats)} episodes",
                 f"sim {S.fps:.0f} policy steps/s (real time = {1.0 / float(inner.step_dt):.0f})",
             ]
+            gi = goal_task_info(w)
+            if gi is not None:
+                alt = f"{gi['alt'] * 1e3:.1f} mm" if np.isfinite(gi["alt"]) else "none"
+                lines.append(f"goal task **{gi['name']}**: designated error {gi['des'] * 1e3:.1f} mm, "
+                             f"look-alike {alt} -> matched **{gi['matched']}**")
             if pierce is not None:
                 run = pierce_run[w].cpu().numpy()
                 through = [f"{nm.replace('left_', '')} ({k} steps)" for nm, k in zip(pierce.names, run) if k > 0]

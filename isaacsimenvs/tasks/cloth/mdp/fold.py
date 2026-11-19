@@ -330,6 +330,20 @@ class FoldGeometry:
         goal, _ = g.goal_particles(g.task, s3, points_w)
         return goal, g.p_goal[g.task] * s3
 
+    def matched_goal_sheet(self, view: FoldView) -> tuple[torch.Tensor, torch.Tensor]:
+        """For viewers: ``(grid (N, P, 3) world, lookalike (N,) bool)`` -- the goal state the fold
+        criterion matches best now: the nearest look-alike where it is closer than the task's own
+        goal (``accept_lookalike``), else the task's own goal."""
+        g = self._active_goal_tasks()
+        s3 = self._scale3()
+        own, _ = g.goal_particles(g.task, s3, view.points_w)
+        if not g.accept_lookalike:
+            return own, torch.zeros(own.shape[0], dtype=torch.bool, device=own.device)
+        member, _ = g.nearest_alternative(g.task, g.read_hinge_abs())
+        other, _ = g.goal_particles(g.task, s3, view.points_w, member)
+        use = torch.isfinite(view.lookalike_error) & (view.lookalike_error < view.designated_error)
+        return torch.where(use.view(-1, 1, 1), other, own), use
+
     def goal_travel_direction(self, points_w: torch.Tensor) -> torch.Tensor:
         """``(N,)`` env-frame direction [rad] the designated fold carries its piece."""
         g = self._active_goal_tasks()
