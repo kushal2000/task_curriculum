@@ -1,0 +1,36 @@
+# The friction prior driven by points: its cloth inputs (object_rot, keypoints_rel_palm,
+# keypoints_rel_goal, object_scales) come from a PointNet adapter encoder trained to reproduce them
+# (collect_train.py), every other prior weight is unchanged (assemble.py). Same env, observations and
+# reward as the from-scratch point-cloud run (point_cloud/scratch_pointnet_15cm_2mm.yaml, job 789626):
+# 15x15 cm single_hinge, 2 mm, nominal material, outside-only reset, robot + points actor,
+# point-distance progress reward.
+base: ../heavy_cloth/prior_nominal_15cm_outside_only_2mm.yaml
+env:
+  obs:
+    num_points: 64
+    obs_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot, fingertip_pos_rel_palm,
+               cloth_points, goal_points]
+    state_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot, palm_vel, object_rot,
+                 object_vel, fingertip_pos_rel_palm, keypoints_rel_palm, keypoints_rel_goal, object_scales,
+                 closest_keypoint_max_dist, closest_fingertip_dist, lifted_object, progress, successes,
+                 reward, point_dist, closest_point_dist]
+  reward:
+    keypoint_rew_scale: 0.0
+    point_rew_scale: 1500.0
+agent:
+  params:
+    load_checkpoint: true
+    load_path: experiments/nov18/pointnet_adapter/encoder_15cm_2mm/adapter_prior.pth
+    checkpoint_load_mode: weights
+    model:
+      name: pointnet_a2c_logstd
+    network:
+      name: pointnet_adapter_actor_critic
+      adapter:
+        num_points: 64
+        segments: [[robot, 88], [object, 4], [robot, 15], [object, 27]]
+        palm_slice: [81, 84]
+        units: [64, 128, 256]
+        head: [256, 256]
+    config:
+      name: 0_cloth_pointnet_adapter_15cm_2mm

@@ -1,0 +1,44 @@
+{
+  "samples": {
+    "train": 1094742,
+    "val": 121770
+  },
+  "segments": [
+    [
+      "robot",
+      88
+    ],
+    [
+      "object",
+      4
+    ],
+    [
+      "robot",
+      15
+    ],
+    [
+      "object",
+      27
+    ]
+  ],
+  "palm_slice": [
+    81,
+    84
+  ],
+  "num_points": 64,
+  "object_rot error deg (median/p90)": [
+    3.53,
+    7.79
+  ],
+  "keypoints_rel_palm error mm (median/p90)": [
+    17.04,
+    28.6
+  ],
+  "keypoints_rel_goal error mm (median/p90)": [
+    16.96,
+    28.65
+  ],
+  "object_scales abs error (median)": 0.00143,
+  "embedding relative error (median)": 0.0831,
+  "normalised mse (val)": 0.01181
+}
