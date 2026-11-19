@@ -1,5 +1,5 @@
-"""How many steps a fold takes: median / mean length of the FOLDED episodes in bos14_px_eval_matrix.sh
-(and bos14_px_eval_trend.sh) results.
+"""How many steps a fold takes: median / mean length of the FOLDED episodes in experiments/eval.sh
+results.
 
     python3 isaacsimenvs/scripts/evaluation/fold_steps.py one_flat ft7lr_flat_last [--targets vbd physx_pool]
 

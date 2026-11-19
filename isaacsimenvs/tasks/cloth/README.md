@@ -57,41 +57,37 @@ cloth checkpoint, and the Play prior, reads the same vector.
 
 ## Training
 
-All launchers are Slurm batch scripts. Run them from the repo root on bos14. Array index = seed - 1.
+Launchers are in `experiments/` (scheduler-agnostic; see `experiments/README.md`). Array index k =
+seed k + 1.
 
 ### On PhysX (rigid plates)
 
-`scripts/cluster/bos14_physx_cloth_train.sh`: 1 GPU per seed (`RigidCloth`).
-
 ```bash
-REPO=$PWD EXPERIMENT=flat7RW_base TASK=pool ROBOT=FlexivWujiRightHLRL RUN_TAG=flat7RW_base WANDB=1 \
-PRIOR=pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth \
-sbatch --array=0-2 scripts/cluster/bos14_physx_cloth_train.sh
+RUN_TAG=base WANDB=1 experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
+    --experiment rigid_cloth_right_wuji \
+    --checkpoint pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth
 ```
 
-- `TASK=pool` -> `FoldPoolPhysx<ROBOT>` (an alias of `RigidCloth` + that robot setup).
-- With `EXPERIMENT` set, the recipe supplies env count, epochs and minibatch. The launcher's
-  `ENVS` / `EPOCHS` are ignored; override them through `EXTRA_ARGS`.
-- `LOAD_MODE=weights` (default) loads model + normalizers only. `LOAD_MODE=resume` also loads the
-  optimizer and epoch counter; `max_epochs` is then the total.
-- `PRIORS="<s1> <s2> <s3>"` gives each seed its own start checkpoint.
+- The recipe supplies env count, epochs, minibatch and the robot setup; DR comes from its `dr:` blocks
+  (`isaacsimenvs/scripts/configs/README.md`). Override anything with hydra arguments.
+- `--checkpoint` loads model + normalizers only (`--checkpoint_load_mode weights`, the default here);
+  `LOAD_MODE=resume` also loads the optimizer and epoch counter, `max_epochs` is then the total.
+- `PRIORS="<s1> <s2> <s3>"` gives each array index its own start checkpoint.
 - Output: `outputs/<date>/<time>/0_pxpool_<RUN_TAG>_s<seed>_<job>/nn/`. Files:
   `snap_*_ep_<N>.pth` (every `snapshot_every` epochs), `last_*`, `best_*`.
 
 ### On VBD cloth (Newton)
 
-`scripts/cluster/bos14_cloth_vbd_train.sh`: `NPS` nodes per seed (default 4, multi-node SAPG).
-
 ```bash
-REPO=$PWD EXPERIMENT=vbdRW_sharpa ROBOT=FlexivWujiRightSharpaGain RUN_TAG=vbdRW_sharpa \
-PRIOR=pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth \
-EXTRA_ARGS=env.robot_self_collision=false \
-sbatch --array=0-11 scripts/cluster/bos14_cloth_vbd_train.sh     # 3 seeds x 4 nodes
+RUN_TAG=vbdRW_sharpa experiments/train.sh --task Isaacsimenvs-Cloth-Direct-v0 --experiment vbdRW_sharpa \
+    --checkpoint pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth \
+    env.robot_self_collision=false env.newton.njmax=32768 env.scene.num_envs=1488 \
+    agent.params.config.minibatch_size=23808 agent.params.config.central_value_config.minibatch_size=23808 \
+    agent.params.config.expl_coef_block_size=248
 ```
 
-- Defaults: 1488 envs per rank, 3750 epochs.
-- Resume: `CKPTS="<s1> <s2> <s3>" LOAD_MODE=resume`. Set `RDZV_TIMEOUT=7200` if array tasks may
-  start far apart.
+- One GPU per seed (`--distributed` for several GPUs on one machine). 1488 envs is the most the Flexiv
+  fits (Warp's int32 contact buffer).
 - Robot self-collision must be off for the Flexiv. With it on, MJWarp is ~26x slower.
 - Output name: `0_pxvbd_<RUN_TAG>_s<seed>_<job>`.
 
@@ -102,28 +98,22 @@ The metric is held folds on the VBD cloth, 32 episodes x 2 eval seeds per cell, 
 - start: pinned (one fixed start state) or rand (`--randomize`)
 - keypoint cutoff: 4 cm or 1.5 cm
 
-The key metrics are 1.5 cm pinned and 1.5 cm rand.
-
-### One checkpoint list
-
-`scripts/cluster/bos14_px_eval_trend.sh` takes a list file, one checkpoint per line:
+The key metrics are 1.5 cm pinned and 1.5 cm rand. `experiments/eval.sh` runs them for one checkpoint,
+a training array, or a list file (one checkpoint per line):
 
 ```
 <tag> <seed> <checkpoint .pth>
-<tag> <seed> <run name> <best | last | ep:N>      # resolved when the task runs
+<tag> <seed> <run name> <best | last | ep:N>      # resolved when the job runs
 ```
 
 ```bash
-LIST=my_list.txt ROBOT=FlexivWujiRightHLRL \
-EVAL_EXTRA="env.cloth.start_height=0.20 env.robot_self_collision=false env.newton.njmax=32768" \
-sbatch --array=0-$(( 2 * $(wc -l < my_list.txt) - 1 )) scripts/cluster/bos14_px_eval_trend.sh
+LIST=my_list.txt TARGETS=vbd INDEX=<k> experiments/eval.sh        # k = 0 .. 2 x lines - 1
 ```
 
-- Each array task is one line x one start: index = 2 x line + start.
-- Each task runs `isaacsimenvs.scripts.evaluation.eval` on `Isaacsimenvs-Cloth<ROBOT>-Direct-v0` for both
-  cutoffs and both eval seeds.
-- Output: `docs/results/px_matrix/<tag>_s<seed>__on_vbd__<pinned|rand>__<4cm|1p5cm>_s<es>.json`.
+- Index = (line x targets + target) x starts + start; `TARGETS` (default `pool7 vbd`), `STARTS`
+  (default `pinned rand`).
+- The policy's robot and spawn height: `ROBOT_SETUP` (default `flexiv_wuji_right_hl_reallimits`),
+  `START_HEIGHT` (default 0.20). VBD runs at the ns6 protocol (`num_substeps 6`, cloth `substeps 2`).
+- Output: `docs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json`;
+  `isaacsimenvs/scripts/evaluation/matrix_summary.py <tag>` tabulates them.
 - `EVAL_SEEDS="3 4 5 6 7 8"` re-tests a picked checkpoint on fresh seeds.
-- `EVAL_EXTRA` must match the training geometry. Example: the right-Wuji tasks need
-  `start_height=0.20`.
-

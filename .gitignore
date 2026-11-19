@@ -68,3 +68,7 @@ assets/flexiv_wuji/wuji_hand2/mjcf/right*
 # The right Wuji Hand's sysid fit (robots.FLEXIV_WUJI_RIGHT_REAL holds its values, rounded): kept local,
 # it identifies the lab's hand. tests/test_robot_specs.py skips its check when the file is absent.
 assets/flexiv_wuji/wuji_hand2_right_sysid_fit_*.json
+
+# Cluster-specific launch wrappers (partition, GPUs, bad nodes, chained drivers): local to each machine.
+# The scheduler-agnostic launchers are experiments/*.sh.
+/cluster/

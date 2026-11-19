@@ -1,4 +1,4 @@
-"""Tabulate bos14_px_eval_matrix.sh: held folds per seed for every target, start and cutoff.
+"""Tabulate experiments/eval.sh results: held folds per seed for every target, start and cutoff.
 
     python3 isaacsimenvs/scripts/evaluation/matrix_summary.py one_flat one_initfold box3 [--md docs/reports/4_physx/eval_matrix.md]
 

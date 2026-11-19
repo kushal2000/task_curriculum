@@ -1,7 +1,7 @@
 """Run a fold policy LIVE in a browser (viser), with its knobs on sliders.
 
     experiments/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser --task Isaacsimenvs-Cloth-Direct-v0
-    sbatch scripts/cluster/bos14_live_viser.sh          # on a GPU node; the log prints the tunnel
+    experiments/viewer.sh --task Isaacsimenvs-Cloth-Direct-v0   # on a GPU machine; prints the host to tunnel to
 
 The env runs on the GPU exactly as `episodes.py` runs it (same reset, same zero-action tick, same
 player), a handful of envs at once; one of them is drawn. What can change WITHOUT a restart:
@@ -25,7 +25,7 @@ is ~4.
 Geometry comes from Newton's own viewer pipeline (`ViewerBase.set_model` -> `log_geo`), captured
 by a null viewer, so what is drawn is exactly the collision geometry the solver sees.
 
-**PhysX tasks** (`*Physx*`, run in `.venv_isaacsim`; `scripts/cluster/bos14_live_viser_physx.sh`): the
+**PhysX tasks** (`RigidCloth` / `*Physx*`, run in `.venv_isaacsim`; `experiments/viewer.sh --task Isaacsimenvs-RigidCloth-Direct-v0`): the
 same viewer, with the geometry read from the USD stage (each rigid body's collision meshes and
 primitives, in its own frame) and the body poses from Isaac Lab's PhysX views every step. The friction
 sliders are hidden there: PhysX refuses friction DR (`backends/rigid/physx.py`). viser needs websockets >= 13,
