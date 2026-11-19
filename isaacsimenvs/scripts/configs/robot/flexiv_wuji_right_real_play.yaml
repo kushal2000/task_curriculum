@@ -1,0 +1,7 @@
+# The identified right Wuji hand (robots.FLEXIV_WUJI_RIGHT_REAL: sysid dynamics, the real joint
+# limits) on the Play task's own setup. Unlike flexiv_wuji_right_real.yaml (the cloth tasks'), it does
+# not move the robot base: Play keeps the pose, table (table_narrow_flexiv.urdf) and reset ranges of
+# PlayFlexivWujiRightHumanLike.yaml, which the Play priors (run 41213) were trained on.
+robot: flexiv_wuji_right_real
+assets:
+  robot_urdf: "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"

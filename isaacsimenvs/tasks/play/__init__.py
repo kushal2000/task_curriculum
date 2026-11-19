@@ -71,6 +71,22 @@ def _register(task_id: str, cfg_class: str, task_yaml: str) -> None:
 
 
 _register("Isaacsimenvs-Play-Direct-v0", "PlayEnvCfg", "Play.yaml")
+# Flexiv + right Wuji with human-like joint limits, in the real setup's table and goal geometry.
+_register("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0", "PlayFlexivWujiRightHumanLikeEnvCfg",
+          "PlayFlexivWujiRightHumanLike.yaml")
+# The same task with the identified right hand (robot setup flexiv_wuji_right_real_play: sysid
+# dynamics, real joint limits), as an alias like the cloth tasks' robot-suffixed ids.
+gym.register(
+    id="Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0",
+    entry_point="isaacsimenvs.tasks.play.play_env:PlayEnv",
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={
+        **gym.spec("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0").kwargs,
+        "canonical_task": "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0",
+        "robot_setup": "flexiv_wuji_right_real_play",
+    },
+)
 
 # --- legacy
 _register("Isaacsimenvs-PlaySelfCollision-Direct-v0", "PlaySelfCollisionEnvCfg", "Play.yaml")

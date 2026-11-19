@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import torch
@@ -17,6 +18,7 @@ from isaaclab.sim.utils import find_matching_prim_paths, get_current_stage
 
 from isaacsimenvs.robots import usd as robot_usd
 from .generate_objects import generate_handle_head_urdfs
+from .goal_table_clearance import collision_corners
 
 
 def _log_scene_step(start_time: float, message: str) -> None:
@@ -1040,6 +1042,14 @@ def apply_physx_material_properties(env) -> None:
 # Scene assembly
 # ----------------------------------------------------------------------------
 
+def _urdf_box_size(urdf_path) -> tuple[float, float, float]:
+    """The table's collision ``<box size>`` (the single-box table URDFs)."""
+    boxes = ET.parse(urdf_path).getroot().findall("link/collision/geometry/box")
+    if len(boxes) != 1:
+        raise ValueError(f"{urdf_path}: expected one collision box, got {len(boxes)}")
+    return tuple(float(v) for v in boxes[0].get("size").split())
+
+
 def _materialize_env_prims(env) -> None:
     stage = get_current_stage()
     for env_path in env.scene.env_prim_paths:
@@ -1210,6 +1220,13 @@ def setup_scene(env) -> None:
 
     # 6. Per-env scale tensor for spawned Objects.
     _build_object_scale_tensor(env, object_scales_normalized, len(object_usd_paths))
+    # ... and each env's object collision-box corners and the table's half height, which keep
+    # goals clear of the table (reset.goal_table_clearance_m).
+    pool_corners = torch.stack([
+        torch.as_tensor(collision_corners(p), device=env.device) for p in env._object_urdf_paths
+    ])
+    env._object_collision_corners = pool_corners[env._object_asset_index_per_env]
+    env._table_half_height = _urdf_box_size(assets_cfg.table_urdf)[2] / 2
 
     # 7. Register with scene so DirectRLEnv refreshes their tensors each step.
     env.scene.articulations["robot"] = env.robot

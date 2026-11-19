@@ -23,6 +23,17 @@ CFG = REPO_ROOT / "isaacsimenvs" / "scripts" / "configs" / "task"
 ALLOWED_EXTRA = {"robot"}
 #: Per Flexiv task YAML: its robot, and the leaves that must differ from Play.yaml with their values.
 VARIANTS = {
+    "PlayFlexivWujiRightHumanLike.yaml": ("flexiv_wuji_right_human_like", {
+        "action_space": 27,
+        "assets.robot_urdf": "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
+        "assets.table_urdf": "assets/urdf/table_narrow_flexiv.urdf",
+        "reset.table_reset_z": 0.26,
+        "reset.table_object_z_offset": 0.12,
+        "reset.table_reset_xy": [0.0, 0.29],
+        "reset.target_volume_mins": [-0.35, 0.0, 0.35],
+        "reset.target_volume_maxs": [0.35, 0.49, 0.7],
+        "reset.use_goal_table_clearance": True,
+    }),
     "PlayFlexivWuji.yaml": ("flexiv_wuji", {
         "action_space": 27,
         "assets.robot_urdf": "assets/flexiv_wuji/rizon4s_left_wuji.urdf",
