@@ -14,20 +14,20 @@ from isaacsimenvs.conftest import REPO_ROOT  # noqa: E402
 
 from types import SimpleNamespace
 
-from isaacsimenvs.tasks.cloth.mdp.rewards import REWARD_SANITY_LIMIT as LIMIT
-from isaacsimenvs.tasks.cloth.mdp.rewards import _guard_reward
+from isaacsimenvs.tasks.cloth.mdp.task import REWARD_SANITY_LIMIT as LIMIT
+from isaacsimenvs.tasks.cloth.mdp.task import ClothTask
 
 
 def _apply_guard(reward: torch.Tensor):
-    """The guard exactly as `rewards.compute_reward` applies it, on a minimal env."""
-    env = SimpleNamespace(
+    """The guard exactly as `ClothTask.compute_reward` applies it, on a minimal task."""
+    task = SimpleNamespace(
         num_envs=reward.numel(),
         extras={},
-        _nonfinite_envs=torch.zeros(reward.numel(), dtype=torch.bool),
-        _insane_count=0,
+        nonfinite_envs=torch.zeros(reward.numel(), dtype=torch.bool),
+        insane_count=0,
     )
-    guarded = _guard_reward(env, reward)
-    return guarded, env._nonfinite_envs
+    guarded = ClothTask._guard_reward(task, reward)
+    return guarded, task.nonfinite_envs
 
 
 def test_nan_to_num_does_not_catch_huge_finite_rewards():

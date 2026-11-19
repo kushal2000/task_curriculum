@@ -28,15 +28,12 @@ from isaacsimenvs.tasks.cloth.backends.rigid.randomization import RandomizationM
 from isaacsimenvs.tasks.cloth.backends.rigid.scene import SceneMixin
 from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
-from isaacsimenvs.tasks.cloth.mdp.task import ClothTaskMixin
-from isaacsimenvs.tasks.cloth.mdp.tracker import TrackerMixin
+from isaacsimenvs.tasks.cloth.mdp.state import SheetLayout
 
 __all__ = ["RigidClothEnv"]
 
 
-class RigidClothEnv(
-    SceneMixin, ContactsMixin, RandomizationMixin, ChecksMixin, TrackerMixin, ClothTaskMixin, ClothEnv
-):
+class RigidClothEnv(SceneMixin, ContactsMixin, RandomizationMixin, ChecksMixin, ClothEnv):
     """The fold task with the fold-shape pool as the manipuland, on PhysX."""
 
     cfg: RigidClothEnvCfg
@@ -123,13 +120,11 @@ class RigidClothEnv(
         self._bind_contact_materials()
         reorder_object_pose_writes(self.object)
 
-    def _reset_idx(self, env_ids):
-        if env_ids is None:
-            env_ids = torch.arange(self.num_envs, device=self.device)
-        ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long).reshape(-1)
+    def _begin_reset(self, env_ids: torch.Tensor) -> None:
         if getattr(self, "_pool_ready", False):
-            self._draw(ids)
-        super()._reset_idx(env_ids)
+            self._draw(env_ids)
+
+    def _end_reset(self, env_ids: torch.Tensor) -> None:
         if getattr(self, "_dr_ready", False):
             self._randomize_physics(env_ids)
 
@@ -139,20 +134,21 @@ class RigidClothEnv(
 
     def _get_dones(self):
         terminated, truncated = super()._get_dones()
-        entered = self._termination_reasons["fold"]
+        reasons = self.task.termination_reasons
+        entered = reasons["fold"]
         active = self.object.active
         for s, sh in enumerate(self._pool):
             on = active == s
             # Averaged over finished episodes by the logger: `shape_<n>` is the share of episodes on
             # that shape, `fold_<n>` the share that were that shape AND folded. Their ratio is the
             # per-shape fold rate.
-            self._termination_reasons[f"shape_{sh.name}"] = on
-            self._termination_reasons[f"fold_{sh.name}"] = entered & on
+            reasons[f"shape_{sh.name}"] = on
+            reasons[f"fold_{sh.name}"] = entered & on
         if getattr(self, "_start_tables", None) is not None:
             # As above: `start_folded` is the share of episodes that started partly folded,
             # `fold_start_folded` the share that did AND folded.
-            self._termination_reasons["start_folded"] = self._start_folded
-            self._termination_reasons["fold_start_folded"] = entered & self._start_folded
+            reasons["start_folded"] = self._start_folded
+            reasons["fold_start_folded"] = entered & self._start_folded
         return terminated, truncated
 
     def _get_rewards(self) -> torch.Tensor:
@@ -163,17 +159,18 @@ class RigidClothEnv(
         # episodes that started flat. Not `done_*`: eval/episodes.py reads those as booleans.
         # `episode_length_buf` already counts this step (DirectRLEnv.step increments it before
         # `_get_dones`), so it equals eval's `per_env_length` for an episode ending here.
-        entered = self._termination_reasons["fold"].bool()
+        entered = self.task.termination_reasons["fold"].bool()
         flat_fold = entered & ~self._start_folded
         length = self.episode_length_buf.float()
         final = self.extras["episode_final"]
         final["fold_steps"] = entered.float() * length
         final["fold_flat_start"] = flat_fold.float()
         final["fold_steps_flat_start"] = flat_fold.float() * length
-        if getattr(self, "_tracker", None) is not None:
+        stats = self.observations.tracker.episode_stats()
+        if stats is not None:
             # Cloth tracker DR: per-episode frozen share of camera frames, fresh share per half,
             # covered share by the hand and by the cloth itself.
-            final.update(self._tracker.episode_stats())
+            final.update(stats)
         return reward
 
     # ------------------------------------------------------------------ the pool's articulations
@@ -190,9 +187,12 @@ class RigidClothEnv(
         instance indices in its articulation."""
         return self._cloth.local_rows(k, ids)
 
-    # ------------------------------------------------------------------ the fold, per-env size
-    def _init_fold_targets(self) -> None:
-        """The pool's ply gap as the target lift -- 0 mm for mid-plane hinges."""
+    # ------------------------------------------------------------------ the sheet, for the task
+
+    def _sheet_layout(self) -> SheetLayout:
+        """The pool's grid; each env's at its own size. The fold lift is the pool's ply gap -- 0 mm
+        for mid-plane hinges."""
+        c = self.cfg.cloth
         if self.cfg.fold_pool.fold_lift_from_ply_gap:
             gaps = {sh.ply_gap for sh in self._pool}
             if len(gaps) != 1:
@@ -202,82 +202,31 @@ class RigidClothEnv(
                 )
             gap = gaps.pop()
             print(
-                f"[fold_pool] fold target lift {self.cfg.cloth.self_contact_radius * 1e3:.2f} -> "
+                f"[fold_pool] fold target lift {c.self_contact_radius * 1e3:.2f} -> "
                 f"{gap * 1e3:.2f} mm (the pool's ply gap)",
                 flush=True,
             )
-            self.cfg.cloth.self_contact_radius = gap
-        ClothTaskMixin._init_fold_targets(self)
-        # The task builds the rest geometry once, for a `cloth.size` sheet. Every quantity below is
-        # that geometry scaled in-plane by the env's own factor (heights -- the fold lift -- are not
-        # lengths in the sheet's plane and stay as they are).
-        s3 = self._scale3()
-        self._corner_rest_offsets = self._corner_rest_offsets.unsqueeze(0) * s3
-        self._mv_folded_rest = self._mv_folded_rest.unsqueeze(0) * s3
-        self._kp_folded_rest = self._kp_folded_rest.unsqueeze(0) * s3
-        self._st_rest_centroid = self._st_rest_centroid.unsqueeze(0) * s3[:, 0]
-        self._st_rest_centred = self._st_rest_centred.unsqueeze(0) * s3
+            c.self_contact_radius = gap
+        return SheetLayout(
+            rest_local=self._cloth_rest_local,
+            keypoint_idx=list(self._cloth_kp_idx),
+            resolution=int(c.resolution),
+            fold_axis=c.fold_axis,
+            size=float(c.size),
+            fold_lift=c.self_contact_radius,
+            object_scale=self._object_scale_per_env,
+            xy_scale=self._xy_scale,
+            env_size=self._env_size,
+        )
+
+    def _read_points(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.object._particles(), self.object._velocities()
+
+    def _observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
+        # Isaac Lab 2.3's helper is wxyz; hand the task the (x, y, z, w) relabelling Newton does.
+        return quat_from_matrix(rot)[..., [1, 2, 3, 0]]
 
     def _scale3(self) -> torch.Tensor:
         """``(N, 1, 3)``: in-plane factor on x and y, 1 on z."""
         s = self._xy_scale
         return torch.stack((s, s, torch.ones_like(s)), dim=-1).unsqueeze(1)
-
-    # The fold-geometry methods of ``ClothTaskMixin`` that read the shared rest geometry, each the same
-    # computation with a per-env rest.
-
-    def _stationary_frame(self, parts: torch.Tensor):
-        cur = parts[:, self._stationary_idx, :]
-        centroid = cur.mean(dim=1)
-        q = cur - centroid.unsqueeze(1)
-        h = torch.einsum("nki,nkj->nij", self._st_rest_centred, q)
-        h = h + 1e-8 * torch.eye(3, device=h.device, dtype=h.dtype).unsqueeze(0)
-        u, _, vh = torch.linalg.svd(h)
-        v = vh.transpose(-2, -1)
-        d = torch.ones((cur.shape[0], 3), device=cur.device, dtype=cur.dtype)
-        d[:, 2] = torch.linalg.det(v @ u.transpose(-2, -1))
-        r = v @ torch.diag_embed(d) @ u.transpose(-2, -1)
-        bad = ~torch.isfinite(r).all(dim=-1).all(dim=-1)
-        if bool(bad.any()):
-            r = r.clone()
-            r[bad] = torch.eye(3, device=r.device, dtype=r.dtype)
-        return r, centroid
-
-    def _folded_w(self, folded_rest: torch.Tensor) -> torch.Tensor:
-        r, centroid = self._stationary_frame(self._particles_w())
-        local = folded_rest - self._st_rest_centroid.unsqueeze(1)
-        return torch.einsum("nij,nmj->nmi", r, local) + centroid.unsqueeze(1)
-
-    def _sync_observed_keypoints(self) -> None:
-        self._keypoint_offsets[:] = self._corner_rest_offsets
-
-    def footprint_ratio(self) -> torch.Tensor:
-        ax = 0 if self.cfg.cloth.fold_axis == "x" else 1
-        parts = self._particles_w()
-        r, _ = self._stationary_frame(parts)
-        coord = torch.einsum("npi,ni->np", parts, r[:, :, ax])
-        return (coord.amax(dim=1) - coord.amin(dim=1)) / self._env_size
-
-    def fold_fraction(self) -> torch.Tensor:
-        rest = (
-            torch.tensor(
-                [self._cloth_rest_local[i] for i in self._cloth_kp_idx],
-                device=self.device,
-                dtype=torch.float32,
-            ).unsqueeze(0)
-            * self._scale3()
-        )
-        start = (
-            rest
-            + torch.tensor(
-                [0.0, 0.0, float(self.cfg.reset.table_reset_z) + self.cfg.cloth.start_height],
-                device=self.device,
-            )
-            + (self.scene.env_origins + self.object.centre_offset).unsqueeze(1)
-        )
-        span = (start - self.fold_targets_w()).norm(dim=-1).amax(dim=-1).clamp(min=1e-6)
-        return (1.0 - self.fold_error() / span).clamp(0.0, 1.0)
-
-    def _goal_quat_from_matrix(self, rot: torch.Tensor) -> torch.Tensor:
-        # Isaac Lab 2.3's helper is wxyz; hand the task the (x, y, z, w) relabelling Newton does.
-        return quat_from_matrix(rot)[..., [1, 2, 3, 0]]

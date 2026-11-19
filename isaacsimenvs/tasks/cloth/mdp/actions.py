@@ -1,4 +1,4 @@
-"""Policy action -> joint position targets.
+"""Policy action -> joint position targets: ``JointController``.
 
 The policy acts in canonical joint order, every entry in [-1, 1]:
 
@@ -10,54 +10,86 @@ The policy acts in canonical joint order, every entry in [-1, 1]:
 Domain randomization on the way: a delay line (``use_action_delay``; per step or per episode, see
 ``delay_mode``) and Gaussian noise (``action_noise_std``) on the action that is executed.
 
-``_cur_targets`` is what ``_apply_action`` writes every physics step; ``_prev_targets`` is the
-smoothing state and the ``prev_action_targets`` observation.
+``targets`` is what the env writes every physics step; ``prev_targets`` is the smoothing state and
+the ``prev_action_targets`` observation.
 """
 
 from __future__ import annotations
 
 import torch
 
-from .randomization import episode_start
+from .randomization import DelayLine, DomainRandomization
+from .robot import RobotLayout
 
-__all__ = ["process_actions"]
+__all__ = ["JointController"]
 
 
-def process_actions(env, actions: torch.Tensor) -> None:
-    """Turn this policy step's ``actions`` (N, J) into ``env._cur_targets`` (Lab order)."""
-    dr = env.cfg.domain_randomization
-    act_cfg = env.cfg.action
-    dt = env.step_dt
-    n_arm = len(env._arm_joint_ids)
+class JointController:
+    def __init__(self, cfg, layout: RobotLayout, dr: DomainRandomization, *, step_dt: float, num_envs: int, device) -> None:
+        self.cfg, self.layout, self.dr = cfg, layout, dr
+        self.step_dt = float(step_dt)
+        self.num_envs, self.device = num_envs, device
+        n_joints = layout.num_joints
+        self.targets = torch.zeros(num_envs, n_joints, device=device)
+        self.prev_targets = torch.zeros(num_envs, n_joints, device=device)
+        self.action_delay = DelayLine(num_envs, dr.action_delay_len, n_joints, device)
 
-    actions = actions.clone().to(env.device)[:, env._perm_canon_to_lab]
+    def process(self, actions: torch.Tensor, start: torch.Tensor) -> None:
+        """This policy step's ``actions`` (N, J, canonical) -> ``targets`` (Lab order). ``start``:
+        the envs on their episode's first step (the delay line flushes there)."""
+        dr = self.cfg.domain_randomization
+        act_cfg = self.cfg.action
+        layout = self.layout
+        n_arm = len(layout.arm_joint_ids)
 
-    if dr.use_action_delay and dr.action_delay_max > 0:
-        start = episode_start(env)
-        if start.any():
-            env._action_queue[start] = actions[start].unsqueeze(1)
-        env._action_queue = torch.roll(env._action_queue, shifts=1, dims=1)
-        env._action_queue[:, 0, :] = actions
-        if dr.delay_mode == "per_episode":
-            delay_idx = env._action_delay_idx
-        else:
-            delay_idx = torch.randint(0, env._action_queue.shape[1], (env.num_envs,), device=env.device)
-        actions = env._action_queue[torch.arange(env.num_envs, device=env.device), delay_idx]
+        actions = actions.clone().to(self.device)[:, layout.perm_canon_to_lab]
 
-    # On the executed (delayed) action, kept in the policy's [-1, 1].
-    if dr.action_noise_std > 0:
-        actions = (actions + torch.randn_like(actions) * dr.action_noise_std).clamp(-1.0, 1.0)
+        if dr.use_action_delay and dr.action_delay_max > 0:
+            actions = self.action_delay.push_and_read(actions, start, self.dr.lag(self.dr.action_delay_idx))
 
-    prev = env._prev_targets
-    arm_raw = prev[:, :n_arm] + act_cfg.dof_speed_scale * dt * actions[:, :n_arm]
-    arm_raw = torch.clamp(arm_raw, env._arm_lower, env._arm_upper)
-    arm = act_cfg.arm_moving_average * arm_raw + (1.0 - act_cfg.arm_moving_average) * prev[:, :n_arm]
-    arm = torch.clamp(arm, env._arm_lower, env._arm_upper)
+        # On the executed (delayed) action, kept in the policy's [-1, 1].
+        if dr.action_noise_std > 0:
+            actions = (actions + torch.randn_like(actions) * dr.action_noise_std).clamp(-1.0, 1.0)
 
-    hand_raw = env._hand_lower + 0.5 * (actions[:, n_arm:] + 1.0) * (env._hand_upper - env._hand_lower)
-    hand = act_cfg.hand_moving_average * hand_raw + (1.0 - act_cfg.hand_moving_average) * prev[:, n_arm:]
-    hand = torch.clamp(hand, env._hand_lower, env._hand_upper)
+        prev = self.prev_targets
+        arm_raw = prev[:, :n_arm] + act_cfg.dof_speed_scale * self.step_dt * actions[:, :n_arm]
+        arm_raw = torch.clamp(arm_raw, layout.arm_lower, layout.arm_upper)
+        arm = act_cfg.arm_moving_average * arm_raw + (1.0 - act_cfg.arm_moving_average) * prev[:, :n_arm]
+        arm = torch.clamp(arm, layout.arm_lower, layout.arm_upper)
 
-    env._cur_targets[:, env._arm_joint_ids] = arm
-    env._cur_targets[:, env._hand_joint_ids] = hand
-    env._prev_targets = env._cur_targets.clone()
+        hand_raw = layout.hand_lower + 0.5 * (actions[:, n_arm:] + 1.0) * (layout.hand_upper - layout.hand_lower)
+        hand = act_cfg.hand_moving_average * hand_raw + (1.0 - act_cfg.hand_moving_average) * prev[:, n_arm:]
+        hand = torch.clamp(hand, layout.hand_lower, layout.hand_upper)
+
+        self.targets[:, layout.arm_joint_ids] = arm
+        self.targets[:, layout.hand_joint_ids] = hand
+        self.prev_targets = self.targets.clone()
+
+    def spring_effort(self, joint_pos: torch.Tensor) -> torch.Tensor | None:
+        return self.layout.spring_effort(joint_pos)
+
+    def sample_reset(self, env_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Joint state at reset: the default pose blended toward a uniform draw within the limits,
+        and a uniform joint velocity. ``(joint_pos, joint_vel)``, Lab order."""
+        cfg = self.cfg.reset
+        layout = self.layout
+        default_pos = layout.default_joint_pos[env_ids]
+        lower = layout.joint_pos_limits[env_ids, :, 0]
+        upper = layout.joint_pos_limits[env_ids, :, 1]
+
+        reset_scale = torch.zeros_like(default_pos)
+        reset_scale[:, layout.arm_joint_ids] = cfg.reset_dof_pos_random_interval_arm
+        reset_scale[:, layout.hand_joint_ids] = cfg.reset_dof_pos_random_interval_fingers
+
+        sampled_pos = lower + (upper - lower) * torch.rand_like(default_pos)
+        joint_pos = torch.lerp(default_pos, sampled_pos, reset_scale).clamp(lower, upper)
+        joint_vel = torch.empty_like(default_pos).uniform_(
+            -cfg.reset_dof_vel_random_interval, cfg.reset_dof_vel_random_interval
+        )
+        return joint_pos, joint_vel
+
+    def reset(self, env_ids: torch.Tensor, joint_pos: torch.Tensor) -> None:
+        """The targets start at the reset pose; the action delay line is cleared."""
+        self.prev_targets[env_ids] = joint_pos
+        self.targets[env_ids] = joint_pos
+        self.action_delay.clear(env_ids)

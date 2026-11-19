@@ -6,7 +6,7 @@ that is also the last moment an asset can be added, since the scene is replicate
 
 The robot and table go through ``isaacsimenvs.robots.usd`` (URDF -> USD, baked physics properties);
 the goal marker is authored here: a kinematic, collision-free copy of the moving half's mesh, which
-``ClothTaskMixin._update_goal`` keeps on the fold target so viewers and renders show the goal.
+``ClothEnv._write_goal`` keeps on the fold target so viewers and renders show the goal.
 """
 
 from __future__ import annotations

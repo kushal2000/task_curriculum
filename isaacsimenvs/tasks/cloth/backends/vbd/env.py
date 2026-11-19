@@ -16,7 +16,11 @@ without a simulator.
 
 from __future__ import annotations
 
-from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import patches  # noqa: F401
+from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import patches  # noqa: F401  (first: the Isaac Lab 3.0 shims)
+
+import torch
+from isaaclab.utils.math import quat_from_matrix
+
 from isaacsimenvs.tasks.cloth.backends.adapter import ClothAsRigidObject
 from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
@@ -25,14 +29,13 @@ from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
     install_pre_construction_patches,
 )
 from isaacsimenvs.tasks.cloth.cloth_env import ClothEnv
-from isaacsimenvs.tasks.cloth.mdp.task import ClothTaskMixin
-from isaacsimenvs.tasks.cloth.mdp.tracker import TrackerMixin
+from isaacsimenvs.tasks.cloth.mdp.state import SheetLayout
 from isaacsimenvs.robots import get_robot_spec
 
 __all__ = ["VbdClothEnv"]
 
 
-class VbdClothEnv(TrackerMixin, ClothTaskMixin, ClothEnv):
+class VbdClothEnv(ClothEnv):
     """The fold task with a VBD cloth sheet."""
 
     cfg: VbdClothEnvCfg
@@ -47,6 +50,41 @@ class VbdClothEnv(TrackerMixin, ClothTaskMixin, ClothEnv):
 
     def _finish_backend_setup(self) -> None:
         install_post_construction_patches(self)
+
+    def _sheet_layout(self) -> SheetLayout:
+        c = self.cfg.cloth
+        return SheetLayout(
+            rest_local=self._cloth_rest_local,
+            keypoint_idx=list(self._cloth_kp_idx),
+            resolution=int(c.resolution),
+            fold_axis=c.fold_axis,
+            size=float(c.size),
+            # Two plies settle one SELF-contact radius apart; the particle radius is the cloth-RIGID
+            # offset and has no say in a fold (``mdp/fold.py``).
+            fold_lift=c.self_contact_radius,
+            object_scale=self._object_scale_per_env,
+        )
+
+    def _read_points(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.object._particles(), self.object._velocities()
+
+    def _observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
+        """``isaaclab.utils.math.quat_from_matrix``, unpatched: under Isaac Lab 3.0 it returns
+        (x, y, z, w), which the task has always read as (w, x, y, z) -- the true quaternion's
+        components relabelled -- and every policy was trained on that."""
+        return quat_from_matrix(rot)
+
+    def _write_object_scale(self) -> None:
+        """``object_scales``: the sheet's bounding box, normalised by ``reward.object_base_size``."""
+        c = self.cfg.cloth
+        base = float(self.cfg.reward.object_base_size)
+        bbox = torch.tensor([c.size, c.size, c.thickness], device=self.device, dtype=torch.float32)
+        self._object_scale_per_env[:] = bbox / base
+        print(
+            f"[cloth] object_scale = {[round(float(v), 2) for v in bbox / base]} "
+            f"(bbox {[round(float(v), 3) for v in bbox]} m / base {base})",
+            flush=True,
+        )
 
     def _install_cloth(self) -> None:
         """Author the sheet and register it as a deformable.

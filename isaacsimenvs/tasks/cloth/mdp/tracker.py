@@ -23,7 +23,7 @@ clustered points all come out of the geometry:
 * DR-6  the pipeline's assumed sheet size off by a per-episode factor.
 
 Torch only (no Isaac Lab, no Kit), so it is unit-tested on CPU (tests/test_cloth_tracker.py). The
-env supplies particles, rest geometry and capsules (``TrackerMixin._tracker_observe``, below).
+observation side supplies particles, rest geometry and capsules (:class:`TrackerObservation`, below).
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ import torch
 
 __all__ = [
     "ClothTracker",
-    "TrackerMixin",
+    "TrackerObservation",
     "cell_triangles",
     "inset_grid_weights",
     "inset_halves",
@@ -438,42 +438,48 @@ class ClothTracker:
         }
 
 
-class TrackerMixin:
-    """Env side of the tracker: the hand capsules, the per-env rest grid, and the estimate the
-    observation reads (``observations.py`` calls ``env._tracker_observe`` when
-    ``cloth.tracker.enabled``). Built lazily on the first observation."""
+class TrackerObservation:
+    """The tracker as the observation reads it: the hand capsules, each env's true rest grid, and
+    the estimate (``ObservationBuilder`` calls :meth:`observe` when ``cloth.tracker.enabled``).
+    The pipeline itself (:class:`ClothTracker`) is built on the first observation."""
 
     #: Flexiv + Wuji: wrist point (link7 -> flange -> mount -> wrist) and fingertip ends, in the
     #: body frames after the importer merges fixed joints (flange / mount / wrist into link7, the
     #: tip into the distal).
-    _TRACKER_WRIST_OFFSET = (0.003, 0.00025, 0.0955)
-    _TRACKER_FINGERS = ("thumb", "index_finger", "middle_finger", "ring_finger", "pinky")
-    _TRACKER_TIP = {"thumb": (0.0, 0.0, -0.02978)}
-    _TRACKER_TIP_DEFAULT = (0.0, 0.0, -0.02475)
+    WRIST_OFFSET = (0.003, 0.00025, 0.0955)
+    FINGERS = ("thumb", "index_finger", "middle_finger", "ring_finger", "pinky")
+    TIP = {"thumb": (0.0, 0.0, -0.02978)}
+    TIP_DEFAULT = (0.0, 0.0, -0.02475)
 
-    def _tracker_capsule_spec(self) -> list:
+    def __init__(self, cfg, robot, geometry, *, num_envs: int, device, env_origins) -> None:
+        self.cfg, self.robot, self.geometry = cfg, robot, geometry
+        self.num_envs, self.device = num_envs, device
+        self.env_origins = env_origins
+        self.tracker: ClothTracker | None = None
+
+    def capsule_spec(self) -> list:
         """``[(body_a, off_a, body_b, off_b, radius)]``: forearm, wrist, palm fan, finger segments."""
         c = self.cfg.cloth.tracker
-        regex = str(self.robot_spec.hand_joint_regex)
+        regex = str(self.robot.spec.hand_joint_regex)
         pre = regex[:2] if regex[:2] in ("r_", "l_") else ""
         z = (0.0, 0.0, 0.0)
-        w = self._TRACKER_WRIST_OFFSET
+        w = self.WRIST_OFFSET
         caps = [
             ("link5", z, "link6", z, c.arm_radius),
             ("link6", z, "link7", z, c.arm_radius),
             ("link7", z, "link7", w, c.wrist_radius),
         ]
-        for f in self._TRACKER_FINGERS:
+        for f in self.FINGERS:
             caps.append(("link7", w, f"{pre}{f}_proximal", z, c.palm_radius))
             caps += [
                 (f"{pre}{f}_proximal_abd", z, f"{pre}{f}_middle", z, c.finger_radius),
                 (f"{pre}{f}_middle", z, f"{pre}{f}_distal", z, c.finger_radius),
-                (f"{pre}{f}_distal", z, f"{pre}{f}_distal", self._TRACKER_TIP.get(f, self._TRACKER_TIP_DEFAULT), c.finger_radius),
+                (f"{pre}{f}_distal", z, f"{pre}{f}_distal", self.TIP.get(f, self.TIP_DEFAULT), c.finger_radius),
             ]
         caps.append((f"{pre}index_finger_proximal", z, f"{pre}pinky_proximal", z, c.palm_radius))
         return caps
 
-    def _init_tracker(self) -> None:
+    def _build(self, points_w: torch.Tensor) -> None:
         c = self.cfg.cloth.tracker
         dr = self.cfg.domain_randomization
         if str(dr.point_dr_mode) != "off" or dr.use_object_state_delay_noise or any(
@@ -484,21 +490,21 @@ class TrackerMixin:
             raise ValueError("cloth.tracker draws its own size factor; keep object_scale_noise_multiplier_range (1, 1)")
         root = torch.as_tensor(self.cfg.robot_root_pos, dtype=torch.float32)
         cams = torch.stack((torch.as_tensor(c.cam_a_base) + root, torch.as_tensor(c.cam_b_base) + root))
-        self._tracker = ClothTracker(c, self.num_envs, int(self.cfg.cloth.resolution), cams, self.device)
-        names = list(self.robot.body_names)
-        spec = self._tracker_capsule_spec() if c.hand_occlusion else []
+        self.tracker = ClothTracker(c, self.num_envs, int(self.cfg.cloth.resolution), cams, self.device)
+        names = self.robot.body_names
+        spec = self.capsule_spec() if c.hand_occlusion else []
         missing = sorted({n for a, _, b, _, _ in spec for n in (a, b) if n not in names})
         if missing:
             raise ValueError(f"cloth.tracker.hand_occlusion: robot has no bodies {missing} (bodies: {names})")
         dev = self.device
-        self._tracker_caps = (
+        self.caps = (
             torch.tensor([names.index(a) for a, *_ in spec], dtype=torch.long, device=dev),
             torch.tensor([o for _, o, *_ in spec], dtype=torch.float32, device=dev).view(-1, 3),
             torch.tensor([names.index(b) for _, _, b, _, _ in spec], dtype=torch.long, device=dev),
             torch.tensor([o for *_, o, _ in spec], dtype=torch.float32, device=dev).view(-1, 3),
             torch.tensor([r for *_, r in spec], dtype=torch.float32, device=dev),
         )
-        parts = self._particles_w()[0] - self.scene.env_origins[0]
+        parts = points_w[0] - self.env_origins[0]
         centre = parts.mean(dim=0).cpu()
         for name, cam in zip("AB", cams):
             d = centre - cam
@@ -519,54 +525,61 @@ class TrackerMixin:
             flush=True,
         )
 
-    def _tracker_rest_grid(self) -> torch.Tensor:
+    def rest_grid(self) -> torch.Tensor:
         """``(N, P, 3)`` each env's TRUE rest grid (per-env size in the pool)."""
-        rest = torch.tensor(self._cloth_rest_local, device=self.device, dtype=torch.float32).unsqueeze(0)
-        xy = getattr(self, "_xy_scale", None)
+        g = self.geometry
+        rest = g.rest_local.unsqueeze(0)
+        xy = g.layout.xy_scale
         if xy is not None:
             return rest * torch.stack((xy, xy, torch.ones_like(xy)), dim=-1).unsqueeze(1)
         return rest.expand(self.num_envs, -1, -1)
 
-    def _tracker_observe(self, start: torch.Tensor):
+    def observe(self, state, episode_length_buf: torch.Tensor, start: torch.Tensor):
         """The tracker's estimate the policy reads now: ``(obj_pos, obj_quat_wxyz, goal_pos,
-        goal_quat, scale)``, env frame, the goal quaternion in the convention ``goal_viz`` reports."""
+        goal_quat, scale)``, env frame, the goal quaternion in the policy's convention."""
         from isaaclab.utils.math import quat_apply
 
         from isaacsimenvs.tasks.cloth.mdp.point_dr import mat_to_wxyz
 
-        if getattr(self, "_tracker", None) is None:
-            self._init_tracker()
-        origins = self.scene.env_origins
-        parts = self._particles_w() - origins.unsqueeze(1)
-        rest = self._tracker_rest_grid()
+        if self.tracker is None:
+            self._build(state.points_w)
+        origins = self.env_origins
+        g = self.geometry
+        n = self.num_envs
+        parts = state.points_w - origins.unsqueeze(1)
+        rest = self.rest_grid()
         caps = (None, None, None)
         if self.cfg.cloth.tracker.hand_occlusion:
-            ia, oa, ib, ob, rad = self._tracker_caps
-            pos = self.robot.data.body_pos_w
-            quat = self.robot.data.body_quat_w
-            pos = pos.torch if hasattr(pos, "torch") else pos
-            quat = quat.torch if hasattr(quat, "torch") else quat
-            n, cnum = self.num_envs, ia.numel()
+            ia, oa, ib, ob, rad = self.caps
+            pos, quat = state.body_pos_w, state.body_quat_w
+            cnum = ia.numel()
 
             def ends(ids, off):
                 q = quat[:, ids].reshape(-1, 4)
                 return pos[:, ids] + quat_apply(q, off.unsqueeze(0).expand(n, -1, -1).reshape(-1, 3)).view(n, cnum, 3) - origins.unsqueeze(1)
 
             caps = (ends(ia, oa), ends(ib, ob), rad)
-        r_mv, t_mv, r_st, t_st, scale = self._tracker.step(
-            self.episode_length_buf, start, parts, rest, None, *caps
-        )
+        r_mv, t_mv, r_st, t_st, scale = self.tracker.step(episode_length_buf, start, parts, rest, None, *caps)
         s_xy = torch.stack((scale, scale, torch.ones_like(scale)), dim=-1).unsqueeze(1)  # (N, 1, 3)
-        corners = rest[:, self._kp_idx_t] * s_xy
+        corners = rest[:, g.keypoint_idx] * s_xy
         obj_pos = (torch.einsum("nij,nkj->nki", r_mv, corners) + t_mv.unsqueeze(1)).mean(dim=1)
-        folded = self._kp_folded_rest
-        folded = (folded if folded.dim() == 3 else folded.unsqueeze(0).expand(self.num_envs, -1, -1)) * s_xy
+        folded = g.kp_folded_rest
+        folded = (folded if folded.dim() == 3 else folded.unsqueeze(0).expand(n, -1, -1)) * s_xy
         goal_pos = (torch.einsum("nij,nkj->nki", r_st, folded) + t_st.unsqueeze(1)).mean(dim=1)
-        flip = torch.eye(3, device=self.device).repeat(self.num_envs, 1, 1)
+        flip = torch.eye(3, device=self.device).repeat(n, 1, 1)
         if self.cfg.cloth.fold_axis == "x":
             flip[:, 0, 0] = -1.0
         else:
             flip[:, 1, 1] = -1.0
         flip[:, 2, 2] = -1.0
-        goal_quat = self._goal_quat_from_matrix(torch.bmm(r_st, flip))
+        goal_quat = g.observed_goal_quat(torch.bmm(r_st, flip))
         return obj_pos, mat_to_wxyz(r_mv), goal_pos, goal_quat, scale
+
+    def size_xy(self) -> torch.Tensor:
+        """``(N, 1, 3)``: the tracker's per-env assumed-size factor on x and y, 1 on z. Read after
+        the tracker has stepped this step (it is redrawn at episode starts)."""
+        s = self.tracker.scale
+        return torch.stack((s, s, torch.ones_like(s)), dim=-1).unsqueeze(1)
+
+    def episode_stats(self) -> dict[str, torch.Tensor] | None:
+        return None if self.tracker is None else self.tracker.episode_stats()

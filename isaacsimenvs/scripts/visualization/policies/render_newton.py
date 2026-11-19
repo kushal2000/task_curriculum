@@ -66,7 +66,7 @@ def _goal_overlay(viewer, inner, world: int):
     """
     import warp as wp
 
-    from isaacsimenvs.tasks.cloth.mdp.observations import keypoints_world
+    from isaacsimenvs.tasks.cloth.mdp.task import keypoints_world
 
     # A deformable task defines its goal directly, not as a rigid pose plus fixed offsets. Ask the
     # env for the quantity it actually scores when it has one -- for the cloth that is

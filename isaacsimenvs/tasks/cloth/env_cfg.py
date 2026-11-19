@@ -57,7 +57,7 @@ class ObsCfg:
 
 @configclass
 class ActionCfg:
-    """Joint targets from the policy action; see ``mdp/actions.py``."""
+    """Joint targets from the policy action; see ``mdp/actions.JointController``."""
 
     arm_moving_average: float = 0.1
     hand_moving_average: float = 0.1
@@ -66,7 +66,7 @@ class ActionCfg:
 
 @configclass
 class RewardCfg:
-    """See ``mdp/rewards.py``."""
+    """See ``mdp/task.py`` (``ClothTask.compute_reward``)."""
 
     keypoint_rew_scale: float = 1500.0
     """Fold progress: paid per metre of new best fold error."""
@@ -90,7 +90,7 @@ class RewardCfg:
 
 @configclass
 class ResetCfg:
-    """The episode's start; see ``mdp/reset.py`` and ``mdp/robot.reset_robot``."""
+    """The episode's start; see ``ClothTask.sample_table`` / ``sample_sheet`` and ``JointController.sample_reset``."""
 
     reset_position_noise_x: float = 0.1
     reset_position_noise_y: float = 0.1
@@ -111,7 +111,7 @@ class ResetCfg:
 
 @configclass
 class TerminationCfg:
-    """See ``mdp/terminations.py``. The episode length is ``episode_length_s``."""
+    """See ``ClothTask.compute_dones``. The episode length is ``episode_length_s``."""
 
     success_steps: int = 1
     """Steps the fold criterion must hold before the episode ends on it and the bonus pays."""

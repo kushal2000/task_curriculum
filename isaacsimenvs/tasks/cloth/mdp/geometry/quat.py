@@ -6,8 +6,8 @@ Isaac Lab's own helpers, bound here once. The other ``mdp`` modules call them as
 module: Isaac Lab 3.0 stores and computes quaternions in (x, y, z, w), and
 ``backends/vbd/newton_support/patches.install_quat_math`` wraps each of these to keep (w, x, y, z)
 semantics. ``convert_quat`` is explicit about its orders and is never wrapped; nor is
-``quat_from_matrix``, which ``mdp/task.py`` imports from Isaac Lab directly (see
-``ClothTaskMixin._goal_quat_from_matrix``).
+``quat_from_matrix``, which the backends import from Isaac Lab directly (see
+the backend's ``_observed_goal_quat``).
 """
 
 from __future__ import annotations
