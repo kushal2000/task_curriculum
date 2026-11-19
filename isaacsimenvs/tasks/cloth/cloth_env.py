@@ -101,7 +101,8 @@ class ClothEnv(DirectRLEnv):
 
     # ------------------------------------------------------------------ state reads
 
-    def _read_state(self) -> SimState:
+    def sim_state(self) -> SimState:
+        """The robot and the sheet now (``mdp/state.SimState``)."""
         data = self.robot.data
         points, velocities = self.backend.read_points()
         return SimState(
@@ -148,7 +149,7 @@ class ClothEnv(DirectRLEnv):
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         # The physics state of this step, read once for the dones and the reward that follows.
-        state = self._read_state()
+        state = self.sim_state()
         view = self.task.derive(state)
         self._step_state = (state, view)
         dones = self.task.compute_dones(state, view, self.episode_length_buf, self.max_episode_length)
@@ -184,7 +185,7 @@ class ClothEnv(DirectRLEnv):
         self.backend.end_reset(ids)
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
-        state = self._read_state()
+        state = self.sim_state()
         view = self.task.derive(state)
         # The goal rides on the stationary half's live frame: refreshed before it is observed.
         self._write_goal(view)
@@ -206,38 +207,40 @@ class ClothEnv(DirectRLEnv):
 
     # ------------------------------------------------------------------ queries (eval, viewers)
 
-    def _now(self) -> FoldView:
-        return self._derive_sheet()
+    def fold_view(self, state: SimState | None = None) -> FoldView:
+        """The fold now, or of ``state`` (``mdp/state.FoldView``): the sheet's points, the
+        stationary half's frame, the corners and their targets, fold error, footprint."""
+        return self._derive_sheet() if state is None else self.task.derive(state)
 
     def fold_error(self) -> torch.Tensor:
         """``(N,)`` max distance of a moving-half corner from its fold target."""
-        return self._now().fold_error
+        return self.fold_view().fold_error
 
     def fold_targets_w(self) -> torch.Tensor:
         """``(N, 4, 3)`` where the moving half's corners belong when folded."""
-        return self._now().targets_w
+        return self.fold_view().targets_w
 
     def cloth_keypoints_w(self) -> torch.Tensor:
         """``(N, 4, 3)`` the moving half's corners."""
-        return self._now().keypoints_w
+        return self.fold_view().keypoints_w
 
     def footprint_ratio(self) -> torch.Tensor:
         """``(N,)`` the sheet's extent along its fold axis over its size."""
-        return self._now().footprint
+        return self.fold_view().footprint
 
     def is_folded(self) -> torch.Tensor:
-        return self.task.is_folded(self._now())
+        return self.task.is_folded(self.fold_view())
 
     def folded_half_w(self) -> torch.Tensor:
         """``(N, M, 3)`` where every point of the moving half belongs when folded (the ghost goal)."""
-        return self.task.geometry.folded_half_w(self._now())
+        return self.task.geometry.folded_half_w(self.fold_view())
 
     def folded_half_topology(self) -> list[int]:
         return self.task.geometry.folded_half_topology()
 
     def object_pos_w(self) -> torch.Tensor:
         """``(N, 3)`` the moving half's centre: the sheet as the policy's rigid object."""
-        return self._now().object_pos_w
+        return self.fold_view().object_pos_w
 
     def cloth_points_w(self) -> torch.Tensor:
         """``(N, P, 3)`` the sheet's grid points."""

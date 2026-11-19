@@ -44,7 +44,7 @@ def attach_student_obs(inner, sobs) -> dict:
 
     def _get_observations():
         obs = original()
-        start = (inner.episode_length_buf == 0) & (inner._successes == 0)
+        start = inner.task.episode_start(inner.episode_length_buf)
         sobs.reset(start.nonzero(as_tuple=True)[0])
         so = sobs(obs["policy"])
         obs["policy"] = torch.cat(

@@ -66,7 +66,7 @@ class StudentObs:
 
         root = torch.as_tensor(inner.cfg.robot_root_pos, dtype=torch.float32)
         cams = torch.stack((torch.as_tensor(pc_cfg.cam_a_base) + root, torch.as_tensor(pc_cfg.cam_b_base) + root))
-        names = list(inner.robot.body_names)
+        names = list(inner.robot_layout.body_names)
         self.scene = isinstance(pc_cfg, SceneCloudCfg)
         self.scale = float(pc_cfg.scale)
         dev = self.device
@@ -131,13 +131,13 @@ class StudentObs:
             flush=True,
         )
 
-    def _stationary(self):
+    def _stationary(self, view):
+        """The sheet's points, the stationary half's centroid and heading, env frame, from ``view``."""
         import torch
 
-        parts_w = self.inner._particles_w()
-        rot, centroid = self.inner._stationary_frame(parts_w)
         origins = self.inner.scene.env_origins
-        return parts_w - origins.unsqueeze(1), centroid - origins, torch.atan2(rot[:, 1, 0], rot[:, 0, 0])
+        rot = view.frame_r
+        return view.points_w - origins.unsqueeze(1), view.frame_c - origins, torch.atan2(rot[:, 1, 0], rot[:, 0, 0])
 
     def reset(self, ids) -> None:
         """Call for the envs whose episode just started, before ``__call__``."""
@@ -145,7 +145,7 @@ class StudentObs:
             return
         import torch
 
-        parts, centroid, yaw = self._stationary()
+        parts, centroid, yaw = self._stationary(self.inner.fold_view())
         if self.scene:
             self.pc.reset(ids)
         else:
@@ -162,14 +162,16 @@ class StudentObs:
 
         inner, n = self.inner, self.n
         origins = inner.scene.env_origins
-        parts, centroid, yaw = self._stationary()
+        state = inner.sim_state()
+        view = inner.fold_view(state)
+        parts, centroid, yaw = self._stationary(view)
         self.drag_xy = (centroid[:, :2] - self.start_xy).norm(dim=-1)
         dyaw = yaw - self.start_yaw
         self.drag_yaw = torch.atan2(torch.sin(dyaw), torch.cos(dyaw)).abs()
         self.max_drag_xy = torch.maximum(self.max_drag_xy, self.drag_xy)
         self.max_drag_yaw = torch.maximum(self.max_drag_yaw, self.drag_yaw)
 
-        pos, quat = _t(inner.robot.data.body_pos_w), _t(inner.robot.data.body_quat_w)
+        pos, quat = state.body_pos_w, state.body_quat_w
         proprio = torch.nan_to_num(teacher_obs[:, self.proprio_cols], nan=0.0, posinf=0.0, neginf=0.0)
         proprio = self.p_buf.push(proprio, self.p_lag, self.fresh)
         aux = torch.nan_to_num(teacher_obs[:, self.aux_cols], nan=0.0, posinf=0.0, neginf=0.0) * self.scale
@@ -189,11 +191,11 @@ class StudentObs:
             return pos[:, ids] + quat_apply(q, o).view(n, -1, 3) - origins.unsqueeze(1)
 
         caps_a, caps_b = ends(self.cap_ia, self.cap_oa), ends(self.cap_ib, self.cap_ob)
-        pid = inner._palm_body_id
+        pid = inner.robot_layout.palm_body_id
         offset = torch.as_tensor(inner.robot_spec.palm_center_offset, dtype=pos.dtype, device=pos.device)
         palm = pos[:, pid] + quat_apply(quat[:, pid].reshape(-1, 4), offset.expand(n, 3)) - origins
-        tips = pos[:, inner._fingertip_body_ids] - origins.unsqueeze(1)
-        goal = inner.fold_targets_w() - origins.unsqueeze(1)
+        tips = pos[:, inner.robot_layout.fingertip_body_ids] - origins.unsqueeze(1)
+        goal = view.targets_w - origins.unsqueeze(1)
         points, mask = self.pc.observe(
             inner.episode_length_buf, parts, palm.reshape(n, 3), goal, centroid, caps_a, caps_b, tips
         )
@@ -483,8 +485,8 @@ def main() -> None:
                         org = inner.scene.env_origins
                         dump[f"robot_all_{step}"] = sobs.pc.robot_points(pos_w[:4] - org[:4].unsqueeze(1), quat_w[:4]).cpu().numpy()
                         dump[f"body_pos_{step}"] = (pos_w[:4] - org[:4].unsqueeze(1)).cpu().numpy()
-                        dump[f"particles_{step}"] = (inner._particles_w()[:4] - org[:4].unsqueeze(1)).cpu().numpy()
-                        dump[f"tips_{step}"] = (pos_w[:4][:, inner._fingertip_body_ids] - org[:4].unsqueeze(1)).cpu().numpy()
+                        dump[f"particles_{step}"] = (inner.cloth_points_w()[:4] - org[:4].unsqueeze(1)).cpu().numpy()
+                        dump[f"tips_{step}"] = (pos_w[:4][:, inner.robot_layout.fingertip_body_ids] - org[:4].unsqueeze(1)).cpu().numpy()
                         for key in ("last_xyz", "last_mask", "last_label", "last_cam"):
                             dump[f"{key}_{step}"] = getattr(sobs.pc, key)[:4].cpu().numpy()
                         dump["cams"], dump["rots"] = sobs.pc.cams[:4].cpu().numpy(), sobs.pc.rots[:4].cpu().numpy()
