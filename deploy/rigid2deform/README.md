@@ -11,15 +11,15 @@ parts:
 | file | what |
 |---|---|
 | [run.py](run.py) | the entry point: the shared nodes + policy.py on config.yaml (deploy/utils/runner.py) |
-| [policy.py](policy.py) | the policy loop of each task (`TASKS`): perception → sheet particles → observation → LSTM → joint targets |
+| [policy.py](policy.py) | the policy loop of each task and kind of network (`TASKS`): keypoints: perception → sheet particles → observation → LSTM → joint targets; point cloud: point_cloud (live cloud + the reference taken at the start) → proprio + cloud → PointNet + LSTM → joint targets |
 | [fold.py](fold.py) | task=fold: the sheet's grid points → what the policy observes, and the success test |
 | [sheets/](sheets/__init__.py) | where the grid points come from, by the object's `perception`: `rigid_plates.py` (two FoundationPose plates), `cloth_points.py` (CoTracker cloth: placeholder) |
-| [perception.py](perception.py) | the perception node for object.name's perception (FoundationPose: `deploy/nodes/perception.py`), or with `perception.source=fake` fake_perception.py |
-| [fake_perception.py](fake_perception.py) | no camera: what the perception node would send for a still sheet |
+| [perception/](perception/__init__.py) | the perception nodes (each in its camera environment). [main.py](perception/main.py) is the entry: it starts the node the config needs, by policy.checkpoint's kind and object.name's perception (FoundationPose: `deploy/nodes/perception.py`; CoTracker: `perception/cloth_tracker.py` / `perception/stereo_tracker.py`; point cloud: `perception/cloud_camera.py`, its start `perception/cloud_reference.py`), or with `perception.source=fake` `fake_sheet.py` / `fake_cloud.py` (no camera) |
+| [cloud_obs.py](cloud_obs.py) | the point-cloud policies' cloud input: base-frame points → the network's points + mask (the network: `deploy/utils/pointcloud_net.py`) |
 | [config.yaml](config.yaml) | every setting, complete (not an overlay of SimToolReal's) |
 | `spec/` | the fold spec json + the robot URDF with the real joint limits |
 | `objects/` | the plate meshes |
-| `policy/` | the five fold checkpoints |
+| `policy/` | the fold checkpoints; `policy/pc/`: the point-cloud ones (+ the golden file of `check_pointcloud_net.py`). `deploy/utils/policy_net.py` tells the two kinds apart by the file, and the kind picks the perception and the loop |
 | `checks/` | the spec exporter, and the check of fold.py against the training code |
 
 Every node reads config.yaml: run.py and policy.py directly, the shared nodes because run.py passes them
@@ -39,6 +39,50 @@ for every sheet.
 | `foundationpose` | `[moving plate, stationary plate]`, two rigid plates taped along one edge | `deploy/nodes/perception.py` (`object_poses`), one per plate | the sheet size and the hinge axis from the plates' meshes; `fold.hinge_z` (null: half the thickness), `fold.max_hinge_gap_m` |
 | `cotracker` | `[cloth]` | `deploy/nodes/point_tracker.py` (`object_points`): not written yet | `fold.sheet_size` (required; more with the node) |
 
+A point-cloud checkpoint (`policy.checkpoint`, `policy/pc/`) ignores this table: perception/main.py runs
+perception/cloud_camera.py instead, in the foundationstereo environment for either `depth` (it opens a window:
+`.venv_deploy`'s OpenCV cannot); `perception.source=fake`: `perception/fake_cloud.py`, a still flat sheet.
+
+At its start, the non-live group of points the network gets from step 12 on, which the checkpoint's
+mode says (`label` | `goal`; the checkpoint stores it as `pc_args.goal`, training's names `first` |
+`scene`; the node reads it from `policy.checkpoint`):
+
+Both from the flat cloth (the robot at home, hands away, nothing touching the cloth at table height:
+keep it 1 cm from the tape): SPACE in the window freezes both cameras, then ONE click on the half that
+folds over (about its middle, not near a corner). The cloth = the connected piece of the cloud at table
+height (within `perception.pointcloud.ref_plane_m` of 0.33) under the click; the sheet = the smallest
+rectangle around it; the fold line = its mid line across the side direction nearest the click. Check the
+drawing (yellow outline, white fold line), SPACE accepts; only then does `point_cloud` start. To take it
+again, restart perception/main.py (the policy keeps the first message's, so restart the run too).
+
+- `label` (the reference; `rigidcloth_pc_label_*`): the cloth's own points, 192 at random, each labelled by
+  its half (drawn orange moving, blue stationary) -> `ref_xyz`, `ref_moving`, `ref_corners`.
+- `goal` (the goal; `rigidcloth_pc_goal_*`): synthesised as training does (handoff README 4.3): the moving
+  half mirrored over the fold line lands on the stationary half at the same height, both layers in one,
+  so 192 points uniform on the stationary half's rectangle, no noise (drawn green) -> `goal_xyz`,
+  `goal_corners`. No folding by hand.
+
+Warnings: a side outside 10-20 cm, not square (something touching the cloth?), a centre more than 10 cm
+from (0, -0.51), fewer than 192 cloth points (label). Refused: a click not on the cloth or near a corner,
+all points on one half.
+
+Measured Nov 17 on the 5090, both cameras at 640 x 480, 60 fps:
+
+| `depth` | clouds/s | cloud age when sent | table plane residual (std, per camera) |
+|---|---|---|---|
+| `raw` (spatial + temporal) | 30 (`rate_hz`) | ~42 ms | ~6 mm |
+| `foundationstereo` (384x512 it4, 31 ms per camera) | ~13 | ~87 ms | 2-3 mm |
+
+Both agree on objects to ~2 mm (median). Camera B uses `right_camera_nov14.json` here: with it B's table
+plane sits within a few mm of A's (nov10: 1 cm lower). The table is removed by height + colour (black:
+brightest - darkest channel <= 35, and brightest <= 100, or <= 140 if not warm: the black tape's highlights,
+not the brown wood), so a black or grey cloth would be removed with it.
+
+```bash
+~/miniconda3/envs/foundationstereo/bin/python deploy/rigid2deform/perception/main.py \
+    policy.checkpoint=deploy/rigid2deform/policy/pc/rigidcloth_pc_label_noiseDR_dagger.pth [perception.pointcloud.depth=raw]
+```
+
 `cloth` is in the config as a placeholder: `object.name=[cloth]` stops with "not implemented yet".
 `deploy/nodes/perception.py` refuses an object whose perception is not `foundationpose`.
 
@@ -51,12 +95,12 @@ PY=.venv_deploy/bin/python; D=deploy/rigid2deform
 ARM="robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>"
 $PY $D/run.py robot.mode=home $ARM
 # perception: both plates, the MOVING one first (one box to click per plate)
-~/miniconda3/envs/foundationpose/bin/python $D/perception.py
+~/miniconda3/envs/foundationpose/bin/python $D/perception/main.py
 # the run (flat7RW_base by default; any of the five: policy.checkpoint=deploy/rigid2deform/policy/<name>.pth)
 $PY $D/run.py $ARM record.name=fold_try1
 ```
 
-Other plates: `object.name=[plate7_brown,plate7_white]` (no spaces), given to perception.py and run.py
+Other plates: `object.name=[plate7_brown,plate7_white]` (no spaces), given to perception/main.py and run.py
 alike; nothing else. The sheet size (the plates' long side) and the hinge height (half their
 thickness: tape on the top face) come from the meshes, and the two plates must match (same size, long
 side twice the short one). Tape elsewhere: `fold.hinge_z=<m>`.
@@ -69,7 +113,7 @@ the base (base frame (0, −0.51)) ± 10 cm, any heading. The policy refuses to 
 Without hardware (MuJoCo arm, fake hand, a still sheet; the viewer at http://localhost:8091):
 
 ```bash
-$PY $D/perception.py perception.source=fake
+$PY $D/perception/main.py perception.source=fake
 $PY $D/run.py robot.arm=mujoco robot.hand=fake run.duration_s=30
 ```
 
@@ -110,6 +154,8 @@ share every one of these (`export_fold_spec.py --compare`):
 | script | what | runs in |
 |---|---|---|
 | `checks/export_fold_spec.py` | the fold spec from `yiboc_wuji` (task YAML + robot overlay + experiment, as train.py layers them); `--compare` diffs the five runs | `.venv_deploy`, no Isaac Sim |
+| `perception/fake_cloud.py` | a stand-in for the point-cloud perception node: a still flat sheet as point_cloud (live cloud + reference), to run the point-cloud loop in MuJoCo without cameras | `.venv_deploy` |
+| `checks/check_pointcloud_net.py` | the point-cloud networks (mode label: `rigidcloth_pc_label_noiseDR_dagger`, mode goal: `rigidcloth_pc_goal_dagger`) + `cloud_obs.py` against pc_deploy_handoff's golden files (made by the training code): the points, the actions (< 1e-4), the 103 proprio numbers, the time per step | `.venv_deploy`, no Isaac Sim |
 | `checks/check_fold.py` | `fold.py` against the training code's own methods (pulled from git, run with torch) on random plate sheets; the success test at 0-180°; the plate frames through random symmetric flips; the `rigid_plates` source end to end | `.venv_deploy`, no Isaac Sim |
 
 ## Adding a task or a perception
@@ -119,7 +165,7 @@ share every one of these (`export_fold_spec.py --compare`):
 - A perception (e.g. finishing cotracker): a sheet source module in `sheets/` with the functions in
   `sheets/__init__.py` (`TOPIC`, `init`, `start`, `update` → particles, stop, status, info,
   goal_mesh_pose), registered in `SOURCES`; its node in `deploy/nodes/` if another task could use it;
-  its fake message in fake_perception.py.
+  its fake message in perception/fake_sheet.py.
 - Code another deploy folder could use goes in `deploy/utils/`.
 
 ## Not verified yet

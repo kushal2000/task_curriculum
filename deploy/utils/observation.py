@@ -1,14 +1,19 @@
 """The policy's 134-number observation, as the training env builds it (obs_utils.build_observations,
 every DR term off). All poses in the env frame, quaternions wxyz.
 
-    obs = build_obs(spec, model, q, dq, prev_targets, object_pos, object_quat,
-                    goal_pos, goal_quat, object_scales)
+    obs = build_keypoints_obs(spec, model, q, dq, prev_targets, object_pos, object_quat,
+                              goal_pos, goal_quat, object_scales)
 
 Play: the 4 keypoints are grasp-box corners placed at the object and goal poses. Other tasks pass
 keypoints=(object_kp, goal_kp) instead (rigid2deform/fold.py: the moving half's corners, and the same
 corners at the observed goal); goal_pos / goal_quat are then unused.
 
     d = keypoint_distance(spec, obj_pos, obj_quat, goal_pos, goal_quat)   # Play's success distance, m
+
+The point-cloud policies (policy_net kind pointcloud) see only the robot's own fields, 103 numbers;
+the object comes in as a point cloud instead (rigid2deform/cloud_obs.py):
+
+    proprio = build_proprio(spec, model, q, dq, prev_targets)
 
 | field                  | size | what                                                        |
 |------------------------|------|-------------------------------------------------------------|
@@ -32,6 +37,7 @@ from .quat import quat_apply, wxyz_to_xyzw
 from .robot_model import fingertips, palm_center
 
 NUM_OBS = 134
+OBJECT_FIELDS = ("object_rot", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales")   # not in build_proprio
 
 
 def keypoint_offsets(spec: dict, object_scales: np.ndarray) -> np.ndarray:
@@ -54,12 +60,27 @@ def keypoint_distance(spec: dict, obj_pos, obj_quat, goal_pos, goal_quat) -> flo
     return float(np.linalg.norm(a - b, axis=-1).max())
 
 
-def obs_fields(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos, goal_quat,
-               object_scales, keypoints=None) -> dict:
-    """Each observation field by name (see the table above). keypoints: (object_kp, goal_kp), each
-    (4, 3), in place of the grasp-box corners (fold mode)."""
+def proprio_fields(spec, model, q, dq, prev_targets) -> dict:
+    """The robot's own fields by name (joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot,
+    fingertip_pos_rel_palm): every field of the table but the object's. The point-cloud students
+    (rigid2deform/cloud_obs.py) observe only these, besides their cloud."""
     lower, upper = spec["joint_lower"], spec["joint_upper"]
     palm_pos, palm_quat = palm_center(spec, model, q)
+    return {
+        "joint_pos": 2.0 * (q - lower) / (upper - lower) - 1.0,
+        "joint_vel": dq,
+        "prev_action_targets": prev_targets,
+        "palm_pos": palm_pos,
+        "palm_rot": wxyz_to_xyzw(palm_quat),
+        "fingertip_pos_rel_palm": (fingertips(spec, model, q) - palm_pos).reshape(-1),
+    }
+
+
+def keypoints_obs_fields(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos,
+                         goal_quat, object_scales, keypoints=None) -> dict:
+    """Each observation field by name (see the table above). keypoints: (object_kp, goal_kp), each
+    (4, 3), in place of the grasp-box corners (fold mode)."""
+    robot = proprio_fields(spec, model, q, dq, prev_targets)
     if keypoints is None:
         kp = keypoint_offsets(spec, object_scales)
         object_kp = keypoints_world(object_pos, object_quat, kp)
@@ -67,24 +88,32 @@ def obs_fields(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_p
     else:
         object_kp, goal_kp = (np.asarray(k, dtype=np.float64) for k in keypoints)
     return {
-        "joint_pos": 2.0 * (q - lower) / (upper - lower) - 1.0,
-        "joint_vel": dq,
-        "prev_action_targets": prev_targets,
-        "palm_pos": palm_pos,
-        "palm_rot": wxyz_to_xyzw(palm_quat),
+        "joint_pos": robot["joint_pos"],
+        "joint_vel": robot["joint_vel"],
+        "prev_action_targets": robot["prev_action_targets"],
+        "palm_pos": robot["palm_pos"],
+        "palm_rot": robot["palm_rot"],
         "object_rot": wxyz_to_xyzw(object_quat),
-        "fingertip_pos_rel_palm": (fingertips(spec, model, q) - palm_pos).reshape(-1),
-        "keypoints_rel_palm": (object_kp - palm_pos).reshape(-1),
+        "fingertip_pos_rel_palm": robot["fingertip_pos_rel_palm"],
+        "keypoints_rel_palm": (object_kp - robot["palm_pos"]).reshape(-1),
         "keypoints_rel_goal": (object_kp - goal_kp).reshape(-1),
         "object_scales": np.asarray(object_scales),
     }
 
 
-def build_obs(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos, goal_quat,
-              object_scales, keypoints=None) -> np.ndarray:
+def build_keypoints_obs(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos, goal_quat,
+                        object_scales, keypoints=None) -> np.ndarray:
     """(134,) float32, the fields in spec["obs_list"] order, clipped."""
-    fields = obs_fields(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos, goal_quat,
-                        object_scales, keypoints)
+    fields = keypoints_obs_fields(spec, model, q, dq, prev_targets, object_pos, object_quat, goal_pos,
+                                  goal_quat, object_scales, keypoints)
     obs = np.concatenate([np.asarray(fields[name], dtype=np.float64) for name in spec["obs_list"]])
     assert obs.shape == (NUM_OBS,), obs.shape
+    return np.clip(obs, -spec["obs_clip"], spec["obs_clip"]).astype(np.float32)
+
+
+def build_proprio(spec, model, q, dq, prev_targets) -> np.ndarray:
+    """(103,) float32: build_keypoints_obs without OBJECT_FIELDS, the rest in spec["obs_list"] order, clipped."""
+    fields = proprio_fields(spec, model, q, dq, prev_targets)
+    obs = np.concatenate([np.asarray(fields[name], dtype=np.float64).reshape(-1)
+                          for name in spec["obs_list"] if name not in OBJECT_FIELDS])
     return np.clip(obs, -spec["obs_clip"], spec["obs_clip"]).astype(np.float32)

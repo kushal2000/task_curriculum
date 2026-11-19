@@ -22,16 +22,15 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
 from deploy.simtoolreal.goals import first_goal, is_near, next_goal, object_corners, rollout_goals   # noqa: E402
 from deploy.utils.config import load_config, object_names, repo_path                                # noqa: E402
 from deploy.utils.link import age, open_publisher, open_subscriber, recv_latest, send               # noqa: E402
-from deploy.utils.observation import NUM_OBS, build_obs                                              # noqa: E402
+from deploy.utils.observation import build_keypoints_obs                                             # noqa: E402
 from deploy.utils.policy_net import (OBJECT_LOST_BELOW_TABLE, action_to_targets,         # noqa: E402
-                                     load_network, wait_for_inputs, wait_step)
+                                     load_policy_net, wait_for_inputs, wait_step)
 from deploy.utils.robot_model import load_robot_model                                                # noqa: E402
 from deploy.utils.spec import base_to_env, env_to_base, load_spec                                    # noqa: E402
 
@@ -43,8 +42,7 @@ def main() -> None:
     pub = open_publisher(cfg.bus.policy_port)
     spec = load_spec(repo_path(cfg.spec_path))
     model = load_robot_model(spec)
-    net = load_network(repo_path(cfg.policy.checkpoint), repo_path(cfg.policy.config), cfg.policy.expl_coef,
-                       num_actions=len(spec["joint_names"]))
+    net = load_policy_net(cfg, num_actions=len(spec["joint_names"]), kinds=("keypoints",))
     rng = np.random.default_rng(cfg.run.seed)
 
     obj_cfg = cfg.objects[object_names(cfg)[0]]   # with several objects: the first
@@ -76,9 +74,7 @@ def main() -> None:
         fixed_goals = None
         goal_pos, goal_quat = first_goal(spec, rng, corners, cfg.goals.table_clearance_m)
     goal_index = 0
-    with torch.no_grad():
-        net.get_action(torch.zeros(1, NUM_OBS), deterministic=True)   # warm up (the first call is slow)
-    net.reset_rnn()                                                    # ... and forget it
+    net.warm_up()   # the first call is slow; then forgotten
 
     near_steps = steps_on_goal = goals_reached = 0
     stop_reason = "duration"
@@ -134,10 +130,9 @@ def main() -> None:
                     near_steps = steps_on_goal = 0
 
             # 3. observation -> network -> targets
-            obs = build_obs(spec, model, state["q"], state["dq"], prev_targets, obj_pos, obj_quat,
-                            goal_pos, goal_quat, scales)
-            with torch.no_grad():
-                action = net.get_action(torch.from_numpy(obs)[None], deterministic=True)[0].numpy().astype(np.float64)
+            obs = build_keypoints_obs(spec, model, state["q"], state["dq"], prev_targets, obj_pos, obj_quat,
+                                      goal_pos, goal_quat, scales)
+            action = net.act(obs)
             targets = action_to_targets(spec, prev_targets, action)
             prev_targets = targets
 

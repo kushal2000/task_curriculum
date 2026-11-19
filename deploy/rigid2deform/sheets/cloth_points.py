@@ -1,5 +1,5 @@
 """Sheet source perception=cotracker: a real cloth, points on it tracked by CoTracker
-(deploy/rigid2deform/cloth_tracker.py, topic object_points) -> the sheet's particles.
+(deploy/rigid2deform/perception/cloth_tracker.py, topic object_points) -> the sheet's particles.
 
 object_points (one per tracked camera frame; t = that frame's time):
     mode           perception.cotracker.mode the points were clicked for (the node's config; the policy
@@ -30,7 +30,7 @@ as in training. No target_lift (a cloth's hinge is its mid-plane, like training'
 Config: object.name [cloth] (an objects entry with perception: cotracker); fold.sheet_size (null: the
 node's size_measured, the longest side between the clicked corners, as a square's side);
 perception.cotracker.max_age_s / max_lost_s. mode and sigma are the node's: they come with object_points,
-so only perception.py needs them on its command line. numpy only (the policy's environment); checks/cloth_track_view.py uses the same
+so only perception/main.py needs them on its command line. numpy only (the policy's environment); checks/cloth_track_view.py uses the same
 functions without the bus.
 """
 

@@ -15,6 +15,10 @@ Every message has seq (counts up from 0, the sender counts) and t (time.time(), 
 | camera_image | perception.py (camera)      | object_pose_port   | jpeg (base64 text), image_hz; for the viewer   |
 | camera_frame | perception.py (camera)      | camera_frame_port  | every camera frame, raw RGB (binary, see        |
 |              |                             |                    | send_frame); width, height; for the recorder   |
+| point_cloud  | rigid2deform/cloud_         | point_cloud_port   | the policy's live cloud, binary (send_cloud):  |
+|              | camera.py                   |                    | n, depth (raw | foundationstereo), t_cams;     |
+|              |                             |                    | xyz (n, 3) float32 base frame; t = the oldest  |
+|              |                             |                    | camera frame in it                             |
 | joint_state  | robot.py                    | joint_state_port   | q (27), dq (27), tripped (None or the safety   |
 |              |                             |                    | trip's reason), ready (policy mode: hand home, |
 |              |                             |                    | forwarding targets); t = when measured         |
@@ -66,8 +70,10 @@ TOPIC_PORTS = {"joint_state": "joint_state_port", "joint_target": "policy_port",
                "sim_object_pose": "policy_port", "object_pose": "object_pose_port",
                "object_poses": "object_pose_port", "object_points": "object_pose_port",
                "camera_image": "object_pose_port"}
-# camera_frame is not in TOPIC_PORTS: it is binary (send_frame / recv_frame), not "<topic> <json>"
+# camera_frame and point_cloud are not in TOPIC_PORTS: they are binary (send_frame / recv_frame,
+# send_cloud / recv_cloud), not "<topic> <json>". A config without point_cloud_port has no cloud.
 FRAME_TOPIC, FRAME_PORT = "camera_frame", "camera_frame_port"
+CLOUD_TOPIC, CLOUD_PORT = "point_cloud", "point_cloud_port"
 
 
 def open_publisher(port: int) -> zmq.Socket:
@@ -107,6 +113,34 @@ def recv_frame(sock: zmq.Socket) -> tuple[dict, np.ndarray] | None:
         return None
     header = json.loads(header)
     return header, np.frombuffer(data, np.uint8).reshape(header["height"], header["width"], 3)
+
+
+def send_cloud(sock: zmq.Socket, seq: int, t: float, xyz: np.ndarray, **fields) -> None:
+    """A point cloud: [b"point_cloud ", json {seq, t, n, **fields}, xyz (n, 3) float32 bytes]. Never waits."""
+    xyz = np.ascontiguousarray(xyz, np.float32).reshape(-1, 3)
+    header = json.dumps({"seq": seq, "t": t, "n": len(xyz), **fields}, default=_to_json).encode()
+    sock.send_multipart([f"{CLOUD_TOPIC} ".encode(), header, xyz], copy=False)
+
+
+def recv_cloud(sock: zmq.Socket, newest: bool = False) -> dict | None:
+    """The next queued point cloud without waiting, as a dict (the header's fields + "xyz" (n, 3)
+    float32), or None. newest=True: drop all but the newest queued one (the policy, the viewer).
+    Subscribe with open_subscriber(host, port, CLOUD_TOPIC, latest_only=False): ZMQ's CONFLATE cannot
+    keep a multipart message, so latest_only does not work here."""
+    got = None
+    while True:
+        try:
+            _, header, data = sock.recv_multipart(zmq.NOBLOCK)
+        except zmq.Again:
+            break
+        got = (header, data)
+        if not newest:
+            break
+    if got is None:
+        return None
+    msg = json.loads(got[0])
+    msg["xyz"] = np.frombuffer(got[1], np.float32).reshape(-1, 3)
+    return msg
 
 
 def open_subscriber(host: str, port: int, topic: str, latest_only: bool = True) -> zmq.Socket:

@@ -1,7 +1,7 @@
 """Two-camera cloth tracking for a policy that uses the newest points: one loop at stereo_rate_hz.
 
     stereo_tracker            (the ~/.bashrc alias), or
-    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/stereo_tracker.py object.name=[cloth]
+    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/perception/stereo_tracker.py object.name=[cloth]
 
 Start: click the cloth in A's window, check the points in B's window (stereo_picker.py), SPACE.
 
@@ -30,15 +30,15 @@ import cv2
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
-from deploy.rigid2deform.cloth_tracker import GREEN, RED, WHITE, Node, draw_grid, panel, pt   # noqa: E402
+sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
+from deploy.rigid2deform.perception.cloth_tracker import GREEN, RED, WHITE, Node, draw_grid, panel, pt   # noqa: E402
 from deploy.rigid2deform.sheets import cloth_points, sheet_perception                         # noqa: E402
-from deploy.rigid2deform.stereo_geometry import base_to_cam, projection_matrix, triangulate   # noqa: E402
-from deploy.rigid2deform.stereo_picker import CameraBPicker                                   # noqa: E402
+from deploy.rigid2deform.perception.stereo_geometry import base_to_cam, projection_matrix, triangulate   # noqa: E402
+from deploy.rigid2deform.perception.stereo_picker import CameraBPicker                                   # noqa: E402
 from deploy.utils.config import load_config, repo_path                                        # noqa: E402
 from deploy.utils.link import encode_jpeg, send                                               # noqa: E402
 
-CONFIG = HERE / "config.yaml"
+CONFIG = HERE.parent / "config.yaml"
 REPORT_EVERY_S = 5.0
 
 

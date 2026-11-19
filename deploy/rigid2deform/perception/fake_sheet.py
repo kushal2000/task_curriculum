@@ -1,6 +1,6 @@
 """perception.source=fake for rigid2deform: a still sheet, no camera, to test without one.
 
-    .venv_deploy/bin/python deploy/rigid2deform/fake_perception.py [overrides]
+    .venv_deploy/bin/python deploy/rigid2deform/perception/fake_sheet.py [overrides]
 
 Sends what object.name's perception node would, at perception.fake_hz until Ctrl-C.
 perception.fake_pose_base is the SHEET's pose (hinge line middle, mid-plane, robot base frame); the
@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
+sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
 from deploy.rigid2deform.fold import fold_geometry                               # noqa: E402
 from deploy.rigid2deform.sheets import cloth_points, rigid_plates, sheet_source  # noqa: E402
 from deploy.utils.config import load_config, repo_path                           # noqa: E402
@@ -28,9 +28,9 @@ from deploy.utils.spec import load_spec                                         
 
 
 def main() -> None:
-    cfg = load_config(path=HERE / "config.yaml")
+    cfg = load_config(path=HERE.parent / "config.yaml")
     if cfg.task != "fold":
-        raise SystemExit(f"[fake_perception] task={cfg.task}: only fold so far")
+        raise SystemExit(f"[fake_sheet] task={cfg.task}: only fold so far")
     src = sheet_source(cfg)
     spec = load_spec(repo_path(cfg.spec_path))
     size = src.sheet_size(cfg) or spec["fold"]["size_range"][0]   # a cloth without fold.sheet_size: the smallest trained
@@ -44,7 +44,7 @@ def main() -> None:
         what = f"cloth, {len(points['pos'])} points ({points['mode']})"
     pub = open_publisher(cfg.bus.object_pose_port)
     hz = cfg.perception.fake_hz
-    print(f"[fake_perception] {what}, sheet at {cfg.perception.fake_pose_base}, moving half "
+    print(f"[fake_sheet] {what}, sheet at {cfg.perception.fake_pose_base}, moving half "
           f"turned {cfg.fold.fake_fold_deg} deg, at {hz} Hz. Ctrl-C stops.", flush=True)
     seq = 0
     try:

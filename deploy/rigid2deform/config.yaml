@@ -23,10 +23,11 @@ spec_path: deploy/rigid2deform/spec/spec_flexiv_wuji_right_fold.json   # robot U
 # Every pose on the bus is in the robot base frame.
 bus:
   host: 127.0.0.1           # the machine the publishers run on
-  object_pose_port: 5560    # perception.py -> object_pose, camera_image
+  object_pose_port: 5560    # perception/main.py -> object_pose, camera_image
   joint_state_port: 5561    # robot.py -> joint_state
   policy_port: 5562         # policy.py -> joint_target, goal_pose
-  camera_frame_port: 5563   # perception.py (plates and cloth) -> camera_frame (every camera frame, raw, for the recorder)
+  camera_frame_port: 5563   # perception/main.py (plates and cloth) -> camera_frame (every camera frame, raw, for the recorder)
+  point_cloud_port: 5564    # perception/main.py (point cloud: perception/cloud_camera.py) -> point_cloud (binary, deploy/utils/link.py)
 
 # ----------------------------------------------------------------------------------------- run
 # run.py: robot.py in robot.mode, + viewer.py / recorder.py, + policy.py in policy mode
@@ -38,10 +39,14 @@ run:
 # --------------------------------------------------------------------------------------- policy
 # The five runs in policy/ (flat7RW_base, _fricition, _sysid, _allDR, box2RW_allDR; the README says
 # what each trained on) share every spec number the deploy code reads (checks/export_fold_spec.py --compare).
+# The checkpoint's kind decides the network and the perception (deploy/utils/policy_net.py, read from the
+# file): keypoints (rl_games: those five) -> object.name's perception; pointcloud (policy/pc/: distilled
+# point-cloud students) -> the two-camera cloud (perception/cloud_camera.py). perception/main.py
+# reads this key too: give it the same checkpoint as run.py.
 policy:
   checkpoint: deploy/rigid2deform/policy/flat7RW_base.pth
-  config: pretrained_policy/config.yaml
-  expl_coef: 0.0            # SAPG block; 0 = the last block (task reward only)
+  config: pretrained_policy/config.yaml   # keypoint checkpoints only (rl_games' network config)
+  expl_coef: 0.0            # keypoint checkpoints only: SAPG block; 0 = the last block (task reward only)
   joint_state_max_age_s: 0.05   # stop when the newest joint_state is older (robot.py died / stalled)
 
 # ---------------------------------------------------------------------------------------- robot
@@ -109,9 +114,9 @@ robot:
 # perception node tracks it and how the policy turns that into the sheet's grid points (sheets/);
 # all of object.name must share one:
 #   foundationpose  [moving plate, stationary plate]: two rigid plates taped along one edge;
-#                   perception.py runs deploy/nodes/perception.py: one box to click per plate, in this order
+#                   perception/main.py runs deploy/nodes/perception.py: one box to click per plate, in this order
 #   cotracker       [cloth]: a cloth, points on it tracked by CoTracker (perception.cotracker);
-#                   perception.py runs cloth_tracker.py: click the points in its window (sheets/cloth_points.py)
+#                   perception/main.py runs perception/cloth_tracker.py: click the points in its window (sheets/cloth_points.py)
 object:
   name: [plate5_brown, plate5_white]
 
@@ -213,13 +218,14 @@ fold:
 
 # ----------------------------------------------------------------------------------- perception
 perception:
-  source: camera            # perception.py runs: camera (the objects' perception node) | fake (fake_perception.py: a still sheet)
-  max_age_s: 0.2            # policy.py treats older poses as "object lost" (cotracker: its own, below)
+  source: camera            # perception/main.py runs: camera (the objects' perception node) | fake (perception/fake_sheet.py: a still sheet)
+  max_age_s: 0.2            # policy.py treats older poses as "object lost" (cotracker: its own, below); also an
+                            #   older point_cloud (a point-cloud policy) stops the run
 
   # camera (runs in the FoundationPose environment on the robot PC)
   foundationpose_dir: ~/FoundationPose   # the kushal2000/FoundationPose checkout (estimater.py, generate_mask.py, weights/)
   extrinsics: deploy/calibration/extrinsics/left_camera_nov7.json   # T_base_cam from calibrate_compare.py (D415 821312062243)
-  camera_serial: null       # null = the extrinsics file's camera_serial; perception.py refuses any other camera
+  camera_serial: null       # null = the extrinsics file's camera_serial; perception/main.py refuses any other camera
   camera_width: 640         # FoundationPose crops around the object, so a small image is enough
   camera_height: 480        #   (upstream: 960 x 540 from a ZED)
   camera_fps: 60            # 6 | 15 | 30 | 60 (D435 at 640 x 480). Pose rate = min(this, FoundationPose's speed)
@@ -230,11 +236,11 @@ perception:
   image_jpeg_quality: 80
   frame_stream: true        # also send every camera frame raw (camera_frame) for recorder.py record.camera (cloth too)
 
-  # cotracker (cloth_tracker.py, in the cotracker environment): CoTracker3 online on the same camera
+  # cotracker (perception/cloth_tracker.py, in the cotracker environment): CoTracker3 online on the same camera
   # (camera_serial / extrinsics / camera_width / camera_height / camera_fps above; image_hz for the viewer)
   cotracker:
-    # mode and sigma are cloth_tracker.py's: they go out with object_points and the policy uses those, so
-    # give them to perception.py only (run.py's are not read; fake perception sends its own)
+    # mode and sigma are perception/cloth_tracker.py's: they go out with object_points and the policy uses those, so
+    # give them to perception/main.py only (run.py's are not read; fake perception sends its own)
     mode: grid              # what you click and how the points become the grid (sheets/cloth_points.py):
                             #   grid: the 4 corners, the 49 grid points tracked | kp8: 8 points, the keypoints
                             #   | fit: the 4 corners + any points on the cloth
@@ -247,7 +253,7 @@ perception:
     iters: 4                # refinement iterations per tracker run (the model's own: 6; 4 is ~30% faster,
                             #   ~0.4 px worse on average)
     compile: false          # torch.compile the refinement: 3-4 ms faster with one camera, no gain with two
-                            #   in parallel (stereo_tracker.py); ~2 s to compile at start
+                            #   in parallel (perception/stereo_tracker.py); ~2 s to compile at start
     auto_points: 30         # fit: how many points `a` adds
     sigma: 0.25             # fit: the moving least squares width, x the side (0 = one rigid fit per half)
     max_age_s: 0.35         # policy.py: older object_points = lost (results come in 8-frame batches:
@@ -255,7 +261,7 @@ perception:
     max_lost_s: null        # a half with < 3 points seen (occluded): the policy keeps observing the last good
                             #   particles until a frame fits again; null = wait for ever, a number = then stop
     save_dir: null          # a directory: also an overlay mp4 + npz per run (null: only the bus / recorder)
-    # stereo_tracker.py only: a second camera; A's clicks carried into it (the cloth's plane), matched pixels triangulated
+    # perception/stereo_tracker.py only: a second camera; A's clicks carried into it (the cloth's plane), matched pixels triangulated
     stereo_extrinsics: deploy/calibration/extrinsics/right_camera_nov10.json   # camera B (its camera_serial picks it)
     stereo_rate_hz: 30.0      # the loop: each step takes both cameras' newest frames, tracks, triangulates and
                               #   publishes; slower if a step takes longer (both trackers ~34 ms on the 5090)
@@ -267,7 +273,45 @@ perception:
     stereo_align: true        # move camera B (position only) so A's points project onto B's at the start;
                               #   false = B's calibration as it is (13 px off: nothing triangulates)
 
-  # fake (perception.py -> fake_perception.py, not nodes/perception.py's fake): the SHEET's pose (hinge line middle,
+  # pointcloud (perception/cloud_camera.py, a point-cloud policy's perception; in the foundationstereo environment):
+  # both D415s -> depth -> base frame -> training's box -> no flying pixels, no table -> merged -> voxels
+  # -> at most 1024 random points (cloud_obs.N_POINTS) -> point_cloud. camera_width / camera_height /
+  # camera_fps, image_hz, frame_stream above apply (camera_image and camera_frame: the first camera).
+  pointcloud:
+    depth: foundationstereo   # raw: the D415's own depth through raw_filters | foundationstereo: FoundationStereo
+                              #   on each D415's IR pair (emitter on in both). 5090: FS 31 ms per camera, so
+                              #   ~16 clouds/s; raw: rate_hz
+    extrinsics:               # one file per camera (T_base_cam of its colour camera); its camera_serial picks it
+      - deploy/calibration/extrinsics/left_camera_nov7.json
+      - deploy/calibration/extrinsics/right_camera_nov14.json   # not nov10: the table plane seen by B with nov14
+                              #   is 0.2 mm from A's at the box centre (nov10: 1 cm below; Nov 17, raw depth)
+    rate_hz: 30.0             # clouds per second at most (each waits for a new frame of the first camera)
+    raw_filters: [spatial, temporal]   # raw: librealsense's, in this order, in the disparity domain:
+                              #   spatial | temporal (keeps a missing pixel's depth from earlier frames) |
+                              #   hole_filling (makes up depth in holes: not for clouds); [] = none
+    foundationstereo_dir: ~/FoundationStereo   # the checkout (trt/fs_trt.py)
+    fs_engine: pretrained_models/trt/fs_23-51-11_384x512_it4.plan   # relative to it; the IR pair is resized
+                              #   to its size (640 x 480 -> 512 x 384) and the cloud comes from that
+    edge_jump_m: 0.01         # a pixel with a neighbour this much nearer / further is dropped (flying pixels
+                              #   between a finger and the cloth below)
+    table_band_m: 0.01        # a point this close above the table top (cloud_obs: 0.33 m above the base; the
+                              #   real one: 0.328 at the box centre, Nov 17) or below it, and black, is the
+    table_dark_max: 100       #   table: dropped (training's cloud has no table). Black = chroma (brightest -
+    table_grey_max: 140       #   darkest RGB channel) <= table_chroma_max, and dark (brightest channel <=
+    table_chroma_max: 35      #   table_dark_max) or a cool grey (<= table_grey_max, red - blue <=
+    table_warm_max: 5         #   table_warm_max: the glossy black tape's highlights, V up to 130; the brown
+                              #   wood plate is as dull but warm, R - B ~ +24). Not HSV saturation: noise on
+                              #   the darkest pixels. Nov 18, both cameras: black tape 0.3-0.6 % kept; wood
+                              #   0-5 %, purple / cyan cloth 0 % removed. Still kept: camera B's white logo on
+                              #   the table and the robot light's blue glow, the blue tape. A point the colour
+                              #   camera does not see counts as black. A dark or grey cloth would go too
+    voxel_m: 0.005            # merge both cameras' points, one per voxel this size (uniform density, as
+                              #   training's area-weighted sampling), then N_POINTS at random
+    ref_plane_m: 0.015        # the reference / goal (perception/cloud_reference.py, at the start): the cloth = the points
+                              #   at most this above training's table top (0.33; a hand above the cloth is
+                              #   not cloth), the connected piece under the click
+
+  # fake (perception/main.py -> perception/fake_sheet.py, not nodes/perception.py's fake): the SHEET's pose (hinge line middle,
   # plates' mid-plane), [x, y, z, qw, qx, qy, qz] in the robot base frame. Default: training's sheet
   # centre on the 0.33 m table, 5 mm plates. The plates (or points) are sent where they lie in it (fold.fake_fold_deg).
   fake_pose_base: [0.0, -0.51, 0.3325, 1.0, 0.0, 0.0, 0.0]

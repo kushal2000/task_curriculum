@@ -1,7 +1,7 @@
 """The cloth's perception node (objects with perception: cotracker): RealSense -> CoTracker3 online ->
-object_points over ZMQ, in the robot base frame. Usually started by perception.py; on its own:
+object_points over ZMQ, in the robot base frame. Usually started by perception/main.py; on its own:
 
-    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/cloth_tracker.py object.name=[cloth] \
+    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/perception/cloth_tracker.py object.name=[cloth] \
         [perception.cotracker.mode=grid|kp8|fit] [fold.sheet_size=0.15]
 
 Runs in the cotracker environment (~/co-tracker, see realsense_track.py; + pyzmq). Opens the camera the
@@ -34,7 +34,7 @@ object_points: mode, sigma (perception.cotracker's: the policy takes them from h
 frame, visible (N), uv (N, 2) pixels, size_measured (m: the longest of the corners' sides on the plane
 fitted to the depth inside them, at the first frame: the square sheet's side unless fold.sheet_size is
 set). perception.cotracker.save_dir: also an overlay mp4 + npz per run.
-checks/cloth_track_view.py is the same tracking in a window of its own, without the bus.
+rigid2deform/checks/cloth_track_view.py is the same tracking in a window of its own, without the bus.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ import cv2
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
+sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
 from deploy.rigid2deform.fold import fold_geometry, observe, score               # noqa: E402
 from deploy.rigid2deform.sheets import cloth_points as cp                         # noqa: E402
 from deploy.rigid2deform.sheets import sheet_perception                           # noqa: E402
@@ -59,7 +59,7 @@ from deploy.utils.config import REPO, load_config, repo_path                    
 from deploy.utils.link import FRAME_PORT, encode_jpeg, open_publisher, send, send_frame  # noqa: E402
 from deploy.utils.spec import load_spec                                           # noqa: E402
 
-CONFIG = HERE / "config.yaml"
+CONFIG = HERE.parent / "config.yaml"
 WINDOW = "cloth_tracker"
 CORNER_LABELS = ["S far A", "S far B", "M far B", "M far A"]
 KP8_LABELS = ["S far A", "S far B", "S near A", "S near B", "M near A", "M near B", "M far A", "M far B"]

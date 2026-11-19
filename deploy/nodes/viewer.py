@@ -15,6 +15,9 @@ Subscribes  joint_state  -> the robot, at its measured joint angles
             sim_object_pose -> a blue see-through object mesh: where the sim rollout had the object
                             (robot.mode=openloop)
             camera_image -> the camera image in the side panel (if perception sends it)
+            point_cloud  -> the policy's live cloud (a point-cloud policy; rigid2deform/perception/cloud_camera.py), light blue;
+                            its reference, if it has one: orange the moving half, dark blue the
+                            stationary one; or its goal (the folded cloth) green; the outline yellow (only with bus.point_cloud_port in the config)
 
 The scene is in the env frame (the training env's): table and robot base where training had them.
 The status panel lists each topic's age and rate, then goal_pose's status line (the task's policy
@@ -31,12 +34,15 @@ from omegaconf import OmegaConf
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
 from deploy.utils.config import REPO, load_config, object_meshes, repo_path                                 # noqa: E402
 from deploy.utils.observation import keypoint_distance                                       # noqa: E402
-from deploy.utils.link import TOPIC_PORTS, age, decode_jpeg, open_subscriber, recv_latest    # noqa: E402
+from deploy.utils.link import (CLOUD_PORT, CLOUD_TOPIC, TOPIC_PORTS, age, decode_jpeg,      # noqa: E402
+                               open_subscriber, recv_cloud, recv_latest)
 from deploy.utils.spec import base_to_env, load_spec                                         # noqa: E402
 
 MESH_DIR = REPO / "assets" / "flexiv_wuji"   # the URDF's mesh paths are relative to it (fetch_assets.sh)
 IDENTITY = np.array([1.0, 0.0, 0.0, 0.0])
 KP_COLOR, GOAL_KP_COLOR = (0, 200, 230), (255, 140, 0)   # goal_pose's object_kp (cyan), goal_kp (orange)
+CLOUD_COLOR = (120, 170, 255)                            # point_cloud
+GOAL_COLOR = (60, 230, 120)                              # point_cloud's goal_xyz (a mode goal policy)
 EXTRA_COLORS = [(0.9, 0.25, 0.6), (0.2, 0.75, 0.85), (0.6, 0.4, 0.9), (0.85, 0.85, 0.2)]
 
 
@@ -70,6 +76,12 @@ def build_scene(server, spec, mesh_paths: list[Path]) -> dict:
     points = server.scene.add_point_cloud("/object_points", points=np.zeros((1, 3), np.float32),
                                           colors=np.zeros((1, 3), np.uint8), point_size=0.006, visible=False)
     server.scene.add_frame("/object/axes", axes_length=0.06, axes_radius=0.002)
+    cloud = server.scene.add_point_cloud("/point_cloud", points=np.zeros((1, 3), np.float32), colors=CLOUD_COLOR,
+                                         point_size=0.004, visible=False)
+    ref = {"points": server.scene.add_point_cloud("/point_cloud_ref", points=np.zeros((1, 3), np.float32),
+                                                  colors=np.zeros((1, 3), np.uint8), point_size=0.007, visible=False),
+           "outline": server.scene.add_line_segments("/point_cloud_ref/outline", points=np.zeros((4, 2, 3), np.float32),
+                                                     colors=(255, 230, 0), thickness=0.002, visible=False)}
     zeros4 = np.zeros((4, 3), np.float32)
     kp = {"object_kp": server.scene.add_point_cloud("/keypoints/object", points=zeros4, colors=KP_COLOR,
                                                     point_size=0.014, visible=False),
@@ -90,7 +102,7 @@ def build_scene(server, spec, mesh_paths: list[Path]) -> dict:
         server.scene.add_frame(f"/object_{i}/axes", axes_length=0.06, axes_radius=0.002)
     return {
         "robot": robot, "ghost": ghost, "object": obj, "goal": goal, "sim_object": sim_obj, "extras": extras,
-        "points": points, "keypoints": kp,
+        "points": points, "keypoints": kp, "cloud": cloud, "cloud_ref": ref,
         # viser's joint order -> index in the spec's joint order
         "order": [list(spec["joint_names"]).index(j) for j in robot.get_actuated_joint_names()],
         "show_targets": server.gui.add_checkbox("show joint targets (green)", True),
@@ -122,6 +134,25 @@ def draw(server, scene: dict, spec, msgs: dict) -> None:
                                                  np.array([1.0, 0.0, 0.0, 0.0]))[0].astype(np.float32)
             scene["points"].colors = np.where(seen[:, None], [[40, 220, 60]], [[230, 40, 40]]).astype(np.uint8)
             scene["points"].visible = True
+        cloud = msgs.get(CLOUD_TOPIC)
+        if cloud is not None and "cloud" in scene and len(cloud["xyz"]):
+            scene["cloud"].points = base_to_env(spec, np.asarray(cloud["xyz"], dtype=np.float32),
+                                                IDENTITY)[0].astype(np.float32)
+            scene["cloud"].visible = True
+            key = "ref_xyz" if "ref_xyz" in cloud else "goal_xyz"     # the reference or the goal
+            if key in cloud and "cloud_ref" in scene and len(cloud[key]):
+                handles = scene["cloud_ref"]
+                handles["points"].points = base_to_env(spec, np.asarray(cloud[key], dtype=np.float32),
+                                                       IDENTITY)[0].astype(np.float32)
+                handles["points"].colors = (np.where(np.asarray(cloud["ref_moving"], bool)[:, None],
+                                                     [[255, 140, 0]], [[30, 60, 200]]) if key == "ref_xyz" else
+                                            np.full((len(cloud[key]), 3), GOAL_COLOR)).astype(np.uint8)
+                handles["points"].visible = True
+                corners = cloud.get("goal_corners", cloud.get("ref_corners"))
+                if corners is not None:
+                    c = base_to_env(spec, np.asarray(corners, dtype=np.float32), IDENTITY)[0]
+                    handles["outline"].points = np.stack([c, np.roll(c, -1, axis=0)], axis=1).astype(np.float32)
+                    handles["outline"].visible = True
         goal = msgs.get("goal_pose")
         if goal is not None and "object_kp" in goal and "keypoints" in scene:
             kp = scene["keypoints"]
@@ -186,8 +217,11 @@ def main() -> None:
     server = viser.ViserServer(host="0.0.0.0", port=vc.port)
     scene = build_scene(server, spec, object_meshes(cfg, allow_missing=True))
     subs = {topic: open_subscriber(cfg.bus.host, cfg.bus[port], topic) for topic, port in TOPIC_PORTS.items()}
-    last = dict.fromkeys(TOPIC_PORTS)                  # newest message per topic
-    counts = dict.fromkeys(TOPIC_PORTS, 0)             # messages since t_rate
+    cloud_sub = (open_subscriber(cfg.bus.host, cfg.bus[CLOUD_PORT], CLOUD_TOPIC, latest_only=False)
+                 if CLOUD_PORT in cfg.bus else None)
+    topics = list(TOPIC_PORTS) + ([CLOUD_TOPIC] if cloud_sub is not None else [])
+    last = dict.fromkeys(topics)                       # newest message per topic
+    counts = dict.fromkeys(topics, 0)                  # messages since t_rate
     t_rate = time.time()
     print(f"[viewer] http://localhost:{vc.port}", flush=True)
 
@@ -199,6 +233,9 @@ def main() -> None:
             if m is not None:
                 new[topic] = last[topic] = m
                 counts[topic] += 1
+        while cloud_sub is not None and (m := recv_cloud(cloud_sub)) is not None:   # all queued: the rate
+            new[CLOUD_TOPIC] = last[CLOUD_TOPIC] = m
+            counts[CLOUD_TOPIC] += 1
         if new:
             draw(server, scene, spec, last)
         if "camera_image" in new:
@@ -207,7 +244,7 @@ def main() -> None:
         now = time.time()
         if now - t_rate >= 1.0:
             rates = {k: v / (now - t_rate) for k, v in counts.items()}
-            counts, t_rate = dict.fromkeys(TOPIC_PORTS, 0), now
+            counts, t_rate = dict.fromkeys(topics, 0), now
             scene["status"].content = status_text(spec, last, rates, vc.stale_s, tolerance)
 
         time.sleep(max(0.0, 1.0 / vc.hz - (time.perf_counter() - t0)))

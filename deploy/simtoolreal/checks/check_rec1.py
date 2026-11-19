@@ -14,13 +14,12 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))   # repo root, for deploy.*
 from deploy.simtoolreal.goals import _volume, first_goal, next_goal, object_corners          # noqa: E402
 from deploy.utils.config import load_config, object_meshes, repo_path                         # noqa: E402
-from deploy.utils.observation import build_obs, keypoint_distance, obs_fields                 # noqa: E402
-from deploy.utils.policy_net import action_to_targets, load_network                           # noqa: E402
+from deploy.utils.observation import build_keypoints_obs, keypoint_distance, keypoints_obs_fields       # noqa: E402
+from deploy.utils.policy_net import action_to_targets, load_policy_net                        # noqa: E402
 from deploy.utils.quat import quat_apply, quat_conj, quat_mul                                     # noqa: E402
 from deploy.utils.robot_model import link_pose, load_robot_model                                  # noqa: E402
 from deploy.utils.spec import load_spec                                                           # noqa: E402
@@ -53,7 +52,7 @@ def main() -> None:
 
     # the observation's fields, as slices of the recorded 134 numbers
     slices, start = {}, 0
-    sizes = {k: np.size(v) for k, v in obs_fields(spec, model, *inputs(0, 0)).items()}
+    sizes = {k: np.size(v) for k, v in keypoints_obs_fields(spec, model, *inputs(0, 0)).items()}
     for name in spec["obs_list"]:
         slices[name] = slice(start, start + sizes[name])
         start += sizes[name]
@@ -70,7 +69,7 @@ def main() -> None:
                 track("fk fingertip body pos [m]", np.abs(p - rec["ft_body_pos"][s, e, k]).max())
                 track("fk fingertip body quat", quat_err(r, rec["ft_body_quat"][s, e, k]))
 
-            diff = np.abs(build_obs(spec, model, *inputs(s, e)) - rec["obs"][s, e])
+            diff = np.abs(build_keypoints_obs(spec, model, *inputs(s, e)) - rec["obs"][s, e])
             track("obs (all 134)", diff.max())
             for name, sl in slices.items():
                 track(f"obs {name}", diff[sl].max())
@@ -85,16 +84,14 @@ def main() -> None:
             track("success keypoint distance [m]", abs(d - rec["kp_max_dist"][s, e]))
 
     # 2. network, in order
-    net = load_network(repo_path(cfg.policy.checkpoint), repo_path(cfg.policy.config), cfg.policy.expl_coef,
-                       num_actions=len(spec["joint_names"]))
+    net = load_policy_net(cfg, num_actions=len(spec["joint_names"]), kinds=("keypoints",))
     net_err = []
     for e in range(NET_ENVS):
-        net.reset_rnn()
+        net.reset()
         for s in range(n_steps):
             if s > 0 and rec["done"][s - 1, e]:
-                net.reset_rnn()
-            with torch.no_grad():
-                action = net.get_action(torch.from_numpy(rec["obs"][s, e])[None], deterministic=True)[0].numpy()
+                net.reset()
+            action = net.act(rec["obs"][s, e])
             net_err.append(np.abs(action - rec["action"][s, e]).max())
     net_err = np.array(net_err)
 

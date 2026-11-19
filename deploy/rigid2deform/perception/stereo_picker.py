@@ -25,8 +25,8 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from deploy.rigid2deform.cloth_tracker import GREEN, PERIMETER, RED, WHITE, YELLOW, draw_grid, panel, pt, ray_plane
-from deploy.rigid2deform.stereo_geometry import cam_to_base, move_camera_onto, project, projection_matrix
+from deploy.rigid2deform.perception.cloth_tracker import GREEN, PERIMETER, RED, WHITE, YELLOW, draw_grid, panel, pt, ray_plane
+from deploy.rigid2deform.perception.stereo_geometry import cam_to_base, move_camera_onto, project, projection_matrix
 
 ALIGN_WARN_M = 0.05         # stereo_align moved B further than this: probably the wrong corners
 GREY = (160, 160, 160)

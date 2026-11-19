@@ -13,7 +13,7 @@ on random sheets (position, yaw, a few degrees of tilt, the moving plate turned 
 plates' poses disturbed independently, as two trackers would give them); fold.py's fits from the
 particles must give back the plates' own rotations. Then start_frames / update_frames: the plates'
 mesh poses through random box symmetries must come back as the right sheet frames, at the start and
-frame to frame. Then the rigid_plates source end to end: the poses fake_perception.py sends -> the flat sheet's grid. Exits
+frame to frame. Then the rigid_plates source end to end: the poses perception/fake_sheet.py sends -> the flat sheet's grid. Exits
 non-zero on any mismatch.
 
     .venv_deploy/bin/python deploy/rigid2deform/checks/check_fold.py
@@ -275,7 +275,7 @@ def main() -> None:
     except SystemExit as e:
         print(f"ok   start_frames refuses plates 8 cm apart: {e}")
 
-    # 6. the rigid_plates source end to end: fake_perception's message (base frame) -> particles (env frame)
+    # 6. the rigid_plates source end to end: fake_sheet's message (base frame) -> particles (env frame)
     sheet = rigid_plates.init(cfg, spec, geom)
     worst = 0.0
     for _ in range(50):
