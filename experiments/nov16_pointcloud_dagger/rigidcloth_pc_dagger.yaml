@@ -1,0 +1,27 @@
+# rigidcloth_pc_dagger: DAgger of a point-cloud student from the keypoint teacher (flat7RW_base), the
+# 11-16 scene-cloud study's B-noise-FK (outputs/distill/sc_B-noise-FK_*): everything the two cameras
+# see in the box over the table, the first-frame cloth cloud with moving / stationary labels (taken at
+# step 12, when the sheet has landed), 128 forward-kinematics points; version C camera errors with the
+# cloud 0-6 steps late, proprioception 0-3 and actions 0-2 steps late.
+#
+#   experiments/distill.sh (TEACHER=<keypoint teacher> NAME=<name>), or
+#   distill_pc --mode train --experiment experiments/nov16_pointcloud_dagger/rigidcloth_pc_dagger ...
+#
+# The study's other students are this recipe with overrides: A (no goal group) env.obs.pointcloud.goal=none;
+# clean: the domain_randomization.{pointcloud,proprio,action} values at 0; no FK env.obs.pointcloud.fk_points=0;
+# aux (the auxiliary keypoint head) distill_pc --aux_coef 1 (the others use 0).
+base: rigid_cloth_right_wuji
+dr: [pointcloud]
+
+env:
+  obs:
+    object: pointcloud
+    pointcloud:
+      goal: label
+      ref_step: 12
+      fk_points: 128
+  domain_randomization:
+    proprio:
+      delay_max: 3
+    action:
+      delay_max: 2

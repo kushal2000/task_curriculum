@@ -11,7 +11,8 @@
 #   --checkpoint_load_mode weights          with --checkpoint, unless given (LOAD_MODE=resume continues a run)
 #   agent.params.seed=<INDEX + 1>           unless given: an array's index k trains seed k + 1
 #   agent.params.config.name=<name>         unless given: 0_px<kind>_<RUN_TAG>_s<seed>_<job>, kind pool (PhysX
-#                                           fold pool), vbd (VBD cloth), play, or 0_pcrl_... with --pc_args
+#                                           fold pool), vbd (VBD cloth), play, or 0_pcrl_... for a point-cloud
+#                                           actor (recipe or override env.obs.object=pointcloud)
 # Environment:
 #   RUN_TAG          the run's tag in its name (default run)
 #   PRIORS="a b c"   one --checkpoint per array index (index k starts from the k-th), e.g. seed-wise finetunes
@@ -50,7 +51,13 @@ case "$TASK" in
     Isaacsimenvs-Play*)                               KIND=play ;;
     *)                                                KIND=run ;;
 esac
-has '^--pc_args' && KIND=pcrl
+EXPERIMENT="$(printf '%s\n' "${ARGS[@]}" | grep -A1 -x -- '--experiment' | tail -1)"
+[ "$EXPERIMENT" = "--experiment" ] && EXPERIMENT=""
+if has '^env\.obs\.object=pointcloud$' || { [ -n "$EXPERIMENT" ] && "${PY[@]}" -c \
+    "import sys; from isaacsimenvs.tasks.recipes import load_recipe; sys.exit(load_recipe(sys.argv[1])['env'].get('obs', {}).get('object') != 'pointcloud')" \
+    "$EXPERIMENT" 2>/dev/null; }; then
+    KIND=pcrl
+fi
 NAME="0_${KIND}_${RUN_TAG:-run}_s${SEED}_${JOB}"
 if has '^agent\.params\.config\.name='; then
     NAME="$(printf '%s\n' "${ARGS[@]}" | sed -n 's/^agent\.params\.config\.name=//p' | tail -1)"
@@ -68,8 +75,6 @@ if [ "${WANDB:-0}" = 1 ]; then
 fi
 
 # The run's size as it will be used (recipe, then the command line), for the header.
-EXPERIMENT="$(printf '%s\n' "${ARGS[@]}" | grep -A1 -x -- '--experiment' | tail -1)"
-[ "$EXPERIMENT" = "--experiment" ] && EXPERIMENT=""
 read -r ENVS EPOCHS MINIBATCH DR < <("${PY[@]}" - "$EXPERIMENT" "${ARGS[@]}" <<'PY' 2>/dev/null
 import re, sys
 from isaacsimenvs.tasks.recipes import load_recipe

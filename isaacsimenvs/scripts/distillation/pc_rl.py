@@ -1,18 +1,18 @@
 """Reinforcement learning with the point-cloud student as the actor (rl_games SAPG).
 
-Three pieces, used by ``isaacsimenvs/scripts/training/train.py --pc_args <json>``:
+Used by ``isaacsimenvs/scripts/training/train.py`` when the recipe sets ``obs.object: pointcloud``:
+the env's ``policy`` observation is then the student's input, ``[proprio | points (M x D) | mask (M)]``
+(``mdp/observations.py``, with the cloud's and the proprioception's DR); the ``critic`` observation
+is the privileged state as for every run.
 
-* ``attach_student_obs`` -- the env's ``policy`` observation becomes the student's input, flat:
-  ``[proprio | points (M x D) | mask (M)]`` (``distill_pc.StudentObs`` builds it, with the cloud
-  noise and the proprioception / cloud delays). The ``critic`` observation is untouched, so the
-  central value network still reads the privileged state.
 * ``PCA2CBuilder`` (network name ``pc_actor_critic``) -- the rl_games actor with the student's
   front end: proprio normaliser + PointNet, then the usual [.., SAPG embedding] -> LSTM ->
   LayerNorm -> MLP -> mu. ``network.pc.init_student`` starts it from a distilled student
   (the embedding's input weights start at zero, so every SAPG block is the student at first) and
   ``network.pc.init_sigma`` takes the exploration noise of a state-policy checkpoint.
 * ``student_from_rl`` -- an rl_games checkpoint of that actor as a ``StudentNet`` state dict (one
-  SAPG block, embedding folded into the LSTM bias), so ``distill_pc --mode eval`` runs it.
+  SAPG block, embedding folded into the LSTM bias), so ``distill_pc --mode eval`` runs it;
+  ``write_student_env`` puts the env settings it needs next to the checkpoints.
 """
 
 from __future__ import annotations
@@ -23,9 +23,9 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from isaacsimenvs.scripts.distillation.student import canonical_pc_args
+from isaacsimenvs.scripts.distillation.student import legacy_env_overrides
 
-__all__ = ["attach_student_obs", "register_network", "student_from_rl", "load_student_any", "write_pc_args", "patch_gradient_step"]
+__all__ = ["register_network", "student_from_rl", "load_student_any", "write_student_env", "patch_gradient_step"]
 
 FEAT_DIM = 64
 
@@ -34,38 +34,11 @@ def flat_dim(n_proprio: int, num_points: int, point_dim: int) -> int:
     return int(n_proprio) + int(num_points) * int(point_dim) + int(num_points)
 
 
-def attach_student_obs(inner, sobs) -> dict:
-    """Make ``inner`` (the unwrapped env) return the student's flat input as its ``policy``
-    observation. Returns the layout ``{n_proprio, num_points, point_dim}``."""
-    import gymnasium as gym
-    import numpy as np
-
-    n_proprio, m, d = int(sobs.proprio_cols.numel()), int(sobs.pc.num_points), int(sobs.pc.point_dim)
-    dim = flat_dim(n_proprio, m, d)
-    original = inner._get_observations
-
-    def _get_observations():
-        obs = original()
-        start = inner.task.episode_start(inner.episode_length_buf)
-        sobs.reset(start.nonzero(as_tuple=True)[0])
-        so = sobs(obs["policy"])
-        obs["policy"] = torch.cat(
-            (so["proprio"], so["points"].flatten(1), so["mask"].to(so["points"].dtype)), dim=1
-        )
-        return obs
-
-    inner._get_observations = _get_observations
-    inner.cfg.observation_space = dim
-    box = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(dim,), dtype=np.float32)
-    inner.single_observation_space.spaces["policy"] = box
-    inner.observation_space = gym.vector.utils.batch_space(box, inner.num_envs)   # DirectRLEnv: the policy group, batched
-    return {"n_proprio": n_proprio, "num_points": m, "point_dim": d}
-
-
-def write_pc_args(run_dir, pc_args: dict, layout: dict, teacher: str | None) -> None:
-    """Next to the checkpoints: what ``distill_pc --mode eval`` needs to rebuild the input."""
+def write_student_env(run_dir, env: dict, layout: dict, teacher: str | None) -> None:
+    """Next to the checkpoints: the env settings the actor reads through (``student.student_env``),
+    for ``distill_pc --mode eval`` and the viewer."""
     Path(run_dir).mkdir(parents=True, exist_ok=True)
-    (Path(run_dir) / "pc_args.json").write_text(json.dumps({"pc_args": pc_args, "layout": layout, "teacher": teacher}, indent=1))
+    (Path(run_dir) / "student_env.json").write_text(json.dumps({"env": env, "layout": layout, "teacher": teacher}, indent=1))
 
 
 def patch_gradient_step() -> None:
@@ -193,19 +166,24 @@ def student_from_rl(model_state: dict, block: int = -1) -> dict:
 
 
 def load_student_any(path: str) -> dict:
-    """A student checkpoint ``{model, pc_args, net_args, ...}`` from either a ``distill_pc`` file or
-    an rl_games checkpoint of the point-cloud actor (its ``pc_args.json`` is in the run directory);
-    ``pc_args`` under the current names (``student.canonical_pc_args``)."""
+    """A student checkpoint ``{model, env, net_args, ...}`` from either a ``distill_pc`` file or an
+    rl_games checkpoint of the point-cloud actor (``student_env.json`` in its run directory). ``env``:
+    the env settings it was trained with (``student.student_env``'s format); students saved before
+    2026-11-19 carry ``pc_args`` instead (``student.legacy_env_overrides`` translates)."""
     ckpt = torch.load(path, map_location="cpu", weights_only=False)
+    if "env" in ckpt:
+        return ckpt
     if "pc_args" in ckpt:
-        return {**ckpt, "pc_args": canonical_pc_args(ckpt["pc_args"])}
+        return {**ckpt, "env": legacy_env_overrides(ckpt["pc_args"])}
     ckpt = ckpt[0] if 0 in ckpt else ckpt
     if "a2c_network.pointnet.out.0.weight" not in ckpt.get("model", {}):
         raise ValueError(f"{path} is neither a distilled student nor a point-cloud RL checkpoint")
     for folder in Path(path).resolve().parents[:3]:
-        side = folder / "pc_args.json"
-        if side.exists():
-            meta = json.loads(side.read_text())
-            return {"model": student_from_rl(ckpt["model"]), "pc_args": canonical_pc_args(meta["pc_args"]), "net_args": {},
-                    "iter": ckpt.get("epoch"), "teacher": meta.get("teacher"), "from_rl": True}
-    raise FileNotFoundError(f"no pc_args.json next to {path}")
+        for name in ("student_env.json", "pc_args.json"):
+            side = folder / name
+            if side.exists():
+                meta = json.loads(side.read_text())
+                env = meta["env"] if "env" in meta else legacy_env_overrides(meta["pc_args"])
+                return {"model": student_from_rl(ckpt["model"]), "env": env, "net_args": {},
+                        "iter": ckpt.get("epoch"), "teacher": meta.get("teacher"), "from_rl": True}
+    raise FileNotFoundError(f"no student_env.json (or pc_args.json) next to {path}")

@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import torch
 
-from .randomization import DelayLine, DomainRandomization
+from .delay import DelayLine
+from .randomization import DomainRandomization
 from .robot import RobotLayout
 
 __all__ = ["JointController"]

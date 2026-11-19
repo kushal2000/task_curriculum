@@ -1,9 +1,24 @@
-# rigidcloth_pc_rl (was pcRW_scratch; its runs and checkpoints keep that name): the point-cloud actor
-# trained by SAPG from a random initialisation on the base fold pool (no prior, no teacher). The actor
-# reads the scene cloud + proprioception (isaacsimenvs/scripts/distillation/pc_rl.py; pass --pc_args),
-# the central value network the privileged state. Env count, minibatch and SAPG block are per rank
-# (the launcher sets them).
+# rigidcloth_pc_rl (was pcRW_scratch): SAPG with the point-cloud student as the actor (pc_rl.py) and the
+# privileged critic, on the 11-16 scene cloud: first-frame cloth cloud with labels (step 12), version C
+# camera errors, the cloud 0-6 steps late, proprioception 0-3, actions 0-2 (as the B-noise students).
+#
+#   experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
+#       --experiment experiments/nov17_pointcloud_rl/rigidcloth_pc_rl [--pc_init_student <student.pth>] \
+#       [--pc_init_sigma <teacher.pth>] [--critic_checkpoint <teacher run's full checkpoint>]
 base: rigid_cloth_right_wuji
+dr: [pointcloud]
+
+env:
+  obs:
+    object: pointcloud
+    pointcloud:
+      goal: label
+      ref_step: 12
+  domain_randomization:
+    proprio:
+      delay_max: 3
+    action:
+      delay_max: 2
 
 agent:
   params:

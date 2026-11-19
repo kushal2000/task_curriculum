@@ -1,10 +1,9 @@
 """Distil a state (keypoint) fold policy into a point-cloud student, and evaluate either one.
 
-    # train (PhysX fold pool, the teacher's own recipe)
+    # train: a recipe with env.obs.object: pointcloud (its cloud and DR), the keypoint teacher
     python -m isaacsimenvs.scripts.distillation.distill_pc --mode train --headless \
-        --task Isaacsimenvs-RigidCloth-Direct-v0 --experiment rigid_cloth_right_wuji \
-        --teacher <snap.pth> --vis cams --goal g1 --out outputs/distill/<name> \
-        env.scene.num_envs=4096 env.cloth.keypoint_tolerance=0.015 env.termination.success_steps=10
+        --task Isaacsimenvs-RigidCloth-Direct-v0 --experiment experiments/<study>/<recipe>.yaml \
+        --teacher <snap.pth> --out outputs/distill/<name> env.scene.num_envs=4096
 
     # evaluate a student (or the teacher: --policy teacher) -- first episode of every env
     experiments/newton_py -m isaacsimenvs.scripts.distillation.distill_pc --mode eval --policy student \
@@ -17,23 +16,17 @@ its deterministic action, and the student regresses that action plus -- from an 
 the keypoint observations the teacher read. Truncated BPTT over ``--horizon`` steps, the teacher's
 ``seq_length``.
 
-Student input: the teacher's proprioceptive observation columns and a point cloud in place of the
-tracker columns. The network is the teacher's LSTM + MLP with a PointNet in front
-(``scripts/distillation/student.py``). Two clouds:
+The env builds both inputs (``obs.object: pointcloud``, ``tasks/cloth/mdp/observations.py``): the
+student reads ``policy`` = ``[proprio | points | mask]``, the teacher reads ``teacher``, the clean
+keypoint vector. The cloud (``obs.pointcloud``: goal group, forward-kinematics points) and its DR
+(``domain_randomization.proprio`` / ``pointcloud`` / ``action``) come from the recipe and are saved
+in the student (``student.student_env``); an evaluation sets them from the student again
+(``--eval_clean``: its cloud without DR; ``--eval_dr``: DR blocks on top). Students saved before
+2026-11-19 carry ``pc_args``; ``student.legacy_env_overrides`` translates them. The network is the
+teacher's LSTM + MLP with a PointNet in front (``scripts/distillation/student.py``).
 
-* ``--cloud cloth_hand_only`` (``tasks/cloth/perception/pointcloud.py``): labelled cloth + hand
-  points, goal inputs g0 / g3 / g1 / gl.
-* ``--cloud scene`` (``tasks/cloth/perception/scene_pointcloud.py``): everything in the box over the
-  table (cloth, hand, arm) as bare xyz, ``--goal none``, ``label`` (the first-frame cloth cloud with
-  moving / stationary labels, taken at ``--ref_step``), ``goal_fixed`` (the folded goal sheet in
-  place) or ``goal_any`` (its shape only, at any yaw); goal_fixed / goal_any need
-  ``fold_pool.goal_task`` (recipes rigidcloth_pc_half_fold / rigidcloth_pc_any_fold). Optional
-  ``--fk_points``. ``--noise`` adds version C; ``--pc_delay`` / ``--proprio_delay`` /
-  ``--action_delay`` the per-episode delays (an eval uses the student's own unless ``--eval_clean``).
-
-A student is fine-tuned by RL with ``train.py --pc_args`` (``pc_rl.py``); ``--student`` also takes
-such an rl_games checkpoint. Checkpoints from before 2026-11-19 carry the old names (cloud legacy,
-goal first / scene / shape); ``student.canonical_pc_args`` translates them.
+A student is fine-tuned by RL with ``train.py`` on a point-cloud recipe (``pc_rl.py``); ``--student``
+also takes such an rl_games checkpoint.
 """
 
 from __future__ import annotations
@@ -54,176 +47,84 @@ def _t(x):
     return x.torch if hasattr(x, "torch") else x
 
 
-class StudentObs:
-    """Builds the student's observation from the env's state, and tracks how far the stationary
-    half has been dragged since the episode started."""
+class DragTracker:
+    """How far each env's stationary half has been dragged (xy, yaw) since its episode started."""
 
-    def __init__(self, inner, pc_cfg, proprio_delay: int = 0) -> None:
+    def __init__(self, inner) -> None:
         import torch
 
-        from isaacsimenvs.scripts.distillation.student import split_columns
-        from isaacsimenvs.tasks.cloth.perception.pointcloud import ClothPointCloud, hand_capsules
-        from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import LagBuffer, SceneCloudCfg
-        from isaacsimenvs.tasks.cloth.mdp.observations import obs_dim
+        self.inner, n, dev = inner, inner.num_envs, inner.device
+        self.start_xy, self.start_yaw = torch.zeros(n, 2, device=dev), torch.zeros(n, device=dev)
+        self.drag_xy, self.drag_yaw = torch.zeros(n, device=dev), torch.zeros(n, device=dev)
+        self.max_drag_xy, self.max_drag_yaw = torch.zeros(n, device=dev), torch.zeros(n, device=dev)
 
-        self.inner, self.device, self.n = inner, inner.device, inner.num_envs
-        if inner.cfg.cloth.fold_axis != "x":
-            raise ValueError("the point cloud assumes cloth.fold_axis = x")
-        obs_list = list(inner.cfg.obs.obs_list)
-        num_joints = int(inner.cfg.action_space)
-        sizes = {f: obs_dim([f], num_joints) for f in obs_list}
-        if sum(sizes.values()) != int(inner.cfg.observation_space):
-            raise ValueError(f"obs_list sizes {sizes} do not add up to {inner.cfg.observation_space}")
-        proprio, aux = split_columns(obs_list, sizes)
-        self.proprio_cols = torch.tensor(proprio, dtype=torch.long, device=self.device)
-        self.aux_cols = torch.tensor(aux, dtype=torch.long, device=self.device)
-
-        root = torch.as_tensor(inner.cfg.robot_root_pos, dtype=torch.float32)
-        cams = torch.stack((torch.as_tensor(pc_cfg.cam_a_base) + root, torch.as_tensor(pc_cfg.cam_b_base) + root))
-        names = list(inner.robot_layout.body_names)
-        self.scene = isinstance(pc_cfg, SceneCloudCfg)
-        self.scale = float(pc_cfg.scale)
-        dev = self.device
-        self.start_xy = torch.zeros(self.n, 2, device=dev)
-        self.start_yaw = torch.zeros(self.n, device=dev)
-        self.drag_xy = torch.zeros(self.n, device=dev)
-        self.drag_yaw = torch.zeros(self.n, device=dev)
-        self.max_drag_xy = torch.zeros(self.n, device=dev)
-        self.max_drag_yaw = torch.zeros(self.n, device=dev)
-        # The student's proprioception is up to ``proprio_delay`` policy steps old (per-episode lag).
-        self.proprio_delay = int(proprio_delay)
-        self.p_lag = torch.zeros(self.n, dtype=torch.long, device=dev)
-        self.fresh = torch.ones(self.n, dtype=torch.bool, device=dev)
-        self.p_buf = LagBuffer(self.n, self.proprio_delay, (len(proprio),), dev)
-        if self.scene:
-            self._init_scene(inner, pc_cfg, cams, names, len(proprio), len(aux))
-            return
-        regex = str(inner.robot_spec.hand_joint_regex)
-        spec = hand_capsules(pc_cfg, regex[:2] if regex[:2] in ("r_", "l_") else "")
-        missing = sorted({b for a, _, c, _, _ in spec for b in (a, c) if b not in names})
-        if missing:
-            raise ValueError(f"robot has no bodies {missing} for the hand capsules (bodies: {names})")
-        dev = self.device
-        self.cap_ia = torch.tensor([names.index(a) for a, *_ in spec], dtype=torch.long, device=dev)
-        self.cap_oa = torch.tensor([o for _, o, *_ in spec], dtype=torch.float32, device=dev).view(-1, 3)
-        self.cap_ib = torch.tensor([names.index(b) for _, _, b, _, _ in spec], dtype=torch.long, device=dev)
-        self.cap_ob = torch.tensor([o for *_, o, _ in spec], dtype=torch.float32, device=dev).view(-1, 3)
-        radii = torch.tensor([r for *_, r in spec], dtype=torch.float32, device=dev)
-        self.pc = ClothPointCloud(pc_cfg, self.n, int(inner.cfg.cloth.resolution), cams, radii, dev)
-        print(
-            f"[distill] point cloud: {pc_cfg.n_cloth} cloth + {self.pc.n_hand} hand ({len(spec)} capsules) + "
-            f"{self.pc.n_extra} goal points, visibility {pc_cfg.visibility}, goal {pc_cfg.goal_mode}; "
-            f"proprio {len(proprio)} of {int(inner.cfg.observation_space)} obs columns, aux {len(aux)}",
-            flush=True,
-        )
-
-    def _init_scene(self, inner, pc_cfg, cams, names, n_proprio: int, n_aux: int) -> None:
+    def _stationary(self):
         import torch
 
-        from isaacsimenvs.tasks.cloth.perception import robot_surface
-        from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import LagBuffer, SceneCloud
-
-        dev = self.device
-        surf = robot_surface.load(inner.cfg.assets.robot_urdf, names)
-        fk_idx = robot_surface.fk_subset(surf, pc_cfg.fk_points) if pc_cfg.fk_points > 0 else None
-        rots = None
-        if pc_cfg.cam_a_rot is not None and pc_cfg.cam_b_rot is not None:
-            rots = torch.tensor([pc_cfg.cam_a_rot, pc_cfg.cam_b_rot], dtype=torch.float32).view(2, 3, 3)
-        table_z = float(inner.cfg.reset.table_reset_z) + float(inner.cfg.cloth.table_half_thickness)
-        self.pc = SceneCloud(
-            pc_cfg, self.n, int(inner.cfg.cloth.resolution), cams, table_z,
-            surf["body"], surf["offset"], surf["weight"], dev, cam_rots=rots, fk_idx=fk_idx,
-        )
-        n_body = len(names)
-        self.body_buf = LagBuffer(self.n, self.proprio_delay if pc_cfg.fk_points > 0 else 0, (n_body, 7), dev)
-        print(
-            f"[distill] scene cloud: {pc_cfg.n_points} live points from {pc_cfg.n_cloth_cand} cloth + "
-            f"{self.pc.n_robot} robot candidates ({len(surf['links'])} links), image {self.pc.w}x{self.pc.h}, "
-            f"goal {pc_cfg.goal_mode}, fk {pc_cfg.fk_points}, labels {self.pc.labels or 'none'}, "
-            f"cloud delay <= {pc_cfg.delay_max}, proprio delay <= {self.proprio_delay}; "
-            f"proprio {n_proprio} of {int(inner.cfg.observation_space)} obs columns, aux {n_aux}",
-            flush=True,
-        )
-
-    def _stationary(self, view):
-        """The sheet's points, the stationary half's centroid and heading, env frame, from ``view``."""
-        import torch
-
-        origins = self.inner.scene.env_origins
+        view = self.inner.fold_view()
         rot = view.frame_r
-        return view.points_w - origins.unsqueeze(1), view.frame_c - origins, torch.atan2(rot[:, 1, 0], rot[:, 0, 0])
+        return view.frame_c - self.inner.scene.env_origins, torch.atan2(rot[:, 1, 0], rot[:, 0, 0])
 
     def reset(self, ids) -> None:
-        """Call for the envs whose episode just started, before ``__call__``."""
         if ids.numel() == 0:
             return
-        import torch
-
-        parts, centroid, yaw = self._stationary(self.inner.fold_view())
-        if self.scene:
-            self.pc.reset(ids)
-        else:
-            self.pc.reset(ids, parts[ids].mean(dim=1))
-        self.p_lag[ids] = torch.randint(0, self.proprio_delay + 1, (int(ids.numel()),), device=self.device)
-        self.fresh[ids] = True
+        centroid, yaw = self._stationary()
         self.start_xy[ids], self.start_yaw[ids] = centroid[ids, :2], yaw[ids]
         self.max_drag_xy[ids] = 0.0
         self.max_drag_yaw[ids] = 0.0
 
-    def __call__(self, teacher_obs):
+    def update(self) -> None:
         import torch
-        from isaaclab.utils.math import quat_apply
 
-        inner, n = self.inner, self.n
-        origins = inner.scene.env_origins
-        state = inner.sim_state()
-        view = inner.fold_view(state)
-        parts, centroid, yaw = self._stationary(view)
+        centroid, yaw = self._stationary()
         self.drag_xy = (centroid[:, :2] - self.start_xy).norm(dim=-1)
         dyaw = yaw - self.start_yaw
         self.drag_yaw = torch.atan2(torch.sin(dyaw), torch.cos(dyaw)).abs()
         self.max_drag_xy = torch.maximum(self.max_drag_xy, self.drag_xy)
         self.max_drag_yaw = torch.maximum(self.max_drag_yaw, self.drag_yaw)
 
-        pos, quat = state.body_pos_w, state.body_quat_w
-        proprio = torch.nan_to_num(teacher_obs[:, self.proprio_cols], nan=0.0, posinf=0.0, neginf=0.0)
-        proprio = self.p_buf.push(proprio, self.p_lag, self.fresh)
-        aux = torch.nan_to_num(teacher_obs[:, self.aux_cols], nan=0.0, posinf=0.0, neginf=0.0) * self.scale
-        if self.scene:
-            body = torch.cat((pos - origins.unsqueeze(1), quat), dim=-1)
-            old = self.body_buf.push(body, self.p_lag, self.fresh)      # what the delayed joint angles give
-            self.fresh[:] = False
-            goal_now = goal_rest = None
-            if self.pc.cfg.goal_mode in ("goal_fixed", "goal_any"):
-                goal_now, goal_rest = inner.task.geometry.goal_sheet(view.points_w)
-                goal_now = goal_now - origins.unsqueeze(1)
-            points, mask = self.pc.observe(
-                inner.episode_length_buf, parts, body[..., :3], body[..., 3:], old[..., :3], old[..., 3:],
-                goal_now=goal_now, goal_rest=goal_rest,
-            )
-            return {"proprio": proprio, "points": points, "mask": mask, "aux": aux}
-        self.fresh[:] = False
 
-        def ends(ids, off):
-            q = quat[:, ids].reshape(-1, 4)
-            o = off.unsqueeze(0).expand(n, -1, -1).reshape(-1, 3)
-            return pos[:, ids] + quat_apply(q, o).view(n, -1, 3) - origins.unsqueeze(1)
+class StudentInput:
+    """Splits the env's observations: the student's ``[proprio | points | mask]`` (``policy``), the
+    teacher's keypoint vector (``teacher``) and the auxiliary targets in it."""
 
-        caps_a, caps_b = ends(self.cap_ia, self.cap_oa), ends(self.cap_ib, self.cap_ob)
-        pid = inner.robot_layout.palm_body_id
-        offset = torch.as_tensor(inner.robot_spec.palm_center_offset, dtype=pos.dtype, device=pos.device)
-        palm = pos[:, pid] + quat_apply(quat[:, pid].reshape(-1, 4), offset.expand(n, 3)) - origins
-        tips = pos[:, inner.robot_layout.fingertip_body_ids] - origins.unsqueeze(1)
-        goal = view.targets_w - origins.unsqueeze(1)
-        points, mask = self.pc.observe(
-            inner.episode_length_buf, parts, palm.reshape(n, 3), goal, centroid, caps_a, caps_b, tips
-        )
-        # An env whose sim went non-finite (cloth.nan_policy resets it next step) must not put NaN
-        # into the networks: its bad points are masked out and every input is made finite.
-        ok = torch.isfinite(points).all(dim=-1) & (points[..., :3].abs() < 50.0).all(dim=-1)
-        mask = mask & ok
-        points = torch.nan_to_num(points, nan=0.0, posinf=0.0, neginf=0.0) * mask.unsqueeze(-1)
-        return {"proprio": proprio, "points": points, "mask": mask, "aux": aux}
+    def __init__(self, inner) -> None:
+        import torch
+
+        from isaacsimenvs.scripts.distillation.student import split_columns
+        from isaacsimenvs.tasks.cloth.mdp.observations import AUX_FIELDS, OBJECT_FIELDS, obs_dim
+
+        self.inner = inner
+        obs_list = list(inner.cfg.obs.obs_list)
+        num_joints = int(inner.cfg.action_space)
+        self.teacher_dim = obs_dim(obs_list, num_joints)
+        sizes = {f: obs_dim([f], num_joints) for f in obs_list}
+        proprio, aux = split_columns(obs_list, sizes, OBJECT_FIELDS, AUX_FIELDS)
+        self.proprio_cols = torch.tensor(proprio, dtype=torch.long, device=inner.device)
+        self.aux_cols = torch.tensor(aux, dtype=torch.long, device=inner.device)
+        self.pc = inner.observations.pointcloud
+        if self.pc is None:
+            return
+        lay = inner.observations.pointcloud_layout
+        self.n_proprio, self.num_points, self.point_dim = lay["n_proprio"], lay["num_points"], lay["point_dim"]
+        self.scale = float(self.pc.setup.scale)
+        if self.n_proprio != len(proprio):
+            raise ValueError(f"the point-cloud vector has {self.n_proprio} proprio columns, the teacher's {len(proprio)}")
+
+    @staticmethod
+    def teacher_obs(obs):
+        return obs.get("teacher", obs["policy"])
+
+    def __call__(self, obs) -> dict:
+        import torch
+
+        pol = obs["policy"]
+        n_p, m, d = self.n_proprio, self.num_points, self.point_dim
+        teacher = torch.nan_to_num(obs["teacher"], nan=0.0, posinf=0.0, neginf=0.0)
+        return {
+            "proprio": pol[:, :n_p], "points": pol[:, n_p:n_p + m * d].reshape(-1, m, d),
+            "mask": pol[:, n_p + m * d:n_p + m * d + m] > 0.5, "aux": teacher[:, self.aux_cols] * self.scale,
+        }
 
 
 def _kp_err_cm(pred, target, scale: float):
@@ -249,33 +150,10 @@ def main() -> None:
     p.add_argument("--out", default=None, help="train: output directory")
     p.add_argument("--json", default=None, help="eval: result file")
     p.add_argument("--seed", type=int, default=1)
-    # point cloud
-    p.add_argument("--vis", choices=("cams", "none"), default="cams")
-    p.add_argument("--cloud", choices=("cloth_hand_only", "scene"), default="cloth_hand_only",
-                   help="cloth_hand_only: labelled cloth + hand points; scene: everything in the box over the table, xyz only")
-    p.add_argument("--goal", choices=("g0", "g3", "g1", "gl", "none", "label", "goal_fixed", "goal_any"), default="g0",
-                   help="cloth_hand_only: g0 g3 g1 gl; scene: none | label (first-frame cloth cloud, moving / "
-                        "stationary) | goal_fixed (the folded goal sheet in place) | goal_any (its shape only, any yaw)")
-    p.add_argument("--n_points", type=int, default=1024, help="scene: live points")
-    p.add_argument("--dump_cloud", default=None, help="eval, scene: save envs 0-3's cloud at steps 0/60/150 to this .npz")
-    p.add_argument("--fk_points", type=int, default=0, help="scene: forward-kinematics points (forearm + hand)")
-    p.add_argument("--pc_delay", type=int, default=0, help="scene: the cloud is up to this many steps old")
-    p.add_argument("--proprio_delay", type=int, default=0, help="the student's proprioception is up to this many steps old")
-    p.add_argument("--action_delay", type=int, default=0,
-                   help="env: actions applied 0 .. N-1 steps late (lag per episode; 0 and 1 = no delay)")
-    p.add_argument("--env_obs_delay", type=int, default=0,
-                   help="env: the teacher's whole observation 0 .. N-1 steps late (teacher eval)")
-    p.add_argument("--noise", action="store_true", help="version C point-cloud noise (noise_preset)")
-    p.add_argument("--g3_noise", action="store_true", help="g3 estimate error (g3_noise_preset)")
-    p.add_argument("--eval_noise", action="store_true", help="eval: version C noise whatever the student trained with")
-    p.add_argument("--eval_clean", action="store_true", help="eval: no point-cloud noise whatever the student trained with")
-    p.add_argument("--eval_noise_only", default=None, choices=("occl", "calib", "depth", "drop", "tip"),
-                   help="eval: one part of the version C noise (occl = camera position + capsule margin)")
-    p.add_argument("--eval_g3_scale", type=float, default=None, help="eval: g3 estimate error = preset x this")
-    p.add_argument("--hand_cam", action="store_true", help="hand points as the cameras see them (g1 / gl)")
-    p.add_argument("--n_cloth", type=int, default=192)
-    p.add_argument("--ref_step", type=int, default=0)
-    p.add_argument("--pc_chunk", type=int, default=1024)
+    p.add_argument("--dump_cloud", default=None, help="eval: save envs 0-3's cloud at steps 0/60/150 to this .npz")
+    p.add_argument("--eval_clean", action="store_true", help="eval: the student's cloud without its DR")
+    p.add_argument("--eval_dr", default="", metavar="BLOCK[,BLOCK]",
+                   help="eval: DR blocks (tasks/cloth/config/dr/) on top of the student's own, e.g. pointcloud,proprio")
     # student
     p.add_argument("--no_rnn_state", action="store_true", help="memory ablation: LSTM state dropped every step")
     p.add_argument("--no_teacher_init", action="store_true")
@@ -311,58 +189,10 @@ def main() -> None:
     import torch
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
-    from isaacsimenvs.scripts.distillation.student import StudentNet, TeacherNet
+    from isaacsimenvs.scripts.distillation.student import StudentNet, TeacherNet, apply_student_env, student_env
     from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
-    from isaacsimenvs.tasks.cloth.perception.pointcloud import PointCloudCfg, g3_noise_preset, noise_preset
-    from isaacsimenvs.tasks.cloth.perception.scene_pointcloud import GOAL_MODES, SceneCloudCfg, scene_noise_preset
     from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
-
-    def delays_of(a: dict) -> tuple[int, int]:
-        """(cloud, proprio) delay for these pc_args; eval flags override what the student trained with."""
-        pc_d, pr_d = int(a.get("pc_delay", 0)), int(a.get("proprio_delay", 0))
-        if args.mode == "eval":
-            if args.eval_clean:
-                pc_d, pr_d = 0, 0
-            if args.eval_noise:
-                pc_d, pr_d = max(pc_d, args.pc_delay), max(pr_d, args.proprio_delay)
-        return pc_d, pr_d
-
-    def pc_cfg_from(a: dict):
-        if a["cloud"] == "scene":
-            cfg = SceneCloudCfg(
-                n_points=int(a["n_points"]), goal_mode=a["goal"], ref_step=int(a["ref_step"]),
-                fk_points=int(a["fk_points"]), chunk=int(args.pc_chunk),
-            )
-            noisy = (a["noise"] and not (args.mode == "eval" and args.eval_clean)) or (args.mode == "eval" and args.eval_noise)
-            if noisy:
-                scene_noise_preset(cfg)
-            cfg.delay_max = delays_of(a)[0]
-            return cfg
-        cfg = PointCloudCfg(
-            n_cloth=int(a["n_cloth"]), visibility=a["vis"], goal_mode=a["goal"],
-            ref_step=int(a["ref_step"]), chunk=int(args.pc_chunk),
-            hand_cam=bool(a.get("hand_cam", False)),
-        )
-        if a["noise"] and not (args.mode == "eval" and (args.eval_clean or args.eval_noise_only)):
-            noise_preset(cfg)
-        if args.mode == "eval" and args.eval_noise_only:
-            full = noise_preset(PointCloudCfg())
-            fields = {"occl": ("cam_pos_noise", "margin_range"), "calib": ("calib_xyz", "calib_rot_deg"),
-                      "depth": ("depth_noise_std_range",), "drop": ("drop_prob_range",),
-                      "tip": ("tip_drop_prob",)}[args.eval_noise_only]
-            for f in fields:
-                setattr(cfg, f, getattr(full, f))
-        if a["g3_noise"]:
-            g3_noise_preset(cfg)
-        if args.mode == "eval":                       # stress tests: input unlike the training one
-            if args.eval_noise:
-                noise_preset(cfg)
-            if args.eval_g3_scale is not None and a["goal"] == "g3":
-                g3_noise_preset(cfg)
-                k = float(args.eval_g3_scale)
-                cfg.g3_bias_xy, cfg.g3_bias_yaw_deg = cfg.g3_bias_xy * k, cfg.g3_bias_yaw_deg * k
-                cfg.g3_noise_xy, cfg.g3_noise_yaw_deg = cfg.g3_noise_xy * k, cfg.g3_noise_yaw_deg * k
-        return cfg
+    from isaacsimenvs.tasks.recipes import dr_block
 
     @hydra_task_config_with_yaml(args.task, "rl_games_sapg_cfg_entry_point", experiment=args.experiment)
     def run(env_cfg, _agent_cfg) -> None:
@@ -376,53 +206,47 @@ def main() -> None:
         from isaacsimenvs.scripts.distillation.pc_rl import load_student_any
 
         student_ckpt = load_student_any(args.student) if args.student else None   # distilled or RL-trained
-        dr = env_cfg.domain_randomization
-        action_delay = int(args.action_delay)
-        if not train and student_ckpt is not None and not args.eval_clean:   # as the student trained
-            action_delay = max(action_delay, int(student_ckpt["pc_args"].get("action_delay", 0)))
-        # N is a delay line of N entries (lags 0 .. N-1), the meaning the students' pc_args were saved with.
-        if action_delay > 0:
-            dr.action.delay_max = action_delay - 1
-        if args.env_obs_delay > 0:
-            dr.proprio.delay_max = dr.keypoints.delay_max = int(args.env_obs_delay) - 1
+        if student_ckpt is not None and not train:      # the student's own cloud, and its DR unless --eval_clean
+            apply_student_env(env_cfg, student_ckpt["env"], with_dr=not args.eval_clean)
+        eval_dr = [b for b in args.eval_dr.split(",") if b]
+        for block in eval_dr:
+            for group, values in dr_block(block)["domain_randomization"].items():
+                for k, v in values.items():
+                    setattr(getattr(env_cfg.domain_randomization, group), k, tuple(v) if isinstance(v, list) else v)
+        need_student = train or args.policy == "student"
+        if need_student and env_cfg.obs.object != "pointcloud":
+            raise ValueError("a student reads the point cloud: use a recipe with env.obs.object: pointcloud")
         torch.manual_seed(args.seed)
 
         env = gym.make(args.task, cfg=env_cfg)
         inner = env.unwrapped
         device, n = inner.device, inner.num_envs
         num_actions = int(inner.cfg.action_space)
+        sin = StudentInput(inner)
+        drag = DragTracker(inner)
 
         ckpt = torch.load(args.teacher, map_location="cpu", weights_only=False)
         ckpt = ckpt[0] if 0 in ckpt else ckpt
         teacher = TeacherNet(ckpt["model"]).to(device).eval()
-        if teacher.obs_dim != int(inner.cfg.observation_space):
-            raise ValueError(f"teacher reads {teacher.obs_dim} obs columns, the env gives {inner.cfg.observation_space}")
+        if teacher.obs_dim != sin.teacher_dim:
+            raise ValueError(f"teacher reads {teacher.obs_dim} obs columns, the env's keypoint vector has {sin.teacher_dim}")
 
-        pc_args = dict(vis=args.vis, goal=args.goal, noise=args.noise, g3_noise=args.g3_noise,
-                       n_cloth=args.n_cloth, ref_step=args.ref_step, hand_cam=args.hand_cam,
-                       cloud=args.cloud, n_points=args.n_points, fk_points=args.fk_points,
-                       pc_delay=args.pc_delay, proprio_delay=args.proprio_delay, action_delay=args.action_delay)
-        if args.cloud == "scene" and args.goal not in GOAL_MODES:
-            raise ValueError(f"--cloud scene takes --goal {' | '.join(GOAL_MODES)}")
         net_args = dict(use_rnn_state=not args.no_rnn_state)
         if student_ckpt is not None and not train:
-            pc_args, net_args = student_ckpt["pc_args"], student_ckpt["net_args"]   # the student's own input
-        sobs = StudentObs(inner, pc_cfg_from(pc_args), proprio_delay=delays_of(pc_args)[1])
-        point_dim = int(sobs.pc.point_dim)
-        need_student = train or args.policy == "student"
+            net_args = student_ckpt["net_args"]
+        env_settings = student_env(env_cfg)
         student = None
         if need_student:
-            student = StudentNet(
-                int(sobs.proprio_cols.numel()), num_actions, point_dim, int(sobs.aux_cols.numel()), **net_args
-            ).to(device)
+            point_dim = sin.point_dim
+            student = StudentNet(sin.n_proprio, num_actions, point_dim, int(sin.aux_cols.numel()), **net_args).to(device)
             if student_ckpt is not None:
                 # an RL-trained actor has no auxiliary head: that part keeps its initial values
                 student.load_state_dict(student_ckpt["model"], strict=not student_ckpt.get("from_rl", False))
                 print(f"[distill] student <- {args.student} (iter {student_ckpt.get('iter')})", flush=True)
             elif not args.no_teacher_init:
-                student.load_teacher(teacher, sobs.proprio_cols.cpu())
+                student.load_teacher(teacher, sin.proprio_cols.cpu())
             elif train:
-                student.load_teacher(teacher, sobs.proprio_cols.cpu())   # the normaliser is always the teacher's
+                student.load_teacher(teacher, sin.proprio_cols.cpu())   # the normaliser is always the teacher's
                 fresh = StudentNet(student.n_proprio, num_actions, point_dim, student.aux_dim, **net_args)
                 keep = {k: v for k, v in student.state_dict().items() if k in ("mean", "var")}
                 student.load_state_dict({**fresh.state_dict(), **keep})
@@ -441,7 +265,7 @@ def main() -> None:
             env.reset()
             obs, _ = env.reset()
         obs, *_ = env.step(torch.zeros((n, num_actions), device=device))
-        sobs.reset(all_ids)
+        drag.reset(all_ids)
         t_state = teacher.initial_state(n, device)
         s_state = student.initial_state(n, device) if student is not None else None
         start = torch.ones(n, dtype=torch.bool, device=device)
@@ -488,38 +312,41 @@ def main() -> None:
             step = 0
             try:
                 while step < args.max_steps and not bool(done_once.all()):
-                    tobs = obs["policy"]
-                    so = sobs(tobs)
+                    tobs = sin.teacher_obs(obs)
+                    so = sin(obs) if student is not None else None
+                    drag.update()
                     live = ~done_once
                     act, t_act, aux = policy_step(tobs, so, None if args.policy == "student" else torch.ones_like(start))
                     w = live.float()
                     if aux is not None:
-                        e_palm, e_goal = _kp_err_cm(aux, so["aux"], sobs.scale)
+                        e_palm, e_goal = _kp_err_cm(aux, so["aux"], sin.scale)
                         err_sum += torch.stack(((e_palm * w).sum(), (e_goal * w).sum()))
                         for b, (lo, hi) in enumerate(DRAG_BINS):
-                            sel = w * ((sobs.drag_xy >= lo) & (sobs.drag_xy < hi)).float()
+                            sel = w * ((drag.drag_xy >= lo) & (drag.drag_xy < hi)).float()
                             bin_sum[b] += torch.stack(((e_palm * sel).sum(), (e_goal * sel).sum()))
                             bin_cnt[b] += sel.sum()
                         action_gap += float((((act - t_act) ** 2).mean(dim=1) * w).sum())
                     else:
                         for b, (lo, hi) in enumerate(DRAG_BINS):
-                            bin_cnt[b] += (w * ((sobs.drag_xy >= lo) & (sobs.drag_xy < hi)).float()).sum()
-                    vis_sum += float((sobs.pc.last_visible_frac * w).sum())
+                            bin_cnt[b] += (w * ((drag.drag_xy >= lo) & (drag.drag_xy < hi)).float()).sum()
+                    if sin.pc is not None:
+                        vis_sum += float((sin.pc.cloud.last_visible_frac * w).sum())
                     steps_cnt += float(w.sum())
                     best_err = torch.where(live, torch.minimum(best_err, inner.fold_error()), best_err)
-                    drag_xy_now, drag_yaw_now = sobs.max_drag_xy.clone(), sobs.max_drag_yaw.clone()
+                    drag_xy_now, drag_yaw_now = drag.max_drag_xy.clone(), drag.max_drag_yaw.clone()
 
-                    if args.dump_cloud and sobs.scene and step in (0, 60, 150):
+                    if args.dump_cloud and sin.pc is not None and step in (0, 60, 150):
+                        cloud = sin.pc.cloud
                         pos_w, quat_w = _t(inner.robot.data.body_pos_w), _t(inner.robot.data.body_quat_w)
                         org = inner.scene.env_origins
-                        dump[f"robot_all_{step}"] = sobs.pc.robot_points(pos_w[:4] - org[:4].unsqueeze(1), quat_w[:4]).cpu().numpy()
+                        dump[f"robot_all_{step}"] = cloud.robot_points(pos_w[:4] - org[:4].unsqueeze(1), quat_w[:4]).cpu().numpy()
                         dump[f"body_pos_{step}"] = (pos_w[:4] - org[:4].unsqueeze(1)).cpu().numpy()
                         dump[f"particles_{step}"] = (inner.cloth_points_w()[:4] - org[:4].unsqueeze(1)).cpu().numpy()
                         dump[f"tips_{step}"] = (pos_w[:4][:, inner.robot_layout.fingertip_body_ids] - org[:4].unsqueeze(1)).cpu().numpy()
                         for key in ("last_xyz", "last_mask", "last_label", "last_cam"):
-                            dump[f"{key}_{step}"] = getattr(sobs.pc, key)[:4].cpu().numpy()
-                        dump["cams"], dump["rots"] = sobs.pc.cams[:4].cpu().numpy(), sobs.pc.rots[:4].cpu().numpy()
-                        dump["box_lo"], dump["box_hi"] = sobs.pc.box_lo.cpu().numpy(), sobs.pc.box_hi.cpu().numpy()
+                            dump[f"{key}_{step}"] = getattr(cloud, key)[:4].cpu().numpy()
+                        dump["cams"], dump["rots"] = cloud.cams[:4].cpu().numpy(), cloud.rots[:4].cpu().numpy()
+                        dump["box_lo"], dump["box_hi"] = cloud.box_lo.cpu().numpy(), cloud.box_hi.cpu().numpy()
                         dump["body_names"] = list(inner.robot.body_names)
                         import numpy as np
 
@@ -537,7 +364,7 @@ def main() -> None:
                                 r = reasons.setdefault(key[5:], torch.zeros(n, dtype=torch.bool, device=device))
                                 r[first] = value[first].bool()
                         done_once |= first
-                    sobs.reset(ended.nonzero(as_tuple=True)[0])
+                    drag.reset(ended.nonzero(as_tuple=True)[0])
                     start = ended
                     step += 1
                     if capture is not None and step % 25 == 0:
@@ -557,10 +384,10 @@ def main() -> None:
             cnt = max(steps_cnt, 1.0)
             result = {
                 "task": args.task, "policy": args.policy, "teacher": args.teacher, "student": args.student,
-                "pc_args": pc_args, "net_args": net_args, "num_envs": n, "seed": args.seed,
-                "eval_flags": {"clean": bool(args.eval_clean), "noise": bool(args.eval_noise),
-                               "action_delay": action_delay, "env_obs_delay": int(args.env_obs_delay),
-                               "cloud_delay": int(getattr(sobs.pc.cfg, "delay_max", 0)), "proprio_delay": sobs.proprio_delay},
+                "student_env": env_settings, "net_args": net_args, "num_envs": n, "seed": args.seed,
+                "eval_flags": {"clean": bool(args.eval_clean), "eval_dr": eval_dr},
+                "delays": {g: int(getattr(env_cfg.domain_randomization, g).delay_max)
+                           for g in ("proprio", "keypoints", "pointcloud", "action")},
                 "randomization": bool(args.randomize), "steps_run": step, "censored": int(n - m.sum()),
                 "keypoint_tolerance": float(inner.cfg.cloth.keypoint_tolerance),
                 "success_rate": round(float((g > 0).float().mean()), 4) if len(g) else None,
@@ -632,13 +459,13 @@ def main() -> None:
         (out_dir / "args.json").write_text(json.dumps({**vars(args), "hydra": hydra_args}, indent=1, default=str))
         opt = torch.optim.Adam(student.parameters(), lr=args.lr)
         scaler = torch.amp.GradScaler("cuda", enabled=amp)
-        h, m_pts = int(args.horizon), sobs.pc.num_points
+        h, m_pts = int(args.horizon), sin.num_points
         buf = {
-            "proprio": torch.zeros(h, n, int(sobs.proprio_cols.numel()), device=device),
+            "proprio": torch.zeros(h, n, sin.n_proprio, device=device),
             "points": torch.zeros(h, n, m_pts, point_dim, device=device, dtype=torch.float16),
             "mask": torch.zeros(h, n, m_pts, dtype=torch.bool, device=device),
             "act": torch.zeros(h, n, num_actions, device=device),
-            "aux": torch.zeros(h, n, int(sobs.aux_cols.numel()), device=device),
+            "aux": torch.zeros(h, n, int(sin.aux_cols.numel()), device=device),
             "start": torch.zeros(h, n, dtype=torch.bool, device=device),
             "drag": torch.zeros(h, n, device=device),
         }
@@ -651,7 +478,7 @@ def main() -> None:
         frames = 0
 
         def save(it: int, name: str) -> None:
-            torch.save({"model": student.state_dict(), "iter": it, "pc_args": pc_args, "net_args": net_args,
+            torch.save({"model": student.state_dict(), "iter": it, "env": env_settings, "net_args": net_args,
                         "teacher": args.teacher, "task": args.task}, out_dir / name)
 
         print(
@@ -665,15 +492,16 @@ def main() -> None:
             state0 = (s_state[0].detach().clone(), s_state[1].detach().clone())
             student.eval()
             for t in range(h):
-                tobs = obs["policy"]
-                so = sobs(tobs)
+                tobs = sin.teacher_obs(obs)
+                so = sin(obs)
+                drag.update()
                 act, t_act, _aux = policy_step(tobs, so, use_teacher)
                 buf["proprio"][t], buf["points"][t], buf["mask"][t] = so["proprio"], so["points"].to(torch.float16), so["mask"]
-                buf["act"][t], buf["aux"][t], buf["start"][t], buf["drag"][t] = t_act, so["aux"], start, sobs.drag_xy
-                win["vis"] += float(sobs.pc.last_visible_frac.mean()) / h
-                if sobs.scene:
-                    win["pts"] += float(sobs.pc.last_count.mean()) / h
-                    win["cloth"] += float(sobs.pc.last_cloth_share.mean()) / h
+                buf["act"][t], buf["aux"][t], buf["start"][t], buf["drag"][t] = t_act, so["aux"], start, drag.drag_xy
+                cloud = sin.pc.cloud
+                win["vis"] += float(cloud.last_visible_frac.mean()) / h
+                win["pts"] += float(cloud.last_count.mean()) / h
+                win["cloth"] += float(cloud.last_cloth_share.mean()) / h
                 obs, _rew, terminated, truncated, extras = env.step(act)
                 ended = terminated.bool() | truncated.bool()
                 if bool(ended.any()):
@@ -682,7 +510,7 @@ def main() -> None:
                     win["s_ok"] += int((ended & ~use_teacher & ok).sum())
                     win["t_ep"] += int((ended & use_teacher).sum())
                     win["t_ok"] += int((ended & use_teacher & ok).sum())
-                sobs.reset(ended.nonzero(as_tuple=True)[0])
+                drag.reset(ended.nonzero(as_tuple=True)[0])
                 start = ended
             frames += n * h
 
@@ -706,15 +534,15 @@ def main() -> None:
                 scaler.step(opt)
                 scaler.update()
                 with torch.no_grad():
-                    e_palm, e_goal = _kp_err_cm(aux, buf["aux"][:, mb], sobs.scale)
+                    e_palm, e_goal = _kp_err_cm(aux, buf["aux"][:, mb], sin.scale)
                     win["loss_act"] += float(loss_act)
                     win["loss_aux"] += float(loss_aux)
                     win["e_palm"] += float(e_palm.mean())
                     win["e_goal"] += float(e_goal.mean())
                     win["upd"] += 1
-                    drag = buf["drag"][:, mb]
+                    mb_drag = buf["drag"][:, mb]
                     for b, (lo, hi) in enumerate(DRAG_BINS):
-                        sel = (drag >= lo) & (drag < hi)
+                        sel = (mb_drag >= lo) & (mb_drag < hi)
                         win["bin_sum"][b] += e_goal[sel].sum()
                         win["bin_cnt"][b] += sel.sum()
             if win["skipped"] > 50:

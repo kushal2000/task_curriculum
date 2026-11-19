@@ -5,7 +5,8 @@ hooks to four parts, which hand each other the dataclasses of ``mdp/state.py``:
 
     controller     mdp/actions.JointController         policy action -> joint targets (+ passive spring)
     task           mdp/task.ClothTask                  episode start, dones, reward, fold goal
-    observations   mdp/observations.ObservationBuilder policy and critic vectors, observation DR
+    observations   mdp/observations.ObservationBuilder policy and critic vectors (keypoints or a point
+                                                       cloud, obs.object), observation DR
     dr             mdp/randomization.DomainRandomization  per-episode DR draws
 
     _pre_physics_step   controller.process
@@ -31,7 +32,7 @@ from isaacsimenvs.robots import robot_spec
 
 from .backends.base import ClothBackend
 from .mdp.actions import JointController
-from .mdp.observations import ObservationBuilder, obs_dim
+from .mdp.observations import OBJECT_FIELDS, ObservationBuilder, obs_dim
 from .mdp.randomization import DomainRandomization
 from .mdp.robot import RobotLayout, to_torch
 from .mdp.state import FoldView, SimState
@@ -48,6 +49,11 @@ class ClothEnv(DirectRLEnv):
         n_joints = self.robot_spec.num_joints
         cfg.action_space = n_joints
         cfg.observation_space = obs_dim(cfg.obs.obs_list, n_joints)
+        if cfg.obs.object == "pointcloud":  # [proprio | points (M x D) | mask (M)]
+            from .perception.observation import point_cloud_layout
+
+            m, d = point_cloud_layout(cfg.obs.pointcloud)
+            cfg.observation_space = obs_dim([f for f in cfg.obs.obs_list if f not in OBJECT_FIELDS], n_joints) + m * d + m
         cfg.state_space = obs_dim(cfg.obs.state_list, n_joints)
         self.backend = backend(cfg, self.robot_spec)
         super().__init__(cfg, render_mode, **kwargs)  # builds the scene (_setup_scene)

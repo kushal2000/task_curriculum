@@ -1,4 +1,4 @@
-"""Surface samples of a robot's link meshes, for ``scene_pointcloud.SceneCloud``.
+"""Surface samples of a robot's link meshes, for ``pointcloud.PointCloud``.
 
 ``bake(urdf)`` samples the visual meshes of every link (uniform over each mesh's area) and writes
 them next to the URDF as ``<urdf stem>.surface.npz``, in the links' own frames. ``load(urdf,

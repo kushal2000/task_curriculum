@@ -2,24 +2,31 @@
 # Point-cloud student distillation (isaacsimenvs/scripts/distillation/distill_pc.py) on the PhysX fold pool,
 # and evaluations of a student / the teacher on PhysX or the VBD cloth (Newton).
 #
-#   TEACHER=<pth> NAME=B_g1 VIS=cams GOAL=g1 experiments/distill.sh                       (train)
+#   TEACHER=<pth> NAME=<name> [EXPERIMENT=<point-cloud recipe>] experiments/distill.sh      (train)
 #   TEACHER=<pth> MODE=eval SIM=vbd STUDENT=<pth> TAG=<tag> START=rand experiments/distill.sh
 #   TEACHER=<pth> MODE=evalall STUDENT=<pth> TAG=<tag> experiments/distill.sh   (PhysX rand + VBD pinned/rand x 2 seeds)
-#   TEACHER=<pth> MODE=evalx STUDENT=<pth> TAG=<tag> SIMS="physx vbd" SEEDS="1 2 3" EVAL_ARGS="--eval_noise ..." ...
+#   TEACHER=<pth> MODE=evalx STUDENT=<pth> TAG=<tag> SIMS="physx vbd" SEEDS="1 2 3" EVAL_ARGS="--eval_dr pointcloud" ...
 #        (PX_EVAL_ENVS: PhysX episodes, default 322; goal tasks: EXPERIMENT=<goal recipe>, e.g.
 #        experiments/nov17_goal_pointcloud/rigidcloth_pc_any_fold)
-#   TEACHER=<pth> MODE=smoke [PART=physx|scene|vbd] experiments/distill.sh
+#   TEACHER=<pth> MODE=smoke [PART=physx|vbd] experiments/distill.sh
 #
-# TEACHER (required): the state policy's checkpoint; EXPERIMENT (default rigid_cloth_right_wuji): its
-# training recipe, which builds the PhysX env. The VBD env is the Cloth task at the ns6 protocol.
-# Train: NAME, VIS (cams|none), GOAL (g0|g3|g1|gl with the cloth_hand_only cloud; none|label|goal_fixed|goal_any
-#        with EXTRA="--cloud scene ..."), NOISE=1, G3_NOISE=1, ENVS (4096),
-#        ITERS (2000), SEED (default INDEX + 1), EXTRA (more distill_pc args). Writes outputs/distill/<NAME>_s<seed>_<job>/.
+# TEACHER (required): the state policy's checkpoint. EXPERIMENT: the recipe that builds the PhysX env.
+# Train: a point-cloud recipe (env.obs.object: pointcloud: the cloud, its DR), default
+#        experiments/nov16_pointcloud_dagger/rigidcloth_pc_dagger; the student keeps those settings.
+#        NAME, ENVS (4096), ITERS (2000), SEED (default INDEX + 1), EXTRA (more distill_pc args or hydra
+#        overrides, e.g. env.obs.pointcloud.goal=none). Writes outputs/distill/<NAME>_s<seed>_<job>/.
+# Eval:  EXPERIMENT default rigid_cloth_right_wuji (the student brings its own cloud and DR; EVAL_ARGS
+#        --eval_clean drops the DR, --eval_dr <blocks> adds DR blocks). The VBD env is the Cloth task at
+#        the ns6 protocol.
 # Eval:  SIM (physx|vbd), POLICY (student|teacher), STUDENT, TAG, START (pinned|rand), CUT (0.015),
 #        EVAL_ENVS, EVAL_SEED. Writes docs/results/distill/<TAG>__on_<sim>__<start>_s<seed>.json.
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 TEACHER="${TEACHER:?set TEACHER to the teacher checkpoint}"
-EXPERIMENT="${EXPERIMENT:-rigid_cloth_right_wuji}"
+if [ "${MODE:-train}" = train ] || [ "${MODE:-train}" = smoke ]; then
+    EXPERIMENT="${EXPERIMENT:-experiments/nov16_pointcloud_dagger/rigidcloth_pc_dagger}"
+else
+    EXPERIMENT="${EXPERIMENT:-rigid_cloth_right_wuji}"
+fi
 PX_TASK=Isaacsimenvs-RigidCloth-Direct-v0
 VBD_TASK=Isaacsimenvs-Cloth-Direct-v0
 PXPY=(.venv_isaacsim/bin/python); NEWTONPY=(experiments/newton_py)
@@ -32,13 +39,10 @@ BACKEND=physx provenance distill
 
 train() {  # name envs iters <extra args...>
     local name=$1 envs=$2 iters=$3; shift 3
-    local args=(--vis "${VIS:-cams}" --goal "${GOAL:-g0}")
-    [ "${NOISE:-0}" = 1 ] && args+=(--noise)
-    [ "${G3_NOISE:-0}" = 1 ] && args+=(--g3_noise)
     read -r -a extra <<<"${EXTRA:-}"
     "${PXPY[@]}" -m isaacsimenvs.scripts.distillation.distill_pc --mode train --headless \
         --task "$PX_TASK" --experiment "$EXPERIMENT" --teacher "$TEACHER" --seed "$SEED" \
-        --out "outputs/distill/$name" --iters "$iters" "${args[@]}" "$@" "${extra[@]}" \
+        --out "outputs/distill/$name" --iters "$iters" "$@" "${extra[@]}" \
         "env.scene.num_envs=$envs" "${FOLD[@]}"
 }
 
@@ -75,7 +79,7 @@ evalall)  # one student (or the teacher: POLICY=teacher, STUDENT unset): PhysX r
     for ES in 1 2; do for START in pinned rand; do
         evaluate vbd "$P" "$ST" "${D}__on_vbd__${START}_s${ES}.json" "$START" 64 "$ES"; echo "[evalall] vbd $START s$ES exit=$?"
     done; done ;;
-evalx)  # stress / extra seeds: SIMS, PX_STARTS, STARTS, SEEDS, EVAL_ARGS (e.g. --eval_noise); TAG carries a suffix
+evalx)  # stress / extra seeds: SIMS, PX_STARTS, STARTS, SEEDS, EVAL_ARGS (e.g. --eval_dr pointcloud); TAG carries a suffix
     D="docs/results/distill/${TAG:?set TAG}"; P="${POLICY:-student}"; ST="${STUDENT:-}"
     read -r -a eargs <<<"${EVAL_ARGS:-}"
     for SIM in ${SIMS:-physx vbd}; do
@@ -92,19 +96,13 @@ evalx)  # stress / extra seeds: SIMS, PX_STARTS, STARTS, SEEDS, EVAL_ARGS (e.g. 
 smoke)
     S="smoke_${JOB}"
     case "${PART:-physx}" in
-    physx)
-        VIS=cams GOAL=g1 NOISE=1 train "${S}_small" 256 30 --save_every 15 --log_every 5 --beta_iters 10; echo "[smoke] small train exit=$?"
-        VIS=cams GOAL=g1 NOISE=1 train "${S}_big" 4096 12 --log_every 4 --save_every 1000; echo "[smoke] big train exit=$?"
-        evaluate physx student "outputs/distill/${S}_small/student_last.pth" "docs/results/distill/${S}_student_px.json" rand 64 1 --max_steps 300
-        echo "[smoke] student eval exit=$?"
-        evaluate physx teacher "" "docs/results/distill/${S}_teacher_px.json" rand 322 1; echo "[smoke] teacher eval exit=$?" ;;
-    scene)   # the scene cloud (everything in the box, xyz only)
-        SC="--cloud scene --aux_coef 0"; DL="--pc_delay 6 --proprio_delay 3 --action_delay 3"
-        GOAL=label NOISE=1 EXTRA="$SC $DL --fk_points 128" train "${S}_small" 256 30 --save_every 15 --log_every 5 --beta_iters 10; echo "[smoke] small train exit=$?"
+    physx)   # a small DAgger run on the point-cloud recipe, then the student on PhysX and VBD
+        train "${S}_small" 256 30 --save_every 15 --log_every 5 --beta_iters 10; echo "[smoke] small train exit=$?"
         evaluate physx student "outputs/distill/${S}_small/student_last.pth" "docs/results/distill/${S}_student_px.json" rand 64 1 --max_steps 300
         echo "[smoke] student px eval exit=$?"
         evaluate vbd student "outputs/distill/${S}_small/student_last.pth" "docs/results/distill/${S}_student_vbd.json" pinned 32 1 --max_steps 200
-        echo "[smoke] student vbd eval exit=$?" ;;
+        echo "[smoke] student vbd eval exit=$?"
+        evaluate physx teacher "" "docs/results/distill/${S}_teacher_px.json" rand 322 1; echo "[smoke] teacher eval exit=$?" ;;
     vbd)
         evaluate vbd teacher "" "docs/results/distill/${S}_teacher_vbd_pinned.json" pinned 64 1; echo "[smoke] vbd pinned exit=$?" ;;
     esac ;;

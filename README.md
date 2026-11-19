@@ -40,13 +40,13 @@ block) swaps in the real hand's identified joint dynamics. See
 experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 --experiment rigid_cloth_right_wuji \
     --checkpoint pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth
 experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
-    --experiment experiments/nov11_right_wuji_dr_ablation/flat7RW_allDR.yaml --checkpoint <prior.pth>
+    --experiment experiments/nov15_dr_delay/flat7RW_DR_delay_friction_sysid.yaml --checkpoint <prior.pth>
 
 # Evaluate a checkpoint on the rigid pool and the VBD cloth (held folds, 1.5 / 4 cm)
 CKPT=<pth> TAG=<name> INDEX=<k> experiments/eval.sh
 
 # Distil into a point-cloud student (DAgger), then evaluate it
-TEACHER=<pth> NAME=<name> VIS=cams GOAL=g1 experiments/distill.sh
+TEACHER=<pth> NAME=<name> EXPERIMENT=experiments/nov16_pointcloud_dagger/rigidcloth_pc_dagger experiments/distill.sh
 TEACHER=<pth> MODE=evalall STUDENT=<student.pth> TAG=<name> experiments/distill.sh
 
 # Watch a policy live in a browser

@@ -1,4 +1,4 @@
-"""Scene point cloud (tasks/cloth/perception/scene_pointcloud.py, robot_surface.py): Kit-free, CPU."""
+"""The point cloud (tasks/cloth/perception/pointcloud.py, robot_surface.py; mdp/delay.py): Kit-free, CPU."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ import torch
 
 from isaacsimenvs.conftest import REPO_ROOT, load_module
 
-sp = load_module("isaacsimenvs/tasks/cloth/perception/scene_pointcloud.py", "scene_pointcloud")
+sp = load_module("isaacsimenvs/tasks/cloth/perception/pointcloud.py", "pointcloud")
+dl = load_module("isaacsimenvs/tasks/cloth/mdp/delay.py", "delay")
 rs = load_module("isaacsimenvs/tasks/cloth/perception/robot_surface.py", "robot_surface")
 
 R = 7
@@ -33,11 +34,11 @@ def _plate(centre, half: float, count: int = 4000) -> torch.Tensor:
 
 
 def _make(n=2, plate=None, **kw):
-    cfg = sp.SceneCloudCfg(**kw)
+    cfg = sp.PointCloudSetup(**kw)
     off = _plate((0.0, 0.0, 5.0), 0.01, 64) if plate is None else plate          # default: far away, unseen
     area = 1e-4 if plate is None else 0.09
     fk = torch.arange(cfg.fk_points) if cfg.fk_points else None
-    cloud = sp.SceneCloud(cfg, n, R, CAMS, TABLE_Z, torch.zeros(len(off), dtype=torch.long), off,
+    cloud = sp.PointCloud(cfg, n, R, CAMS, TABLE_Z, torch.zeros(len(off), dtype=torch.long), off,
                           torch.full((len(off),), area / len(off)), "cpu", fk_idx=fk)
     cloud.reset(torch.arange(n))
     return cloud
@@ -171,14 +172,14 @@ def test_noise_moves_points_and_keeps_them_in_the_box():
     assert (z > TABLE_Z - cloud.cfg.box_below - 1e-6).all()
 
 
-def test_look_at_and_lag_buffer():
+def test_look_at_and_delay_line():
     rot = sp.look_at(CAMS, torch.tensor([0.0, 0.0, TABLE_Z]).expand(2, 3))
     assert torch.allclose(rot.transpose(-1, -2) @ rot, torch.eye(3).expand(2, 3, 3), atol=1e-5)
     assert torch.allclose(torch.linalg.det(rot), torch.ones(2), atol=1e-5)
     assert (rot[:, 2, 1] < 0).all()                                            # image y points down
-    buf = sp.LagBuffer(2, 3, (1,), "cpu")
+    buf = dl.DelayLine(2, 3, (1,), "cpu")
     lag = torch.tensor([1, 3])
-    out = [buf.push(torch.full((2, 1), float(t)), lag, torch.tensor([t == 0, t == 0])) for t in range(6)]
+    out = [buf.push_and_read(torch.full((2, 1), float(t)), torch.tensor([t == 0, t == 0]), lag) for t in range(6)]
     assert [float(o[0]) for o in out] == [0, 0, 1, 2, 3, 4] and [float(o[1]) for o in out] == [0, 0, 0, 0, 1, 2]
 
 

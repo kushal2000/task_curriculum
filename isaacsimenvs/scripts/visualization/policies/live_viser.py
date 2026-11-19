@@ -36,7 +36,7 @@ imports websockets).
 `student_*.pth` runs through `distill/student_player.py`. The "Point cloud" folder then draws what the
 network reads -- the cloud by label or by source camera, the two cameras, the auxiliary head's keypoint
 and goal estimates against the truth -- over the true sheet (made translucent), and the "Point-cloud
-noise" folder switches the parts of the version C noise (new per-episode draws, so it resets the envs).
+noise" folder switches the camera errors of the pointcloud DR block (new per-episode draws, so it resets the envs).
 
 **Goal tasks** (`fold_pool.goal_task`, e.g. `LIVE_VISER_EXPERIMENT=rigidcloth_pc_any_fold`): a green
 ghost shows the goal state the fold criterion matches best now (the task's own goal, or a look-alike
@@ -145,20 +145,18 @@ GOAL_RGB = (40, 200, 90)
 KP_RGB = (255, 165, 25)
 MOVING_RGB = (242, 77, 26)
 STATIONARY_RGB = (250, 199, 38)
-#: Student point cloud, by label (cloth_pointcloud.LABELS order): cloth, cloth moving / stationary (gl),
-#: hand (forward kinematics), first-frame reference moving / stationary (g1), goal corners (g0 / g3).
-PC_LABEL_RGB = np.array([(245, 245, 245), (230, 40, 160), (40, 110, 235), (40, 40, 40),
-                         (255, 150, 200), (140, 195, 255), (40, 200, 90)], np.uint8)
-PC_HAND_CAM_RGB = (150, 60, 220)   # hand points as the cameras see them (hand_cam students)
+#: Student point cloud, by label (``PointCloudSetup.labels``): live points, first-frame reference
+#: moving / stationary (goal label), the goal sheet (goal_fixed / goal_any), forward kinematics.
+PC_LABEL_RGB = {"live": (245, 245, 245), "ref_moving": (255, 150, 200), "ref_stationary": (140, 195, 255),
+                "goal": (255, 150, 200), "fk": (40, 40, 40)}
 PC_CAM_RGB = np.array([(0, 190, 215), (235, 60, 200)], np.uint8)   # camera A, B
 PC_NO_CAM_RGB = np.array((120, 120, 120), np.uint8)
 PC_AUX_KP_RGB, PC_AUX_GOAL_RGB = (255, 0, 200), (0, 120, 110)
 PC_NOISE_LABELS = {
-    "occl": "occlusion: camera position +-5 cm, capsule margin 0-1.5 cm",
+    "cams": "camera position +-5 cm",
     "calib": "calibration: each camera +-1.5 cm, +-2 deg",
     "depth": "depth noise 1-4 mm",
     "drop": "random drop 0-30%",
-    "tip": "hole at the fingertips (half the episodes, 1-3 cm)",
 }
 
 
@@ -689,10 +687,9 @@ def main() -> None:
         with server.gui.add_folder("Point cloud (student policies)"):
             g_pc_col = server.gui.add_dropdown("colour points by", ["label", "camera"])
             g_pc_show = {
-                "cloth": server.gui.add_checkbox("cloth points (what the cameras see)", True),
-                "hand": server.gui.add_checkbox("hand points (forward kinematics)", True),
-                "handcam": server.gui.add_checkbox("hand points as the cameras see them (hand_cam)", True),
-                "ref": server.gui.add_checkbox("goal cloud (pink) / goal corners / first-frame reference cloud", True),
+                "live": server.gui.add_checkbox("live points (what the cameras see: cloth, hand, arm)", True),
+                "fk": server.gui.add_checkbox("forward-kinematics points (forearm, hand)", True),
+                "ref": server.gui.add_checkbox("goal cloud / first-frame reference cloud", True),
             }
             g_pc_ghost = server.gui.add_checkbox("goal tasks: matched goal state (green ghost)", True)
             g_pc_aux = server.gui.add_checkbox("aux head: estimated keypoints + goal", False)
@@ -701,13 +698,10 @@ def main() -> None:
             g_opac = server.gui.add_slider("true sheet opacity", 0.05, 1.0, 0.05, 0.4)
             g_pc_size = server.gui.add_slider("point size [mm]", 1.0, 10.0, 0.5, 4.0)
             server.gui.add_markdown(
-                "by label: white = cloth, pink / blue = moving / stationary half (gl), black = hand (FK), "
-                "purple = hand seen by the cameras, light pink / light blue = first-frame reference "
-                "moving / stationary (g1), green = goal corners (g0, g3).  \n"
-                "scene cloud: white = live points (cloth + hand + arm), light pink = goal cloud as the student "
-                "gets it (goal_fixed: folded sheet in place; goal_any: bare shape about the box centre, random "
-                "yaw; label: light pink / light blue = moving / stationary); green ghost = the goal state the "
-                "fold criterion matches best now.  \n"
+                "by label: white = live points (cloth + hand + arm), black = forward kinematics, light pink = "
+                "goal cloud as the student gets it (goal_fixed: folded sheet in place; goal_any: bare shape "
+                "about the box centre, random yaw; label: light pink / light blue = moving / stationary); "
+                "green ghost = the goal state the fold criterion matches best now.  \n"
                 "by camera: cyan = camera A, magenta = camera B, grey = no camera.  \n"
                 "aux head: magenta = estimated keypoints, teal = estimated goal, lines go to the truth "
                 "(orange / green, 'show keypoints / targets').")
@@ -1152,29 +1146,22 @@ def main() -> None:
         def draw_cloud():
             """What the active student read at its latest step, in the drawn env."""
             pl, w = stu(), scene_w[0]
-            if pl is None or pl.last is None or not hasattr(pl.sobs.pc, "last_xyz"):
+            if pl is None or pl.last is None or not hasattr(pl.cloud, "last_xyz"):
                 for h in pc_nodes.values():
                     h.visible = False
                 return
-            pc, o = pl.sobs.pc, origins[w]
+            pc, o = pl.cloud, origins[w]
             xyz = pc.last_xyz[w].detach().float().cpu().numpy()          # env frame
-            lab, cam = pc.last_label[w].cpu().numpy(), pc.last_cam[w].cpu().numpy()
-            if getattr(pl, "scene", False):
-                # scene cloud: its own label set -> the legacy indices the colours and groups use
-                # (live -> cloth 0, first-frame reference -> 4 / 5, forward kinematics -> hand 3)
-                to_legacy = {"live": 0, "ref_moving": 4, "ref_stationary": 5, "fk": 3, "goal": 4}
-                names = pc.labels or ("live",)
-                lab = np.array([to_legacy[k] for k in names])[lab]
+            names = np.array(pc.labels or ("live",))
+            lab, cam = names[pc.last_label[w].cpu().numpy()], pc.last_cam[w].cpu().numpy()
             ok = pc.last_mask[w].cpu().numpy() & np.isfinite(xyz).all(axis=1)
-            seen_hand = (lab == 6) & (cam >= 0)
             if g_pc_col.value == "camera":
                 rgb = np.where((cam >= 0)[:, None], PC_CAM_RGB[np.clip(cam, 0, 1)], PC_NO_CAM_RGB)
             else:
-                rgb = PC_LABEL_RGB[lab].copy()
-                rgb[seen_hand] = PC_HAND_CAM_RGB
+                rgb = np.array([PC_LABEL_RGB[k] for k in lab], np.uint8).reshape(-1, 3)
             size = float(g_pc_size.value) * 1e-3
-            groups = {"cloth": lab <= 2, "hand": lab == 3, "handcam": seen_hand,
-                      "ref": (lab == 4) | (lab == 5) | ((lab == 6) & (cam < 0))}
+            groups = {"live": lab == "live", "fk": lab == "fk",
+                      "ref": (lab == "ref_moving") | (lab == "ref_stationary") | (lab == "goal")}
             for name, sel in groups.items():
                 sel = sel & ok & bool(g_pc_show[name].value)
                 put_points(name, xyz[sel], rgb[sel], size)
@@ -1205,7 +1192,7 @@ def main() -> None:
             if g_pc_aux.value and hasattr(inner, "fold_targets_w"):
                 # aux = [keypoints - palm, keypoints - goal] * scale; its error is in the env frame, so
                 # the estimates are the truth moved by it (drawn on the current sheet).
-                d = ((pl.last["aux_pred"][w] - pl.last["aux_true"][w]) / pl.sobs.scale).view(2, -1, 3).cpu().numpy()
+                d = ((pl.last["aux_pred"][w] - pl.last["aux_true"][w]) / pl.scale).view(2, -1, 3).cpu().numpy()
                 kp = inner.cloth_keypoints_w()[w].detach().cpu().numpy() - o
                 goal = inner.fold_targets_w()[w].detach().cpu().numpy() - o
                 kp_est, goal_est = kp + d[0], goal + d[0] - d[1]
@@ -1251,31 +1238,21 @@ def main() -> None:
                 lines.append("finger THROUGH cloth: **" + ", ".join(through) + "** (red)" if through
                              else "finger through cloth: none")
             pl = stu()
-            if pl is not None and pl.last is not None and hasattr(pl.sobs.pc, "last_xyz"):
-                pc = pl.sobs.pc
-                lab, m = pc.last_label[w], pc.last_mask[w]
-                e = ((pl.last["aux_pred"][w] - pl.last["aux_true"][w]) / pl.sobs.scale).view(2, -1, 3)
+            if pl is not None and pl.last is not None and hasattr(pl.cloud, "last_xyz"):
+                pc = pl.cloud
+                e = ((pl.last["aux_pred"][w] - pl.last["aux_true"][w]) / pl.scale).view(2, -1, 3)
                 e = e.norm(dim=-1).mean(dim=-1) * 100.0
                 shift = pc.calib_t[w].norm(dim=-1) * 1e3
-                if getattr(pl, "scene", False):
-                    lines += [
-                        f"scene cloud (goal input {pc.cfg.goal_mode}, fk points {pc.cfg.fk_points}): "
-                        f"**{int(pc.last_count[w])} / {pc.cfg.n_points}** live points, "
-                        f"cloth share {float(pc.last_cloth_share[w]) * 100:.0f}%, "
-                        f"{float(pc.last_visible_frac[w]) * 100:.0f}% of the sheet seen",
-                        f"this episode: calibration shift A {float(shift[0]):.0f} mm / B {float(shift[1]):.0f} mm, "
-                        f"depth std {float(pc.depth_std[w]) * 1e3:.1f} mm, drop {float(pc.drop_p[w]) * 100:.0f}%, "
-                        f"cloud {int(pc.lag[w])} steps old, proprio {int(pl.sobs.p_lag[w])} steps old",
-                    ]
-                else:
-                    lines += [
-                        f"point cloud (goal input {pc.cfg.goal_mode}{', hand_cam' if pc.cfg.hand_cam else ''}): "
-                        f"**{int((m & (lab <= 2)).sum())} / {pc.cfg.n_cloth}** cloth points seen, {int(m.sum())} points in all",
-                        f"aux head error: keypoints **{float(e[0]):.1f} cm**, keypoints - goal **{float(e[1]):.1f} cm**",
-                        f"this episode's noise: calibration shift A {float(shift[0]):.0f} mm / B {float(shift[1]):.0f} mm, "
-                        f"depth std {float(pc.depth_std[w]) * 1e3:.1f} mm, drop {float(pc.drop_p[w]) * 100:.0f}%, "
-                        f"fingertip hole {float(pc.tip_r[w]) * 1e3:.0f} mm, capsule margin {float(pc.margin[w]) * 1e3:.0f} mm",
-                    ]
+                lines += [
+                    f"point cloud (goal input {pc.cfg.goal_mode}, fk points {pc.cfg.fk_points}): "
+                    f"**{int(pc.last_count[w])} / {pc.cfg.n_points}** live points, "
+                    f"cloth share {float(pc.last_cloth_share[w]) * 100:.0f}%, "
+                    f"{float(pc.last_visible_frac[w]) * 100:.0f}% of the sheet seen",
+                    f"aux head error: keypoints **{float(e[0]):.1f} cm**, keypoints - goal **{float(e[1]):.1f} cm**",
+                    f"this episode: calibration shift A {float(shift[0]):.0f} mm / B {float(shift[1]):.0f} mm, "
+                    f"depth std {float(pc.depth_std[w]) * 1e3:.1f} mm, drop {float(pc.drop_p[w]) * 100:.0f}%, "
+                    f"cloud {int(pc.lag[w])} steps old, proprio {int(pl.p_lag[w])} steps old",
+                ]
             if rb is not None and rb.physics_dr is not None:
                 d = {k: float(v[w]) for k, v in rb.physics_dr.sample.items()}
                 lines.append(

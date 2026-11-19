@@ -6,8 +6,8 @@ mu. ``TeacherNet`` rebuilds exactly that from a checkpoint's ``model`` state dic
 block (default the last: coefficient 0, task reward only -- what every evaluation here uses).
 
 ``StudentNet`` is the same LSTM + MLP + mu. Its input is the teacher's proprioceptive observation
-columns (same normaliser) and a PointNet feature in place of the columns that need a tracker
-(``VISION_FIELDS``). ``load_teacher`` copies every teacher weight that still has a counterpart;
+columns (same normaliser) and a PointNet feature in place of the sheet's columns
+(``mdp/observations.OBJECT_FIELDS``): the env's ``obs.object: pointcloud`` vector. ``load_teacher`` copies every teacher weight that still has a counterpart;
 the SAPG embedding is a constant, so it is folded into the LSTM input bias.
 
 Torch only -- no rl_games, no Isaac Lab -- so both are unit-tested on CPU.
@@ -18,43 +18,87 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-__all__ = ["VISION_FIELDS", "canonical_pc_args", "split_columns", "PointNet", "TeacherNet", "StudentNet"]
+__all__ = [
+    "STUDENT_DR_GROUPS", "apply_student_env", "legacy_env_overrides", "split_columns", "student_env",
+    "PointNet", "TeacherNet", "StudentNet",
+]
 
-#: Point-cloud settings renamed on 2026-11-19; checkpoints written before keep the old names.
-_OLD_CLOUD = {"legacy": "cloth_hand_only"}
+#: The camera errors the 11-16 students called version C (``--noise``): ``config/dr/pointcloud.yaml``
+#: without its delay.
+_VERSION_C = {
+    "cam_pos_noise": [0.05, 0.05, 0.05], "calib_xyz": [0.015, 0.015, 0.01], "calib_rot_deg": 2.0,
+    "depth_noise_std_range": [0.001, 0.004], "drop_prob_range": [0.0, 0.3],
+}
+#: Scene-cloud goal modes renamed on 2026-11-19.
 _OLD_GOAL = {"first": "label", "scene": "goal_fixed", "shape": "goal_any"}
+#: The parts of the env config a point-cloud student was trained with and is evaluated with.
+STUDENT_DR_GROUPS = ("proprio", "pointcloud", "action")
 
 
-def canonical_pc_args(pc_args: dict) -> dict:
-    """A student's point-cloud settings (``pc_args``) under the current names: ``cloud`` legacy ->
-    cloth_hand_only (also the default when absent); scene-cloud ``goal`` first / scene / shape ->
-    label / goal_fixed / goal_any. The cloth-and-hand cloud's goals (g0 g3 g1 gl) are unchanged."""
+def legacy_env_overrides(pc_args: dict) -> dict:
+    """The env settings (``student_env``'s format) of a student saved before 2026-11-19 with
+    ``pc_args``: the scene cloud's settings, ``noise`` -> version C camera errors, the cloud /
+    proprioception delays (0 .. N) and the action delay (a delay line of N entries: 0 .. N-1)."""
     a = dict(pc_args)
-    a["cloud"] = _OLD_CLOUD.get(a.get("cloud", "legacy"), a.get("cloud", "legacy"))
-    if a["cloud"] == "scene" and "goal" in a:
-        a["goal"] = _OLD_GOAL.get(a["goal"], a["goal"])
-    return a
+    if a.get("cloud", "legacy") not in ("scene",):
+        raise ValueError("this student reads the cloth-and-hand cloud (cloud legacy / cloth_hand_only), deleted on 2026-11-19")
+    pc = dict(_VERSION_C) if a.get("noise") else {}
+    pc["delay_max"] = int(a.get("pc_delay", 0))
+    return {
+        "obs": {"object": "pointcloud", "pointcloud": {
+            "n_points": int(a.get("n_points", 1024)), "goal": _OLD_GOAL.get(a.get("goal", "none"), a.get("goal", "none")),
+            "ref_step": int(a.get("ref_step", 0)), "fk_points": int(a.get("fk_points", 0)),
+        }},
+        "domain_randomization": {
+            "proprio": {"delay_max": int(a.get("proprio_delay", 0))},
+            "pointcloud": pc,
+            "action": {"delay_max": max(int(a.get("action_delay", 0)) - 1, 0)},
+        },
+    }
 
-#: Observation fields that come from the cloth tracker on the robot; the student does not get them.
-VISION_FIELDS = ("object_rot", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales")
-#: The student's auxiliary head regresses these (what the teacher read).
-AUX_FIELDS = ("keypoints_rel_palm", "keypoints_rel_goal")
+
+def _fields(cfg) -> dict:
+    return {k: (list(v) if isinstance(v, tuple) else v) for k, v in vars(cfg).items()}
 
 
-def split_columns(obs_list, sizes) -> tuple[list[int], list[int]]:
-    """``(proprio columns, aux columns)`` of the flat observation ``obs_list`` (field -> width)."""
+def student_env(env_cfg) -> dict:
+    """What a point-cloud student is saved with: ``obs.object`` / ``obs.pointcloud`` and the DR groups it
+    reads through (``STUDENT_DR_GROUPS``), from the env config it was trained on."""
+    dr = env_cfg.domain_randomization
+    return {
+        "obs": {"object": env_cfg.obs.object, "pointcloud": _fields(env_cfg.obs.pointcloud)},
+        "domain_randomization": {g: _fields(getattr(dr, g)) for g in STUDENT_DR_GROUPS},
+    }
+
+
+def apply_student_env(env_cfg, env: dict, with_dr: bool = True) -> None:
+    """Set a student's ``env`` (``student_env``'s format) on ``env_cfg``: its cloud always; its DR
+    groups when ``with_dr`` (else they are left as they are)."""
+    env_cfg.obs.object = env["obs"]["object"]
+    for k, v in env["obs"]["pointcloud"].items():
+        setattr(env_cfg.obs.pointcloud, k, v)
+    if with_dr:
+        for group, values in env["domain_randomization"].items():
+            target = getattr(env_cfg.domain_randomization, group)
+            for k, v in values.items():
+                setattr(target, k, tuple(v) if isinstance(v, list) else v)
+
+
+def split_columns(obs_list, sizes, object_fields, aux_fields) -> tuple[list[int], list[int]]:
+    """``(proprio columns, aux columns)`` of the keypoint vector ``obs_list`` (field -> width):
+    every field but ``object_fields``, and ``aux_fields`` in that order."""
     proprio, aux, at = [], {}, 0
     for name in obs_list:
         cols = list(range(at, at + int(sizes[name])))
         at += int(sizes[name])
-        if name in AUX_FIELDS:
+        if name in aux_fields:
             aux[name] = cols
-        if name not in VISION_FIELDS:
+        if name not in object_fields:
             proprio += cols
-    missing = [f for f in AUX_FIELDS if f not in aux]
+    missing = [f for f in aux_fields if f not in aux]
     if missing:
         raise ValueError(f"obs_list has no {missing}; the auxiliary head needs them")
-    return proprio, [c for f in AUX_FIELDS for c in aux[f]]
+    return proprio, [c for f in aux_fields for c in aux[f]]
 
 
 def _mlp(sizes) -> nn.Sequential:

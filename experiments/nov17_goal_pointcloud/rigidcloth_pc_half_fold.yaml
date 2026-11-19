@@ -2,12 +2,18 @@
 # mode. The base fold -- 7 shapes, flat start, the half fold -- with the goal tables built
 # (fold_pool.goal_task.mode half_fold: observations and the designated target unchanged) and
 # accept_lookalike: any folded state that looks like the goal from above counts.
-# For DAgger / evaluation of point-cloud students with --goal goal_fixed | goal_any (distill_pc).
+# The point cloud with the goal group (obs.pointcloud.goal goal_fixed, or goal_any as an override), clean
+# (no camera errors, no delays): DAgger and evaluation of point-cloud students (distill_pc).
 # The 90 deg travel sector of the goal_any students ("shape90"): add env.fold_pool.goal_task.sector_deg=90.0
 # env.fold_pool.goal_task.sector_centre_deg=0.0 env.fold_pool.goal_task.sector_margin_deg=10.0.
 base: rigid_cloth_right_wuji
 
 env:
+  obs:
+    object: pointcloud
+    pointcloud:
+      goal: goal_fixed          # or goal_any (the bare shape at any yaw)
+      ref_step: 12
   fold_pool:
     goal_task:
       mode: half_fold

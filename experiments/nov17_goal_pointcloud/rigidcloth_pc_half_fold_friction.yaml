@@ -16,6 +16,11 @@ env:
       slat_friction_scale: [0.7, 1.5]
       robot_friction_scale: [0.7, 1.3]
       table_friction_scale: [0.7, 1.3]
+  obs:
+    object: pointcloud
+    pointcloud:
+      goal: goal_fixed          # or goal_any (the bare shape at any yaw)
+      ref_step: 12
   fold_pool:
     goal_task:
       mode: half_fold

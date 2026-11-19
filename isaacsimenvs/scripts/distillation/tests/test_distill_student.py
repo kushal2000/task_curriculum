@@ -32,7 +32,8 @@ def _teacher_state() -> dict:
 def test_split_columns():
     obs_list = ["joint_pos", "object_rot", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales", "palm_pos"]
     sizes = {"joint_pos": 2, "object_rot": 4, "keypoints_rel_palm": 12, "keypoints_rel_goal": 12, "object_scales": 3, "palm_pos": 3}
-    proprio, aux = st.split_columns(obs_list, sizes)
+    proprio, aux = st.split_columns(obs_list, sizes, ("object_rot", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales"),
+                                    ("keypoints_rel_palm", "keypoints_rel_goal"))
     assert proprio == [0, 1, 33, 34, 35]
     assert aux == list(range(6, 30))
 
@@ -92,12 +93,19 @@ def test_pointnet_ignores_masked_points_and_order():
     assert torch.allclose(a, net(pts2[:, perm], mask), atol=1e-6)
 
 
-def test_old_pc_args_names():
-    """Checkpoints from before 2026-11-19 name the clouds and goals the old way."""
-    from isaacsimenvs.scripts.distillation.student import canonical_pc_args
+def test_legacy_pc_args_become_env_settings():
+    """Students saved before 2026-11-19 carry pc_args: the scene cloud's settings, version C noise,
+    delays (the action delay was a delay line of N entries)."""
+    import pytest
 
-    assert canonical_pc_args({"vis": "cams", "goal": "g1"}) == {"vis": "cams", "goal": "g1", "cloud": "cloth_hand_only"}
-    assert canonical_pc_args({"cloud": "legacy", "goal": "g3"})["cloud"] == "cloth_hand_only"
-    for old, new in (("first", "label"), ("scene", "goal_fixed"), ("shape", "goal_any"), ("none", "none")):
-        assert canonical_pc_args({"cloud": "scene", "goal": old}) == {"cloud": "scene", "goal": new}
-    assert canonical_pc_args({"cloud": "scene", "goal": "goal_any"})["goal"] == "goal_any"
+    env = st.legacy_env_overrides({"cloud": "scene", "goal": "first", "noise": True, "n_points": 1024, "fk_points": 128,
+                                   "ref_step": 12, "pc_delay": 6, "proprio_delay": 3, "action_delay": 3})
+    assert env["obs"] == {"object": "pointcloud", "pointcloud": {"n_points": 1024, "goal": "label", "ref_step": 12, "fk_points": 128}}
+    dr = env["domain_randomization"]
+    assert dr["proprio"] == {"delay_max": 3} and dr["action"] == {"delay_max": 2}
+    assert dr["pointcloud"]["delay_max"] == 6 and dr["pointcloud"]["drop_prob_range"] == [0.0, 0.3]
+    clean = st.legacy_env_overrides({"cloud": "scene", "goal": "shape"})
+    assert clean["obs"]["pointcloud"]["goal"] == "goal_any" and clean["domain_randomization"]["pointcloud"] == {"delay_max": 0}
+    assert clean["domain_randomization"]["action"] == {"delay_max": 0}
+    with pytest.raises(ValueError):
+        st.legacy_env_overrides({"vis": "cams", "goal": "g1"})            # the deleted cloth-and-hand cloud

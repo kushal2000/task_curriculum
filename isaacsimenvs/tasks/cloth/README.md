@@ -47,8 +47,9 @@ cloth/
     vbd/              VbdBackend (backend.py) on Newton: config.py, cloth_cfg.py (VbdClothCfg: the
                       sheet's material, contact, coupling), newton_setup.py, pierce.py,
                       newton_support/ (Isaac Lab 3.0 compat, patches, USD cache)
-  perception/         point clouds for the point-cloud students (pointcloud, scene_pointcloud,
-                      robot_surface)
+  perception/         the point cloud a policy reads with obs.object: pointcloud: pointcloud.py
+                      (the two cameras' cloud), observation.py (PointCloudObservation: from the
+                      sim state), robot_surface.py (samples on the robot's link meshes)
   tests/
 ```
 
@@ -76,7 +77,12 @@ The fold shapes are YAML designs with a PNG each in `isaacsimenvs/tasks/cloth/co
 
 The observation is the encoding the Play prior was trained on: the sheet's moving half as a rigid
 object (`FoldView.object_*`), the fold goal as a pose (`ClothTask.goal_*`), so every cloth
-checkpoint, and the Play prior, reads the same vector.
+checkpoint, and the Play prior, reads the same vector. `obs.object: pointcloud` replaces the sheet's
+fields (`OBJECT_FIELDS`) with a point cloud of what two depth cameras see over the table
+(`obs.pointcloud`, `perception/`): the policy then reads `[proprio | points | mask]`, and the env also
+returns the clean keypoint vector as `teacher` (for DAgger, `scripts/distillation/`). The
+proprioception's DR (`domain_randomization.proprio`) is the same either way; the sheet's is
+`keypoints` or `pointcloud`, with its own, independent lag.
 
 ## Training
 
@@ -144,7 +150,7 @@ LIST=my_list.txt TARGETS=vbd INDEX=<k> experiments/eval.sh        # k = 0 .. 2 x
 
 `fold_pool.goal_task` gives each env a start state and, as its goal, that state plus one more fold
 (`mdp/goal_tasks.py`, states from `mdp/geometry/fold_states.py`), so a point-cloud student can be told
-the goal as a cloud of the folded sheet (`perception/scene_pointcloud.py`, `goal_fixed` / `goal_any`):
+the goal as a cloud of the folded sheet (`obs.pointcloud.goal` `goal_fixed` / `goal_any`, `perception/pointcloud.py`):
 
 - `mode`: `off` (the stage-1 task), `half_fold` (the stage-1 task with the goal tables built),
   `any_fold` (a random reachable folded start, flat included, plus one more fold; the observed

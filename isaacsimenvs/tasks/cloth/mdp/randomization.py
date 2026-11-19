@@ -14,7 +14,7 @@ reset, in a FIXED order (it sets the random stream):
 
 The robot terms are written to the articulation here. The per-step terms (delays, noise) are
 applied where they act: :class:`~.actions.JointController` and
-:class:`~.observations.ObservationBuilder`, each with its own :class:`DelayLine`.
+:class:`~.observations.ObservationBuilder`, each with its own ``delay.DelayLine``.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ import torch
 from .geometry import quat
 from .robot import RobotLayout, to_torch
 
-__all__ = ["DelayLine", "DomainRandomization", "perturb_quat"]
+__all__ = ["DomainRandomization", "perturb_quat"]
 
 
 def perturb_quat(q_wxyz: torch.Tensor, max_deg: float) -> torch.Tensor:
@@ -43,34 +43,6 @@ def _as_tuple(v):
 
 def _neutral(scale) -> bool:
     return tuple(float(v) for v in scale) == (1.0, 1.0)
-
-
-class DelayLine:
-    """The last ``max_lag + 1`` values of a ``(N, *shape)`` signal per env (a ring buffer), read back at
-    a per-env lag. ``max_lag = 0`` passes the signal through."""
-
-    def __init__(self, num_envs: int, max_lag: int, shape, device, dtype=torch.float32) -> None:
-        shape = (int(shape),) if isinstance(shape, int) else tuple(shape)
-        self.size = int(max_lag) + 1
-        self.buffer = torch.zeros(self.size, num_envs, *shape, device=device, dtype=dtype)
-        self.ptr = 0
-        self.env = torch.arange(num_envs, device=device)
-
-    def clear(self, env_ids: torch.Tensor) -> None:
-        self.buffer[:, env_ids] = 0.0
-
-    def push_and_read(self, values: torch.Tensor, flush: torch.Tensor | None, lag: torch.Tensor) -> torch.Tensor:
-        """Push ``values`` and read each env's entry ``lag`` steps back. ``flush`` envs (the first step
-        of an episode) have their whole history set to ``values`` first, so an episode never reads
-        the previous one."""
-        values = values.to(self.buffer.dtype)
-        if self.size == 1:
-            return values
-        self.ptr = (self.ptr + 1) % self.size
-        self.buffer[self.ptr] = values
-        if flush is not None and bool(flush.any()):
-            self.buffer[:, flush] = values[flush].unsqueeze(0)
-        return self.buffer[(self.ptr - lag.clamp(0, self.size - 1)) % self.size, self.env]
 
 
 class DomainRandomization:

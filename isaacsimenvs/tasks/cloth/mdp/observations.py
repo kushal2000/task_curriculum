@@ -12,6 +12,10 @@ same vector:
   ``centre + R * offsets``, from the moving half's fitted pose and the fold goal's pose
   (``FoldView.object_*`` and ``ClothTask.goal_*``).
 
+With ``obs.object: pointcloud`` the sheet fields (``OBJECT_FIELDS``) are replaced by a point cloud
+(``perception/observation.py``): the policy reads ``[proprio fields | points | mask]``, and the clean
+keypoint vector is returned too, as ``teacher``.
+
 Observation DR, two independent parts: the proprioception (``domain_randomization.proprio``: joint
 noise, a delay line on every field that is not the sheet's) and the sheet (``keypoints``: its pose
 delayed, noised and biased, :meth:`ObservationBuilder._observed_object`). The critic always reads the
@@ -24,7 +28,8 @@ import torch
 
 from .actions import JointController
 from .geometry import quat
-from .randomization import DelayLine, DomainRandomization, perturb_quat
+from .delay import DelayLine
+from .randomization import DomainRandomization, perturb_quat
 from .robot import NUM_FINGERTIPS, RobotLayout
 from .state import FoldView, SimState
 from .task import ClothTask, apply_local_offset, keypoints_world
@@ -83,13 +88,31 @@ class ObservationBuilder:
         self.env_origins = env_origins
         self.extras = extras
         dr_cfg = cfg.domain_randomization
-        #: The proprioceptive fields, in policy order; ``palm_pos`` is carried along when the policy
-        #: does not read it, so ``keypoints_rel_palm`` can be rebuilt from the delayed palm.
+        #: The proprioceptive fields, in policy order (every field but the sheet's).
         self.proprio_fields = [f for f in cfg.obs.obs_list if f not in OBJECT_FIELDS]
-        carried = self.proprio_fields + ([] if "palm_pos" in self.proprio_fields else ["palm_pos"])
-        self.carried_fields = carried
-        self.proprio_delay = DelayLine(num_envs, dr_cfg.proprio.delay_max, obs_dim(carried, robot.num_joints), device)
+        #: The point cloud (``obs.object: pointcloud``), else None.
+        self.pointcloud = None
+        if cfg.obs.object == "pointcloud":
+            from isaacsimenvs.tasks.cloth.perception.observation import PointCloudObservation
+
+            self.pointcloud = PointCloudObservation(
+                cfg, robot, num_envs=num_envs, device=device, proprio_delay_max=dr_cfg.proprio.delay_max
+            )
+            self.carried_fields = self.proprio_fields
+        else:
+            # palm_pos is carried along when the policy does not read it, so keypoints_rel_palm can
+            # be rebuilt from the delayed palm.
+            self.carried_fields = self.proprio_fields + ([] if "palm_pos" in self.proprio_fields else ["palm_pos"])
+        width = obs_dim(self.carried_fields, robot.num_joints)
+        self.proprio_delay = DelayLine(num_envs, dr_cfg.proprio.delay_max, width, device)
         self.keypoints_delay = DelayLine(num_envs, dr_cfg.keypoints.delay_max, 13, device)
+
+    @property
+    def pointcloud_layout(self) -> dict:
+        """The point-cloud policy vector ``[proprio | points (M x D) | mask (M)]``:
+        ``{n_proprio, num_points, point_dim}``."""
+        return {"n_proprio": obs_dim(self.proprio_fields, self.robot.num_joints),
+                "num_points": self.pointcloud.num_points, "point_dim": self.pointcloud.point_dim}
 
     def reset(self, env_ids: torch.Tensor) -> None:
         self.proprio_delay.clear(env_ids)
@@ -133,7 +156,9 @@ class ObservationBuilder:
     def build(self, state: SimState, view: FoldView, episode_length_buf: torch.Tensor, reward_buf: torch.Tensor,
               start: torch.Tensor) -> dict[str, torch.Tensor]:
         """``{"policy": (N, obs_dim), "critic": (N, state_dim)}``, both clamped to
-        ``obs.clamp_abs_observations``. ``start``: the envs on their episode's first step."""
+        ``obs.clamp_abs_observations``; with the point cloud also ``"teacher"``, the clean keypoint
+        vector (what a keypoint policy would read, without DR). ``start``: the envs on their episode's
+        first step."""
         cfg, dr, task, robot = self.cfg, self.cfg.domain_randomization.proprio, self.task, self.robot
         env_origins = self.env_origins
         n = self.num_envs
@@ -206,14 +231,28 @@ class ObservationBuilder:
             span = robot.joint_upper_canon - robot.joint_lower_canon
             obs_noisy["joint_pos"] = joint_pos + torch.randn_like(joint_pos) * dr.joint_pos_noise_std * 2.0 / span
 
+        clip = cfg.obs.clamp_abs_observations
+        critic = _stack(obs_clean, cfg.obs.state_list)
+        if self.pointcloud is not None:
+            return self._pointcloud_obs(state, view, episode_length_buf, start, obs_clean, obs_noisy, critic, clip)
         if dr.delay_max > 0:
             self._delay_proprio(start, obs_noisy, noisy_obj_kp, palm_pos - palm_pos_obs)
-
-        critic = _stack(obs_clean, cfg.obs.state_list)
         policy = _stack(obs_noisy, cfg.obs.obs_list)
-
-        clip = cfg.obs.clamp_abs_observations
         return {"policy": policy.clamp(-clip, clip), "critic": critic.clamp(-clip, clip)}
+
+    def _pointcloud_obs(self, state, view, episode_length_buf, start, obs_clean, obs_noisy, critic, clip):
+        """``obs.object: pointcloud``: the policy reads ``[proprio | points | mask]``, the proprioception
+        ``proprio_lag`` steps old and the cloud as the cameras deliver it; ``teacher`` is the clean
+        keypoint vector (DAgger labels it, a student's auxiliary head regresses its sheet fields)."""
+        teacher = _stack(obs_clean, self.cfg.obs.obs_list).clamp(-clip, clip)
+        proprio = _stack(obs_noisy, self.proprio_fields).clamp(-clip, clip)
+        proprio = torch.nan_to_num(proprio, nan=0.0, posinf=0.0, neginf=0.0)
+        proprio = self.proprio_delay.push_and_read(proprio, start, self.dr.proprio_lag)
+        points, mask = self.pointcloud.observe(
+            state, view, episode_length_buf, start, self.dr.proprio_lag, self.env_origins, self.task.geometry.goal_sheet
+        )
+        policy = torch.cat((proprio, points.flatten(1), mask.to(points.dtype)), dim=1)
+        return {"policy": policy, "critic": critic.clamp(-clip, clip), "teacher": teacher}
 
     # ------------------------------------------------------------------ divergence guard
 
