@@ -32,7 +32,9 @@ cloth/
     point_dr.py       point-level observation DR
     tracker.py        the cloth tracker pipeline (ClothTracker) and its observation (TrackerObservation)
     geometry/         grid.py (sheet grid, keypoints, fold targets), fold_shapes.py (pool shapes),
-                      quat.py (the quaternion helpers, one place for the Newton backend to wrap)
+                      fold_states.py (each shape's reachable folded states, one-fold moves,
+                      look-alike classes), quat.py (the quaternion helpers, one place for the
+                      Newton backend to wrap)
   backends/
     base.py           ClothBackend: build the scene, read the sheet's points, write resets;
                       reset_yaw / sheet_yaw
