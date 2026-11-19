@@ -10,10 +10,10 @@ backends then consume byte-identical geometry, converted by one importer. Withou
 difference between the PhysX and Newton numbers is confounded with a difference in how their USDs
 were produced, and is unattributable.
 
-Populate (Isaac Sim venv), once per robot setup::
+Populate (Isaac Sim venv), once per URDF and self-collision setting::
 
     OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python -m isaacsimenvs.tasks.cloth.backends.vbd.newton_support.usd_cache \
-        --populate env.robot_setup=flexiv_wuji_right_hl_reallimits
+        --populate env.robot_self_collision=false
 
 Consume: :func:`install_reader` runs from ``backends/vbd/newton_setup.py``.
 
@@ -124,7 +124,7 @@ def install_reader(cache_dir: Path = DEFAULT_CACHE_DIR) -> None:
             raise RuntimeError(
                 f"USD cache miss for {Path(asset_path).name} (key {key}).\n"
                 "The bake and this run disagree on URDF content or conversion options; "
-                "re-populate with this run's robot setup (see the module docstring)."
+                "re-populate with this run's URDF and self-collision setting (see the module docstring)."
             )
         manifest = json.loads(manifest_path.read_text())
 

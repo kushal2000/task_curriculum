@@ -1,8 +1,8 @@
-"""Which of a robot's link pairs to exclude from self-collision, measured from its URDF.
+"""Which of the robot's link pairs to exclude from self-collision, measured from its URDF.
 
 Tasks with ``robot_self_collision`` on let every robot body collide except the pairs in
 ``RobotSpec.self_collision_filter``, as SimToolReal does in Isaac Gym with its hand-written
-``adjacent_links.py`` for the Kuka + Sharpa. This derives the list from a robot's URDF:
+``adjacent_links.py`` for the Kuka + Sharpa. This derives the list from the robot's URDF:
 
   1. every jointed pair -- a moving body and the body its joint hangs off;
   2. every other pair whose collision hulls overlap at the reset pose (gen_mechanics'
@@ -18,7 +18,7 @@ Bodies are the ones left after the importer's ``merge_fixed_joints`` (a link joi
 fixed joint hangs off), named as Isaac Lab names them. The reset pose is the spec's default arm
 pose with the hand at 0, which is what ``reset_utils`` puts the robot in.
 
-    .venv_isaaclab3/bin/python isaacsimenvs/scripts/robots/self_collision_pairs.py flexiv_wuji_right_human_like
+    .venv_isaaclab3/bin/python isaacsimenvs/scripts/robots/self_collision_pairs.py [--urdf real_limits|human_like]
 """
 
 from __future__ import annotations
@@ -36,9 +36,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "isaacsimenvs"))
 import robots  # noqa: E402  (stdlib-only; imported by path so Isaac Lab is not needed)
 
+#: The robot's URDFs: the cloth tasks' (the real robot's joint limits) and the Play task's.
 URDFS = {
-    "flexiv_wuji_right_human_like": REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
-    "flexiv_wuji_right_real": REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+    "real_limits": REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+    "human_like": REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
 }
 #: Deeper than this counts as overlapping (onboard.py's threshold).
 OVERLAP_M = 5e-4
@@ -95,10 +96,10 @@ def _penetration(a: list[trimesh.Trimesh], b: list[trimesh.Trimesh]) -> float:
     return best
 
 
-def derive(robot: str) -> tuple[dict[str, tuple[str, ...]], dict[tuple[str, str], tuple[str, float]]]:
-    """``(filter map, {non-jointed pair: (why, depth in m)})`` for a robot spec name."""
-    spec = robots.ROBOT_SPECS[robot]
-    urdf = yourdfpy.URDF.load(str(URDFS[robot]), load_collision_meshes=False)
+def derive(which: str) -> tuple[dict[str, tuple[str, ...]], dict[tuple[str, str], tuple[str, float]]]:
+    """``(filter map, {non-jointed pair: (why, depth in m)})`` for one of ``URDFS``."""
+    spec = robots.FLEXIV_WUJI_RIGHT
+    urdf = yourdfpy.URDF.load(str(URDFS[which]), load_collision_meshes=False)
     names = urdf.actuated_joint_names
     home = np.array([spec.arm_default_joint_pos.get(n, 0.0) for n in names])
     body_of = _merged_bodies(urdf)
@@ -155,11 +156,11 @@ def _pairs(adjacency) -> set[frozenset]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("robot", choices=sorted(URDFS))
+    parser.add_argument("--urdf", choices=sorted(URDFS), default="real_limits")
     args = parser.parse_args()
 
-    adjacency, overlapping = derive(args.robot)
-    print(f"# {args.robot}: {len(_pairs(adjacency))} filtered pairs, "
+    adjacency, overlapping = derive(args.urdf)
+    print(f"# {args.urdf}: {len(_pairs(adjacency))} filtered pairs, "
           f"{len(overlapping)} of them not jointed")
     for (a, b), (why, d) in sorted(overlapping.items()):
         print(f"#   {a} x {b}: {why}, {d * 1000:.2f} mm")
@@ -168,11 +169,8 @@ def main() -> None:
         print(f"    {k!r}: {v!r},")
     print("}")
 
-    spec_map = robots.ROBOT_SPECS[args.robot].self_collision_filter
-    if spec_map:
-        same = _pairs(spec_map) == _pairs(adjacency)
-        print(f"# robots.{args.robot.upper()}.self_collision_filter "
-              + ("matches" if same else "DIFFERS from this"))
+    same = _pairs(robots.FLEXIV_WUJI_RIGHT.self_collision_filter) == _pairs(adjacency)
+    print("# robots.FLEXIV_WUJI_RIGHT.self_collision_filter " + ("matches" if same else "DIFFERS from this"))
 
 
 if __name__ == "__main__":

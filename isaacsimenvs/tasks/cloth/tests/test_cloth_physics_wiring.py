@@ -116,12 +116,13 @@ def test_thickness_and_resolution_stay_on_the_guard_boundary(solver_kwargs):
 
 def _cloth_overlays():
     """``(file, cloth block)`` of every YAML that can set cloth values: run recipes and study
-    recipes (under ``env:``), DR blocks and robot setups (env overlays themselves)."""
+    recipes (under ``env:``) and DR blocks (env overlays themselves)."""
     from isaacsimenvs.conftest import REPO_ROOT
 
-    configs = REPO_ROOT / "isaacsimenvs" / "scripts" / "configs"
+    configs = REPO_ROOT / "isaacsimenvs" / "tasks" / "cloth" / "config"
     recipes = [*(configs / "runs").glob("*.yaml"), *(REPO_ROOT / "experiments").rglob("*.yaml")]
-    overlays = [*(configs / "dr").glob("*.yaml"), *(configs / "robot").glob("*.yaml")]
+    overlays = [*(configs / "dr").glob("*.yaml")]
+    assert recipes and overlays, f"no recipes / DR blocks under {configs}"
     for path in recipes:
         yield path, ((yaml.safe_load(path.read_text()) or {}).get("env") or {}).get("cloth") or {}
     for path in overlays:

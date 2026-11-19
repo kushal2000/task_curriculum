@@ -1,8 +1,8 @@
 # Rigid cloth fold pool, Flexiv Rizon 4s + right Wuji Hand 2: THE base recipe (was flat7RW_base).
 #
 # PhysX (.venv_isaacsim). All 7 fold shapes, one shape per env, flat starts only; per-env sheet size
-# 10-20 cm and the contact shell 7 +- 3 mm per episode (RigidClothEnvCfg). Robot: HAND2_DRIVE hand
-# dynamics (no sysid), the real joint limits, the real-setup geometry (flexiv_wuji_right_hl_reallimits).
+# 10-20 cm and the contact shell 7 +- 3 mm per episode (RigidClothEnvCfg). Robot: the task's (HAND2_DRIVE
+# hand dynamics, no sysid; the real joint limits; the real-setup geometry).
 # Trained from a Play prior:
 #
 #   experiments/submit.sh experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
@@ -16,7 +16,6 @@
 task: Isaacsimenvs-RigidCloth-Direct-v0
 
 env:
-  robot_setup: flexiv_wuji_right_hl_reallimits
   scene:
     num_envs: 24576
   cloth:

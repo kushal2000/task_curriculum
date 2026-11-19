@@ -100,7 +100,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Train isaacsimenvs task via rl_games.")
     # --- Task/agent selection ---
-    parser.add_argument("--task", required=True, help="Gym task id, e.g. Isaacsimenvs-FoldPoolPhysx-Direct-v0")
+    parser.add_argument("--task", required=True, help="Gym task id, e.g. Isaacsimenvs-RigidCloth-Direct-v0")
     parser.add_argument(
         "--agent",
         default="rl_games_cfg_entry_point",

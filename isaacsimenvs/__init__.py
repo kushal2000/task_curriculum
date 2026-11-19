@@ -13,10 +13,9 @@ PACKAGE_ROOT = _Path(__file__).resolve().parent
 REPO_ROOT = PACKAGE_ROOT.parent
 SCRIPTS_DIR = PACKAGE_ROOT / "scripts"
 #: YAML beside its owner: the cloth task's run recipes, DR blocks, fold designs and learner config; the
-#: Play task's learner configs; the robot setups both tasks share.
+#: Play task's learner configs.
 CLOTH_CONFIG_DIR = PACKAGE_ROOT / "tasks" / "cloth" / "config"
 PLAY_CONFIG_DIR = PACKAGE_ROOT / "tasks" / "play" / "config"
-ROBOT_SETUPS_DIR = PACKAGE_ROOT / "robots" / "setups"
 #: Play priors and the policy network config (not in git; PRETRAINED_POLICY_DIR overrides the place).
 PRETRAINED_DIR = _Path(_os.environ.get("PRETRAINED_POLICY_DIR", REPO_ROOT / "pretrained_policy"))
 #: The default prior: Play on the Flexiv + right Wuji (nov8, DR, fingertip friction 0.5).
@@ -28,5 +27,5 @@ from . import tasks  # noqa: E402,F401  side effect: gym.register(...) for each 
 
 __all__ = [
     "CLOTH_CONFIG_DIR", "PACKAGE_ROOT", "PLAY_CONFIG_DIR", "PRETRAINED_CHECKPOINT", "PRETRAINED_CONFIG",
-    "PRETRAINED_DIR", "REPO_ROOT", "ROBOT_SETUPS_DIR", "SCRIPTS_DIR", "tasks",
+    "PRETRAINED_DIR", "REPO_ROOT", "SCRIPTS_DIR", "tasks",
 ]

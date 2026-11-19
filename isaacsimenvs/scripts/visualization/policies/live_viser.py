@@ -1,7 +1,7 @@
 """Run a fold policy LIVE in a browser (viser), with its knobs on sliders.
 
-    experiments/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser --task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0
-    experiments/viewer.sh --task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0   # on a GPU machine; prints the host to tunnel to
+    experiments/newton_py -m isaacsimenvs.scripts.visualization.policies.live_viser --task Isaacsimenvs-Cloth-Direct-v0
+    experiments/viewer.sh --task Isaacsimenvs-Cloth-Direct-v0   # on a GPU machine; prints the host to tunnel to
 
 The env runs on the GPU exactly as `episodes.py` runs it (same reset, same zero-action tick, same
 player), a handful of envs at once; one of them is drawn. What can change WITHOUT a restart:
@@ -92,22 +92,17 @@ def policies_for(task_name: str) -> list[str]:
 
 #: Display name -> (gym task, extra hydra overrides). Newton; PHYSX_TASKS for the PhysX viewer.
 TASKS = {
-    "VBD cloth, Flexiv + right Wuji human-like (real setup)": ("Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0", []),
-    "VBD cloth, Flexiv + right Wuji identified hand (real setup)": ("Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0", []),
+    "VBD cloth, Flexiv + right Wuji (real setup)": ("Isaacsimenvs-Cloth-Direct-v0", []),
+    "VBD cloth, Flexiv + right Wuji identified hand (real setup)": ("Isaacsimenvs-Cloth-Direct-v0", ["env.hand_sysid=true"]),
 }
 _POOL7 = ["env.fold_pool.shapes=[box2-mid,box2diag4-mid,box2x8-mid,cross4-mid,corners8-mid,box4-mid,star8-mid]",
           "env.fold_pool.one_shape_per_env=true", "env.fold_pool.init_fold_prob=0.0"]
 PHYSX_TASKS = {
-    "fold pool 7 shapes flat, Flexiv + right Wuji, real limits (rigid_cloth_right_wuji)": (
-        "Isaacsimenvs-RigidCloth-Direct-v0",
-        ["env.robot_setup=flexiv_wuji_right_hl_reallimits", "env.cloth.start_height=0.20", *_POOL7],
+    "fold pool 7 shapes flat, Flexiv + right Wuji (rigid_cloth_right_wuji)": (
+        "Isaacsimenvs-RigidCloth-Direct-v0", ["env.cloth.start_height=0.20", *_POOL7],
     ),
-    "fold pool 7 shapes flat, Flexiv + right Wuji human-like (real setup)": (
-        "Isaacsimenvs-FoldPoolPhysxFlexivWujiRightHumanLike-Direct-v0", _POOL7,
-    ),
-    "fold pool (5 shapes, 10-20 cm), Flexiv + right Wuji, real limits": (
-        "Isaacsimenvs-RigidCloth-Direct-v0",
-        ["env.robot_setup=flexiv_wuji_right_hl_reallimits", "env.cloth.start_height=0.20"],
+    "fold pool (5 shapes, 10-20 cm), Flexiv + right Wuji": (
+        "Isaacsimenvs-RigidCloth-Direct-v0", ["env.cloth.start_height=0.20"],
     ),
 }
 #: VBD cloth size -> hydra overrides (the large-cloth evals' settings):
@@ -165,7 +160,7 @@ PC_NOISE_LABELS = {
 
 def _parse():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--task", default="Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0")
+    p.add_argument("--task", default="Isaacsimenvs-Cloth-Direct-v0")
     p.add_argument("--policy", default=next(iter(POLICIES)), choices=list(POLICIES))
     p.add_argument("--num_envs", type=int, default=8)
     p.add_argument("--port", type=int, default=8080)
@@ -375,9 +370,8 @@ def main() -> None:
     args, hydra_args = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + hydra_args
     os.chdir(ROOT)
-    # PhysX = the rigid backend (`RigidCloth`, or an alias of it such as `FoldPoolPhysx<robot>`). Read
-    # from the id's own spelling: the gym registry is not imported until after the app starts.
-    physx = args.task.startswith(("Isaacsimenvs-RigidCloth", "Isaacsimenvs-FoldPoolPhysx"))
+    # PhysX = the rigid backend (`RigidCloth`). Read from the id's own spelling: the gym registry is not imported until after the app starts.
+    physx = args.task.startswith("Isaacsimenvs-RigidCloth")
     tasks = PHYSX_TASKS if physx else TASKS
     task_keys = _TASK_KEYS
     # $LIVE_VISER_TASKS: a JSON {display name: [gym task, [hydra overrides]]} that replaces the task menu.

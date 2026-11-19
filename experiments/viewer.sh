@@ -1,7 +1,7 @@
 #!/bin/bash
 # Live, interactive policy viewer (isaacsimenvs/scripts/visualization/policies/live_viser.py) on a GPU machine.
 #
-#   experiments/viewer.sh --task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0 [--num_envs 8] [--port 8080] [live_viser args]
+#   experiments/viewer.sh --task Isaacsimenvs-Cloth-Direct-v0 [--num_envs 8] [--port 8080] [live_viser args]
 #   experiments/viewer.sh --task Isaacsimenvs-RigidCloth-Direct-v0 --port 8081 [--policy "<name>"]
 #
 # Open http://<host>:<port> (through an ssh tunnel from a laptop: ssh -N -L <port>:<host>:<port> <login>).
@@ -10,7 +10,7 @@
 # in third_party/viser_websockets (install_isaacsim.sh; older setups: .venv_isaacsim/viser_overlay) goes
 # first on PYTHONPATH for this process only.
 ARGS=("$@")
-printf '%s\n' "${ARGS[@]}" | grep -qE '^--task' || ARGS=(--task Isaacsimenvs-ClothFlexivWujiRightHumanLike-Direct-v0 "${ARGS[@]}")
+printf '%s\n' "${ARGS[@]}" | grep -qE '^--task' || ARGS=(--task Isaacsimenvs-Cloth-Direct-v0 "${ARGS[@]}")
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh" "${ARGS[@]}"
 printf '%s\n' "${ARGS[@]}" | grep -qE '^--num_envs' || ARGS+=(--num_envs 8)
 printf '%s\n' "${ARGS[@]}" | grep -qE '^--port' || ARGS+=(--port "$([ "$BACKEND" = physx ] && echo 8081 || echo 8080)")

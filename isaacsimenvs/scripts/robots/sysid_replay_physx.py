@@ -1,7 +1,7 @@
-"""Replay the real Wuji Hand 2 sysid trials in PhysX on a Flexiv + right Wuji robot (RightReal).
+"""Replay the real Wuji Hand 2 sysid trials in PhysX on the Flexiv + right Wuji with the identified hand.
 
     PYTHONPATH=$PWD OMNI_KIT_ACCEPT_EULA=YES .venv_isaacsim/bin/python isaacsimenvs/scripts/robots/sysid_replay_physx.py \
-        --task Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0 --headless \
+        --task Isaacsimenvs-RigidCloth-Direct-v0 --headless \
         --data_dir <dir holding sysid-2026*/> --dt 0.00833333333 --out replay_dt120.npz
 
 One env per (variant, 2 s window), windows cut exactly as aiowuji sysid_fit.py does (each starts from
@@ -11,7 +11,7 @@ the recorded q, qd). The SIM is stepped directly (no env actions). Per env:
     Kt = the fit's gear. kp_scale / kd_scale = the fit's firmware_law (1.966 / 1.944).
   * targets: the frame-wise target with the 2 ms lag, zero-order held per sim step, sampled at the step
     midpoint (hold=mid) or start (hold=start). At dt 1 ms both are exactly sysid_fit's.
-  * friction / armature: PhysX's RightReal values scaled per variant (RightReal already carries the
+  * friction / armature: the identified hand's (env.hand_sysid, forced on) scaled per variant (it already carries the
     per-type friction scale, so 1 = the spec). spring=1 adds the fit's passive spring by folding it
     into the drive (stiffness kp+ks, target (kp q_cmd + ks springref)/(kp+ks); the spring is then
     clipped with the PD, which the real one is not); spring=2 applies it as the env does, a joint
@@ -35,7 +35,7 @@ from pathlib import Path
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-parser.add_argument("--task", default="Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0")
+parser.add_argument("--task", default="Isaacsimenvs-RigidCloth-Direct-v0")
 parser.add_argument("--data_dir", required=True)
 parser.add_argument("--fit_json", default="assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json")
 parser.add_argument("--dt", type=float, default=1.0 / 120.0)
@@ -129,6 +129,7 @@ def run(env_cfg, agent_cfg) -> None:
     env_cfg.scene.num_envs = N
     env_cfg.seed = 0
     env_cfg.sim.dt = dt
+    env_cfg.hand_sysid = True
     disable_randomization(env_cfg)
     env = gym.make(args_cli.task, cfg=env_cfg)
     inner = env.unwrapped
@@ -150,7 +151,7 @@ def run(env_cfg, agent_cfg) -> None:
     fr0 = view.get_dof_friction_properties().clone()  # (N, J, 3) cpu
     arm0 = view.get_dof_armatures().clone()
     home = robot.data.default_joint_pos.clone()
-    # Hand joint limits -> the vendor MJCF ranges (RightReal's human-like URDF holds finger abduction to
+    # Hand joint limits -> the vendor MJCF ranges (the task's URDF holds finger abduction to
     # +-2 deg, MCP back-bend to -20 deg and PIP to 100 deg; the recordings go beyond). Arm drive x ARM_GAIN.
     lim_rr = robot.data.joint_pos_limits[0, cols_t].cpu().numpy().copy()
     mjcf = ET.parse(Path(args_cli.data_dir) / "mjbatch_sysid/aiowuji/models/wuji_hand2/mjcf/right.xml").getroot()

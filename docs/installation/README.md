@@ -20,10 +20,10 @@ on an anaconda interpreter whose old `libstdc++` lacks a symbol `omni.client` ne
 preloads the system one (see its header).
 
 Newton cannot convert URDFs (no Kit), so it reads robots from a USD cache (`.usd_cache/`) baked with
-Isaac Sim, once per robot setup and self-collision value:
+Isaac Sim, once per URDF and self-collision value:
 
 ```bash
-ROBOT_SETUP=flexiv_wuji_right_hl_reallimits SC=false experiments/bake_robot.sh
+SC=false experiments/bake_robot.sh
 ```
 
 The live viewer on PhysX needs websockets >= 13, which Isaac Sim pins to 12; `install_isaacsim.sh`

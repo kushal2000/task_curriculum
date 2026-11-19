@@ -1,9 +1,10 @@
 """``ClothEnvCfg``: the fold task's configuration, shared by both backends.
 
 These defaults are the task: a backend's config adds its own blocks and changes what differs for it
-(``backends/rigid/config.py``, ``backends/vbd/config.py``). The robot comes from ``robot`` (a
-``RobotSpec`` name) and ``assets.robot_urdf``, both set by a robot setup
-(``robots/setups/<robot_setup>.yaml``); a run recipe (``config/runs/``) changes the rest.
+(``backends/rigid/config.py``, ``backends/vbd/config.py``); a run recipe (``config/runs/``) changes the
+rest. The robot is the real setup's: ``robots.FLEXIV_WUJI_RIGHT`` (the identified hand with
+``hand_sysid``) with the real robot's joint limits (``assets.robot_urdf``), its base where the real
+table puts it (``robot_root_pos``).
 """
 
 from __future__ import annotations
@@ -189,21 +190,22 @@ def _physx_sim_cfg() -> SimulationCfg:
 
 @configclass
 class ClothEnvCfg(DirectRLEnvCfg):
-    """The fold task, with the robot of ``robot``."""
+    """The fold task on the Flexiv + right Wuji, as the real robot is set up."""
 
-    robot: str = "flexiv_wuji_right_human_like"
-    """A key of ``isaacsimenvs.robots.ROBOT_SPECS``; ``assets.robot_urdf`` must be its URDF."""
-    robot_setup: str = ""
-    """A file stem in ``robots/setups/`` (robot, URDF, self-collision, base position), applied by the
-    config loader (``tasks/loader``) onto these defaults, before the recipe. Empty: the task's."""
-    robot_self_collision: bool = False
+    hand_sysid: bool = False
+    """The real hand's identified joint dynamics (``robots.with_sysid``: armature, friction, passive
+    spring, torque limit 1.0 A x Kt) instead of HAND2_DRIVE's; the sysid DR block turns it on."""
+    robot_self_collision: bool = True
     """Robot self-collision, minus ``RobotSpec.self_collision_filter``."""
     robot_self_collision_scope: str = "all"
     """With self-collision on: "all", "hand" (palm and fingers only) or "tips" (fingertips of
     different fingers, thumb against palm); ``robots.usd.self_collision_keep``."""
-    robot_root_pos: tuple[float, float, float] = (0.0, 0.8, 0.0)
-    """Robot base in the env frame. ``palm_pos`` is observed as if it stood at the Play task's
-    (0, 0.8, 0) (``observations.PLAY_ROBOT_ROOT_POS``)."""
+    robot_root_pos: tuple[float, float, float] = (0.0, 0.51, 0.20)
+    """Robot base in the env frame. The real table's top is 0.33 m above the robot frame (with the foam
+    board on it) and its near side 0.31 m in front. The task's table is 0.4 m deep, centred on the env
+    origin, its top at 0.53 m, so the base moves instead: y = 0.2 + 0.31, z = 0.53 - 0.33.
+    ``palm_pos`` is observed as if it stood at the Play task's (0, 0.8, 0)
+    (``observations.PLAY_ROBOT_ROOT_POS``), where the Play priors and the deploy code have it."""
 
     decimation: int = 2
     episode_length_s: float = 10.0

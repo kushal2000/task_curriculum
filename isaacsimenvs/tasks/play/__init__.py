@@ -1,12 +1,9 @@
 """Play task registration: rigid-object goal reaching (play2perfect / SimToolReal), the pretraining
 task of every cloth policy's prior.
 
-One env class (``PlayEnv``) and config (``PlayEnvCfg``), on the Flexiv Rizon 4s + right Wuji Hand 2
-in the real setup's table and goal geometry:
-
-    Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0   HAND2_DRIVE hand, human-like limits
-    Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0        the identified hand (robot setup
-                                                          flexiv_wuji_right_real_play), an alias
+One task, ``Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0``: one env class (``PlayEnv``) and
+config (``PlayEnvCfg``), on the Flexiv Rizon 4s + right Wuji Hand 2 (HAND2_DRIVE hand, human-like
+joint limits) in the real setup's table and goal geometry.
 
 Entry points:
 - ``env_cfg_entry_point``           → PlayEnvCfg (typed defaults in code: the task)
@@ -65,16 +62,3 @@ def _register(task_id: str, cfg_class: str) -> None:
 
 
 _register("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0", "PlayEnvCfg")
-# The same task with the identified right hand (robot setup flexiv_wuji_right_real_play: sysid
-# dynamics, real joint limits), as an alias like the cloth tasks' robot-suffixed ids.
-gym.register(
-    id="Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0",
-    entry_point="isaacsimenvs.tasks.play.play_env:PlayEnv",
-    order_enforce=False,
-    disable_env_checker=True,
-    kwargs={
-        **gym.spec("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0").kwargs,
-        "canonical_task": "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0",
-        "robot_setup": "flexiv_wuji_right_real_play",
-    },
-)

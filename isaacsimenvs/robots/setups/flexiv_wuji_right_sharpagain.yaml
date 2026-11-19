@@ -1,7 +1,0 @@
-# Robot overlay: flexiv_wuji_right_real.yaml's geometry and real-limits URDF with the Sharpa's hand drive
-# (kp / kd / torque limit by joint role, robots.FLEXIV_WUJI_RIGHT_SHARPAGAIN), no sysid.
-robot: flexiv_wuji_right_sharpagain
-robot_self_collision: true
-robot_root_pos: [0.0, 0.51, 0.20]
-assets:
-  robot_urdf: "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"

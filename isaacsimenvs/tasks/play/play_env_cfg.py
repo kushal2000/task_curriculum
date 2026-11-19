@@ -2,7 +2,7 @@
 
 The defaults are the task: the Flexiv Rizon 4s + right Wuji Hand 2 in the real setup's table and
 goal geometry, as the Play priors (kushal/2026-10-30_pretraining_real, run 41213) were trained. A
-robot setup (robots/setups/) or a run recipe changes them. Organized into sectioned sub-configclasses:
+run recipe changes them. Organized into sectioned sub-configclasses:
 
     sim                     → isaaclab.sim.SimulationCfg (+ PhysxCfg)
     scene                   → PlaySceneCfg(InteractiveSceneCfg)
@@ -599,17 +599,11 @@ def _default_sim_cfg() -> SimulationCfg:
 class PlayEnvCfg(DirectRLEnvCfg):
     """Top-level configclass for the Play goal-pose-reaching env.
 
-    Robot setups and run recipes are YAML overlays onto these fields (``configclass.from_dict``).
+    The robot is ``robots.FLEXIV_WUJI_RIGHT`` with the human-like joint limits (``assets.robot_urdf``)
+    the Play priors were trained with. Run recipes are YAML overlays onto these fields
+    (``configclass.from_dict``).
     """
 
-    # Robot embodiment, a key of robots.ROBOT_SPECS. Fixed per registered task; assets.robot_urdf
-    # must be its URDF. PlayEnv sets action_space (and the obs sizes) from it.
-    robot: str = "flexiv_wuji_right_human_like"
-    # Robot setup: a file stem in robots/setups/ (robot spec, URDF, self-collision, base position),
-    # applied by the config loader (tasks/loader) onto these defaults, before the run recipe.
-    # Set it in a recipe (`env.robot_setup`), on the command line, or through an alias task id.
-    # Empty: the task's own robot.
-    robot_setup: str = ""
     # Robot self-collision, minus robots.RobotSpec.self_collision_filter: SimToolReal's Isaac Gym
     # setup, which the right-hand Play priors were trained with.
     robot_self_collision: bool = True
@@ -618,8 +612,8 @@ class PlayEnvCfg(DirectRLEnvCfg):
     # robots.usd.self_collision_keep. MJWarp (Newton) is ~26x slower with "all" on the Flexiv.
     robot_self_collision_scope: str = "all"
     # Robot base position in the env frame. Play's (0, 0.8, 0) puts the table where SimToolReal has
-    # it; a robot overlay moves the base to put the table where a real setup has it (relative to the
-    # robot) without moving the table and what sits on it. The observed palm_pos is expressed as if
+    # it; moving the base puts the table where a real setup has it (relative to the robot) without
+    # moving the table and what sits on it. The observed palm_pos is expressed as if
     # the base were at Play's position (obs_utils.PLAY_ROBOT_ROOT_POS), i.e. in the robot's frame.
     robot_root_pos: tuple[float, float, float] = (0.0, 0.8, 0.0)
 

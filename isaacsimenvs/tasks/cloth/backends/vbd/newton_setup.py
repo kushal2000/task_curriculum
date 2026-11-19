@@ -15,7 +15,7 @@ takes effect on the objects that were already built.
 from __future__ import annotations
 
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat, patches, physx_schema_shim, usd_cache
-from isaacsimenvs.robots import get_robot_spec
+from isaacsimenvs.robots import FLEXIV_WUJI_RIGHT
 
 __all__ = ["install_post_construction_patches", "install_pre_construction_patches"]
 
@@ -91,7 +91,7 @@ def install_pre_construction_patches(cfg, *, physics_cfg) -> None:
     patches.install_newton_gravcomp()
 
     patches.install_newton_condim(
-        int(cfg.newton.condim), tuple(get_robot_spec(cfg.robot).fingertip_link_names)
+        int(cfg.newton.condim), tuple(FLEXIV_WUJI_RIGHT.fingertip_link_names)
     )
 
 

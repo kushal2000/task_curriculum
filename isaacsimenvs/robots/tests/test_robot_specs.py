@@ -25,15 +25,13 @@ def _joints(urdf_path) -> dict[str, ET.Element]:
     return {j.get("name"): j for j in ET.parse(urdf_path).getroot().iter("joint")}
 
 
-def test_specs_are_registered() -> None:
-    assert set(robots.ROBOT_SPECS) == {
-        "flexiv_wuji_right_human_like", "flexiv_wuji_right_real", "flexiv_wuji_right_s2r_eff",
-        "flexiv_wuji_right_sharpagain"}
-    assert all(spec.num_joints == 27 for spec in robots.ROBOT_SPECS.values())
+SPEC = robots.FLEXIV_WUJI_RIGHT
+SYSID = robots.with_sysid(SPEC)
 
 
-@pytest.mark.parametrize("spec", list(robots.ROBOT_SPECS.values()), ids=lambda s: s.name)
-def test_self_collision_filter_is_symmetric(spec) -> None:
+@pytest.mark.parametrize("spec", [SPEC, SYSID], ids=lambda s: s.name)
+def test_spec_shape(spec) -> None:
+    assert spec.num_joints == 27
     pairs = spec.self_collision_filter
     assert pairs
     for a, partners in pairs.items():
@@ -41,23 +39,18 @@ def test_self_collision_filter_is_symmetric(spec) -> None:
             assert a in pairs.get(b, ()), f"{a} -> {b} listed one way only"
 
 
-def test_drive_variants_change_only_the_hand_drive() -> None:
-    base = robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE
-    for spec, changed in ((robots.FLEXIV_WUJI_RIGHT_S2R_EFF, {"hand_effort_limit"}),
-                          (robots.FLEXIV_WUJI_RIGHT_SHARPAGAIN, {"hand_stiffness", "hand_damping", "hand_effort_limit"})):
-        for f in dataclasses.fields(base):
-            if f.name not in changed | {"name"}:
-                assert getattr(spec, f.name) == getattr(base, f.name), (spec.name, f.name)
-    assert robots.FLEXIV_WUJI_RIGHT_S2R_EFF.hand_effort_limit == robots.FLEXIV_WUJI_RIGHT_REAL.hand_effort_limit
+def test_robot_spec_switch() -> None:
+    assert robots.robot_spec() is SPEC and robots.robot_spec(False) is SPEC
+    assert robots.robot_spec(True) == SYSID
 
 
 RIGHT_URDF = REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
 
 
 def test_right_hand_spec_matches_its_urdf() -> None:
-    """Joints, home pose inside the limits, fingertip / palm / filter bodies all exist in the right
-    URDF."""
-    spec = robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE
+    """Joints, home pose inside the limits, fingertip / palm / filter bodies all exist in the
+    human-like URDF (the Play task's)."""
+    spec = SPEC
     joints = _joints(RIGHT_URDF)
     actuated = [n for n, j in joints.items() if j.get("type") != "fixed"]
     assert sorted(actuated) == sorted(spec.joint_names_canonical)
@@ -81,14 +74,14 @@ REAL_URDF = REPO_ROOT / "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
 SYSID_JSON = REPO_ROOT / "assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json"
 
 
-def test_right_real_spec_is_the_sysid_fit() -> None:
-    """FLEXIV_WUJI_RIGHT_REAL = the right human-like spec, with the sysid fit's armature, friction
-    and passive damping, and torque limit 1.0 A x Kt; everything else unchanged."""
+def test_sysid_spec_is_the_sysid_fit() -> None:
+    """with_sysid(FLEXIV_WUJI_RIGHT) = the spec with the sysid fit's armature, friction, passive
+    damping and spring, and torque limit 1.0 A x Kt; everything else unchanged."""
     import json
 
     if not SYSID_JSON.exists():
         pytest.skip(f"{SYSID_JSON.name} is kept out of git (.gitignore); put the fit there to run this")
-    real, base = robots.FLEXIV_WUJI_RIGHT_REAL, robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE
+    real, base = SYSID, SPEC
     fit = json.loads(SYSID_JSON.read_text())
     assert fit["handedness"] == "right"
     by_joint = {v["mjcf_joint"]: v for v in fit["joints"].values()}
@@ -114,7 +107,7 @@ def test_right_real_spec_is_the_sysid_fit() -> None:
             assert getattr(real, f.name) == getattr(base, f.name), f.name
 
 
-def test_right_real_urdf_limits() -> None:
+def test_real_limits_urdf() -> None:
     """The real-limits URDF differs from the human-like one only in the arm limits (5 deg inside
     on both sides) and the finger PIP upper limit (100 deg); the home pose stays inside."""
     base, real = _joints(RIGHT_URDF), _joints(REAL_URDF)
@@ -138,7 +131,7 @@ def test_right_real_urdf_limits() -> None:
         else:
             assert (lo, hi) == (blo, bhi), name
         assert lim.get("effort") == blim.get("effort") and lim.get("velocity") == blim.get("velocity"), name
-    for name, q in robots.FLEXIV_WUJI_RIGHT_HUMAN_LIKE.arm_default_joint_pos.items():
+    for name, q in SPEC.arm_default_joint_pos.items():
         lim = real[name].find("limit")
         # 0.1 rad: the arm reset noise (reset_dof_pos_random_interval_arm).
         assert float(lim.get("lower")) + 0.1 <= q <= float(lim.get("upper")) - 0.1, name
@@ -165,9 +158,6 @@ def test_hand_spring_effort() -> None:
     assert au.hand_spring_effort(types.SimpleNamespace(_spring_ks=None)) is None
 
 
-def test_only_right_real_has_a_spring() -> None:
-    for name, spec in robots.ROBOT_SPECS.items():
-        if name == "flexiv_wuji_right_real":
-            assert len(spec.hand_spring_stiffness) == len(spec.hand_joint_names)
-        else:
-            assert not spec.hand_spring_stiffness, name
+def test_only_the_sysid_hand_has_a_spring() -> None:
+    assert not SPEC.hand_spring_stiffness
+    assert len(SYSID.hand_spring_stiffness) == len(SYSID.hand_joint_names)

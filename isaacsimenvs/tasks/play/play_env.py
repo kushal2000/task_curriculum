@@ -11,7 +11,7 @@ import torch
 from isaaclab.envs import DirectRLEnv
 
 from .play_env_cfg import PlayEnvCfg
-from isaacsimenvs.robots import get_robot_spec
+from isaacsimenvs.robots import FLEXIV_WUJI_RIGHT
 from .utils.action_utils import apply_action_pipeline, apply_wrench_dr, hand_spring_effort
 from .utils.logging_utils import log_step_metrics
 from .utils.obs_utils import (
@@ -35,7 +35,7 @@ class PlayEnv(DirectRLEnv):
     def __init__(
         self, cfg: PlayEnvCfg, render_mode: str | None = None, **kwargs
     ) -> None:
-        self.robot_spec = get_robot_spec(cfg.robot)
+        self.robot_spec = FLEXIV_WUJI_RIGHT
         # Override action/obs/state space from the robot and the configured field lists before
         # DirectRLEnv / rl_games observes the configclass.
         n = self.robot_spec.num_joints

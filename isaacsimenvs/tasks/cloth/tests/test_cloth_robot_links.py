@@ -1,4 +1,4 @@
-"""The cloth tasks' hand bodies, per robot: what the VBD cloth couples to and the pierce detector watches.
+"""The cloth tasks' hand bodies: what the VBD cloth couples to and the pierce detector watches.
 
 Checked against the robot's URDF, as bodies after the importer merges fixed joints: every finger
 segment the spec names must be a real body, and together they must be every finger body.
@@ -13,13 +13,11 @@ from pathlib import Path
 import pytest
 
 from isaacsimenvs.conftest import REPO_ROOT
-from isaacsimenvs.robots import FLEXIV_WUJI_RIGHT_HUMAN_LIKE
+from isaacsimenvs.robots import FLEXIV_WUJI_RIGHT
 
 REPO = REPO_ROOT
-URDFS = {
-    "flexiv_wuji_right_human_like": "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf",
-}
-SPECS = [FLEXIV_WUJI_RIGHT_HUMAN_LIKE]
+URDFS = {"flexiv_wuji_right": "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"}  # the cloth tasks'
+SPECS = [FLEXIV_WUJI_RIGHT]
 
 
 def _bodies(spec) -> set[str]:

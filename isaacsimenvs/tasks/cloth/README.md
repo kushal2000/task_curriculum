@@ -8,16 +8,15 @@ thing on both, so a policy trained on the rigid pool is evaluated on the VBD clo
 | `Cloth` | `backends/vbd` | Newton (`.venv_isaaclab3`) | VBD particle cloth |
 | `RigidCloth` | `backends/rigid` | PhysX (`.venv_isaacsim`) | pool of 7 hinged-plate fold shapes |
 
-The robot is `env.robot_setup` (a file stem in `isaacsimenvs/robots/setups/`), set in the run recipe or on
-the command line. The older ids stay registered as aliases that carry their setup:
-`FoldPoolPhysx<Robot>` -> `RigidCloth`, `Cloth<Robot>` -> `Cloth`, e.g.
-`Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0` = `RigidCloth` + `flexiv_wuji_right_real`.
+The robot is the real setup's (`ClothEnvCfg`): `robots.FLEXIV_WUJI_RIGHT` (Wuji's HAND2_DRIVE on the
+hand) with the real robot's joint limits (`rizon4s_right_wuji_real_limits.urdf`), its base where the
+real table puts it. `env.hand_sysid=true` (the `sysid` DR block) uses the identified hand instead.
 
 ## Layout
 
 ```text
 cloth/
-  __init__.py         task registration (canonical ids + aliases); make_env, the gym entry point
+  __init__.py         task registration; make_env, the gym entry point
   cloth_env.py        ClothEnv(DirectRLEnv): owns a backend and the four task parts below
   env_cfg.py          ClothEnvCfg: robot, obs, action, reward, reset, termination, DR, cloth
   cloth_cfg.py        ClothCfg: the sheet the task is defined on (geometry, the fold), both backends
@@ -67,7 +66,7 @@ For evaluation and viewers the env answers `fold_error()`, `fold_targets_w()`,
 `cloth_keypoints_w()`, `footprint_ratio()`, `is_folded()`, `folded_half_w()`, `cloth_points_w()`,
 `object_pos_w()`; anything else is on `env.task`, `env.backend` or `env.robot_layout`.
 
-Robots (`RobotSpec`s and the URDF -> USD pipeline) are `isaacsimenvs/robots/`, shared with the Play
+The robot (`RobotSpec` and the URDF -> USD pipeline) is `isaacsimenvs/robots/`, shared with the Play
 task; the training-time interactive viewer is `isaacsimenvs/scripts/visualization/interactive_viewer/`.
 The fold shapes are YAML designs with a PNG each in `isaacsimenvs/tasks/cloth/config/designs/`
 (regenerate the PNGs with `isaacsimenvs/scripts/visualization/rigid_cloth/render_designs.py`).
@@ -89,7 +88,7 @@ RUN_TAG=base WANDB=1 experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-
     --checkpoint pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth
 ```
 
-- The recipe supplies env count, epochs, minibatch and the robot setup; DR comes from its `dr:` blocks
+- The recipe supplies env count, epochs and minibatch; DR comes from its `dr:` blocks
   (`config/README.md`). Override anything with hydra arguments.
 - `--checkpoint` loads model + normalizers only (`--checkpoint_load_mode weights`, the default here);
   `LOAD_MODE=resume` also loads the optimizer and epoch counter, `max_epochs` is then the total.
@@ -133,8 +132,7 @@ LIST=my_list.txt TARGETS=vbd INDEX=<k> experiments/eval.sh        # k = 0 .. 2 x
 
 - Index = (line x targets + target) x starts + start; `TARGETS` (default `pool7 vbd`), `STARTS`
   (default `pinned rand`).
-- The policy's robot and spawn height: `ROBOT_SETUP` (default `flexiv_wuji_right_hl_reallimits`),
-  `START_HEIGHT` (default 0.20). VBD runs at the ns6 protocol (`num_substeps 6`, cloth `substeps 2`).
+- The sheet's spawn height: `START_HEIGHT` (default 0.20). VBD runs at the ns6 protocol (`num_substeps 6`, cloth `substeps 2`).
 - Output: `docs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json`;
   `isaacsimenvs/scripts/evaluation/matrix_summary.py <tag>` tabulates them.
 - `EVAL_SEEDS="3 4 5 6 7 8"` re-tests a picked checkpoint on fresh seeds.

@@ -1,7 +1,0 @@
-# Robot overlay: flexiv_wuji_right_real.yaml's geometry and real-limits URDF with HAND2_DRIVE kp/kd and the
-# real hand's torque limit (1.0 A x Kt), no sysid friction / armature / spring (robots.FLEXIV_WUJI_RIGHT_S2R_EFF).
-robot: flexiv_wuji_right_s2r_eff
-robot_self_collision: true
-robot_root_pos: [0.0, 0.51, 0.20]
-assets:
-  robot_urdf: "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"

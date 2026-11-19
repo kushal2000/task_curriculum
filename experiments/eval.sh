@@ -17,8 +17,7 @@
 #   vbd      the VBD cloth on Newton, 32 envs, num_substeps 6 / cloth substeps 2 (the ns6 protocol)
 # STARTS (default "pinned rand"): pinned = DR off (one start state); rand = the env's randomisation on.
 # CKPT_SEL (default best): best | last | ep:<N> (isaacsimenvs/scripts/evaluation/checkpoints.py).
-# ROBOT_SETUP (default flexiv_wuji_right_hl_reallimits) and START_HEIGHT (default 0.20): the policy's
-# robot and sheet spawn height, as in its training recipe. EVAL_SEEDS (default "1 2"); EXTRA_ARGS: more
+# START_HEIGHT (default 0.20): the sheet spawn height, as in the policy's training recipe. EVAL_SEEDS (default "1 2"); EXTRA_ARGS: more
 # hydra overrides for every run. Protocol: eval.py, 900 steps, a fold counts once HELD 10 steps, SAPG
 # block 0 with coefficient 0.
 # Output: $OUTDIR/<tag>_s<seed>__on_<physx_pool|physx_pool7|physx_pool7of|vbd>__<start>__<4cm|1p5cm>_s<es>.json
@@ -66,7 +65,7 @@ esac
 read -r -a EXTRA <<<"${EXTRA_ARGS:-}"
 OUTDIR="${OUTDIR:-docs/results/px_matrix}"
 mkdir -p "$OUTDIR"
-echo "[eval] tag=$TAG seed=$SEED target=$NAME start=$START ckpt=$CKPT robot_setup=${ROBOT_SETUP:-flexiv_wuji_right_hl_reallimits}"
+echo "[eval] tag=$TAG seed=$SEED target=$NAME start=$START ckpt=$CKPT"
 provenance eval
 
 RC=0
@@ -79,7 +78,7 @@ for CUT in 0.04 0.015; do
             --task "$TASK" --checkpoint "$CKPT" --policy_config "${POLICY_CONFIG:-pretrained_policy/config.yaml}" \
             --sapg_expl_coef 0 --num_envs "$ENVS" --max_steps 900 --success_tolerance 0.01 \
             --num_assets_per_type 1 --single_variant "${SARGS[@]}" --seed "$ES" --out "$OUT" \
-            "env.robot_setup=${ROBOT_SETUP:-flexiv_wuji_right_hl_reallimits}" "env.cloth.start_height=${START_HEIGHT:-0.20}" \
+            "env.cloth.start_height=${START_HEIGHT:-0.20}" \
             "${TARGS[@]}" "env.cloth.keypoint_tolerance=$CUT" env.cloth.nan_policy=reset \
             env.termination.success_steps=10 "${EXTRA[@]}" \
             || { echo "[eval] $OUT FAILED"; RC=1; }

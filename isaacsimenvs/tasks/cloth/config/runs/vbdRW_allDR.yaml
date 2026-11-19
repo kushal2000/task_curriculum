@@ -1,11 +1,12 @@
-# vbdRW_allDR (stage 12, run 4): VBD-direct on the right Wuji with the identified hand (FlexivWujiRightReal:
+# vbdRW_allDR (stage 12, run 4): VBD-direct on the right Wuji with the identified hand (hand_sysid:
 # HAND2_DRIVE kp/kd, sysid armature / friction / passive damping / spring, 1.0 A x Kt torque limit) and every
 # DR that exists on Newton: point-level object DR (realistic lags, as flat7FWRHL_dB), proprio / action
 # delays and noise, action noise, PD gains, table height +-1.5 cm, the 11-10 contact frictions (centre values).
 # Not on Newton: hand friction / torque-limit DR, contact-friction DR, the plates' C layer, felt thickness.
-task: Isaacsimenvs-ClothFlexivWujiRightReal-Direct-v0
+task: Isaacsimenvs-Cloth-Direct-v0
 
 env:
+  hand_sysid: true
   reset:
     table_reset_z_range: 0.015
   cloth:

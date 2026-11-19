@@ -50,11 +50,10 @@ _WEBSOCKETS = REPO / "third_party" / "viser_websockets"
 if _WEBSOCKETS.is_dir():
     sys.path.insert(0, str(_WEBSOCKETS))
 
-#: (robot, robot_self_collision) in a run's config -> the task it trained on.
-TASK_FOR = {
-    ("flexiv_wuji_right_human_like", True): "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0",
-    ("flexiv_wuji_right_real", True): "Isaacsimenvs-PlayFlexivWujiRightReal-Direct-v0",
-}
+#: The Play task, and the robot URDF of the runs trained on it (older runs' configs also name
+#: ``robot: flexiv_wuji_right_human_like``; Kuka runs have neither and are not playable).
+PLAY_TASK = "Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0"
+PLAY_URDF = "assets/flexiv_wuji/rizon4s_right_wuji_human_like_joint_limits.urdf"
 #: SAPG's per-block coefficients: linspace(50, 0, num_actors // expl_coef_block_size)
 #: (rl_games a2c_common.py:342).
 SAPG_MAX_COEF = 50.0
@@ -75,31 +74,8 @@ class Run:
         # Resolved: the agent config interpolates into the env's (num_actors: ${....env.scene.num_envs}).
         self.config = OmegaConf.to_container(OmegaConf.load(self.config_path), resolve=True)
         env = self.config["env"]
-        self.robot = env.get("robot")  # None: a config from before the field (a Kuka run; not playable)
-        self.self_collision = bool(env.get("robot_self_collision", False))
-        self.task = TASK_FOR.get((self.robot, self.self_collision))
-        # Two jobs started in the same second share one outputs/<date>/<time>/ and so one
-        # .hydra/config.yaml (2026-10-09/18-04-56 holds a Flexiv and a Kuka run). The Slurm log's
-        # "[train] robot=... task=..." line is per job, so it decides; on disagreement the saved
-        # env config is another run's and is not used.
-        self.config_is_own = True
-        logged = self._logged_robot_and_task()
-        if logged is not None:
-            robot, task = logged
-            self.config_is_own = robot == self.robot
-            self.robot, self.task = robot, task
-
-    def _logged_robot_and_task(self) -> tuple[str, str] | None:
-        m = re.search(r"_(\d+)$", self.name)
-        log = REPO / "slurm_logs" / f"play_scratch_{m.group(1)}.out" if m else None
-        if log is None or not log.is_file():
-            return None
-        with log.open(errors="replace") as f:
-            for line in f:
-                hit = re.match(r"\[train\] robot=(\S+) task=(\S+)", line)
-                if hit:
-                    return hit.group(1), hit.group(2)
-        return None
+        self.robot = (env.get("assets") or {}).get("robot_urdf")  # None: a Kuka run's config (not playable)
+        self.task = PLAY_TASK if self.robot == PLAY_URDF else None
 
     def checkpoints(self) -> list[Path]:
         """Periodic checkpoints by epoch, then the best-so-far one last."""
@@ -170,12 +146,12 @@ def main() -> None:
     runs = find_runs()
     run, checkpoint = resolve_run(args.run, runs)
     if run.task is None:
-        raise SystemExit(f"{run.name}: no task for robot {run.robot!r}, self-collision {run.self_collision}")
+        raise SystemExit(f"{run.name}: not a Play run on the Flexiv + right Wuji (robot URDF {run.robot!r})")
     siblings = [r for r in runs if r.task == run.task]
     playable = [r for r in runs if r.task is not None]
-    run_label = {r.name: f"{r.robot}: {r.name}" for r in playable}
+    run_label = {r.name: r.name for r in playable}
     print(f"[viser_play] {run.name} ({run.task}), {checkpoint.name}; "
-          f"{len(siblings)} runs of this robot", flush=True)
+          f"{len(siblings)} Play runs", flush=True)
 
     from isaaclab.app import AppLauncher
 
@@ -202,15 +178,12 @@ def main() -> None:
 
     @hydra_task_config_with_yaml(run.task, "")
     def _run(env_cfg, agent_cfg) -> None:
-        if run.config_is_own:
-            saved_env = dict(run.config["env"])
-            for key in ("observation_space", "state_space", "action_space", "num_observations",
-                        "num_states", "num_actions"):
-                saved_env.pop(key, None)
-            env_cfg.from_dict(saved_env)
-        else:
-            print(f"[viser_play] {run.config_path} belongs to another run; building "
-                  f"{run.task} from its defaults", flush=True)
+        saved_env = dict(run.config["env"])
+        # Sizes are set from the robot at env init; robot / robot_setup are older runs' robot fields.
+        for key in ("observation_space", "state_space", "action_space", "num_observations",
+                    "num_states", "num_actions", "robot", "robot_setup"):
+            saved_env.pop(key, None)
+        env_cfg.from_dict(saved_env)
         from isaacsimenvs.tasks.play.utils.object_size_distributions import OBJECT_SIZE_DISTRIBUTIONS
 
         per_type = args.num_assets_per_type

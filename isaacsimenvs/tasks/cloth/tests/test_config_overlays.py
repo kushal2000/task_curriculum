@@ -97,9 +97,6 @@ EXPERIMENT_TASKS = {
     "Isaacsimenvs-RigidCloth-Direct-v0": ("RigidClothEnvCfg", RIGID_CLOTH_CFG, _CLOTH_SAPG),
     "Isaacsimenvs-Cloth-Direct-v0": ("VbdClothEnvCfg", VBD_CLOTH_CFG, _CLOTH_SAPG),
 }
-# The robot-suffixed alias ids (tasks/cloth/__init__.py) share their canonical task's cfg and agent YAML.
-for _robot in ("FlexivWujiRightReal", "FlexivWujiRightS2REff", "FlexivWujiRightSharpaGain"):
-    EXPERIMENT_TASKS[f"Isaacsimenvs-Cloth{_robot}-Direct-v0"] = EXPERIMENT_TASKS["Isaacsimenvs-Cloth-Direct-v0"]
 
 
 def _env_problems(overlay: dict, classes: dict, cls: str, path: str) -> list[str]:

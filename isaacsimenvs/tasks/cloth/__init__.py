@@ -3,10 +3,7 @@
     Isaacsimenvs-Cloth-Direct-v0       VBD cloth sheet, Newton (``.venv_isaaclab3``)
     Isaacsimenvs-RigidCloth-Direct-v0  fold-shape pool of hinged plates, PhysX (``.venv_isaacsim``)
 
-The robot is a config field, ``env.robot_setup`` (a file stem in ``robots/setups/``), set in the run
-recipe or on the command line. The older ids -- ``FoldPoolPhysx`` and one per robot, e.g.
-``Isaacsimenvs-FoldPoolPhysxFlexivWujiRightReal-Direct-v0`` -- stay registered as aliases: each
-names its canonical task and robot setup (``tasks/loader.resolve_task``). Start with
+Both run the Flexiv + right Wuji as the real robot is set up (``env_cfg.ClothEnvCfg``). Start with
 ``README.md``.
 """
 
@@ -37,7 +34,7 @@ def make_env(cfg, render_mode: str | None = None, *, backend: str, **kwargs):
     return ClothEnv(cfg, render_mode, backend=Backend, **kwargs)
 
 
-def _register(task_id: str, base: str, **extra) -> None:
+def _register(task_id: str, base: str) -> None:
     backend, cfg = _TASKS[base]
     gym.register(
         id=task_id,
@@ -49,28 +46,10 @@ def _register(task_id: str, base: str, **extra) -> None:
             "env_cfg_entry_point": f"isaacsimenvs.tasks.cloth.{cfg}",
             "rl_games_cfg_entry_point": str(PLAY_CONFIG_DIR / "PlayPPO.yaml"),  # Play's PPO, as the prior
             "rl_games_sapg_cfg_entry_point": str(CLOTH_CONFIG_DIR / "ClothSAPG.yaml"),
-            **extra,
         },
     )
 
 
 for _base in _TASKS:
     _register(f"Isaacsimenvs-{_base}-Direct-v0", _base)
-
-# --- aliases: the ids before the robot became a config field (old recipes and launchers use them).
-_ALIAS_BASE = {"Cloth": "Cloth", "FoldPoolPhysx": "RigidCloth"}
-_ALIAS_SETUP = {
-    "FlexivWujiRightHumanLike": "flexiv_wuji_right_human_like",
-    "FlexivWujiRightReal": "flexiv_wuji_right_real",
-    "FlexivWujiRightS2REff": "flexiv_wuji_right_s2r_eff",
-    "FlexivWujiRightSharpaGain": "flexiv_wuji_right_sharpagain",
-    "FlexivWujiRightHLRL": "flexiv_wuji_right_hl_reallimits",
-}
-_register("Isaacsimenvs-FoldPoolPhysx-Direct-v0", "RigidCloth", canonical_task="Isaacsimenvs-RigidCloth-Direct-v0")
-for _old, _base in _ALIAS_BASE.items():
-    for _suffix, _setup in _ALIAS_SETUP.items():
-        _register(
-            f"Isaacsimenvs-{_old}{_suffix}-Direct-v0", _base,
-            canonical_task=f"Isaacsimenvs-{_base}-Direct-v0", robot_setup=_setup,
-        )
-del _base, _old, _suffix, _setup
+del _base

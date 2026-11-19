@@ -8,7 +8,7 @@ Each task subpackage registers itself with gymnasium on import (side effect in i
 sheet (Newton) or on the fold-shape pool of hinged plates (PhysX).
 """
 
-from . import cloth  # gym.register("Isaacsimenvs-Cloth-Direct-v0" / "-RigidCloth-" / aliases)
-from . import play   # gym.register("Isaacsimenvs-PlayFlexivWujiRight{HumanLike,Real}-Direct-v0")
+from . import cloth  # gym.register("Isaacsimenvs-Cloth-Direct-v0" / "Isaacsimenvs-RigidCloth-Direct-v0")
+from . import play   # gym.register("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0")
 
 __all__ = ["cloth", "play"]

@@ -15,7 +15,7 @@ isaacsimenvs/scripts/robots/fetch_assets.sh   # Rizon 4s + Wuji Hand 2 vendor me
 ```
 
 Details in [`docs/installation/`](docs/installation/README.md). Newton reads the robot as
-a USD baked by Kit, once per robot setup: `ROBOT_SETUP=flexiv_wuji_right_hl_reallimits experiments/bake_robot.sh`.
+a USD baked by Kit, once per URDF and self-collision value: `SC=false experiments/bake_robot.sh`.
 Policies are not in git: the Play prior goes in `pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth`,
 the network config in `pretrained_policy/config.yaml`.
 
@@ -23,12 +23,14 @@ the network config in `pretrained_policy/config.yaml`.
 
 | Task id (`Isaacsimenvs-<name>-Direct-v0`) | Simulator | What |
 | --- | --- | --- |
-| `PlayFlexivWujiRightHumanLike` (alias `PlayFlexivWujiRightReal`: identified hand) | PhysX | rigid-object goal reaching, the prior |
+| `PlayFlexivWujiRightHumanLike` | PhysX | rigid-object goal reaching, the prior |
 | `RigidCloth` | PhysX | fold a pool of 7 hinged-plate shapes (10-20 cm) |
 | `Cloth` | Newton | fold a VBD particle cloth |
 
-The cloth tasks take the robot from `env.robot_setup` (a file in `isaacsimenvs/robots/setups/`);
-the robot-suffixed ids (e.g. `ClothFlexivWujiRightReal`) are aliases that set it. See
+One robot, `robots.FLEXIV_WUJI_RIGHT`: the Flexiv Rizon 4s + right Wuji Hand 2 with Wuji's sim2real
+hand drive (HAND2_DRIVE). The cloth tasks use the real robot's joint limits and table geometry; Play
+keeps the human-like limits its priors were trained with. `env.hand_sysid=true` (the `sysid` DR
+block) swaps in the real hand's identified joint dynamics. See
 [`isaacsimenvs/tasks/cloth/README.md`](isaacsimenvs/tasks/cloth/README.md).
 
 ## Running
@@ -48,7 +50,7 @@ TEACHER=<pth> NAME=<name> VIS=cams GOAL=g1 experiments/distill.sh
 TEACHER=<pth> MODE=evalall STUDENT=<student.pth> TAG=<name> experiments/distill.sh
 
 # Watch a policy live in a browser
-experiments/viewer.sh --task Isaacsimenvs-RigidCloth-Direct-v0 env.robot_setup=flexiv_wuji_right_hl_reallimits
+experiments/viewer.sh --task Isaacsimenvs-RigidCloth-Direct-v0
 ```
 
 The launchers are scheduler-agnostic: on a cluster, submit them as the batch command (array index =
@@ -57,8 +59,8 @@ Runs write to `outputs/<date>/<time>/<run name>/` (checkpoints in `nn/`).
 
 ## Configuration
 
-A run's config is the task's Python defaults (its config class), the robot setup, a run recipe and
-the command line, in that order. A recipe names a base recipe and DR blocks:
+A run's config is the task's Python defaults (its config class), a run recipe and the command line,
+in that order. A recipe names a base recipe and DR blocks:
 
 ```yaml
 base: rigid_cloth_right_wuji
@@ -73,9 +75,8 @@ See [`isaacsimenvs/tasks/cloth/config/README.md`](isaacsimenvs/tasks/cloth/confi
 isaacsimenvs/
   tasks/cloth/      the fold task: ClothEnv owning a backend (backends/{rigid,vbd}) and mdp/ (task, obs, actions, DR), perception/
   tasks/play/       the Play task (the prior)
-  robots/           the robot specs and the URDF -> USD pipeline
+  robots/           the robot spec and the URDF -> USD pipeline
   scripts/
-    configs/        task / robot / train YAMLs, run recipes (runs/), DR blocks (dr/), rigid cloth designs
     training/       train.py and its rl_games / wandb glue
     evaluation/     eval.py, protocol, checkpoint lookup, summaries
     distillation/   point-cloud student: DAgger (distill_pc.py) and RL (pc_rl.py)

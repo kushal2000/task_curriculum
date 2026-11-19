@@ -27,7 +27,7 @@ from __future__ import annotations
 import torch
 from isaaclab.envs import DirectRLEnv
 
-from isaacsimenvs.robots import get_robot_spec
+from isaacsimenvs.robots import robot_spec
 
 from .backends.base import ClothBackend
 from .mdp.actions import JointController
@@ -41,10 +41,10 @@ __all__ = ["ClothEnv"]
 
 
 class ClothEnv(DirectRLEnv):
-    """Fold half a sheet onto the other half, with the robot of ``cfg.robot``."""
+    """Fold half a sheet onto the other half."""
 
     def __init__(self, cfg, render_mode: str | None = None, *, backend: type[ClothBackend], **kwargs) -> None:
-        self.robot_spec = get_robot_spec(cfg.robot)
+        self.robot_spec = robot_spec(cfg.hand_sysid)
         n_joints = self.robot_spec.num_joints
         cfg.action_space = n_joints
         cfg.observation_space = obs_dim(cfg.obs.obs_list, n_joints)

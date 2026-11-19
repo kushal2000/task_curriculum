@@ -84,22 +84,14 @@ def _blocks(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
 
 
-def test_tasks_and_aliases_are_registered():
-    """Canonical ids, and every old id as an alias naming its canonical task and an existing robot
-    setup (robots/setups/<setup>.yaml)."""
+def test_tasks_are_registered():
+    """The two cloth task ids, with no robot-suffixed or other alias ids beside them."""
     gym = pytest.importorskip("gymnasium")
     from isaacsimenvs.conftest import load_module
 
     load_module("isaacsimenvs/tasks/cloth/__init__.py", "cloth_registration")
-    for task in ("Isaacsimenvs-Cloth-Direct-v0", "Isaacsimenvs-RigidCloth-Direct-v0"):
-        assert "canonical_task" not in gym.spec(task).kwargs
-    alias = gym.spec("Isaacsimenvs-FoldPoolPhysx-Direct-v0").kwargs
-    assert alias["canonical_task"] == "Isaacsimenvs-RigidCloth-Direct-v0" and "robot_setup" not in alias
-    for old, base in (("Cloth", "Cloth"), ("FoldPoolPhysx", "RigidCloth")):
-        kw = gym.spec(f"Isaacsimenvs-{old}FlexivWujiRightReal-Direct-v0").kwargs
-        assert kw["canonical_task"] == f"Isaacsimenvs-{base}-Direct-v0"
-        assert kw["robot_setup"] == "flexiv_wuji_right_real"
-    setups = {p.stem for p in (REPO / "isaacsimenvs/robots/setups").glob("*.yaml")}
-    for spec in gym.registry.values():
-        if spec.id.startswith("Isaacsimenvs-") and "robot_setup" in spec.kwargs:
-            assert spec.kwargs["robot_setup"] in setups, spec.id
+    cloth_ids = {
+        spec.id for spec in gym.registry.values()
+        if spec.id.startswith("Isaacsimenvs-") and spec.entry_point == "isaacsimenvs.tasks.cloth:make_env"
+    }
+    assert cloth_ids == {"Isaacsimenvs-Cloth-Direct-v0", "Isaacsimenvs-RigidCloth-Direct-v0"}

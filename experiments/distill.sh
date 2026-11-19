@@ -9,8 +9,7 @@
 #   TEACHER=<pth> MODE=smoke [PART=physx|scene|vbd] experiments/distill.sh
 #
 # TEACHER (required): the state policy's checkpoint; EXPERIMENT (default rigid_cloth_right_wuji): its
-# training recipe, which builds the PhysX env. The VBD env is the Cloth task on ROBOT_SETUP (default
-# flexiv_wuji_right_hl_reallimits) at the ns6 protocol.
+# training recipe, which builds the PhysX env. The VBD env is the Cloth task at the ns6 protocol.
 # Train: NAME, VIS (cams|none), GOAL (g0|g3|g1|gl|first|none), NOISE=1, G3_NOISE=1, ENVS (4096),
 #        ITERS (2000), SEED (default INDEX + 1), EXTRA (more distill_pc args). Writes outputs/distill/<NAME>_s<seed>_<job>/.
 # Eval:  SIM (physx|vbd), POLICY (student|teacher), STUDENT, TAG, START (pinned|rand), CUT (0.015),
@@ -23,8 +22,7 @@ VBD_TASK=Isaacsimenvs-Cloth-Direct-v0
 PXPY=(.venv_isaacsim/bin/python); NEWTONPY=(experiments/newton_py)
 CUT="${CUT:-0.015}"
 FOLD=("env.cloth.keypoint_tolerance=$CUT" env.termination.success_steps=10 env.cloth.nan_policy=reset)
-VBD_EXTRA=("env.robot_setup=${ROBOT_SETUP:-flexiv_wuji_right_hl_reallimits}" env.cloth.start_height=0.20
-           env.robot_self_collision=false env.newton.njmax=32768 env.newton.num_substeps=6 env.cloth.substeps=2)
+VBD_EXTRA=(env.cloth.start_height=0.20 env.robot_self_collision=false env.newton.njmax=32768 env.newton.num_substeps=6 env.cloth.substeps=2)
 SEED="${SEED:-$(( INDEX + 1 ))}"
 echo "[distill] mode=${MODE:-train} teacher=$TEACHER experiment=$EXPERIMENT"
 BACKEND=physx provenance distill

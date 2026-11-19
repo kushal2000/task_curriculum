@@ -1,5 +1,5 @@
-"""Flexiv Rizon 4s + right Wuji Hand 2, as the real robot is set up: human-like limits, the
-identified hand (sysid), and the drive variants trained on it."""
+"""Flexiv Rizon 4s + right Wuji Hand 2, as the real robot is set up (``FLEXIV_WUJI_RIGHT``), and the
+real hand's identified joint dynamics (``with_sysid``)."""
 
 from __future__ import annotations
 
@@ -8,13 +8,14 @@ import dataclasses
 from .spec import RobotSpec
 
 # ----------------------------------------------------------------------------
-# Flexiv Rizon 4s + RIGHT Wuji Hand 2, human-like limits, as the real robot is set up: the
-# robot of kushal/2026-10-30_pretraining_real (cdf26eb, Isaacsimenvs-PlayFlexivWujiRightHumanLike):
-# the human-like hand (r_ joints), mounted 180 deg about the flange axis so the palm faces the table
-# at the same arm pose; Wuji's HAND2_DRIVE on the hand (_WUJI_S2R_DRIVE, no joint friction,
-# 100 rad/s); the real robot's home pose; per-finger pad offsets (thumb 22.9 mm, the same 77% of its
-# longer distal link). Where the table sits relative to it is the env's ``robot_root_pos``
-# (robots/setups/flexiv_wuji_right_human_like.yaml).
+# Flexiv Rizon 4s + RIGHT Wuji Hand 2, as the real robot is set up: the robot of
+# kushal/2026-10-30_pretraining_real (cdf26eb, Isaacsimenvs-PlayFlexivWujiRightHumanLike): the
+# human-like hand (r_ joints), mounted 180 deg about the flange axis so the palm faces the table at
+# the same arm pose; Wuji's HAND2_DRIVE on the hand (_WUJI_S2R_DRIVE, no joint friction, 100 rad/s);
+# the real robot's home pose; per-finger pad offsets (thumb 22.9 mm, the same 77% of its longer
+# distal link). The joint limits are the URDF's (``assets.robot_urdf``): the cloth tasks use the
+# real robot's (rizon4s_right_wuji_real_limits.urdf), the Play task the human-like ones its priors
+# were trained with. Where the table sits relative to the robot is the env's ``robot_root_pos``.
 # ----------------------------------------------------------------------------
 
 _RIZON_JOINTS = tuple(f"joint{i}" for i in range(1, 8))
@@ -88,8 +89,8 @@ _WUJI_RIGHT_SELF_COLLISION_FILTER = {
     'r_thumb_proximal_abd': ('r_thumb_middle', 'r_thumb_proximal', 'link7'),
 }
 
-FLEXIV_WUJI_RIGHT_HUMAN_LIKE = RobotSpec(
-    name="flexiv_wuji_right_human_like",
+FLEXIV_WUJI_RIGHT = RobotSpec(
+    name="flexiv_wuji_right",
     arm_joint_regex="joint[1-7]",
     hand_joint_regex="r_.*",
     joint_names_canonical=_RIZON_JOINTS + _WUJI_RIGHT_JOINTS,
@@ -133,8 +134,8 @@ FLEXIV_WUJI_RIGHT_HUMAN_LIKE = RobotSpec(
 )
 
 # ----------------------------------------------------------------------------
-# FLEXIV_WUJI_RIGHT_HUMAN_LIKE with the real hand's identified joint dynamics and the real robot's
-# limits (the "real" variant; robots/setups/flexiv_wuji_right_real.yaml):
+# The real hand's identified joint dynamics (``with_sysid``; the env's ``hand_sysid``, turned on by
+# the sysid DR block):
 #   * hand armature, joint friction and passive damping from the sysid of the deployed right hand
 #     (firmware 2.10.0; aiowuji sysid_fit.py MuJoCo fit of the 2026-09-30 fingers-up and 2026-10-09
 #     palm-down runs, assets/flexiv_wuji/wuji_hand2_right_sysid_fit_20261009.json, kept out of git).
@@ -146,9 +147,7 @@ FLEXIV_WUJI_RIGHT_HUMAN_LIKE = RobotSpec(
 #   * hand torque limit = the deploy's 1.0 A current limit x each joint's identified torque constant
 #     (the fit's `gear`, N m/A; deploy config.yaml hand_kt). The firmware multiplies the PD output by
 #     ~1.97 BEFORE clipping the current, so that factor changes the gain conversion, not the limit.
-#   * arm limits 5 deg inside the spec on both sides and finger PIP <= 100 deg: in the URDF
-#     (rizon4s_right_wuji_real_limits.urdf), not here.
-# The PD gains, geometry, home pose and collision filter are FLEXIV_WUJI_RIGHT_HUMAN_LIKE's.
+# The PD gains, geometry, home pose and collision filter stay FLEXIV_WUJI_RIGHT's.
 # ----------------------------------------------------------------------------
 
 #: Per hand joint: (torque constant N m/A, armature kg m^2, passive damping N m s/rad, Coulomb
@@ -215,57 +214,18 @@ _WUJI_RIGHT_FRICTION_SCALE = {
 #: The deploy's hand current limit [A] (deploy/simtoolreal/config.yaml hand_effort_limit).
 WUJI_HAND_CURRENT_LIMIT_A = 1.0
 
-FLEXIV_WUJI_RIGHT_REAL = dataclasses.replace(
-    FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
-    name="flexiv_wuji_right_real",
-    hand_armature={j: v[1] for j, v in _WUJI_RIGHT_SYSID.items()},
-    hand_effort_limit={j: WUJI_HAND_CURRENT_LIMIT_A * v[0] for j, v in _WUJI_RIGHT_SYSID.items()},
-    hand_friction={j: v[3] * _WUJI_RIGHT_FRICTION_SCALE[j] for j, v in _WUJI_RIGHT_SYSID.items()},
-    hand_dynamic_friction={j: v[3] * _WUJI_RIGHT_FRICTION_SCALE[j] for j, v in _WUJI_RIGHT_SYSID.items()},
-    hand_viscous_friction={j: v[2] for j, v in _WUJI_RIGHT_SYSID.items()},
-    hand_spring_stiffness={j: v[0] for j, v in _WUJI_RIGHT_SPRING.items()},
-    hand_spring_ref={j: v[1] for j, v in _WUJI_RIGHT_SPRING.items()},
-)
 
-# Right-hand drive variants for the 11-11 training set (stage 12). Both keep FLEXIV_WUJI_RIGHT_HUMAN_LIKE's
-# armature, no joint friction and no spring; their overlays use the real-limits URDF.
-#   * _S2R_EFF: HAND2_DRIVE kp/kd (as RIGHT_HUMAN_LIKE) with the real hand's torque limit, 1.0 A x Kt
-#     (FLEXIV_WUJI_RIGHT_REAL's), instead of HAND2_DRIVE's limits.
-#   * _SHARPAGAIN: the Sharpa's kp / kd / URDF torque limit by joint role (_SHARPA_DRIVE_BY_ROLE).
-FLEXIV_WUJI_RIGHT_S2R_EFF = dataclasses.replace(
-    FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
-    name="flexiv_wuji_right_s2r_eff",
-    hand_effort_limit=dict(FLEXIV_WUJI_RIGHT_REAL.hand_effort_limit),
-)
-#: The Sharpa hand's drive by joint role (SimToolReal's Kuka + Sharpa: kp N m/rad, kd N m s/rad, and
-#: its URDF effort limit N m), for the drive-swap control. The Sharpa's two joints without a Wuji
-#: counterpart (thumb MCP_AA, pinky CMC) are left out.
-_SHARPA_DRIVE_BY_ROLE = {
-    'r_thumb_cmc_flex': (6.95, 0.28676845, 3.3),
-    'r_thumb_cmc_abd': (13.2, 0.40845109, 3.3),
-    'r_thumb_mcp': (4.76, 0.20394083, 1.864),
-    'r_thumb_ip': (0.9, 0.04190723, 0.638),
-    'r_index_finger_mcp_flex': (4.76, 0.20859232, 1.864),
-    'r_index_finger_mcp_abd': (6.62, 0.24595532, 1.864),
-    'r_index_finger_pip': (0.9, 0.04243185, 0.638),
-    'r_index_finger_dip': (0.9, 0.03504461, 0.189369),
-    'r_middle_finger_mcp_flex': (4.76, 0.2085923, 1.864),
-    'r_middle_finger_mcp_abd': (6.62, 0.24595532, 1.864),
-    'r_middle_finger_pip': (0.9, 0.04243185, 0.638),
-    'r_middle_finger_dip': (0.9, 0.03504461, 0.189369),
-    'r_ring_finger_mcp_flex': (4.76, 0.20859226, 1.864),
-    'r_ring_finger_mcp_abd': (6.62, 0.24595528, 1.864),
-    'r_ring_finger_pip': (0.9, 0.04243183, 0.638),
-    'r_ring_finger_dip': (0.9, 0.0350446, 0.189369),
-    'r_pinky_mcp_flex': (4.76, 0.20859229, 1.864),
-    'r_pinky_mcp_abd': (6.62, 0.24595528, 1.864),
-    'r_pinky_pip': (0.9, 0.04243183, 0.638),
-    'r_pinky_dip': (0.9, 0.0350446, 0.189369),
-}
-FLEXIV_WUJI_RIGHT_SHARPAGAIN = dataclasses.replace(
-    FLEXIV_WUJI_RIGHT_HUMAN_LIKE,
-    name="flexiv_wuji_right_sharpagain",
-    hand_stiffness={j: d[0] for j, d in _SHARPA_DRIVE_BY_ROLE.items()},
-    hand_damping={j: d[1] for j, d in _SHARPA_DRIVE_BY_ROLE.items()},
-    hand_effort_limit={j: d[2] for j, d in _SHARPA_DRIVE_BY_ROLE.items()},
-)
+def with_sysid(spec: RobotSpec) -> RobotSpec:
+    """``spec`` with the identified right hand: sysid armature, Coulomb and viscous friction, passive
+    spring, and torque limit 1.0 A x Kt. Everything else (PD gains, geometry, home pose) unchanged."""
+    return dataclasses.replace(
+        spec,
+        name=f"{spec.name}_sysid",
+        hand_armature={j: v[1] for j, v in _WUJI_RIGHT_SYSID.items()},
+        hand_effort_limit={j: WUJI_HAND_CURRENT_LIMIT_A * v[0] for j, v in _WUJI_RIGHT_SYSID.items()},
+        hand_friction={j: v[3] * _WUJI_RIGHT_FRICTION_SCALE[j] for j, v in _WUJI_RIGHT_SYSID.items()},
+        hand_dynamic_friction={j: v[3] * _WUJI_RIGHT_FRICTION_SCALE[j] for j, v in _WUJI_RIGHT_SYSID.items()},
+        hand_viscous_friction={j: v[2] for j, v in _WUJI_RIGHT_SYSID.items()},
+        hand_spring_stiffness={j: v[0] for j, v in _WUJI_RIGHT_SPRING.items()},
+        hand_spring_ref={j: v[1] for j, v in _WUJI_RIGHT_SPRING.items()},
+    )
