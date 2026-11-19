@@ -43,12 +43,11 @@ cloth/
                       newton_support/ (Isaac Lab 3.0 compat, patches, USD cache)
   perception/         point clouds for the point-cloud students (pointcloud, scene_pointcloud,
                       robot_surface)
-  pose_viewer.py      training-time interactive viewer
   tests/
 ```
 
 Robots (`RobotSpec`s and the URDF -> USD pipeline) are `isaacsimenvs/robots/`, shared with the Play
-task. The fold shapes are YAML designs with a PNG each in `isaacsimenvs/scripts/configs/rigid_cloth_designs/`
+task; the training-time interactive viewer is `isaacsimenvs/scripts/visualization/interactive_viewer/`. The fold shapes are YAML designs with a PNG each in `isaacsimenvs/scripts/configs/rigid_cloth_designs/`
 (regenerate the PNGs with `isaacsimenvs/scripts/visualization/rigid_cloth/render_designs.py`).
 
 The observation is the encoding the Play prior was trained on: the sheet's moving half as a rigid
