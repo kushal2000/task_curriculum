@@ -128,7 +128,7 @@ def _revolute(stage, path: str, body0: str, body1: str, a, b, z: float, limits=N
 def write_shape_usd(shape, out_path: str | Path, *, density: float = 2.0) -> Path:
     """Write ``shape`` as a floating-base USD articulation at ``out_path``.
 
-    ``density`` is per AREA [kg/m^2], as ``ClothCfg.density`` -- every pool sheet weighs 20 g.
+    ``density`` is per AREA [kg/m^2], as ``VbdClothCfg.density`` -- every pool sheet weighs 20 g.
 
     Hinge axes are written as the sheet line FROM ``Hinge.a`` TO ``Hinge.b``, which is not
     necessarily the fold_shapes axis (oriented so +angle folds UP). Where the two disagree the line is

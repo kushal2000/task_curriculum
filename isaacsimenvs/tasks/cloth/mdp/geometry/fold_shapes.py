@@ -390,7 +390,7 @@ def plate_mass_properties(
 ) -> tuple[float, np.ndarray, np.ndarray]:
     """``(mass, centre of mass, inertia about the COM)`` of a uniform slab, in the plate's frame.
 
-    ``density`` is PER AREA [kg/m^2], as ``ClothCfg.density``, so the pool's sheets weigh what the
+    ``density`` is PER AREA [kg/m^2], as ``VbdClothCfg.density``, so the pool's sheets weigh what the
     cloth weighs. Exact for a prism: in-plane second moments from the polygon (fan of triangles),
     plus the slab's own ``m t^2 / 12`` about the in-plane axes.
     """

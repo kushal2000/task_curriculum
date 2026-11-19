@@ -20,7 +20,7 @@ cloth/
   __init__.py         task registration (canonical ids + aliases); make_env, the gym entry point
   cloth_env.py        ClothEnv(DirectRLEnv): owns a backend and the four task parts below
   env_cfg.py          ClothEnvCfg: robot, obs, action, reward, reset, termination, DR, cloth
-  cloth_cfg.py        ClothCfg: the sheet the task is defined on
+  cloth_cfg.py        ClothCfg: the sheet the task is defined on (geometry, the fold), both backends
   mdp/                the task, simulator-independent
     state.py          SimState, SheetLayout, FoldView: what the parts hand each other
     robot.py          RobotLayout: body and joint indices, joint orders, limits, passive spring
@@ -42,7 +42,8 @@ cloth/
                       (building the pool, shape draws, folded starts), contacts.py,
                       randomization.py (PlateRandomization), checks.py (startup proofs), physx.py,
                       assets.py, usd.py
-    vbd/              VbdBackend (backend.py) on Newton: config.py, newton_setup.py, pierce.py,
+    vbd/              VbdBackend (backend.py) on Newton: config.py, cloth_cfg.py (VbdClothCfg: the
+                      sheet's material, contact, coupling), newton_setup.py, pierce.py,
                       newton_support/ (Isaac Lab 3.0 compat, patches, USD cache)
   perception/         point clouds for the point-cloud students (pointcloud, scene_pointcloud,
                       robot_surface)

@@ -1,7 +1,7 @@
 """``VbdClothEnvCfg``: the fold task with a VBD cloth sheet, on Isaac Lab 3.0 + Newton.
 
-The task's ``ClothEnvCfg`` (whose ``cloth`` block configures the sheet and the coupled MJWarp + VBD
-solve) plus the MJWarp solver settings (``newton``). ``sim.physics`` is replaced by the Newton
+The task's ``ClothEnvCfg`` with the VBD sheet as its ``cloth`` block (``cloth_cfg.VbdClothCfg``: the
+material, contact and the coupled MJWarp + VBD solve) plus the MJWarp solver settings (``newton``). ``sim.physics`` is replaced by the Newton
 config at construction (``newton_setup.py``).
 """
 
@@ -17,6 +17,7 @@ compat.install_isaaclab3_compat()
 
 from isaaclab.utils import configclass  # noqa: E402
 
+from isaacsimenvs.tasks.cloth.backends.vbd.cloth_cfg import VbdClothCfg  # noqa: E402
 from isaacsimenvs.tasks.cloth.env_cfg import ClothEnvCfg  # noqa: E402
 
 __all__ = ["NewtonSolverCfg", "VbdClothEnvCfg"]
@@ -171,6 +172,7 @@ class NewtonSolverCfg:
 class VbdClothEnvCfg(ClothEnvCfg):
     """The fold task with a VBD cloth sheet, on Newton."""
 
+    cloth: VbdClothCfg = VbdClothCfg()
     newton: NewtonSolverCfg = NewtonSolverCfg()
 
     use_gravcomp: bool = True

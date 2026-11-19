@@ -219,6 +219,8 @@ def main() -> None:
         # `segments`.
         cable = getattr(inner.cfg, "cable", None)
         cloth = getattr(inner.cfg, "cloth", None)
+        if not hasattr(cloth, "vbd_iterations"):  # the rigid pool's sheet: no particles to report
+            cloth = None
         if cable is not None:
             result.update(
                 segments=int(cable.segments),

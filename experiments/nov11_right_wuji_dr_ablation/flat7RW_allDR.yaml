@@ -7,5 +7,3 @@ dr: [sysid, friction, contact_shell, proprio_noise, object_points, action_delay,
 env:
   reset:
     table_reset_z_range: 0.015
-  cloth:
-    soft_contact_mu: 0.265

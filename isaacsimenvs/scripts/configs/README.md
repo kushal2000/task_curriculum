@@ -31,8 +31,8 @@ A run's config is composed in this order; each layer overrides the ones before i
 base: rigid_cloth_right_wuji
 dr: [sysid, friction, contact_shell, proprio_noise, object_points, action_delay, pd_gains, action_noise, hinge_mass]
 env:
-  cloth:
-    soft_contact_mu: 0.265        # what no block covers
+  reset:
+    table_reset_z_range: 0.015    # what no block covers
 ```
 
 `--experiment` takes a name in `runs/` or a path (`experiments/<study>/<name>.yaml`). A `base:` is

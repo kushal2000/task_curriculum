@@ -40,7 +40,9 @@ CLOTH_CFG = [
     "isaacsimenvs/tasks/cloth/mdp/tracker_cfg.py",
 ]
 RIGID_CLOTH_CFG = ["isaacsimenvs/tasks/cloth/backends/rigid/config.py", *CLOTH_CFG]
-VBD_CLOTH_CFG = ["isaacsimenvs/tasks/cloth/backends/vbd/config.py", *CLOTH_CFG]
+VBD_CLOTH_CFG = [
+    "isaacsimenvs/tasks/cloth/backends/vbd/config.py", "isaacsimenvs/tasks/cloth/backends/vbd/cloth_cfg.py", *CLOTH_CFG,
+]
 
 def _collect_classes(modules: list[str]) -> dict:
     classes: dict[str, tuple] = {}

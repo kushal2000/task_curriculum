@@ -16,10 +16,12 @@ from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
 from isaacsimenvs.tasks.cloth.env_cfg import AssetsCfg, ClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 
-__all__ = ["FoldPoolCfg", "PhysxChainCfg", "RigidClothCfg", "RigidClothEnvCfg", "RigidClothRandomizationCfg"]
+__all__ = ["CLOTH_FOLD_LIFT", "FoldPoolCfg", "PhysxChainCfg", "RigidClothCfg", "RigidClothEnvCfg", "RigidClothRandomizationCfg"]
 
 #: The VBD cloth's own friction and the shapes' it meets (Newton mixes them by geometric mean).
 _CLOTH_MU, _TABLE_MU, _FINGERTIP_MU = 0.25, 0.5, 1.5
+#: The VBD cloth's fold-target lift [m]: its self-contact radius (``VbdClothCfg.self_contact_radius``).
+CLOTH_FOLD_LIFT = 0.002
 
 
 @configclass
@@ -167,7 +169,7 @@ class RigidClothCfg:
 
     density: float = 2.0
     """Surface density [kg/m^2], PER AREA -- the same number and the same units as
-    ``ClothCfg.density``, so the two manipulands have the same total mass (20 g for a 100 mm sheet).
+    ``VbdClothCfg.density``, so the two manipulands have the same total mass (20 g for a 100 mm sheet).
     Split across a shape's plates in proportion to their areas (``assets.write_shape_usd``)."""
 
     joint_armature: float = 1.0e-5
@@ -269,8 +271,8 @@ class FoldPoolCfg:
     """Relative draw probabilities, one per shape. ``None`` is uniform."""
 
     fold_lift_from_ply_gap: bool = True
-    """Lift the fold target by the pool's ply gap (0 mm for mid-plane hinges) instead of the cloth's
-    ``self_contact_radius`` (2 mm). The gap must agree across the pool: the target is built once for
+    """Lift the fold target by the pool's ply gap (0 mm for mid-plane hinges) instead of the VBD
+    cloth's (``CLOTH_FOLD_LIFT``, its self-contact radius, 2 mm). The gap must agree across the pool: the target is built once for
     every env."""
 
     park_distance: float = 3.0

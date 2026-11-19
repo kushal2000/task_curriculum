@@ -130,9 +130,9 @@ def _cloth_overlays():
 
 def test_yaml_numbers_are_numbers():
     """YAML 1.1 parses `1.0e2` as a STRING -- the exponent needs a sign. Caught this in review."""
-    from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
 
-    defaults = ClothCfg()
+    defaults = VbdClothEnvCfg().cloth  # every cloth field (the rigid pool's are a subset)
     for path, block in _cloth_overlays():
         for key, value in block.items():
             default = getattr(defaults, key, None)

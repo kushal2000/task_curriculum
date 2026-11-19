@@ -114,7 +114,7 @@ class VbdBackend(ClothBackend):
 
         Runs at the end of the scene setup, before replication -- which is also when Newton imports
         the stage: a mesh authored after that point is invisible to the solver."""
-        # Re-validate here, not only in `ClothCfg.__post_init__`. Hydra constructs the dataclass
+        # Re-validate here, not only in `VbdClothCfg.__post_init__`. Hydra constructs the dataclass
         # with its DEFAULTS -- which is when `__post_init__` runs and passes -- and only then
         # assigns the CLI overrides onto the instance. So `env.cloth.thickness=0.03` walks straight
         # past the thickness/spacing guard: it ran against thickness 0.012 and never saw 0.03.

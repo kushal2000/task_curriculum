@@ -7,8 +7,6 @@ dr: [sysid, friction, contact_shell, proprio_noise, action_delay, pd_gains]
 env:
   reset:
     table_reset_z_range: 0.015
-  cloth:
-    soft_contact_mu: 0.265
   domain_randomization:
     delay_mode: per_step
     point_dr_mode: simple

@@ -1,6 +1,5 @@
 # flat7FlexivWujiRHL: the base recipe on the identified hand (no hand DR), with the 11-10 contact
-# frictions (no friction DR), the 5 mm contact shell, the fabric-release cloth mu and table-height DR
-# +-1.5 cm (the kinematic table moves in z at every reset; the base stays put, so the policy cannot see
+# frictions (no friction DR), the 5 mm contact shell and table-height DR +-1.5 cm (the kinematic table moves in z at every reset; the base stays put, so the policy cannot see
 # it). The control for flat7FWRHL_dA / _dB.
 base: rigid_cloth_right_wuji
 dr: [contact_shell]
@@ -9,9 +8,6 @@ env:
   robot_setup: flexiv_wuji_right_real    # sysid's robot, without its DR
   reset:
     table_reset_z_range: 0.015
-  cloth:
-    # Fabric-release value (cotton / napkin / denim / chiffon 0.265); VBD only, unused on PhysX.
-    soft_contact_mu: 0.265
   assets:                                # friction's centres, without its DR
     finger_tip_friction: 0.5
     table_friction: 1.0

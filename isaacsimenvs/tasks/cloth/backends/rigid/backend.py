@@ -24,7 +24,7 @@ from isaaclab.utils.math import quat_from_matrix
 from isaacsimenvs.tasks.cloth.backends.base import ClothBackend, reset_yaw
 from isaacsimenvs.tasks.cloth.backends.rigid import checks, contacts
 from isaacsimenvs.tasks.cloth.backends.rigid import scene as pool_scene
-from isaacsimenvs.tasks.cloth.backends.rigid.config import RigidClothEnvCfg
+from isaacsimenvs.tasks.cloth.backends.rigid.config import CLOTH_FOLD_LIFT, RigidClothEnvCfg
 from isaacsimenvs.tasks.cloth.backends.rigid.physx import DEFAULT_MU, size_gpu_buffers
 from isaacsimenvs.tasks.cloth.backends.rigid.randomization import PlateRandomization
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
@@ -132,6 +132,7 @@ class RigidBackend(ClothBackend):
         """The pool's grid; each env's at its own size. The fold lift is the pool's ply gap -- 0 mm
         for mid-plane hinges."""
         c = self.cfg.cloth
+        lift = CLOTH_FOLD_LIFT
         if self.cfg.fold_pool.fold_lift_from_ply_gap:
             gaps = {sh.ply_gap for sh in self.shapes}
             if len(gaps) != 1:
@@ -141,18 +142,17 @@ class RigidBackend(ClothBackend):
                 )
             gap = gaps.pop()
             print(
-                f"[fold_pool] fold target lift {c.self_contact_radius * 1e3:.2f} -> "
-                f"{gap * 1e3:.2f} mm (the pool's ply gap)",
+                f"[fold_pool] fold target lift {lift * 1e3:.2f} -> {gap * 1e3:.2f} mm (the pool's ply gap)",
                 flush=True,
             )
-            c.self_contact_radius = gap
+            lift = gap
         return SheetLayout(
             rest_local=self.rest_local,
             keypoint_idx=list(self.keypoint_idx),
             resolution=int(c.resolution),
             fold_axis=c.fold_axis,
             size=float(c.size),
-            fold_lift=c.self_contact_radius,
+            fold_lift=lift,
             object_scale=self.object_scale,
             xy_scale=self.xy_scale,
             env_size=self.env_size,
