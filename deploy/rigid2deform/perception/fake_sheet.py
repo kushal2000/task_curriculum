@@ -9,7 +9,7 @@ moving half is turned up about the hinge by fold.fake_fold_deg.
                   lie in that sheet (sheets/rigid_plates.py fake_message), as
                   deploy/nodes/perception.py does.
   cotracker:      object_points, the points perception.cotracker.mode tracks, all seen
-                  (sheets/cloth_points.py fake_message), as cloth_tracker.py does.
+                  (sheets/cloth_points.py fake_message), as cotracker_node.py does.
 """
 
 import sys

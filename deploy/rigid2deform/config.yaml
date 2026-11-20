@@ -18,7 +18,7 @@
 
 task: fold                  # fold: turn one plate of a taped two-plate sheet over onto the other (fold.py)
 spec_path: deploy/rigid2deform/spec/spec_flexiv_wuji_right_fold.json   # robot URDF next to it
-mode: pc_label              # pc_label | pc_goal (point cloud: perception/cloud_camera.py, the reference | the goal)
+mode: pc_label              # pc_label | pc_goal (point cloud: perception/pc_node.py, the reference | the goal)
                             #   | foundationpose (object.name: two plates) | cotracker (object.name=[cloth]).
                             #   Picks the perception (perception/main.py) and, with policy.checkpoint null,
                             #   the network (policy.default_checkpoint); see mode.py. Give run.py and
@@ -33,7 +33,7 @@ bus:
   joint_state_port: 5561    # robot.py -> joint_state
   policy_port: 5562         # policy.py -> joint_target, goal_pose
   camera_frame_port: 5563   # perception/main.py (plates and cloth) -> camera_frame (every camera frame, raw, for the recorder)
-  point_cloud_port: 5564    # perception/main.py (point cloud: perception/cloud_camera.py) -> point_cloud (binary, deploy/utils/link.py)
+  point_cloud_port: 5564    # perception/main.py (point cloud: perception/pc_node.py) -> point_cloud (binary, deploy/utils/link.py)
 
 # ----------------------------------------------------------------------------------------- run
 # run.py: robot.py in robot.mode, + viewer.py / recorder.py, + policy.py in policy mode
@@ -125,7 +125,7 @@ robot:
 #   foundationpose  [moving plate, stationary plate]: two rigid plates taped along one edge;
 #                   perception/main.py runs deploy/nodes/perception.py: one box to click per plate, in this order
 #   cotracker       [cloth]: a cloth, points on it tracked by CoTracker (perception.cotracker);
-#                   perception/main.py runs perception/cloth_tracker.py: click the points in its window (sheets/cloth_points.py)
+#                   perception/main.py runs perception/cotracker_node.py: click the points in its window (sheets/cloth_points.py)
 object:
   name: [plate5_brown, plate5_white]
 
@@ -245,10 +245,10 @@ perception:
   image_jpeg_quality: 80
   frame_stream: true        # also send every camera frame raw (camera_frame) for recorder.py record.camera (cloth too)
 
-  # cotracker (perception/cloth_tracker.py, in the cotracker environment): CoTracker3 online on the same camera
+  # cotracker (perception/cotracker_node.py, in the cotracker environment): CoTracker3 online on the same camera
   # (camera_serial / extrinsics / camera_width / camera_height / camera_fps above; image_hz for the viewer)
   cotracker:
-    # mode and sigma are perception/cloth_tracker.py's: they go out with object_points and the policy uses those, so
+    # mode and sigma are perception/cotracker_node.py's: they go out with object_points and the policy uses those, so
     # give them to perception/main.py only (run.py's are not read; fake perception sends its own)
     mode: grid              # what you click and how the points become the grid (sheets/cloth_points.py):
                             #   grid: the 4 corners, the 49 grid points tracked | kp8: 8 points, the keypoints
@@ -262,7 +262,7 @@ perception:
     iters: 4                # refinement iterations per tracker run (the model's own: 6; 4 is ~30% faster,
                             #   ~0.4 px worse on average)
     compile: false          # torch.compile the refinement: 3-4 ms faster with one camera, no gain with two
-                            #   in parallel (perception/stereo_tracker.py); ~2 s to compile at start
+                            #   in parallel (perception/cotracker_stereo_node.py); ~2 s to compile at start
     auto_points: 30         # fit: how many points `a` adds
     sigma: 0.25             # fit: the moving least squares width, x the side (0 = one rigid fit per half)
     max_age_s: 0.35         # policy.py: older object_points = lost (results come in 8-frame batches:
@@ -270,7 +270,7 @@ perception:
     max_lost_s: null        # a half with < 3 points seen (occluded): the policy keeps observing the last good
                             #   particles until a frame fits again; null = wait for ever, a number = then stop
     save_dir: null          # a directory: also an overlay mp4 + npz per run (null: only the bus / recorder)
-    # perception/stereo_tracker.py only: a second camera; A's clicks carried into it (the cloth's plane), matched pixels triangulated
+    # perception/cotracker_stereo_node.py only: a second camera; A's clicks carried into it (the cloth's plane), matched pixels triangulated
     stereo_extrinsics: deploy/calibration/extrinsics/right_camera_nov10.json   # camera B (its camera_serial picks it)
     stereo_rate_hz: 30.0      # the loop: each step takes both cameras' newest frames, tracks, triangulates and
                               #   publishes; slower if a step takes longer (both trackers ~34 ms on the 5090)
@@ -282,9 +282,9 @@ perception:
     stereo_align: true        # move camera B (position only) so A's points project onto B's at the start;
                               #   false = B's calibration as it is (13 px off: nothing triangulates)
 
-  # pointcloud (perception/cloud_camera.py, a point-cloud policy's perception; in the foundationstereo environment):
+  # pointcloud (perception/pc_node.py, a point-cloud policy's perception; in the foundationstereo environment):
   # both D415s -> depth -> base frame -> training's box -> no flying pixels, no table -> merged -> voxels
-  # -> at most 1024 random points (cloud_obs.N_POINTS) -> point_cloud. camera_width / camera_height /
+  # -> at most 1024 random points (pc_obs.N_POINTS) -> point_cloud. camera_width / camera_height /
   # camera_fps, image_hz, frame_stream above apply (camera_image and camera_frame: the first camera).
   pointcloud:
     depth: foundationstereo   # raw: the D415's own depth through raw_filters | foundationstereo: FoundationStereo
@@ -306,7 +306,7 @@ perception:
     # table_band_m 0.03, not 0.01 (Nov 19): next to a hand or an arm close over the board, raw depth reads
     # the black board 1-3 cm too high, in dense patches (15 of the 1024 sent points; 2 cm: 4, 3 cm: 0). The
     # cost: the robot hand's black parts (11-35 % of its pixels) vanish below 3 cm
-    table_band_m: 0.03        # a point this close above the table top (cloud_obs: 0.33 m above the base; the
+    table_band_m: 0.03        # a point this close above the table top (pc_obs: 0.33 m above the base; the
                               #   real one: 0.328 at the box centre, Nov 17) or below it, and black, is the
     table_dark_max: 100       #   table: dropped (training's cloud has no table). Black = chroma (brightest -
     table_grey_max: 140       #   darkest RGB channel) <= table_chroma_max, and dark (brightest channel <=
@@ -330,7 +330,7 @@ perception:
                               #   the black board (above table_band_m, so the colour test misses it) and its
                               #   flying pixels around the hand: Nov 19, raw 11 unsteady points of the 1024
                               #   (foundationstereo 2). ~7 ms a step
-    ref_plane_m: 0.015        # the reference / goal (perception/cloud_reference.py, at the start): the cloth = the points
+    ref_plane_m: 0.015        # the reference / goal (perception/pc_ref_goal.py, at the start): the cloth = the points
                               #   at most this above training's table top (0.33; a hand above the cloth is
                               #   not cloth), the connected piece under the click
 

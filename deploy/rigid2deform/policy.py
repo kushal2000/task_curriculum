@@ -16,14 +16,14 @@ object_kp / goal_kp (4, 3) (the observed keypoints and their goals, base frame) 
 and recorder.
 
 task=fold, a point-cloud checkpoint (run_fold_cloud): a distilled point-cloud student. Its perception
-(perception/cloud_camera.py) sends point_cloud: the live cloud, at most 1024 points already sampled, base frame,
+(perception/pc_node.py) sends point_cloud: the live cloud, at most 1024 points already sampled, base frame,
 t = its older camera frame; and in every message the same non-live group, taken once at the start, which
-one the checkpoint's mode says (cloud_obs.mode_of):
+one the checkpoint's mode says (pc_obs.mode_of):
   label  the reference, the flat cloth alone (clicked corners -> each point's half): ref_xyz (R <= 192, 3)
          base frame, ref_moving (R,) bool (True = on the half that folds over)
   goal   the goal, the sheet folded by hand and photographed before the run (then unfolded where it
          was): goal_xyz (R <= 192, 3) base frame
-Each step: build_proprio (103) + cloud_obs.featurize (live + that group, which the network gets only
+Each step: build_proprio (103) + pc_obs.featurize (live + that group, which the network gets only
 from step pc_args.ref_step on, 12: training masked it before) -> the network -> action_to_targets.
 There is no success test (no tracked sheet): the run stops on timeout (fold.timeout_steps),
 run.duration_s, a safety trip, or a stale joint_state / point_cloud (perception.max_age_s). Publishes
@@ -42,7 +42,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))    # repo root, for deploy.*
-from deploy.rigid2deform import cloud_obs                                                            # noqa: E402
+from deploy.rigid2deform import pc_obs                                                            # noqa: E402
 from deploy.rigid2deform.mode import cloud_mode, kind_of, resolve                                  # noqa: E402
 from deploy.rigid2deform.fold import fold_geometry, observe, score                                  # noqa: E402
 from deploy.rigid2deform.sheets import sheet_perception, sheet_source                                                 # noqa: E402
@@ -167,16 +167,16 @@ def run_fold_keypoints(cfg, spec, model, net, pub) -> None:
 
 
 def non_live_group(msg: dict, pc: dict) -> dict:
-    """point_cloud's reference (mode label) or goal (mode goal), as cloud_obs.featurize's keyword arguments
+    """point_cloud's reference (mode label) or goal (mode goal), as pc_obs.featurize's keyword arguments
     ("group"), with "centre" (where the moving half lands, base frame) and "describe"; SystemExit if the
     message does not carry it."""
     def points(key: str) -> np.ndarray:
         xyz = np.asarray(msg[key], dtype=np.float64).reshape(-1, 3)
-        if not 0 < len(xyz) <= cloud_obs.N_REF:
-            raise SystemExit(f"[policy] point_cloud {key}: {len(xyz)} points (want 1 to {cloud_obs.N_REF})")
+        if not 0 < len(xyz) <= pc_obs.N_REF:
+            raise SystemExit(f"[policy] point_cloud {key}: {len(xyz)} points (want 1 to {pc_obs.N_REF})")
         return xyz
 
-    if cloud_obs.mode_of(pc) == "label":
+    if pc_obs.mode_of(pc) == "label":
         if "ref_xyz" not in msg or "ref_moving" not in msg:
             raise SystemExit("[policy] point_cloud carries no reference (ref_xyz, ref_moving), which this "
                              "mode label checkpoint needs: the perception node takes it at its start (click the "
@@ -217,7 +217,7 @@ def run_fold_cloud(cfg, spec, model, net, pub) -> None:
     non_live = non_live_group(cloud, pc)   # frozen for the run: taken once, at the start
     ref_seq = cloud["seq"]
     centre, name = non_live["centre"], non_live["name"]   # goal_pose: where the moving half lands
-    print(f"[policy] fold (point cloud, mode {cloud_obs.mode_of(pc)}): {non_live['describe']}, the network gets it from "
+    print(f"[policy] fold (point cloud, mode {pc_obs.mode_of(pc)}): {non_live['describe']}, the network gets it from "
           f"step {ref_step}; live cloud {len(cloud['xyz'])} points", flush=True)
 
     prev_targets = joints["q"].copy()
@@ -250,7 +250,7 @@ def run_fold_cloud(cfg, spec, model, net, pub) -> None:
             # 2. observation -> network -> targets
             proprio = build_proprio(spec, model, joints["q"], joints["dq"], prev_targets)
             group = non_live["group"] if step >= ref_step else {}
-            points, mask = cloud_obs.featurize(cloud["xyz"], pc, **group)
+            points, mask = pc_obs.featurize(cloud["xyz"], pc, **group)
             action = net.act((proprio, points, mask))
             targets = action_to_targets(spec, prev_targets, action)
             prev_targets = targets
@@ -261,11 +261,11 @@ def run_fold_cloud(cfg, spec, model, net, pub) -> None:
             send(pub, "joint_target", {"seq": step, "t": now, "targets": targets})
             send(pub, "goal_pose", {
                 "seq": step, "t": now, "goal_index": 0, "pos": centre, "quat_wxyz": IDENTITY,
-                "cloud_points": int(mask[:cloud_obs.N_POINTS].sum()), "cloud_seq": cloud["seq"],
+                "cloud_points": int(mask[:pc_obs.N_POINTS].sum()), "cloud_seq": cloud["seq"],
                 "cloud_age": age(cloud), "reference_in": bool(step >= ref_step), "reference_seq": ref_seq,
-                "status": (f"point-cloud policy · live cloud **{int(mask[:cloud_obs.N_POINTS].sum())}** points, "
+                "status": (f"point-cloud policy · live cloud **{int(mask[:pc_obs.N_POINTS].sum())}** points, "
                            f"{1000 * age(cloud):.0f} ms old · {name} "
-                           f"{int(mask[cloud_obs.N_POINTS:].sum()) if step >= ref_step else 0} points "
+                           f"{int(mask[pc_obs.N_POINTS:].sum()) if step >= ref_step else 0} points "
                            f"({'in' if step >= ref_step else f'from step {ref_step}'}) · no success test")})
 
             t_next = wait_step(t_next, dt, step)   # -> 60 Hz
@@ -303,10 +303,10 @@ def check(cfg) -> None:
         raise SystemExit(f"[policy] a point-cloud policy needs bus.{CLOUD_PORT} (its perception's port)")
     spec = load_spec(repo_path(cfg.spec_path))
     net = load_policy_net(cfg, num_actions=len(spec["joint_names"]), kinds=("pointcloud",))
-    cloud_obs.check_supported(net.pc_args, net.point_dim)   # a cloud cloud_obs.py builds
-    if cloud_obs.mode_of(net.pc_args) != cloud_mode(mode):
-        raise SystemExit(f"[policy] mode={mode}, but {cfg.policy.checkpoint} is a {cloud_obs.mode_of(net.pc_args)} "
-                         f"network: give mode=pc_{cloud_obs.mode_of(net.pc_args)} or policy.checkpoint=null")
+    pc_obs.check_supported(net.pc_args, net.point_dim)   # a cloud pc_obs.py builds
+    if pc_obs.mode_of(net.pc_args) != cloud_mode(mode):
+        raise SystemExit(f"[policy] mode={mode}, but {cfg.policy.checkpoint} is a {pc_obs.mode_of(net.pc_args)} "
+                         f"network: give mode=pc_{pc_obs.mode_of(net.pc_args)} or policy.checkpoint=null")
 
 
 def main() -> None:

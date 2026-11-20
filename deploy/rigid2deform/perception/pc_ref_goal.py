@@ -1,6 +1,6 @@
-"""The point-cloud fold policies' non-live group of points, taken once at the start: cloud_camera.py runs
+"""The point-cloud fold policies' non-live group of points, taken once at the start: pc_node.py runs
 `pick` before it streams, and every point_cloud message then carries the same one. Which one the
-checkpoint's mode says (cloud_obs.mode_of); policy.py feeds it to the network from step pc_args.ref_step (12) on, as
+checkpoint's mode says (pc_obs.mode_of); policy.py feeds it to the network from step pc_args.ref_step (12) on, as
 training did. To take it again, restart the node (and the run: the policy keeps the first message's).
 
 Both come from the FLAT cloth and one click (training's sheet is square, at any heading, folded along its
@@ -44,10 +44,10 @@ from dataclasses import dataclass, field
 import cv2
 import numpy as np
 
-from deploy.rigid2deform.perception.cloth_tracker import BLUE, GREEN, ORANGE, RED, WHITE, YELLOW, panel, pt
-from deploy.rigid2deform.cloud_obs import MODES, N_REF, ROOT_ENV, TABLE_Z_ENV
+from deploy.rigid2deform.perception.cotracker_node import BLUE, GREEN, ORANGE, RED, WHITE, YELLOW, panel, pt
+from deploy.rigid2deform.pc_obs import MODES, N_REF, ROOT_ENV, TABLE_Z_ENV
 
-WINDOW = "cloud_reference"
+WINDOW = "pc_ref_goal"
 TABLE_Z_BASE = TABLE_Z_ENV - ROOT_ENV[2]        # 0.33: training's table top above the base
 SHEET_CENTRE_BASE = np.array([0.0, -0.51])      # training's sheet centre, robot base frame (x, y)
 CENTRE_WARN_M = 0.10
@@ -240,7 +240,7 @@ def pick(cam, cams: list, cloud_of, cfg, mode: str, rng: np.random.Generator) ->
     from deploy.utils.spec import load_spec
 
     if mode not in MODES:
-        raise SystemExit(f"[cloud_reference] mode {mode}: this node takes {' | '.join(MODES)}")
+        raise SystemExit(f"[pc_ref_goal] mode {mode}: this node takes {' | '.join(MODES)}")
     size_range = load_spec(repo_path(cfg.spec_path))["fold"]["size_range"]
     cfg_pc = cfg.perception.pointcloud
     st = {"frozen": None, "cloud": None, "low_uv": None, "taken": None}
@@ -253,12 +253,12 @@ def pick(cam, cams: list, cloud_of, cfg, mode: str, rng: np.random.Generator) ->
         elif event == cv2.EVENT_LBUTTONDOWN:
             t = take(mode, cam, st["cloud"], (float(x), float(y)), cfg_pc, size_range, rng)
             st["taken"] = t
-            print(f"[cloud_reference] {t.error or t.summary()}"
-                  + "".join(f"\n[cloud_reference]   WARNING: {w}" for w in t.warnings), flush=True)
+            print(f"[pc_ref_goal] {t.error or t.summary()}"
+                  + "".join(f"\n[pc_ref_goal]   WARNING: {w}" for w in t.warnings), flush=True)
 
     cv2.namedWindow(WINDOW)
     cv2.setMouseCallback(WINDOW, on_mouse)
-    print(f"[cloud_reference] mode {mode}. In the window: put the cloth flat (robot at home, hands away, "
+    print(f"[pc_ref_goal] mode {mode}. In the window: put the cloth flat (robot at home, hands away, "
           "nothing touching it), SPACE freezes, click once on the half that folds over, SPACE accepts", flush=True)
     try:
         while True:
@@ -279,11 +279,11 @@ def pick(cam, cams: list, cloud_of, cfg, mode: str, rng: np.random.Generator) ->
                     low = st["cloud"][table_height(st["cloud"], float(cfg_pc.ref_plane_m))]
                     uv, front = project(cam, low)
                     st["low_uv"], st["taken"] = uv[front], None
-                    print(f"[cloud_reference] frozen: {len(st['cloud'])} points, {len(low)} at table height", flush=True)
+                    print(f"[pc_ref_goal] frozen: {len(st['cloud'])} points, {len(low)} at table height", flush=True)
                 elif st["taken"] is None:
-                    print("[cloud_reference] click on the half that folds over first", flush=True)
+                    print("[pc_ref_goal] click on the half that folds over first", flush=True)
                 elif st["taken"].error:
-                    print(f"[cloud_reference] cannot use it: {st['taken'].error}", flush=True)
+                    print(f"[pc_ref_goal] cannot use it: {st['taken'].error}", flush=True)
                 else:
                     return st["taken"]
             elif key == ord("r"):

@@ -7,12 +7,12 @@
 
 | mode           | perception.source=camera                                      | fake (no camera, any env)  |
 |----------------|---------------------------------------------------------------|----------------------------|
-| pc_label       | cloud_camera.py: both D415s -> point_cloud; at its start the  | fake_cloud.py: a still     |
+| pc_label       | pc_node.py: both D415s -> point_cloud; at its start the       | pc_fake_node.py: a still   |
 | pc_goal        |   flat cloth, one click (the reference | the goal); the        |   flat sheet's cloud       |
 |                |   foundationstereo environment (its window)                   |                            |
 | foundationpose | deploy/nodes/perception.py: one box to click per plate, the   | fake_sheet.py: a still     |
 |                |   moving one first (the FoundationPose environment)           |   sheet                    |
-| cotracker      | cloth_tracker.py: click the points in its window, then it     | fake_sheet.py              |
+| cotracker      | cotracker_node.py: click the points in its window, then it    | fake_sheet.py              |
 |                |   tracks without one (the cotracker environment)              |                            |
 
 Give run.py the same mode (both read config.yaml; policy.py refuses a network of another kind). For
@@ -41,11 +41,11 @@ def main() -> None:
     print(f"[perception] mode={mode}" + (" (fake)" if fake else ""), flush=True)
     if kind_of(mode) == "pointcloud":
         if fake:
-            from deploy.rigid2deform.perception import fake_cloud
-            fake_cloud.main()
+            from deploy.rigid2deform.perception import pc_fake_node
+            pc_fake_node.main()
         else:
-            from deploy.rigid2deform.perception import cloud_camera
-            cloud_camera.main()
+            from deploy.rigid2deform.perception import pc_node
+            pc_node.main()
         return
     sheet_source(cfg).check(cfg)
     if sheet_perception(cfg) != mode:
@@ -59,8 +59,8 @@ def main() -> None:
         sys.argv.insert(1, f"config={CONFIG.relative_to(REPO)}")   # the shared node reads its config from argv
         perception.main()
     else:
-        from deploy.rigid2deform.perception import cloth_tracker
-        cloth_tracker.main()
+        from deploy.rigid2deform.perception import cotracker_node
+        cotracker_node.main()
 
 if __name__ == "__main__":
     main()

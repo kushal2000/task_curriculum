@@ -17,7 +17,7 @@ T_color_depth (from the device) carries the points over:
     p_depth = backproject(depth, K, keep)                   # (N, 3) in the depth sensor's frame
     p_base = transform(T_base_cam @ cam.T_color_depth, p_depth)
     rgb, seen = color_at(f.color, cam.K_color, transform(cam.T_color_depth, p_depth))
-    # every pixel at once (rigid2deform/perception/cloud_camera.py): rays = pixel_rays(K, depth.shape, R_base_depth) once, then
+    # every pixel at once (rigid2deform/perception/pc_node.py): rays = pixel_rays(K, depth.shape, R_base_depth) once, then
     # p_all = t_base_depth + rays * depth[..., None]
 
 Needs numpy + pyrealsense2 (+ cv2, torch and tensorrt for FoundationStereo, in its environment).

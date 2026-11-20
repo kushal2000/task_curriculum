@@ -14,8 +14,8 @@ parts:
 | [policy.py](policy.py) | the policy loop of each task and kind of network (`TASKS`): keypoints: perception → sheet particles → observation → LSTM → joint targets; point cloud: point_cloud (live cloud + the reference taken at the start) → proprio + cloud → PointNet + LSTM → joint targets |
 | [fold.py](fold.py) | task=fold: the sheet's grid points → what the policy observes, and the success test |
 | [sheets/](sheets/__init__.py) | where the grid points come from, by the object's `perception`: `rigid_plates.py` (two FoundationPose plates), `cloth_points.py` (CoTracker cloth: placeholder) |
-| [perception/](perception/__init__.py) | the perception nodes (each in its camera environment). [main.py](perception/main.py) is the entry: it starts the node config.yaml's `mode` needs ([mode.py](mode.py): `pc_label` / `pc_goal` / `foundationpose` / `cotracker`; FoundationPose: `deploy/nodes/perception.py`; CoTracker: `perception/cloth_tracker.py` / `perception/stereo_tracker.py`; point cloud: `perception/cloud_camera.py`, its start `perception/cloud_reference.py`), or with `perception.source=fake` `fake_sheet.py` / `fake_cloud.py` (no camera) |
-| [cloud_obs.py](cloud_obs.py) | the point-cloud policies' cloud input: base-frame points → the network's points + mask (the network: `deploy/utils/pointcloud_net.py`) |
+| [perception/](perception/__init__.py) | the perception nodes (each in its camera environment). [main.py](perception/main.py) is the entry: it starts the node config.yaml's `mode` needs ([mode.py](mode.py): `pc_label` / `pc_goal` / `foundationpose` / `cotracker`; FoundationPose: `deploy/nodes/perception.py`; CoTracker: `perception/cotracker_node.py` / `perception/cotracker_stereo_node.py`; point cloud: `perception/pc_node.py`, its start `perception/pc_ref_goal.py`), or with `perception.source=fake` `fake_sheet.py` / `pc_fake_node.py` (no camera) |
+| [pc_obs.py](pc_obs.py) | the point-cloud policies' cloud input: base-frame points → the network's points + mask (the network: `deploy/utils/pointcloud_net.py`) |
 | [config.yaml](config.yaml) | every setting, complete (not an overlay of SimToolReal's) |
 | `spec/` | the fold spec json + the robot URDF with the real joint limits |
 | `objects/` | the plate meshes |
@@ -34,10 +34,10 @@ the network (`policy.default_checkpoint`):
 
 | mode | perception | default network |
 |---|---|---|
-| `pc_label` | point cloud (`perception/cloud_camera.py`), the reference | `policy/pc/rigidcloth_pc_label_noiseDR_dagger.pth` |
+| `pc_label` | point cloud (`perception/pc_node.py`), the reference | `policy/pc/rigidcloth_pc_label_noiseDR_dagger.pth` |
 | `pc_goal` | point cloud, the goal | `policy/pc/rigidcloth_pc_goal_dagger.pth` |
 | `foundationpose` | two plates (`deploy/nodes/perception.py`) | `policy/flat7RW_base.pth` |
-| `cotracker` | a cloth, `object.name=[cloth]` (`perception/cloth_tracker.py`) | `policy/flat7RW_base.pth` |
+| `cotracker` | a cloth, `object.name=[cloth]` (`perception/cotracker_node.py`) | `policy/flat7RW_base.pth` |
 
 Give perception/main.py and run.py the same `mode` (or set it in config.yaml). A `policy.checkpoint` given
 on the command line must be of the mode's kind (and point-cloud mode): policy.py refuses another.
@@ -55,8 +55,8 @@ for every sheet.
 | `cotracker` | `[cloth]` | `deploy/nodes/point_tracker.py` (`object_points`): not written yet | `fold.sheet_size` (required; more with the node) |
 
 `mode=pc_label` / `pc_goal` ignores this table: perception/main.py runs
-perception/cloud_camera.py instead, in the foundationstereo environment for either `depth` (it opens a window:
-`.venv_deploy`'s OpenCV cannot); `perception.source=fake`: `perception/fake_cloud.py`, a still flat sheet.
+perception/pc_node.py instead, in the foundationstereo environment for either `depth` (it opens a window:
+`.venv_deploy`'s OpenCV cannot); `perception.source=fake`: `perception/pc_fake_node.py`, a still flat sheet.
 
 At its start, the non-live group of points the network gets from step 12 on, which the mode says
 (`pc_label`: the reference | `pc_goal`: the goal; the network's own, `pc_args.goal`, training's names
@@ -169,8 +169,8 @@ share every one of these (`export_fold_spec.py --compare`):
 | script | what | runs in |
 |---|---|---|
 | `checks/export_fold_spec.py` | the fold spec from `yiboc_wuji` (task YAML + robot overlay + experiment, as train.py layers them); `--compare` diffs the five runs | `.venv_deploy`, no Isaac Sim |
-| `perception/fake_cloud.py` | a stand-in for the point-cloud perception node: a still flat sheet as point_cloud (live cloud + reference), to run the point-cloud loop in MuJoCo without cameras | `.venv_deploy` |
-| `checks/check_pointcloud_net.py` | the point-cloud networks (mode label: `rigidcloth_pc_label_noiseDR_dagger`, mode goal: `rigidcloth_pc_goal_dagger`) + `cloud_obs.py` against pc_deploy_handoff's golden files (made by the training code): the points, the actions (< 1e-4), the 103 proprio numbers, the time per step | `.venv_deploy`, no Isaac Sim |
+| `perception/pc_fake_node.py` | a stand-in for the point-cloud perception node: a still flat sheet as point_cloud (live cloud + reference), to run the point-cloud loop in MuJoCo without cameras | `.venv_deploy` |
+| `checks/check_pointcloud_net.py` | the point-cloud networks (mode label: `rigidcloth_pc_label_noiseDR_dagger`, mode goal: `rigidcloth_pc_goal_dagger`) + `pc_obs.py` against pc_deploy_handoff's golden files (made by the training code): the points, the actions (< 1e-4), the 103 proprio numbers, the time per step | `.venv_deploy`, no Isaac Sim |
 | `checks/check_fold.py` | `fold.py` against the training code's own methods (pulled from git, run with torch) on random plate sheets; the success test at 0-180°; the plate frames through random symmetric flips; the `rigid_plates` source end to end | `.venv_deploy`, no Isaac Sim |
 
 ## Adding a task or a perception

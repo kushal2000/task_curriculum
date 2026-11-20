@@ -1,4 +1,4 @@
-"""Camera B's point picking for stereo_tracker.py: an OpenCV window that finds, in camera B's image, the
+"""Camera B's point picking for cotracker_stereo_node.py: an OpenCV window that finds, in camera B's image, the
 points you clicked in camera A.
 
 How a point gets from A to B:
@@ -25,8 +25,8 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from deploy.rigid2deform.perception.cloth_tracker import GREEN, PERIMETER, RED, WHITE, YELLOW, draw_grid, panel, pt, ray_plane
-from deploy.rigid2deform.perception.stereo_geometry import cam_to_base, move_camera_onto, project, projection_matrix
+from deploy.rigid2deform.perception.cotracker_node import GREEN, PERIMETER, RED, WHITE, YELLOW, draw_grid, panel, pt, ray_plane
+from deploy.rigid2deform.perception.cotracker_stereo_geometry import cam_to_base, move_camera_onto, project, projection_matrix
 
 ALIGN_WARN_M = 0.05         # stereo_align moved B further than this: probably the wrong corners
 GREY = (160, 160, 160)
@@ -45,11 +45,11 @@ class PickResult:
 class CameraBPicker:
     """Shows A's clicked points in camera B's image and lets you fix B's 4 outer corners.
 
-    a, b: cloth_tracker.Node for each camera; A must already have its clicks and layout
+    a, b: cotracker_node.Node for each camera; A must already have its clicks and layout
     (a.start_tracking() done). T_b_calib: B's calibration as loaded. run() returns a PickResult on SPACE,
     None when you want to click A again, and raises KeyboardInterrupt on q."""
 
-    WINDOW = "stereo_tracker: camera B"
+    WINDOW = "cotracker_stereo_node: camera B"
 
     def __init__(self, a, b, T_b_calib: np.ndarray, cotracker_cfg):
         self.a, self.b, self.T_b_calib, self.cfg = a, b, T_b_calib, cotracker_cfg

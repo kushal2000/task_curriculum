@@ -15,7 +15,7 @@ Subscribes  joint_state  -> the robot, at its measured joint angles
             sim_object_pose -> a blue see-through object mesh: where the sim rollout had the object
                             (robot.mode=openloop)
             camera_image -> the camera image in the side panel (if perception sends it)
-            point_cloud  -> the policy's live cloud (a point-cloud policy; rigid2deform/perception/cloud_camera.py), light blue;
+            point_cloud  -> the policy's live cloud (a point-cloud policy; rigid2deform/perception/pc_node.py), light blue;
                             its reference, if it has one: orange the moving half, dark blue the
                             stationary one; or its goal (the folded cloth) green; the outline yellow (only with bus.point_cloud_port in the config)
 

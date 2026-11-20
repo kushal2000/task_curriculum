@@ -11,7 +11,7 @@ corners at the observed goal); goal_pos / goal_quat are then unused.
     d = keypoint_distance(spec, obj_pos, obj_quat, goal_pos, goal_quat)   # Play's success distance, m
 
 The point-cloud policies (policy_net kind pointcloud) see only the robot's own fields, 103 numbers;
-the object comes in as a point cloud instead (rigid2deform/cloud_obs.py):
+the object comes in as a point cloud instead (rigid2deform/pc_obs.py):
 
     proprio = build_proprio(spec, model, q, dq, prev_targets)
 
@@ -63,7 +63,7 @@ def keypoint_distance(spec: dict, obj_pos, obj_quat, goal_pos, goal_quat) -> flo
 def proprio_fields(spec, model, q, dq, prev_targets) -> dict:
     """The robot's own fields by name (joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot,
     fingertip_pos_rel_palm): every field of the table but the object's. The point-cloud students
-    (rigid2deform/cloud_obs.py) observe only these, besides their cloud."""
+    (rigid2deform/pc_obs.py) observe only these, besides their cloud."""
     lower, upper = spec["joint_lower"], spec["joint_upper"]
     palm_pos, palm_quat = palm_center(spec, model, q)
     return {

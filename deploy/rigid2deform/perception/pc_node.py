@@ -2,13 +2,13 @@
 
 Usually started by perception/main.py (mode pc_label | pc_goal); on its own:
 
-    ~/miniconda3/envs/foundationstereo/bin/python deploy/rigid2deform/perception/cloud_camera.py \
+    ~/miniconda3/envs/foundationstereo/bin/python deploy/rigid2deform/perception/pc_node.py \
         [mode=pc_label|pc_goal] [perception.pointcloud.depth=raw|foundationstereo]
 
 Runs in the foundationstereo environment (pyrealsense2, TensorRT, torch, cv2 with a window; + pyzmq);
 .venv_deploy's cv2 cannot open the window. Every setting: config.yaml perception.pointcloud.
 
-First the non-live group of points, which config.yaml's mode says (pc_label | pc_goal; cloud_reference.py), in a
+First the non-live group of points, which config.yaml's mode says (pc_label | pc_goal; pc_ref_goal.py), in a
 window with the first camera's image; nothing is sent before it is accepted, then every point_cloud
 message carries the same one. To take it again, restart. Either mode: put the cloth flat, SPACE
 freezes, click once on the half that folds over, SPACE accepts.
@@ -37,7 +37,7 @@ camera's newest frameset:
      Nov 19, 7 of the 1024 sent points; with 3 cm, 0.6). The arm and the hand, higher, stay
 then both cameras' points together -> one per voxel_m voxel -> no lone ones (a voxel with fewer than
 outlier_min_neighbours others within outlier_radius_m: raw depth's noise over the black board and its
-flying pixels around the hand; a surface has ~25) -> at most cloud_obs.N_POINTS (1024) at
+flying pixels around the hand; a surface has ~25) -> at most pc_obs.N_POINTS (1024) at
 random -> point_cloud (deploy/utils/link.py send_cloud; t = the older camera frame's time, so the policy
 sees how old it is). The hand and the arm stay in the cloud: training's cloud has them.
 
@@ -59,8 +59,8 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
-from deploy.rigid2deform.perception import cloud_reference                                       # noqa: E402
-from deploy.rigid2deform.cloud_obs import BOX_HI_BASE, BOX_LO_BASE, N_POINTS, ROOT_ENV, TABLE_Z_ENV   # noqa: E402
+from deploy.rigid2deform.perception import pc_ref_goal                                       # noqa: E402
+from deploy.rigid2deform.pc_obs import BOX_HI_BASE, BOX_LO_BASE, N_POINTS, ROOT_ENV, TABLE_Z_ENV   # noqa: E402
 from deploy.rigid2deform.mode import cloud_mode, resolve                               # noqa: E402
 from deploy.utils.config import load_config, repo_path                                  # noqa: E402
 from deploy.utils.depth_camera import (DepthCamera, FoundationStereo, color_at, depth_edges,  # noqa: E402
@@ -81,7 +81,7 @@ class CloudCamera:
         p, pc = cfg.perception, cfg.perception.pointcloud
         calib = json.loads(extrinsics.read_text())
         if calib.get("camera_serial") is None:
-            raise SystemExit(f"[cloud_camera] {extrinsics.name} has no camera_serial: which camera is it?")
+            raise SystemExit(f"[pc_node] {extrinsics.name} has no camera_serial: which camera is it?")
         self.T_base_cam = np.asarray(calib["T_base_cam"], dtype=float)
         self.name = extrinsics.name
         self.dev = DepthCamera(str(calib["camera_serial"]), depth, int(p.camera_width), int(p.camera_height),
@@ -145,7 +145,7 @@ class CloudCamera:
             for du in (-1, 0, 1):
                 out[np.clip(v + dv, 0, H - 1), np.clip(u + du, 0, W - 1)] = (40, 230, 60)
         if ref is not None:
-            cloud_reference.draw_reference(out, self, ref)
+            pc_ref_goal.draw_reference(out, self, ref)
         return out
 
 
@@ -172,7 +172,7 @@ def merged_cloud(cams: list, frames: list, fs, voxel_m: float, times: dict, coun
 
 
 def in_box(p: np.ndarray) -> np.ndarray:
-    """(...,) inside training's box (cloud_obs.BOX_LO_BASE .. BOX_HI_BASE, no top) for (..., 3) points known
+    """(...,) inside training's box (pc_obs.BOX_LO_BASE .. BOX_HI_BASE, no top) for (..., 3) points known
     to be finite, a component at a time (an (H, W, 3) image of points: ~1 ms instead of ~10)."""
     out = np.ones(p.shape[:-1], bool)
     for i in range(3):
@@ -212,15 +212,15 @@ def main() -> None:
     p, pc = cfg.perception, cfg.perception.pointcloud
     mode = cloud_mode(resolve(cfg))
     if mode is None:
-        raise SystemExit(f"[cloud_camera] mode={cfg.mode} is not a point-cloud mode (pc_label | pc_goal)")
+        raise SystemExit(f"[pc_node] mode={cfg.mode} is not a point-cloud mode (pc_label | pc_goal)")
     depth = str(pc.depth)
     fs = None
     if depth == "foundationstereo":
-        print(f"[cloud_camera] loading FoundationStereo ({pc.fs_engine}) ...", flush=True)
+        print(f"[pc_node] loading FoundationStereo ({pc.fs_engine}) ...", flush=True)
         fs = FoundationStereo(pc.foundationstereo_dir, pc.fs_engine)
     cams = [CloudCamera(repo_path(e), depth, cfg) for e in pc.extrinsics]
     for c in cams:
-        print(f"[cloud_camera] {c.dev.name} {c.dev.serial} ({c.name}): {p.camera_width}x{p.camera_height} at "
+        print(f"[pc_node] {c.dev.name} {c.dev.serial} ({c.name}): {p.camera_width}x{p.camera_height} at "
               f"{p.camera_fps} fps, depth {depth}"
               + (f" (filters {list(pc.raw_filters) or 'none'})" if fs is None else
                  f" (FoundationStereo {fs.width}x{fs.height}, baseline {1000 * c.dev.baseline:.1f} mm)"),
@@ -237,7 +237,7 @@ def main() -> None:
     outlier = (float(pc.outlier_radius_m), int(pc.outlier_min_neighbours))
 
     try:
-        ref = cloud_reference.pick(cams[0], cams, lambda frames: merged_cloud(cams, frames, fs, voxel_m, {}, {}, outlier),
+        ref = pc_ref_goal.pick(cams[0], cams, lambda frames: merged_cloud(cams, frames, fs, voxel_m, {}, {}, outlier),
                                    cfg, mode, rng)
     except KeyboardInterrupt:
         if stream is not None:
@@ -246,11 +246,11 @@ def main() -> None:
             c.dev.stop()
         return
     ref_fields = ref.fields()
-    print(f"[cloud_camera] {ref.summary()}", flush=True)
+    print(f"[pc_node] {ref.summary()}", flush=True)
 
     seq, last_t, t_image = 0, None, 0.0
     report = {"t": time.time(), "steps": 0, "times": {}, "counts": {}, "voxels": 0, "sent": 0, "age": 0.0}
-    print(f"[cloud_camera] point_cloud on port {cfg.bus[CLOUD_PORT]}, at most {pc.rate_hz:g} Hz, "
+    print(f"[pc_node] point_cloud on port {cfg.bus[CLOUD_PORT]}, at most {pc.rate_hz:g} Hz, "
           f"{N_POINTS} points, voxel {1000 * pc.voxel_m:g} mm. Ctrl-C stops.", flush=True)
     try:
         while True:
@@ -299,7 +299,7 @@ def print_report(report: dict, cams: list, now: float) -> None:
                                                for k in ("valid", "edges", "box", "table", "rim"))
         for c in cams)
     stale = [f"{c.name} {now - c.dev.latest().t:.1f} s" for c in cams if now - c.dev.latest().t > 0.5]
-    print(f"[cloud_camera] {report['steps'] / (now - report['t']):.1f} Hz, ms/step: {times}; "
+    print(f"[pc_node] {report['steps'] / (now - report['t']):.1f} Hz, ms/step: {times}; "
           f"age {1000 * report['age'] / n:.0f} ms; per camera (px / points): {per_cam}; "
           f"lone {report['counts'].get('lone', 0) // n}, voxels {report['voxels'] // n}, sent {report['sent'] // n}"
           + (f"; NO NEW FRAMES: {', '.join(stale)}" if stale else ""), flush=True)
