@@ -1,12 +1,9 @@
 """Record the Play policy lifting the flat eraser 10 cm in its training env, for robot.mode=openloop.
 
-Runs on the TRAINING branch's code (kushal/2026-10-30_pretraining_real), like record_sim_rollout.py.
-On the cluster: scripts/cluster/bos14_simtoolreal_lift.sh. By hand:
+Runs this repo's Play task, like record_sim_rollout.py. From the repo root, on a GPU node:
 
-    cd <branch worktree>
-    PYTHONPATH=$PWD:$PWD/rl_games .venv_isaacsim/bin/python \
-        /home/yiboc/mit/task_curriculum_deployment/deploy/simtoolreal/checks/record_lift.py --headless \
-        --checkpoint <nov6_dr.txt> --out <dir>
+    PYTHONPATH=$PWD:$PWD/rl_games .venv_isaacsim/bin/python deploy/simtoolreal/checks/record_lift.py \
+        --headless --checkpoint <nov6_dr.txt> --out docs/results/simtoolreal/lift1
 
 The scene (randomization off, as record_sim_rollout.py):
   - the object: the env's procedural eraser (a box), its size range pinned to the DexToolBench
@@ -142,10 +139,10 @@ def main() -> None:
     import torch
 
     import isaacsimenvs  # noqa: F401
-    from isaacsimenvs.eval.player import PretrainedPlayer
-    from isaacsimenvs.eval.protocol import disable_randomization
+    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
     from isaacsimenvs.tasks.play.utils import object_size_distributions as osd
-    from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
+    from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

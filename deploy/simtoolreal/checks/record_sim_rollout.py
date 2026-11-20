@@ -1,6 +1,7 @@
 """Record the Play policy in the training env, every step, for check_rec1.py; optionally compare SAPG blocks.
 
-Runs on the TRAINING branch's code (kushal/2026-10-30_pretraining_real), not this one: the env it
+Runs this repo's Play task (Isaacsimenvs-PlayFlexivWujiRightHumanLike, ported from the training branch
+kushal/2026-10-30_pretraining_real; the nov8 prior evaluates bit-identically on both), so the env it
 builds is the one the checkpoint was trained in. Randomization is off (protocol.disable_randomization:
 no obs / action / object-state delay, no noise, no impulses), but the object's start pose stays random
 as in training, and the success tolerance is pinned to training's final 0.01 m.
@@ -8,13 +9,11 @@ as in training, and the success tolerance is pinned to training's final 0.01 m.
 Every step it saves what the real loop will measure (joint angles and velocities, previous targets,
 object, goal, object scales), what the sim computed from it (the 134-dim policy observation, the palm
 and fingertip body poses, the keypoint distance and goal-hit test) and what came out (the action, the
-next joint targets). check_rec1.py runs those inputs through the deploy code. On the cluster:
-scripts/cluster/bos14_simtoolreal_record.sh. By hand:
+next joint targets). check_rec1.py runs those inputs through the deploy code. From the repo root, on a
+GPU node:
 
-    cd <branch worktree>
-    PYTHONPATH=$PWD:$PWD/rl_games .venv_isaacsim/bin/python \
-        /home/yiboc/mit/task_curriculum_deployment/deploy/simtoolreal/checks/record_sim_rollout.py --headless \
-        --checkpoint pretrained_policy/nov6_dr.pth --out <dir>
+    PYTHONPATH=$PWD:$PWD/rl_games .venv_isaacsim/bin/python deploy/simtoolreal/checks/record_sim_rollout.py \
+        --headless --checkpoint <nov6_dr.txt> --out docs/results/simtoolreal/rec1
 
 --sweep_coefs 50,40,30,20,10,0 then runs every SAPG block for --sweep_steps on all envs and reports
 goals reached and object falls per block.
@@ -57,10 +56,10 @@ def main() -> None:
     import torch
 
     import isaacsimenvs  # noqa: F401
-    from isaacsimenvs.eval.player import PretrainedPlayer
-    from isaacsimenvs.eval.protocol import disable_randomization
+    from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
+    from isaacsimenvs.scripts.evaluation.protocol import disable_randomization
     from isaacsimenvs.tasks.play.utils.object_size_distributions import OBJECT_SIZE_DISTRIBUTIONS
-    from isaacsimenvs.utils.hydra_utils import hydra_task_config_with_yaml
+    from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -148,13 +147,15 @@ def main() -> None:
         rec["object_corners"] = inner._object_collision_corners.cpu().numpy()
         rec["table_top_z"] = (inner._table_z_per_env + inner._table_half_height).cpu().numpy()
         np.savez_compressed(out / "rollout.npz", **rec)
+        ft_off = inner.robot_spec.fingertip_offset
+        ft_off = [list(ft_off)] * 5 if len(ft_off) == 3 and not hasattr(ft_off[0], "__len__") else [list(o) for o in ft_off]
         meta = {
             "task": TASK, "checkpoint": str(args.checkpoint), "expl_coef": args.expl_coef,
             "num_envs": n, "steps": args.steps, "joint_names": joint_names,
             # The order the obs lists the fingertips in (find_bodies = PhysX body order), and the
-            # pad offset the env applied at each position (robot_spec.fingertip_offsets, by position).
+            # pad offset the env applied at each position (robot_spec.fingertip_offset: one for all or one each).
             "fingertip_bodies_obs_order": [inner.robot.body_names[i] for i in inner._fingertip_body_ids],
-            "fingertip_offsets_by_position": [list(o) for o in inner.robot_spec.fingertip_offsets],
+            "fingertip_offsets_by_position": ft_off,
             "palm_body": inner.robot.body_names[inner._palm_body_id],
             "object_urdfs": [str(u) for u in inner._object_urdf_paths],
             "object_asset_index": inner._object_asset_index_per_env.cpu().tolist(),

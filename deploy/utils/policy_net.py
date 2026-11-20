@@ -74,7 +74,7 @@ def load_policy_net(cfg, num_actions: int, kinds: tuple[str, ...] = KINDS):
 class KeypointNet:
     """The keypoint policy: an LSTM (rl_games SAPG checkpoint) on the 134-number observation.
 
-    Built through the training repo's isaacsimenvs/eval/player.py (rl_games reads
+    Built through the training repo's isaacsimenvs/scripts/evaluation/player.py (rl_games reads
     pretrained_policy/config.yaml). SAPG trains several policy "blocks" that differ only in one extra
     input, the exploration coefficient; expl_coef 0.0 is the one trained on the task reward only.
     """
@@ -83,7 +83,7 @@ class KeypointNet:
 
     def __init__(self, checkpoint: Path, config: Path, expl_coef: float, num_actions: int) -> None:
         # load player.py by path: importing the isaacsimenvs package would pull in Isaac Lab
-        path = REPO / "isaacsimenvs" / "eval" / "player.py"
+        path = REPO / "isaacsimenvs" / "scripts" / "evaluation" / "player.py"
         module_spec = importlib.util.spec_from_file_location("_play_player", path)
         player = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(player)

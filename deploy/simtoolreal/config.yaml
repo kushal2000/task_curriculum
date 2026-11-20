@@ -142,7 +142,7 @@ perception:
 
 # -------------------------------------------------------------------------------------- openloop
 # robot.mode=openloop: send a sim rollout's joint targets with no feedback (no policy, no camera).
-# Made by checks/record_lift.py (cluster: scripts/cluster/bos14_simtoolreal_lift.sh).
+# Made by checks/record_lift.py (see README, "Open loop").
 openloop:
   path: docs/results/simtoolreal/lift1/openloop.npz
 

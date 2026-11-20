@@ -148,10 +148,10 @@ aioflexiv's own home.
 The policy runs only in sim. Its joint targets are then sent to the real robot unchanged. The real
 eraser must lie where the sim's did; nothing checks it.
 
-1. Record the rollout in the training env (Isaac Sim, the training branch's worktree):
+1. Record the rollout in the training env (Isaac Sim, this repo's Play task; a GPU node):
    ```bash
-   OUT=$PWD/docs/results/simtoolreal/lift1 EXTRA_ARGS="--num_envs 256 --candidates 16" \
-       sbatch scripts/cluster/bos14_simtoolreal_lift.sh
+   PYTHONPATH=$PWD:$PWD/rl_games .venv_isaacsim/bin/python deploy/simtoolreal/checks/record_lift.py --headless \
+       --checkpoint <nov6_dr.txt> --out docs/results/simtoolreal/lift1 --num_envs 256 --candidates 16
    ```
    [checks/record_lift.py](checks/record_lift.py): the env's eraser box pinned to the DexToolBench
    mesh (12.5 x 2.8 x 5 cm, 70 g), lying flat at the table centre, the goal 10 cm above it.
@@ -222,8 +222,8 @@ rollout (32 MB) is gitignored, so it runs only where the rollout is.
 
 | script | what | runs in |
 |---|---|---|
-| `checks/record_lift.py` | the lift rollout for `robot.mode=openloop`, and its open-loop test in sim (cluster: `scripts/cluster/bos14_simtoolreal_lift.sh`) | the training branch's worktree, Isaac Sim |
-| `checks/record_sim_rollout.py` | records the policy in the training env, every step → `rollout.npz` (cluster: `scripts/cluster/bos14_simtoolreal_record.sh`) | the training branch's worktree, Isaac Sim |
+| `checks/record_lift.py` | the lift rollout for `robot.mode=openloop`, and its open-loop test in sim | `.venv_isaacsim`, Isaac Sim (this repo's Play task) |
+| `checks/record_sim_rollout.py` | records the policy in the training env, every step → `rollout.npz` | `.venv_isaacsim`, Isaac Sim (this repo's Play task) |
 | `checks/export_spec.py` | reads the training branch from git → `spec/` (spec json + URDF); `--rollout_meta` adds the fingertip order | `.venv_deploy`, no Isaac Sim |
 
 ## Things the policy depends on that are easy to break
