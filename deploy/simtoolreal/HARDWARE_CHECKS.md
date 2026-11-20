@@ -194,4 +194,5 @@ $PY $D/run.py $LEFT $POLICY goals.from_rollout=<left top0>/openloop.npz goals.ti
 - Before the first run, `aiowuji status` must show `Side: left`, and step 1b on the real left hand must
   flex every finger. So far "+ = flexion" on the left hand is proven only in sim.
 - The left hand uses the right hand's motor constants (`hand_kt`), because the left hand hasn't been measured yet.
+  To measure them, see CALIBRATE_LEFT_HAND.md.
 - More in README.md, section "Left hand".
