@@ -231,7 +231,7 @@ def main() -> None:
         if cloth is not None:
             result.update(
                 resolution=int(cloth.resolution),
-                particles=int(cloth.num_particles),
+                particles=int(cloth.num_particles()),
                 triangles=2 * (int(cloth.resolution) - 1) ** 2,
                 thickness=float(cloth.thickness),
                 substeps=int(cloth.substeps),

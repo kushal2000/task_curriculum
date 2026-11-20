@@ -24,9 +24,9 @@ from isaaclab.utils.math import quat_from_matrix
 from isaacsimenvs.tasks.cloth.backends.base import ClothBackend, reset_yaw
 from isaacsimenvs.tasks.cloth.backends.rigid import checks, contacts
 from isaacsimenvs.tasks.cloth.backends.rigid import scene as pool_scene
-from isaacsimenvs.tasks.cloth.backends.rigid.config import CLOTH_FOLD_LIFT, RigidClothEnvCfg
 from isaacsimenvs.tasks.cloth.backends.rigid.physx import DEFAULT_MU, size_gpu_buffers
 from isaacsimenvs.tasks.cloth.backends.rigid.randomization import PlateRandomization
+from isaacsimenvs.tasks.cloth.config.schema.rigid import CLOTH_FOLD_LIFT, RigidClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 from isaacsimenvs.tasks.cloth.mdp.state import SheetLayout
 
@@ -48,11 +48,6 @@ class RigidBackend(ClothBackend):
         thickness = {sh.thickness for sh in self.shapes}
         if len(thickness) != 1:
             raise ValueError(f"pool shapes disagree on thickness {sorted(thickness)}")
-        slab0 = thickness.pop()
-        # The contact-margin sentinel resolves against the pool's own (nominal) plate thickness.
-        r = cfg.rigid_cloth
-        if r.contact_margin < 0.0:
-            r.contact_margin = max(0.5 * float(cfg.cloth.thickness) - 0.5 * slab0, 0.0)
         # Per-env size and slab thickness, drawn ONCE (see FoldPoolCfg.size_range): each env's USD is
         # built at its size, so it cannot change afterwards.
         n = int(cfg.scene.num_envs)
@@ -98,7 +93,6 @@ class RigidBackend(ClothBackend):
                 "domain_randomization.cloth.{slat,robot,table}_friction_scale to [1.0, 1.0], or use "
                 "physx_chain.friction_model: cloth_min."
             )
-        p.goal_task.check(p.init_fold_prob)
         #: One-fold goal tasks (``fold_pool.goal_task``): built with the sheet layout, drawn from start.
         self.goal_tasks = None
         #: Set by :meth:`start`: until then resets keep the shape the startup proofs left in place.

@@ -44,10 +44,11 @@ def test_finger_segments_are_the_finger_bodies(spec):
 
 @pytest.mark.parametrize("spec", SPECS, ids=lambda s: s.name)
 def test_cloth_proxies_follow_the_robot(spec):
-    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.physics import build_physics
+    from isaacsimenvs.tasks.cloth.config import vbd_cloth_env_cfg
 
-    cfg = VbdClothEnvCfg()
-    physics = cfg.cloth.build_physics(cfg.newton, 32, spec)
+    cfg = vbd_cloth_env_cfg()
+    physics = build_physics(cfg.cloth, cfg.newton, 32, spec)
     proxy = [re.compile(b) for p in physics.solver_cfg.proxies for b in p.bodies]
     matched = {b for b in _bodies(spec) if any(p.fullmatch(f"/World/envs/env_7/Robot/{b}") for p in proxy)}
     fingers = re.compile(spec.finger_links_regex("distal", "middle", "proximal"))

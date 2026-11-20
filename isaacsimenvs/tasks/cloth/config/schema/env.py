@@ -1,20 +1,22 @@
 """``ClothEnvCfg``: the fold task's configuration, shared by both backends.
 
-These defaults are the task: a backend's config adds its own blocks and changes what differs for it
-(``backends/rigid/config.py``, ``backends/vbd/config.py``); a run recipe (``config/runs/``) changes the
-rest. The robot is the real setup's: ``robots.FLEXIV_WUJI_RIGHT`` (the identified hand with
-``hand_sysid``) with the real robot's joint limits (``assets.robot_urdf``), its base where the real
-table puts it (``robot_root_pos``).
+The fields, what they mean and their checks; the values are ``config/task.yaml`` (a field with no
+default here is MISSING until that file sets it). A backend's config adds its own blocks
+(``rigid.py``, ``vbd.py``). The robot is the real setup's: ``robots.FLEXIV_WUJI_RIGHT`` (the
+identified hand with ``hand_sysid``) with the real robot's joint limits (``assets.robot_urdf``), its
+base where the real table puts it (``robot_root_pos``).
 """
 
 from __future__ import annotations
 
+from dataclasses import MISSING
+
 from isaaclab.envs import DirectRLEnvCfg, ViewerCfg
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sim import PhysxCfg, SimulationCfg
+from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
-from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
+from .cloth import ClothCfg
 
 __all__ = [
     "ActionCfg",
@@ -39,11 +41,11 @@ __all__ = [
 class AssetsCfg:
     """The robot and table URDFs, and their contact frictions."""
 
-    robot_urdf: str = "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
-    table_urdf: str = "assets/urdf/table_narrow.urdf"
-    robot_friction: float = 0.5
-    finger_tip_friction: float = 1.5
-    table_friction: float = 0.5
+    robot_urdf: str = MISSING
+    table_urdf: str = MISSING
+    robot_friction: float = MISSING
+    finger_tip_friction: float = MISSING
+    table_friction: float = MISSING
 
 
 @configclass
@@ -51,16 +53,16 @@ class PointCloudObsCfg:
     """The point cloud the policy reads with ``obs.object: pointcloud``: everything the two depth cameras
     see in a box over the table (cloth, hand, arm) as bare xyz; ``perception/pointcloud.py``."""
 
-    n_points: int = 1024
+    n_points: int = MISSING
     """Live points per step (the fixed size; unused slots are masked)."""
-    goal: str = "none"
+    goal: str = MISSING
     """An extra group of points that says what to do: ``none``; ``label`` (the cloth at ``ref_step``
     with moving / stationary labels); ``goal_fixed`` (the folded goal sheet where it belongs) or
     ``goal_any`` (its shape only, at any yaw) -- these two need ``fold_pool.goal_task``."""
-    ref_step: int = 0
+    ref_step: int = MISSING
     """The episode step the ``label`` / ``goal_fixed`` group is taken at (the sheet spawns ~4 cm up
     and lands by step ~12)."""
-    fk_points: int = 0
+    fk_points: int = MISSING
     """Points on the forearm and hand from forward kinematics of the (delayed) joint state (0: none)."""
     chunk: int = 1024
     """Envs per batch when the cloud is built (memory, not the result)."""
@@ -70,18 +72,10 @@ class PointCloudObsCfg:
 class ObsCfg:
     """The policy (``obs_list``) and critic (``state_list``) fields; see ``mdp/observations.py``."""
 
-    state_list: tuple[str, ...] = (
-        "joint_pos", "joint_vel", "prev_action_targets", "palm_pos", "palm_rot", "palm_vel",
-        "object_rot", "object_vel", "fingertip_pos_rel_palm", "keypoints_rel_palm", "keypoints_rel_goal",
-        "object_scales", "closest_keypoint_max_dist", "closest_fingertip_dist", "lifted_object",
-        "progress", "successes", "reward",
-    )
-    obs_list: tuple[str, ...] = (
-        "joint_pos", "joint_vel", "prev_action_targets", "palm_pos", "palm_rot", "object_rot",
-        "fingertip_pos_rel_palm", "keypoints_rel_palm", "keypoints_rel_goal", "object_scales",
-    )
-    clamp_abs_observations: float = 10.0
-    object: str = "keypoints"
+    state_list: tuple[str, ...] = MISSING
+    obs_list: tuple[str, ...] = MISSING
+    clamp_abs_observations: float = MISSING
+    object: str = MISSING
     """How the policy sees the sheet. ``keypoints``: the ``obs_list`` fields as listed. ``pointcloud``:
     the ``obs_list`` fields that are not the sheet's (``observations.OBJECT_FIELDS``), then the cloud
     (``pointcloud``); the keypoint vector stays available as the clean ``teacher`` group."""
@@ -92,32 +86,32 @@ class ObsCfg:
 class ActionCfg:
     """Joint targets from the policy action; see ``mdp/actions.JointController``."""
 
-    arm_moving_average: float = 0.1
-    hand_moving_average: float = 0.1
-    dof_speed_scale: float = 1.5
+    arm_moving_average: float = MISSING
+    hand_moving_average: float = MISSING
+    dof_speed_scale: float = MISSING
 
 
 @configclass
 class RewardCfg:
     """See ``mdp/task.py`` (``ClothTask.compute_reward``)."""
 
-    keypoint_rew_scale: float = 1500.0
+    keypoint_rew_scale: float = MISSING
     """Fold progress: paid per metre of new best fold error."""
-    reach_goal_bonus: float = 1000.0
+    reach_goal_bonus: float = MISSING
     """Paid once, on the step the fold criterion is met."""
-    distance_delta_rew_scale: float = 50.0
+    distance_delta_rew_scale: float = MISSING
     """Fingertip approach: paid per metre of new best fingertip-to-sheet distance, until lifted."""
-    fingertip_distance_from_pad: bool = True
+    fingertip_distance_from_pad: bool = MISSING
     """Measure that distance from the pad point the policy observes (``RobotSpec.fingertip_offset``),
     not from the fingertip body's origin."""
-    lifting_bonus_threshold: float = 0.15
+    lifting_bonus_threshold: float = MISSING
     """The lift latch (the critic's ``lifted_object``): set once the sheet's centre has risen this
     far, minus 5 cm, above its start."""
-    kuka_actions_penalty_scale: float = 0.03
+    kuka_actions_penalty_scale: float = MISSING
     """L1 arm joint speed penalty."""
-    hand_actions_penalty_scale: float = 0.003
+    hand_actions_penalty_scale: float = MISSING
     """L1 hand joint speed penalty."""
-    object_base_size: float = 0.04
+    object_base_size: float = MISSING
     """``object_scales`` is the sheet's bounding box divided by this."""
 
 
@@ -125,26 +119,26 @@ class RewardCfg:
 class ResetCfg:
     """The episode's start; see ``ClothTask.sample_table`` / ``sample_sheet`` and ``JointController.sample_reset``."""
 
-    reset_position_noise_x: float = 0.1
-    reset_position_noise_y: float = 0.1
-    reset_position_noise_z: float = 0.02
-    fixed_start_pose: tuple[float, float, float, float, float, float, float] | None = None
+    reset_position_noise_x: float = MISSING
+    reset_position_noise_y: float = MISSING
+    reset_position_noise_z: float = MISSING
+    fixed_start_pose: tuple[float, float, float, float, float, float, float] | None = MISSING
     """``(x, y, z, qw, qx, qy, qz)`` in the env frame: pins the sheet's start (by its yaw)."""
 
-    reset_dof_pos_random_interval_arm: float = 0.1
-    reset_dof_pos_random_interval_fingers: float = 0.1
-    reset_dof_vel_random_interval: float = 0.5
+    reset_dof_pos_random_interval_arm: float = MISSING
+    reset_dof_pos_random_interval_fingers: float = MISSING
+    reset_dof_vel_random_interval: float = MISSING
 
-    table_reset_z: float = 0.38
-    table_reset_z_range: float = 0.01
-    table_object_z_offset: float = 0.25
+    table_reset_z: float = MISSING
+    table_reset_z_range: float = MISSING
+    table_object_z_offset: float = MISSING
 
 
 @configclass
 class TerminationCfg:
     """See ``ClothTask.compute_dones``. The episode length is ``episode_length_s``."""
 
-    success_steps: int = 1
+    success_steps: int = MISSING
     """Steps the fold criterion must hold before the episode ends on it and the bonus pays."""
 
 
@@ -251,13 +245,13 @@ class ClothDRCfg:
     """Factor on every plate's mass and inertia together (the mass distribution keeps its shape)."""
     contact_margin_offset: tuple[float, float] = (0.0, 0.0)
     """Added to ``rigid_cloth.contact_margin`` [m]: where the surface a fingertip meets sits. The
-    rigid task's default is +-3 mm (``RigidClothEnvCfg``)."""
+    rigid task's is +-3 mm (``config/task.yaml``)."""
 
 
 @configclass
 class DomainRandomizationCfg:
     """Domain randomization, by what it acts on. Every range defaults to neutral (off); the DR blocks
-    (``tasks/cloth/config/dr/``) turn a group on. ``keypoints`` and ``pointcloud`` are the two ways the
+    (``tasks/cloth/config/dr/``) turn a group on (task.yaml sets the rigid task's contact shell). ``keypoints`` and ``pointcloud`` are the two ways the
     policy can see the sheet (``obs.object``); only the one in use may be set. Centre values (the hand model, frictions, contact
     shell) are configuration, not DR: ``hand_sysid``, ``assets``, ``rigid_cloth``."""
 
@@ -269,54 +263,35 @@ class DomainRandomizationCfg:
     cloth: ClothDRCfg = ClothDRCfg()
 
 
-def _physx_sim_cfg() -> SimulationCfg:
-    """60 Hz policy / 120 Hz physics, PhysX TGS. (The Newton backend replaces ``physics``.)"""
-    return SimulationCfg(
-        dt=0.00833333333,  # 1/120 to 11 digits, as every policy was trained (bit-identical replays)
-        render_interval=2,
-        gravity=(0.0, 0.0, -9.81),
-        physx=PhysxCfg(
-            solver_type=1,
-            min_position_iteration_count=8,
-            max_position_iteration_count=8,
-            min_velocity_iteration_count=0,
-            max_velocity_iteration_count=0,
-            bounce_threshold_velocity=0.2,
-            friction_offset_threshold=0.04,
-            friction_correlation_distance=0.025,
-            gpu_max_rigid_patch_count=2**21,
-        ),
-    )
-
-
 @configclass
 class ClothEnvCfg(DirectRLEnvCfg):
     """The fold task on the Flexiv + right Wuji, as the real robot is set up."""
 
-    hand_sysid: bool = False
+    hand_sysid: bool = MISSING
     """The real hand's identified joint dynamics (``robots.with_sysid``: armature, friction, passive
     spring, torque limit 1.0 A x Kt) instead of HAND2_DRIVE's. Configuration, not DR: the robot DR
     (``domain_randomization.robot``) scales around it."""
-    robot_self_collision: bool = True
+    robot_self_collision: bool = MISSING
     """Robot self-collision, minus ``RobotSpec.self_collision_filter``."""
-    robot_self_collision_scope: str = "all"
+    robot_self_collision_scope: str = MISSING
     """With self-collision on: "all", "hand" (palm and fingers only) or "tips" (fingertips of
     different fingers, thumb against palm); ``robots.usd.self_collision_keep``."""
-    robot_root_pos: tuple[float, float, float] = (0.0, 0.51, 0.20)
+    robot_root_pos: tuple[float, float, float] = MISSING
     """Robot base in the env frame. The real table's top is 0.33 m above the robot frame (with the foam
     board on it) and its near side 0.31 m in front. The task's table is 0.4 m deep, centred on the env
     origin, its top at 0.53 m, so the base moves instead: y = 0.2 + 0.31, z = 0.53 - 0.33.
     ``palm_pos`` is observed as if it stood at the Play task's (0, 0.8, 0)
     (``observations.PLAY_ROBOT_ROOT_POS``), where the Play priors and the deploy code have it."""
 
-    decimation: int = 2
-    episode_length_s: float = 10.0
+    decimation: int = MISSING
+    episode_length_s: float = MISSING
     # Set from the robot and the field lists in ClothEnv.__init__; placeholders until then.
     action_space: int = 29
     observation_space: int = 140
     state_space: int = 140
 
-    sim: SimulationCfg = _physx_sim_cfg()
+    # Isaac Lab's defaults; task.yaml sets the time step and (rigid) the PhysX solver.
+    sim: SimulationCfg = SimulationCfg()
     viewer: ViewerCfg = ViewerCfg(eye=(0.5, -1.5, 1.2), lookat=(0.0, 0.4, 0.5), resolution=(640, 480))
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
         num_envs=768, env_spacing=1.2, replicate_physics=False, clone_in_fabric=False
@@ -330,3 +305,8 @@ class ClothEnvCfg(DirectRLEnvCfg):
     termination: TerminationCfg = TerminationCfg()
     domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg()
     cloth: ClothCfg = ClothCfg()
+
+    def check(self) -> None:
+        """The config as a whole, after every override (a configclass's ``__post_init__`` runs on the
+        defaults, before task.yaml, recipes or the command line). ``ClothEnv`` calls it."""
+        self.cloth.check()

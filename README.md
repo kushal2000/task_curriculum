@@ -59,12 +59,15 @@ Runs write to `outputs/<date>/<time>/<run name>/` (checkpoints in `nn/`).
 
 ## Configuration
 
-A run's config is the task's Python defaults (its config class), a run recipe and the command line,
-in that order. A recipe names a base recipe and DR blocks (proprio, keypoints / pointcloud, action, robot, cloth):
+Everything is in `isaacsimenvs/tasks/cloth/config/`. A run's config is the task's values
+(`config/task.yaml` on the configclasses of `config/schema/`), a run recipe and the command line, in
+that order. A recipe names a base recipe and DR blocks (proprio, keypoints / pointcloud, action, robot, cloth):
 
 ```yaml
-base: rigid_cloth_right_wuji_real     # the base recipe on the real setup's centre values
+base: rigid_cloth_right_wuji          # the training setup of every PhysX run
 dr: [proprio, keypoints, action, robot, cloth]
+env:
+  hand_sysid: true                    # centre values are configuration: here, not in the DR blocks
 ```
 
 See [`isaacsimenvs/tasks/cloth/config/README.md`](isaacsimenvs/tasks/cloth/config/README.md).

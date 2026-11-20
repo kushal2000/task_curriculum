@@ -55,11 +55,11 @@ def bind_contact_materials(b) -> None:
     slat = "/World/PhysicsMaterials/slat"
     tip = "/World/PhysicsMaterials/fingertip"
     define_scene_material(
-        stage, slat, mu=r.friction, combine=pc.slat_friction_combine,
+        stage, slat, mu=r.slat_friction, combine=pc.slat_friction_combine,
         compliant_stiffness=pc.slat_compliant_stiffness, compliant_damping=pc.slat_compliant_damping,
         compliant_acceleration=pc.slat_compliant_acceleration,
     )
-    define_scene_material(stage, tip, mu=r.fingertip_friction, combine=pc.fingertip_friction_combine)
+    define_scene_material(stage, tip, mu=r.fingertip_slat_friction, combine=pc.fingertip_friction_combine)
     n = b.num_envs
     slats = 0
     for k, art in enumerate(b.arts):
@@ -112,14 +112,14 @@ def _bind_cloth_min_materials(b, stage) -> None:
     f_mult, f_idx = _draw_friction_buckets(b, rd.robot_friction_scale, gen)
     t_mult, t_idx = _draw_friction_buckets(b, rd.table_friction_scale, gen)
     #: (N,) cpu: each env's friction of the slats, the robot and the table.
-    b.friction_slat = float(r.friction) * s_mult[s_idx]
+    b.friction_slat = float(r.slat_friction) * s_mult[s_idx]
     b.friction_robot = float(a.finger_tip_friction) * f_mult[f_idx]
     b.friction_table = float(a.table_friction) * t_mult[t_idx]
     paths = []
     for k, m in enumerate(s_mult.tolist()):
         path = f"/World/PhysicsMaterials/slat_{k}"
         define_scene_material(
-            stage, path, mu=float(r.friction) * m, combine=pc.slat_friction_combine,
+            stage, path, mu=float(r.slat_friction) * m, combine=pc.slat_friction_combine,
             compliant_stiffness=pc.slat_compliant_stiffness, compliant_damping=pc.slat_compliant_damping,
             compliant_acceleration=pc.slat_compliant_acceleration,
         )
@@ -208,7 +208,7 @@ def check_contacts(b) -> None:
         view = art.root_physx_view
         mats = view.get_material_properties()
         rest = view.get_rest_offsets()
-        bad_mu = 0.0 if cloth_min else float((mats[..., 0] - r.friction).abs().max())
+        bad_mu = 0.0 if cloth_min else float((mats[..., 0] - r.slat_friction).abs().max())
         bad_rest = float((rest - m).abs().max())
         if bad_mu > 1e-4 or bad_rest > 1e-6:
             raise RuntimeError(
@@ -223,20 +223,20 @@ def check_contacts(b) -> None:
         )
         return
     tips = b.robot.root_physx_view.get_material_properties()[0, :, 0]
-    n_tip = int(((tips - r.fingertip_friction).abs() < 1e-4).sum())
+    n_tip = int(((tips - r.fingertip_slat_friction).abs() < 1e-4).sum())
     n_def = int(((tips - DEFAULT_MU).abs() < 1e-4).sum())
     if n_tip < b.fingertip_colliders or n_tip + n_def != tips.numel():
         raise RuntimeError(
-            f"[physx] robot frictions: {n_tip} shapes at {r.fingertip_friction} (bound "
+            f"[physx] robot frictions: {n_tip} shapes at {r.fingertip_slat_friction} (bound "
             f"{b.fingertip_colliders} fingertip colliders), {n_def} at {DEFAULT_MU}, of "
             f"{tips.numel()}: {sorted(set(round(float(v), 3) for v in tips))}"
         )
     print(
-        f"[rigid_cloth] friction: slat {r.friction:.3f} ({pc.slat_friction_combine}), fingertip "
-        f"{r.fingertip_friction:.3f} ({pc.fingertip_friction_combine}, {n_tip} colliders), robot "
-        f"links and table {DEFAULT_MU} (average) -> slat-table/link {min(r.friction, DEFAULT_MU):.3f}, "
-        f"slat-fingertip {r.fingertip_friction:.3f}, fingertip-table "
-        f"{max(r.fingertip_friction, DEFAULT_MU):.3f}\n"
+        f"[rigid_cloth] friction: slat {r.slat_friction:.3f} ({pc.slat_friction_combine}), fingertip "
+        f"{r.fingertip_slat_friction:.3f} ({pc.fingertip_friction_combine}, {n_tip} colliders), robot "
+        f"links and table {DEFAULT_MU} (average) -> slat-table/link {min(r.slat_friction, DEFAULT_MU):.3f}, "
+        f"slat-fingertip {r.fingertip_slat_friction:.3f}, fingertip-table "
+        f"{max(r.fingertip_slat_friction, DEFAULT_MU):.3f}\n"
         f"[rigid_cloth] contact margin {m * 1e3:.2f} mm as PhysX rest offset on every slat "
         f"(contact offset {contact_offset(b) * 1e3:.1f} mm); slat-slat contact "
         f"{'off (articulation self-collision disabled)' if m > 0.0 else 'on'}",

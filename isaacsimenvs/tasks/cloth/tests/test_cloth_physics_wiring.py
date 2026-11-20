@@ -1,4 +1,4 @@
-"""Every cloth physics setting of the VBD task (`VbdClothEnvCfg`'s defaults) actually reaches the solver.
+"""Every cloth physics setting of the VBD task (config/task.yaml) actually reaches the solver.
 
 This file exists because the failure mode it guards has already happened here twice. A field can be
 declared on `ClothCfg`, given a value, and read back correctly by anything that inspects the
@@ -36,10 +36,11 @@ def solver_kwargs():
     from isaaclab_newton.physics.newton_manager import NewtonManager
     from newton.solvers import SolverVBD
 
-    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
+    from isaacsimenvs.tasks.cloth.backends.vbd.physics import build_physics
+    from isaacsimenvs.tasks.cloth.config import vbd_cloth_env_cfg
 
-    cfg = VbdClothEnvCfg()
-    physics = cfg.cloth.build_physics(cfg.newton, num_envs=32)
+    cfg = vbd_cloth_env_cfg()
+    physics = build_physics(cfg.cloth, cfg.newton, num_envs=32)
 
     entry = next(e for e in physics.solver_cfg.entries if e.name == "cloth")
     return {
@@ -98,20 +99,20 @@ def test_soft_contact_triplet_is_forwarded(solver_kwargs):
 
 
 def test_cloth_substeps_reach_the_coupler_entry(solver_kwargs):
-    """Substeps live on the CouplerEntryCfg, not on the solver cfg, so they need their own check."""
-    assert solver_kwargs["substeps"] == 6
+    """Substeps live on the CouplerEntryCfg, not on the solver cfg, so they need their own check.
+    2 cloth substeps in each of 6 MJWarp substeps (the ns6 protocol): cloth dt 1/1440 s."""
+    assert solver_kwargs["substeps"] == 2
 
 
 def test_thickness_and_resolution_stay_on_the_guard_boundary(solver_kwargs):
     """16 mm particles need >= 16.7 mm spacing; resolution 7 is the finest grid that admits it.
 
-    These two are one decision, and the guard only runs in `__post_init__` -- it does NOT re-run
-    after a YAML overlay (robot setup, recipe) is applied. So a recipe that raised `resolution`
-    without lowering `thickness` would produce a sheet that self-collides at rest, with no error.
+    These two are one decision. The guard (``VbdClothCfg.check_thickness``) only warns, so a recipe
+    that raised `resolution` without lowering `thickness` would still run.
     """
     c = solver_kwargs["cloth"]
-    assert c.thickness <= c.spacing + 1e-9
-    assert c.resolution <= c.max_resolution_for_thickness
+    assert c.thickness <= c.spacing() + 1e-9
+    assert c.resolution <= c.max_resolution_for_thickness()
 
 
 def _cloth_overlays():
@@ -131,9 +132,9 @@ def _cloth_overlays():
 
 def test_yaml_numbers_are_numbers():
     """YAML 1.1 parses `1.0e2` as a STRING -- the exponent needs a sign. Caught this in review."""
-    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
+    from isaacsimenvs.tasks.cloth.config import vbd_cloth_env_cfg
 
-    defaults = VbdClothEnvCfg().cloth  # every cloth field (the rigid pool's are a subset)
+    defaults = vbd_cloth_env_cfg().cloth  # every cloth field (the rigid pool's are a subset)
     for path, block in _cloth_overlays():
         for key, value in block.items():
             default = getattr(defaults, key, None)

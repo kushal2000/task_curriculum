@@ -235,4 +235,3 @@ def test_the_designs_are_the_seven_flat7_shapes(fold_shapes):
     }
     for p in paths:
         assert p.with_suffix(".png").exists(), f"{p.name}: render its diagram (render_fold_designs.py)"
-    assert set(fold_shapes.DEFAULT_SHAPES) <= set(fold_shapes.POOL)

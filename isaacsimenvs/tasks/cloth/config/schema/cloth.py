@@ -1,13 +1,15 @@
 """ClothCfg -- the sheet the fold task is defined on: its geometry and the fold.
 
-The ``cloth`` block of ``env_cfg.ClothEnvCfg``, for both backends: the rigid plate pool stands in for
+The ``cloth`` block of ``env.ClothEnvCfg``, for both backends: the rigid plate pool stands in for
 this sheet (same nominal size, the same thickness to the hand, the same fold and keypoints), so a
 policy sees one task on either simulator. The VBD backend's sheet adds its material, contact and
-coupling (``backends/vbd/cloth_cfg.VbdClothCfg``). It imports nothing but ``configclass``, so both
-stacks read the same definition of the task.
+coupling (``vbd_cloth.VbdClothCfg``). Values: ``config/task.yaml``. It imports nothing but
+``configclass``, so both stacks read the same definition of the task.
 """
 
 from __future__ import annotations
+
+from dataclasses import MISSING
 
 # The function, not the package attribute: under Isaac Lab 3.0 `isaaclab.utils.configclass` can be
 # shadowed by the same-named submodule (see `newton/compat.py`), and this module must import
@@ -22,10 +24,10 @@ class ClothCfg:
     """The sheet's geometry and the fold definition, shared by both backends."""
 
     # --- geometry -------------------------------------------------------------------------
-    size: float = 0.10
+    size: float = MISSING
     """Side length of the square sheet [m]."""
 
-    thickness: float = 0.016
+    thickness: float = MISSING
     """Cloth thickness [m], as ``2 * particle_radius``. On the rigid pool: the thickness the hand
     meets at the nominal plate (slab + 2 x contact margin), observed in ``object_scales``.
 
@@ -51,7 +53,7 @@ class ClothCfg:
     displaced it; it was replaced to match SIM1, not to improve on it. If the fold regresses, this
     and ``resolution`` are the first pair to revert."""
 
-    resolution: int = 7
+    resolution: int = MISSING
     """Particles per side, so the sheet is ``resolution**2`` particles and
     ``2*(resolution-1)**2`` triangles. 7 gives 49 particles / 72 triangles. The rigid pool reads
     the same grid off its plates (keypoints, fold targets).
@@ -64,7 +66,7 @@ class ClothCfg:
     the sheet is meaningfully coarser, and a 72-triangle sheet is close to the floor at which
     "cloth" stops being a useful description."""
 
-    start_height: float = 0.30
+    start_height: float = MISSING
     """Spawn height above ``reset.table_reset_z`` [m].
 
     **The table's collision surface is at ``table_reset_z + 0.150``, not + 0.045.** See
@@ -86,7 +88,7 @@ class ClothCfg:
     Values below the surface are worse still, and were correctly diagnosed at the time: at 0.010 the
     sheet starts inside the table and reaches 51 m by step 80."""
 
-    table_half_thickness: float = 0.150
+    table_half_thickness: float = MISSING
     """Distance from ``reset.table_reset_z`` up to the table's COLLISION surface [m].
 
     **Measured, not read off the USD.** The visual box is 0.045 half-thick, and that number sat here
@@ -104,14 +106,14 @@ class ClothCfg:
     resolution, and to cloth physics; it was this."""
 
     # --- the fold -------------------------------------------------------------------------
-    fold_axis: str = "x"
+    fold_axis: str = MISSING
     """Axis normal to the fold line, in cloth-local coordinates: the ``+`` half folds onto ``-``."""
 
-    num_keypoints: int = 4
+    num_keypoints: int = MISSING
     """Tracked keypoints on the moving half. Four matches the task's existing keypoint machinery
     and is the minimum that pins a folded flap's position *and* orientation."""
 
-    max_folded_footprint: float = 0.65
+    max_folded_footprint: float = MISSING
     """Largest sheet extent along the fold axis, as a fraction of ``size``, that still counts as
     folded.
 
@@ -121,7 +123,7 @@ class ClothCfg:
     still scored transiently by putting four keypoints near their targets. 0.65 leaves room for a
     real fold's drape while excluding anything close to flat."""
 
-    keypoint_tolerance: float = 0.04
+    keypoint_tolerance: float = MISSING
     """Per-keypoint distance for success [m]. Deliberately looser than the cable's 1.5 cm: a
     folded flap settles wherever the drape puts it, and demanding rigid-body precision from a
     sheet would measure the tolerance rather than the fold."""
@@ -138,7 +140,7 @@ class ClothCfg:
     normal path. Over a multi-hour run on 4 GPUs a single diverged env would otherwise kill
     everything; the failure has been seen roughly once per three 900-step evals."""
 
-    def __post_init__(self) -> None:
+    def check(self) -> None:
         """Reject a sheet that would spawn inside the table: it presents as violent instability rather
         than as a configuration error, which is exactly how it was first diagnosed here -- as a
         solver problem."""

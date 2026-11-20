@@ -1,4 +1,5 @@
-"""Every key in a run recipe or a DR block must name a real field on its configclass.
+"""Every key in task.yaml, a run recipe or a DR block must name a real field on its configclass, and
+task.yaml must give every field the schema leaves MISSING.
 
 `configclass.from_dict` walks the overlay and applies it onto the typed config, so a
 misspelled or stale YAML key fails at env-construction time — after Kit has booted and
@@ -34,14 +35,10 @@ SCENE_FIELDS = {
     "lazy_sensor_update", "filter_collisions",
 }
 
-CLOTH_CFG = [
-    "isaacsimenvs/tasks/cloth/env_cfg.py",
-    "isaacsimenvs/tasks/cloth/cloth_cfg.py",
-]
-RIGID_CLOTH_CFG = ["isaacsimenvs/tasks/cloth/backends/rigid/config.py", *CLOTH_CFG]
-VBD_CLOTH_CFG = [
-    "isaacsimenvs/tasks/cloth/backends/vbd/config.py", "isaacsimenvs/tasks/cloth/backends/vbd/cloth_cfg.py", *CLOTH_CFG,
-]
+SCHEMA = "isaacsimenvs/tasks/cloth/config/schema"
+CLOTH_CFG = [f"{SCHEMA}/env.py", f"{SCHEMA}/cloth.py"]
+RIGID_CLOTH_CFG = [f"{SCHEMA}/rigid.py", *CLOTH_CFG]
+VBD_CLOTH_CFG = [f"{SCHEMA}/vbd.py", f"{SCHEMA}/vbd_cloth.py", *CLOTH_CFG]
 
 def _collect_classes(modules: list[str]) -> dict:
     classes: dict[str, tuple] = {}
@@ -50,36 +47,40 @@ def _collect_classes(modules: list[str]) -> dict:
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef) or node.name in classes:
                 continue
-            fields, annotations = set(), {}
+            fields, annotations, missing = set(), {}, set()
             for stmt in node.body:
                 if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
                     fields.add(stmt.target.id)
                     ann = stmt.annotation
                     annotations[stmt.target.id] = ann.id if isinstance(ann, ast.Name) else None
+                    if isinstance(stmt.value, ast.Name) and stmt.value.id == "MISSING":
+                        missing.add(stmt.target.id)
             bases = [b.id for b in node.bases if isinstance(b, ast.Name)]
-            classes[node.name] = (bases, fields, annotations)
+            classes[node.name] = (bases, fields, annotations, missing)
     return classes
 
 
-def _resolve(classes: dict, name: str, seen=None) -> tuple[set, dict] | None:
-    """Fields and annotations of `name`, with subclass definitions winning over bases."""
+def _resolve(classes: dict, name: str, seen=None) -> tuple[set, dict, set] | None:
+    """Fields, annotations and MISSING fields of `name`, with subclass definitions winning over bases."""
     if name not in classes:
         return None
     seen = seen or set()
     if name in seen:
-        return set(), {}
+        return set(), {}, set()
     seen.add(name)
 
-    bases, fields, annotations = classes[name]
-    out_fields, out_ann = set(), {}
+    bases, fields, annotations, missing = classes[name]
+    out_fields, out_ann, out_missing = set(), {}, set()
     for base in bases:  # bases first...
         resolved = _resolve(classes, base, seen)
         if resolved:
             out_fields |= resolved[0]
             out_ann.update(resolved[1])
+            out_missing |= resolved[2]
     out_fields |= fields  # ...so the subclass overrides
     out_ann.update(annotations)
-    return out_fields, out_ann
+    out_missing = (out_missing - fields) | missing
+    return out_fields, out_ann, out_missing
 
 
 # --- run recipes (config/runs/, experiments/) and DR blocks (config/dr/) ----------------------
@@ -99,7 +100,7 @@ EXPERIMENT_TASKS = {
 
 
 def _env_problems(overlay: dict, classes: dict, cls: str, path: str) -> list[str]:
-    fields, annotations = _resolve(classes, cls)
+    fields, annotations, _ = _resolve(classes, cls)
     problems = []
     for key, value in overlay.items():
         where = f"{path}{key}"
@@ -144,3 +145,58 @@ def test_every_dr_block_key_maps_to_a_rigid_cloth_field(block):
     assert overlay, f"{block}: empty DR block"
     problems = _env_problems(overlay, _collect_classes(RIGID_CLOTH_CFG), "RigidClothEnvCfg", "")
     assert not problems, f"{block}:\n  " + "\n  ".join(problems)
+
+
+# --- task.yaml: the values every task id starts from -------------------------------------------
+
+from isaacsimenvs.tasks.cloth.config import task_values  # noqa: E402
+
+TASK_BACKENDS = {"rigid": ("RigidClothEnvCfg", RIGID_CLOTH_CFG), "vbd": ("VbdClothEnvCfg", VBD_CLOTH_CFG)}
+
+
+def _missing_paths(classes: dict, cls: str, path: str = "") -> set[str]:
+    """Every field under ``cls`` the schema leaves MISSING, as dotted paths."""
+    fields, annotations, missing = _resolve(classes, cls)
+    out = {path + f for f in missing}
+    for f in fields - missing:
+        if annotations.get(f) in classes:
+            out |= _missing_paths(classes, annotations[f], path + f + ".")
+    return out
+
+
+def _leaf_paths(values: dict, path: str = "") -> set[str]:
+    out = set()
+    for k, v in values.items():
+        out |= _leaf_paths(v, path + k + ".") if isinstance(v, dict) else {path + k}
+    return out
+
+
+@pytest.mark.parametrize("backend", sorted(TASK_BACKENDS))
+def test_task_yaml_keys_map_to_fields(backend):
+    root, modules = TASK_BACKENDS[backend]
+    problems = _env_problems(task_values(backend), _collect_classes(modules), root, "")
+    assert not problems, f"task.yaml ({backend}):\n  " + "\n  ".join(problems)
+
+
+@pytest.mark.parametrize("backend", sorted(TASK_BACKENDS))
+def test_task_yaml_gives_every_missing_field(backend):
+    root, modules = TASK_BACKENDS[backend]
+    need = _missing_paths(_collect_classes(modules), root)
+    assert need, "the schema has no MISSING fields: the AST walk is broken"
+    absent = need - _leaf_paths(task_values(backend))
+    assert not absent, f"task.yaml ({backend}) gives no value for: {sorted(absent)}"
+
+
+def test_task_yaml_numbers_are_numbers():
+    """YAML 1.1 reads `1.0e2` (and `1e-5`) as a string; every value in task.yaml that looks numeric must parse as one."""
+    import re
+
+    for backend in TASK_BACKENDS:
+        def walk(v, where):
+            if isinstance(v, dict):
+                for k, x in v.items():
+                    walk(x, f"{where}.{k}")
+            elif isinstance(v, str):
+                assert not re.fullmatch(r"[-+]?[0-9.]+(e[-+]?[0-9]+)?", v, re.I), f"{where} = {v!r} is a string"
+
+        walk(task_values(backend), backend)

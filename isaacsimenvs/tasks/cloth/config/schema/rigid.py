@@ -2,26 +2,26 @@
 
 Isaac Sim 5.1 / Isaac Lab 2.3 (``.venv_isaacsim``). ``RigidClothEnvCfg`` is the task's
 ``ClothEnvCfg`` (whose ``cloth`` block is the sheet the plates stand in for) plus three blocks:
-``rigid_cloth`` (plate physics; its DR is ``domain_randomization.cloth``), ``fold_pool`` (which shapes, how big, folded
-starts) and ``physx_chain`` (how contacts are expressed in PhysX).
+``rigid_cloth`` (plate physics; its DR is ``domain_randomization.cloth``), ``fold_pool`` (which
+shapes, how big, folded starts) and ``physx_chain`` (how contacts are expressed in PhysX). Values:
+``config/task.yaml`` (``common`` + ``rigid``).
 """
 
 from __future__ import annotations
 
 import math
+from dataclasses import MISSING
 
 from isaaclab.utils import configclass
 
-from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
-from isaacsimenvs.tasks.cloth.env_cfg import AssetsCfg, ClothDRCfg, ClothEnvCfg, DomainRandomizationCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
+
+from .env import ClothEnvCfg
 
 __all__ = [
     "CLOTH_FOLD_LIFT", "FoldPoolCfg", "GoalTaskCfg", "PhysxChainCfg", "RigidClothCfg", "RigidClothEnvCfg",
 ]
 
-#: The VBD cloth's own friction and the shapes' it meets (Newton mixes them by geometric mean).
-_CLOTH_MU, _TABLE_MU, _FINGERTIP_MU = 0.25, 0.5, 1.5
 #: The VBD cloth's fold-target lift [m]: its self-contact radius (``VbdClothCfg.self_contact_radius``).
 CLOTH_FOLD_LIFT = 0.002
 
@@ -30,27 +30,27 @@ CLOTH_FOLD_LIFT = 0.002
 class PhysxChainCfg:
     """How the plates' contacts are expressed in PhysX terms."""
 
-    slat_friction_combine: str = "min"
+    slat_friction_combine: str = MISSING
     """Friction combine mode on every slat (plate) collider.
 
     Newton reproduces the cloth's per-pair friction with MJWarp geom priority (slat 1, fingertip 2).
     PhysX has no priority; it has combine modes, and when two differ the higher one wins
-    (average < min < multiply < max). Slats at ``min`` with ``rigid_cloth.friction`` (0.354) feel
+    (average < min < multiply < max). Slats at ``min`` with ``rigid_cloth.slat_friction`` (0.354) feel
     min(0.354, 0.5) = 0.354 against the table and the robot links; fingertips at ``max`` with
-    ``rigid_cloth.fingertip_friction`` (0.612) win against the slats (0.612) and against the table
+    ``rigid_cloth.fingertip_slat_friction`` (0.612) win against the slats (0.612) and against the table
     (max(0.612, 0.5) = 0.612) -- the same four pairs Newton's priority rule produces."""
 
-    fingertip_friction_combine: str = "max"
+    fingertip_friction_combine: str = MISSING
     """Friction combine mode on the fingertip colliders; see ``slat_friction_combine``."""
 
-    friction_model: str = "priority"
+    friction_model: str = MISSING
     """How contact friction is set up.
 
-    ``"priority"`` (default): the cloth-matched model above -- slats ``min`` at
-    ``rigid_cloth.friction``, fingertips ``max`` at ``rigid_cloth.fingertip_friction``, everything
-    else PhysX's default 0.5; fixed, friction DR refused.
+    ``"priority"``: the cloth-matched model above -- slats ``min`` at ``rigid_cloth.slat_friction``,
+    fingertips ``max`` at ``rigid_cloth.fingertip_slat_friction``, everything else PhysX's default
+    0.5; fixed, friction DR refused.
 
-    ``"cloth_min"``: slats ``min`` at ``rigid_cloth.friction``; the WHOLE robot at
+    ``"cloth_min"``: slats ``min`` at ``rigid_cloth.slat_friction``; the WHOLE robot at
     ``assets.finger_tip_friction`` and the table at ``assets.table_friction``, both average-mode
     (tensor-API written). Pairs: cloth-table = min(slat, table), cloth-robot = min(slat, robot),
     robot-table = (robot + table) / 2. Each of the three can be drawn per env ONCE at startup
@@ -58,24 +58,24 @@ class PhysxChainCfg:
     ``friction_buckets`` values: PhysX caps a scene at 64K materials and the slats need one USD
     material (with its combine mode) per bucket."""
 
-    friction_buckets: int = 16
+    friction_buckets: int = MISSING
     """Distinct values per randomised friction under ``friction_model: cloth_min``."""
 
-    friction_seed: int = 0
+    friction_seed: int = MISSING
     """Seed of the per-env friction draw under ``friction_model: cloth_min``."""
 
-    contact_offset_margin: float = 0.002
+    contact_offset_margin: float = MISSING
     """A slat's PhysX contact offset is its rest offset (the 7 mm ``rigid_cloth.contact_margin``) plus
     this [m]. PhysX starts generating contacts at the contact offset and holds them at the rest
     offset, so this is how early a contact is seen, not where the surface is."""
 
-    solver_position_iterations: int = 8
+    solver_position_iterations: int = MISSING
     """Each plate articulation's TGS position iterations. 8, as the robot's."""
 
-    solver_velocity_iterations: int = 0
+    solver_velocity_iterations: int = MISSING
     """Each plate articulation's TGS velocity iterations. 0, as the robot's."""
 
-    hinge_armature: float = 1.0e-3
+    hinge_armature: float = MISSING
     """Hinge armature on PhysX [kg m^2], replacing ``rigid_cloth.joint_armature`` (1e-5); 0 keeps that.
 
     At 1e-5 -- about the plate's own inertia about its hinge -- PhysX's reduced-coordinate solve
@@ -86,20 +86,20 @@ class PhysxChainCfg:
     unchanged, and stage 1 trained here folds the cloth as often as Newton-trained stage 1 (55% / 45%
     vs 52% / 43%). 3e-4 still leaks enough to halve that (24% pinned). See docs/reports/4_physx/physx_port.md."""
 
-    slat_compliant_stiffness: float = 0.0
+    slat_compliant_stiffness: float = MISSING
     """PhysX compliant-contact spring on every slat contact (table, robot, fingertips); 0 = rigid.
 
     Per unit mass when ``slat_compliant_acceleration`` [1/s^2], else [N/m]. MJWarp's contacts are
     soft constraints (solref/solimp) while PhysX's are rigid; this is the PhysX knob that softens a
     slat's contacts the same way, for calibrating how a fingertip pressing a plate behaves."""
 
-    slat_compliant_damping: float = 0.0
+    slat_compliant_damping: float = MISSING
     """Damping of the compliant contact above [1/s per unit mass, or N s/m]."""
 
-    slat_compliant_acceleration: bool = True
+    slat_compliant_acceleration: bool = MISSING
     """Read ``slat_compliant_stiffness`` / ``_damping`` per unit mass (MuJoCo's solref is too)."""
 
-    slat_max_depenetration_velocity: float = 0.0
+    slat_max_depenetration_velocity: float = MISSING
     """Cap on how fast PhysX pushes a slat out of a penetration [m/s]; 0 = leave the converter's.
 
     A fingertip driven down onto a plate lying on the table squeezes it, and an uncapped
@@ -117,7 +117,7 @@ class PhysxChainCfg:
     gpu_pairs_per_env: int = 128
     """Likewise for ``gpu_found_lost_pairs_capacity`` and ``gpu_total_aggregate_pairs_capacity``."""
 
-    size_quantum: float = 0.001
+    size_quantum: float = MISSING
     """Per-env sheet sizes are quantised to this [m], and one USD per distinct size and shape is
     written. PhysX parses every env on its own (``replicate_physics: false``), so envs can
     simply reference differently sized sheets -- no per-world builder hook as on Newton."""
@@ -127,12 +127,12 @@ class PhysxChainCfg:
 class RigidClothCfg:
     """The plates' physical parameters (every pool shape shares them)."""
 
-    density: float = 2.0
+    density: float = MISSING
     """Surface density [kg/m^2], PER AREA -- the same number and the same units as
     ``VbdClothCfg.density``, so the two manipulands have the same total mass (20 g for a 100 mm sheet).
     Split across a shape's plates in proportion to their areas (``assets.write_shape_usd``)."""
 
-    joint_armature: float = 1.0e-5
+    joint_armature: float = MISSING
     """Rotational inertia added to each hinge DOF [kg m^2]. **Load-bearing for stability.**
 
     A slat is 2-6 mm thick, so its inertia about a hinge axis is of order ``1e-8 kg m^2``. At the
@@ -150,7 +150,7 @@ class RigidClothCfg:
 
     On PhysX ``physx_chain.hinge_armature`` replaces it."""
 
-    joint_damping: float = 0.05
+    joint_damping: float = MISSING
     """Hinge viscous damping [N m s / rad], applied as an Isaac Lab **actuator** gain.
 
     Not the URDF's ``<dynamics damping>``: that value does not survive URDF -> USD -> Newton (the
@@ -162,7 +162,7 @@ class RigidClothCfg:
     mesh edge and the map from that to a per-hinge value depends on how many edges a hinge stands
     in for. Chosen with ``joint_armature`` in the stability sweep instead."""
 
-    joint_stiffness: float = 0.0
+    joint_stiffness: float = MISSING
     """Hinge spring stiffness [N m / rad], applied as an Isaac Lab actuator gain against a zero
     target. Zero means a limp chain: it holds no shape of its own and drapes under gravity alone.
 
@@ -172,27 +172,25 @@ class RigidClothCfg:
     (``edge_ke = 8.0e-4``, and measurements said the response saturates by 0.05), so a limp chain is
     the closer match until someone runs the cantilever test on both."""
 
-    slat_friction: float = -1.0
-    """Friction a plate feels against the table and the robot links. Negative computes it (a float
-    sentinel, not ``None``: the config checker refuses a float override of a ``None`` default):
-    the cloth's effective value against the table, ``sqrt(0.25 * 0.5) = 0.354`` -- Newton's VBD
-    mixes a particle's ``soft_contact_mu`` with a shape's by geometric mean."""
+    slat_friction: float = MISSING
+    """Friction a plate feels against the table and the robot links. task.yaml's 0.354 is the VBD
+    cloth's effective value against the table, ``sqrt(0.25 * 0.5)`` -- Newton's VBD mixes a
+    particle's ``soft_contact_mu`` with a shape's by geometric mean."""
 
-    fingertip_slat_friction: float = -1.0
-    """Friction a plate feels against a fingertip. Negative means the cloth's value against the
-    1.5 fingertip, ``sqrt(0.25 * 1.5) = 0.612``."""
+    fingertip_slat_friction: float = MISSING
+    """Friction a plate feels against a fingertip (``physx_chain.friction_model: priority`` only).
+    task.yaml's 0.612 is the cloth's value against the 1.5 fingertip, ``sqrt(0.25 * 1.5)``."""
 
-    contact_margin: float = -1.0
-    """Outward collision offset [m] on every plate (PhysX rest offset). Negative matches the cloth:
-    ``cloth.thickness / 2 - plate thickness / 2``, resolved by the env against the pool's nominal
-    plate thickness.
+    contact_margin: float = MISSING
+    """Outward collision offset [m] on every plate (PhysX rest offset). task.yaml's 7 mm matches the
+    cloth: ``cloth.thickness / 2 - plate thickness / 2`` = 8 - 1 mm.
 
     The VBD sheet collides through particles of radius ``cloth.thickness / 2`` = 8 mm, so it rests
     with its mid-plane 8 mm above the table and a fingertip meets it 8 mm above that. A 2 mm plate
     with a 7 mm margin puts both where the cloth's are. Plate-plate contact would sum two margins,
     so those pairs are off whenever this is nonzero (articulation self-collision disabled)."""
 
-    def __post_init__(self) -> None:
+    def check(self) -> None:
         if self.density <= 0.0:
             raise ValueError(f"density must be positive, got {self.density}")
         if self.joint_damping < 0.0:
@@ -201,22 +199,9 @@ class RigidClothCfg:
             raise ValueError(f"joint_armature must be >= 0, got {self.joint_armature}")
         if self.joint_stiffness < 0.0:
             raise ValueError(f"joint_stiffness must be >= 0, got {self.joint_stiffness}")
-        if self.slat_friction < 0.0 and self.slat_friction != -1.0:
-            raise ValueError(f"slat_friction must be >= 0 (or -1: computed), got {self.slat_friction}")
-
-    @property
-    def friction(self) -> float:
-        """The plate friction actually applied, resolving the sentinel."""
-        if self.slat_friction >= 0.0:
-            return float(self.slat_friction)
-        return math.sqrt(_CLOTH_MU * _TABLE_MU)
-
-    @property
-    def fingertip_friction(self) -> float:
-        """The plate-fingertip friction actually applied, resolving the sentinel."""
-        if self.fingertip_slat_friction >= 0.0:
-            return float(self.fingertip_slat_friction)
-        return math.sqrt(_CLOTH_MU * _FINGERTIP_MU)
+        for name in ("slat_friction", "fingertip_slat_friction", "contact_margin"):
+            if getattr(self, name) < 0.0:
+                raise ValueError(f"rigid_cloth.{name} must be >= 0, got {getattr(self, name)}")
 
 
 @configclass
@@ -225,7 +210,7 @@ class GoalTaskCfg:
     the state one fold further on as its goal, so a goal can be shown to a point-cloud student as a
     cloud of the folded sheet."""
 
-    mode: str = "off"
+    mode: str = MISSING
     """``off``: the stage-1 task as it always was, no goal tables. ``half_fold``: the same task (flat
     start, the half fold; observations unchanged) with the goal tables built, so the goal cloud,
     ``accept_lookalike`` and the travel sector are available. ``any_fold``: every episode starts
@@ -233,22 +218,21 @@ class GoalTaskCfg:
     ``mdp/geometry/fold_states.py``) and the goal is that state plus ONE more fold; the keypoints
     the policy observes are on the piece that fold moves."""
 
-    accept_lookalike: bool = False
+    accept_lookalike: bool = MISSING
     """Success and the dense fold reward accept every folded state that looks like the goal from
     above (any position, any direction, any equivalent crease), not only the designated fold."""
 
-    sector_deg: float = 360.0
+    sector_deg: float = MISSING
     """Width of the sector the designated fold's travel direction (env frame, the way the moving
     piece goes) is drawn in at reset; 360 = the sheet's own uniform yaw."""
 
-    sector_centre_deg: float = 180.0
+    sector_centre_deg: float = MISSING
     """Centre of that sector. 180 = -x, the travel direction of the half fold at yaw 0."""
 
-    sector_margin_deg: float = 0.0
+    sector_margin_deg: float = MISSING
     """Left free at each end of the sector."""
 
     def check(self, init_fold_prob: float) -> None:
-        """Called by the backend: a configclass's ``__post_init__`` does not see YAML overrides."""
         if self.mode not in ("off", "half_fold", "any_fold"):
             raise ValueError(f"fold_pool.goal_task.mode must be off, half_fold or any_fold, got {self.mode!r}")
         if not 0.0 < float(self.sector_deg) <= 360.0:
@@ -261,14 +245,14 @@ class GoalTaskCfg:
 
 @configclass
 class FoldPoolCfg:
-    shapes: list[str] = list(fs.DEFAULT_SHAPES)
+    shapes: list[str] = MISSING
     """Pool members, by ``fold_shapes.POOL`` name. Each env carries ALL of them every episode and
     uses one; the rest are parked. Order is the order of the per-shape logs."""
 
-    weights: list[float] | None = None
+    weights: list[float] | None = MISSING
     """Relative draw probabilities, one per shape. ``None`` is uniform."""
 
-    fold_lift_from_ply_gap: bool = True
+    fold_lift_from_ply_gap: bool = MISSING
     """Lift the fold target by the pool's ply gap (0 mm for mid-plane hinges) instead of the VBD
     cloth's (``CLOTH_FOLD_LIFT``, its self-contact radius, 2 mm). The gap must agree across the pool: the target is built once for
     every env."""
@@ -283,7 +267,7 @@ class FoldPoolCfg:
     park_height: float = 2.0
     """Height of the parked shapes above the env origin [m]."""
 
-    size_range: list[float] = [0.10, 0.20]
+    size_range: list[float] = MISSING
     """Sheet side length [m], drawn ONCE PER ENV at startup and fixed for the whole run. Up to 20 cm:
     the arm cannot reach the far side of a 30 cm sheet.
 
@@ -291,21 +275,21 @@ class FoldPoolCfg:
     before the simulator starts. Every shape in an env shares its size. The task -- fold targets,
     keypoints, footprint, ``object_scales`` -- follows each env's size."""
 
-    thickness_range: list[float] = [0.002, 0.002]
+    thickness_range: list[float] = MISSING
     """Plate (slab) thickness [m], drawn once per env like ``size_range``. NOT the thickness the
     hand feels: that is slab + 2 x ``rigid_cloth.contact_margin`` (2 + 2 x 7 = 16 mm by default),
     and the margin is already randomised PER EPISODE (``domain_randomization.cloth.contact_margin_offset``)."""
 
-    size_seed: int = 0
+    size_seed: int = MISSING
     """Seed for the per-env size / thickness draws, so a run's sizes are reproducible."""
 
-    reach_shift: list[float] = [0.0, 1.0]
+    reach_shift: list[float] = MISSING
     """Unit direction (env-frame x, y) toward the robot base. A sheet larger than ``cloth.size``
     has its reset centre moved this way by the growth of its half-diagonal, so its farthest point
     (at any yaw) stays where a ``cloth.size`` sheet's would be: the arm reaches only ~18 cm past the
     table centre on the far side. ``[0, 0]`` disables the shift."""
 
-    one_shape_per_env: bool = False
+    one_shape_per_env: bool = MISSING
     """Each env carries ONE pool shape, fixed for the run, instead of all of them.
 
     Assigned round-robin (env ``i`` -> shape ``i % S``; ``weights`` -> a seeded draw), so every SAPG
@@ -314,7 +298,7 @@ class FoldPoolCfg:
     four parked articulations per env are gone (PhysX steps every articulation, parked or not; a
     single-shape pool runs 107-117k env-steps/s against 62-66k for all five)."""
 
-    init_fold_prob: float = 0.0
+    init_fold_prob: float = MISSING
     """Share of episodes that start partly folded instead of flat; 0 = always flat.
 
     A folded start picks one of the active shape's SINGLE-STAGE named folds uniformly (the half fold
@@ -323,13 +307,13 @@ class FoldPoolCfg:
     seams stays closed at any angle (checked at startup). Multi-stage folds are excluded: their first
     stage is a full 180 deg fold."""
 
-    init_fold_deg: list[float] = [15.0, 120.0]
+    init_fold_deg: list[float] = MISSING
     """Range of the folded start's angle [deg], drawn uniformly per episode (per PART with
     ``init_fold_starts: other``). Positive = the moving plates lift off the table, so no start can
     press a plate into it. Up to 180 (fully folded) with ``other``; below 180 with ``single``,
     whose starts include the target fold itself."""
 
-    init_fold_starts: str = "single"
+    init_fold_starts: str = MISSING
     """Which folded starts.
 
     * ``single``: every single-stage named fold, the target half fold included, all its hinges at
@@ -341,7 +325,7 @@ class FoldPoolCfg:
     goal_task: GoalTaskCfg = GoalTaskCfg()
     """One-fold goal tasks, the look-alike criterion and the travel sector (``GoalTaskCfg``)."""
 
-    def __post_init__(self) -> None:
+    def check(self) -> None:
         if not 0.0 <= float(self.init_fold_prob) <= 1.0:
             raise ValueError(f"fold_pool.init_fold_prob must be in [0, 1], got {self.init_fold_prob}")
         if self.init_fold_starts not in ("single", "other"):
@@ -375,21 +359,18 @@ class FoldPoolCfg:
                 f"park_spacing {self.park_spacing} m would let parked sheets of up to "
                 f"{self.size_range[1]} m overlap"
             )
+        self.goal_task.check(self.init_fold_prob)
 
 
 @configclass
 class RigidClothEnvCfg(ClothEnvCfg):
     """The fold task on the fold-shape pool, on PhysX."""
 
-    # 0.6 x 0.4 m: wider in x only -- extending the table toward the robot pins the arm's elbow.
-    assets: AssetsCfg = AssetsCfg(table_urdf="assets/urdf/table_fold_pool.urdf")
-    # A fixed 1.5 cm at every sheet size (the VBD cloth keeps 4 cm; experiments/eval.sh passes both cutoffs).
-    cloth: ClothCfg = ClothCfg(keypoint_tolerance=0.015)
     rigid_cloth: RigidClothCfg = RigidClothCfg()
     physx_chain: PhysxChainCfg = PhysxChainCfg()
     fold_pool: FoldPoolCfg = FoldPoolCfg()
-    # The contact shell (where a fingertip meets the plates) at +-3 mm per episode around
-    # rigid_cloth.contact_margin; every other DR range neutral.
-    domain_randomization: DomainRandomizationCfg = DomainRandomizationCfg(
-        cloth=ClothDRCfg(contact_margin_offset=(-0.003, 0.003))
-    )
+
+    def check(self) -> None:
+        super().check()
+        self.rigid_cloth.check()
+        self.fold_pool.check()

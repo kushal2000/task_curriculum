@@ -1,16 +1,18 @@
 """VbdClothCfg -- the VBD cloth sheet: the task's ``ClothCfg`` plus its material, contact and the
-coupling that lets the hand feel it, and the Newton physics built from them.
+coupling that lets the hand feel it.
 
-The ``cloth`` block of ``backends/vbd/config.VbdClothEnvCfg``. The Newton-only methods
-(``build_physics``, ``triangle_pair_budget``) import their dependencies when called.
+The ``cloth`` block of ``vbd.VbdClothEnvCfg``; values in ``config/task.yaml``. The Newton physics
+built from it is ``backends/vbd/physics.py``.
 """
 
 from __future__ import annotations
 
-# The function, not the package attribute (see `tasks/cloth/cloth_cfg.py`).
+from dataclasses import MISSING
+
+# The function, not the package attribute (see `cloth.py`).
 from isaaclab.utils.configclass import configclass
 
-from isaacsimenvs.tasks.cloth.cloth_cfg import ClothCfg
+from .cloth import ClothCfg
 
 __all__ = ["VbdClothCfg"]
 
@@ -32,7 +34,7 @@ class VbdClothCfg(ClothCfg):
       right after building the table.
     """
 
-    reset_offset_xy: list[float] = [0.0, 0.0]
+    reset_offset_xy: list[float] = MISSING
     """Env-frame shift of the sheet's reset centre [m], added to every reset (pinned or random).
 
     For sheets larger than the 10 cm default: the arm reaches only ~18 cm past the table centre on
@@ -42,7 +44,7 @@ class VbdClothCfg(ClothCfg):
 
 
     # --- material -------------------------------------------------------------------------
-    density: float = 2.0
+    density: float = MISSING
     """Surface density [kg/m^2]. **Per AREA, not per volume.**
 
     This reaches ``ModelBuilder.add_cloth_mesh(density=...)`` unchanged (via the ``newton:density``
@@ -54,7 +56,7 @@ class VbdClothCfg(ClothCfg):
 
     2.0 kg/m^2 is SIM1 Table 2. Still heavy for cloth -- real cotton sheeting is 0.15-0.3 kg/m^2 --
     but it is their calibrated value and it is 50x lighter than what this ran before."""
-    tri_ke: float = 1.0e2
+    tri_ke: float = MISSING
     """In-plane stretch stiffness -- the Lame ``mu`` (shear modulus) of the membrane model.
 
     **1.0e2 is SIM1 Table 2, and also Newton's own ``default_tri_ke``.** Their "calibrated"
@@ -65,17 +67,17 @@ class VbdClothCfg(ClothCfg):
     and the sheet has an area term (``tri_ka``) carrying load the cable had no analogue for. The
     cable result is not evidence about a membrane. If the sheet oscillates or blows up, this is the
     first suspect and 1.0e3 is the obvious intermediate."""
-    tri_ka: float = 1.0e2
+    tri_ka: float = MISSING
     """In-plane shear/area stiffness -- the Lame ``lambda`` (area modulus). SIM1 Table 2.
 
     Note their own solver comment recommends ``lambda: 1000.0+`` to maintain area against
     penetration, and then their env ships 1e2. Table 2 agrees with the env, so 1e2 it is."""
-    tri_kd: float = 1.5e-6
+    tri_kd: float = MISSING
     """In-plane damping. SIM1 Table 2 (was 1.0e-5 here).
 
     Newton's ``default_tri_kd`` is 10.0; both this and the previous value are far below it, which
     is right for a membrane that has to drape rather than settle."""
-    edge_ke: float = 8.0e-4
+    edge_ke: float = MISSING
     """Bending stiffness. Low -- a cloth that will not bend cannot be folded. This is the opposite
     of the cable, where a stiff bend response was the thing ringing.
 
@@ -91,21 +93,23 @@ class VbdClothCfg(ClothCfg):
     One caveat on transferring it at all: the dihedral bending energy scales with edge length, and
     SIM1 tuned this on a scanned garment with ~mm edges against our 16.7 mm grid. The number is not
     dimensionally portable even though the saturation argument says it should not matter."""
-    edge_kd: float = 1.0e-3
+    edge_kd: float = MISSING
     """Bending damping. SIM1 Table 2 (was 1.0e-2 here)."""
 
     # --- coupling (defaults carried from the cable result) --------------------------------
-    proxy_mode: str = "staggered"
+    proxy_mode: str = MISSING
     """See `docs/phase4_cable_env.md`. `lagged` syncs the hand's *begin* pose with its *end*
     velocities; the mismatch scales with hand speed and was the single change that took the cable
     from ~0 to 5 goals in an episode."""
 
-    substeps: int = 6
-    """Cloth substeps inside one coupled step, i.e. the VBD timestep.
+    substeps: int = MISSING
+    """Cloth substeps inside one coupled step, i.e. the VBD timestep is ``sim.dt / newton.num_substeps
+    / substeps``.
 
-    **6 makes the cloth dt 1/1440 s, matching SIM1.** Their loop is 60 Hz with 24 substeps; ours is
-    ``sim.dt`` 1/120 / ``newton.num_substeps`` 2 / this, so 6 lands on the same 0.694 ms. It was 2
-    (1/480 s, 3x larger).
+    **The cloth dt is 1/1440 s, matching SIM1** (60 Hz with 24 substeps, 0.694 ms). task.yaml gets
+    there as 1/120 / 6 / 2: the ns6 protocol (2026-11-12), six MJWarp substeps so the light Wuji
+    fingers do not chatter against the sheet, two cloth substeps in each. Before that it was 1/120 /
+    2 / 6 (the same cloth dt, a third of the MJWarp substeps), and before that 1/120 / 2 / 2 (1/480 s).
 
     **This directly contradicts a cable measurement**: on the cable there was a sharp optimum at 2,
     with 1 peaking at 37 m/s and 4/8/16 degrading monotonically, on the theory that fewer, larger
@@ -114,9 +118,9 @@ class VbdClothCfg(ClothCfg):
     direct conflict and not a gap -- if the sheet gains energy at reset or under contact, revert
     this first.
 
-    Costs 3x the VBD work per policy step, on top of the iteration increase."""
+    Costs 3x the VBD work per policy step of the 1/480 s setting, on top of the iteration increase."""
 
-    vbd_iterations: int = 12
+    vbd_iterations: int = MISSING
     """VBD solver iterations per substep.
 
     **12 is SIM1's ``lift2`` value** (their ``acone`` task uses 16). Everything below was measured
@@ -160,24 +164,24 @@ class VbdClothCfg(ClothCfg):
     have helped the sheet's grip even if it had fit.
 
     The knob that does reach cloth-vs-hand contact is `rigid_avbd_beta`; see that field."""
-    coupler_iterations: int = 1
+    coupler_iterations: int = MISSING
     """Raising this made the cable *worse* at every setting tried."""
 
-    mass_scale: float = 1.0
+    mass_scale: float = MISSING
     """KEEP AT 1.0. 0.05 was ~500x worse on the cable and NaN'd the robot."""
 
-    collide_interval: int = 1
+    collide_interval: int = MISSING
 
-    proxy_relaxation: float = 1.0
+    proxy_relaxation: float = MISSING
     """Under-relaxation of the cloth -> hand feedback force: applied = r * new + (1 - r) * previous.
     1.0 is off (Newton's default). The exchange is explicit, so light fingers (Wuji armature
     2-5e-4) overshoot and chatter on contact; r < 1 damps that. With ``coupler_iterations`` 1 the
     Aitken mode is identical to fixed (its state resets every coupled step)."""
 
-    proxy_relaxation_mode: str = "fixed"
+    proxy_relaxation_mode: str = MISSING
     """``fixed`` or ``aitken`` (adaptive per coupled step; needs ``coupler_iterations`` > 1)."""
 
-    proxy_relaxation_min: float = 0.1
+    proxy_relaxation_min: float = MISSING
     """Aitken lower bound."""
 
     use_cuda_graph: bool = False
@@ -187,19 +191,19 @@ class VbdClothCfg(ClothCfg):
     At small env counts the step is kernel-LAUNCH bound (decimation 2 x substeps 6 x 12 VBD
     iterations per policy step), which is what makes the live viewer's cloth ~4 steps/s."""
 
-    soft_contact_ke: float = 5.0e2
+    soft_contact_ke: float = MISSING
     """Body-particle contact stiffness [N/m]. SIM1 Table 2 (was 8.0e3 here).
 
     The per-contact value is the AVERAGE of this and the rigid shape's own material stiffness
     (`NewtonShapeCfg.ke`, 2.5e3), so the effective ceiling moves 5250 -> 1500."""
 
-    soft_contact_kd: float = 5.0e-3
+    soft_contact_kd: float = MISSING
     """Body-particle contact damping [N*s/m]. SIM1 Table 2.
 
     NEW FIELD. `NewtonModelCfg` defaults it to 1.0e-2 and `build_physics` was passing only `ke` and
     `mu`, so this ran at the library default and was never stated."""
 
-    soft_contact_mu: float = 0.25
+    soft_contact_mu: float = MISSING
     """Body-particle friction coefficient. SIM1 Table 2 (`self_contact_friction`; was 10.0 here).
 
     Effective per-contact friction is `sqrt(soft_contact_mu * shape_mu)`, so against the fingertips
@@ -211,7 +215,7 @@ class VbdClothCfg(ClothCfg):
     configuration that does not run. Our per-shape frictions stay as the rigid-tool task sets
     them."""
 
-    rigid_contact_k_start: float = 1.0e2
+    rigid_contact_k_start: float = MISSING
     """Body-particle contact penalty SEED for AVBD ramping [N/m].
 
     **Inert unless `rigid_avbd_beta` > 0**, which is why it did nothing until now. Newton computes
@@ -220,7 +224,7 @@ class VbdClothCfg(ClothCfg):
     (rigid_vbd_kernels.py:3395) -- so with beta 0 the seed is discarded and every contact starts at
     full material stiffness."""
 
-    rigid_avbd_beta: float = 5.0e5
+    rigid_avbd_beta: float = MISSING
     """AVBD penalty ramp rate for body-particle contacts [N/m per m of penetration].
 
     NEW FIELD, and **the one change here that is not from SIM1**: their solver (a fork of Newton
@@ -245,7 +249,7 @@ class VbdClothCfg(ClothCfg):
     the grip rather than strengthen it. A/B it against 0.0 before trusting it."""
 
     # --- self-contact ---------------------------------------------------------------------
-    enable_self_contact: bool = True
+    enable_self_contact: bool = MISSING
     """Whether the sheet collides with ITSELF.
 
     NEW FIELD, and the largest behavioural change in this config. `VBDSolverCfg` defaults
@@ -253,7 +257,7 @@ class VbdClothCfg(ClothCfg):
     folded flap passed straight THROUGH the half it was supposed to land on. For a folding task
     that is not a tuning knob, it is a missing mechanic. SIM1 runs `handle_self_contact=True`."""
 
-    self_contact_radius: float = 0.002
+    self_contact_radius: float = MISSING
     """Distance at which cloth primitives start to repel each other [m]. SIM1 Table 2.
 
     **This is a geometric distance between mesh primitives, NOT scaled by `particle_radius`** --
@@ -271,15 +275,15 @@ class VbdClothCfg(ClothCfg):
     Scaling this to ~`thickness` (with margin ~1.5x) is the consistent alternative and costs more
     in collision detection. Left at SIM1's value; flagged, not hidden."""
 
-    self_contact_margin: float = 0.003
+    self_contact_margin: float = MISSING
     """Detection margin for self-contact [m]. SIM1 Table 2, and 1.5x the radius, which is the ratio
     Newton's own error message asks for. Must be >= `self_contact_radius` or the solver raises."""
 
-    self_contact_detection_interval: int = -1
+    self_contact_detection_interval: int = MISSING
     """How often self-contact detection runs. ``-1`` = once before initialisation, which is both
     the `VBDSolverCfg` default and what SIM1 uses."""
 
-    conservative_bound_relaxation: float = 0.42
+    conservative_bound_relaxation: float = MISSING
     """Relaxation factor for the penetration-free displacement bound (SIM1's beta, Table 2).
 
     Newton 1.5 defaults this to 0.85; 0.42 was the default in the Newton 0.1.3 that SIM1 forked, so
@@ -289,12 +293,12 @@ class VbdClothCfg(ClothCfg):
 
     Only has any effect when `enable_self_contact` is True."""
 
-    proxy_links: str = "hand"
+    proxy_links: str = MISSING
     """Which hand links the cloth can feel. `tips` (five distal phalanges) makes an enclosing grasp
     geometrically impossible; a pinch grasp is arguably enough to drag a cloth, but the asymmetry
     against the rigid baseline is not worth reintroducing."""
 
-    proxy_table: bool = True
+    proxy_table: bool = MISSING
     """The table must be in the proxy set or the sheet falls through it."""
 
     color: tuple[float, float, float] = (0.85, 0.35, 0.55)
@@ -327,30 +331,23 @@ class VbdClothCfg(ClothCfg):
     symptom; the overflow was the cause, and it is worth remembering that this class of failure
     surfaces far from its origin."""
 
-    @property
+    # Methods, not properties: configclass reads every attribute while it builds an instance, when
+    # these fields are still MISSING (task.yaml has not been applied yet).
     def particle_radius(self) -> float:
         """Half the thickness: what the solver actually consumes."""
         return 0.5 * self.thickness
 
-    @property
     def num_particles(self) -> int:
         return self.resolution**2
 
-    @property
     def spacing(self) -> float:
         return self.size / (self.resolution - 1)
 
-    @property
     def max_resolution_for_thickness(self) -> int:
         """Finest grid whose spacing still admits this thickness without self-overlap."""
         return max(2, int(self.size / self.thickness) + 1)
 
-    def __post_init__(self) -> None:
-        """The task's checks, then the thickness against the grid (a warning)."""
-        super().__post_init__()
-        self._check_thickness()
-
-    def _check_thickness(self) -> None:
+    def check_thickness(self) -> None:
         """Warn when particle DIAMETER exceeds grid spacing. No longer an error.
 
         **The original premise was wrong.** This raised on `thickness > spacing`, on the grounds
@@ -373,186 +370,17 @@ class VbdClothCfg(ClothCfg):
         changes grip in ways nobody here has measured. But it is not a correctness constraint, and
         as an error it forced this task from a 9x9 sheet to 7x7 for no reason.
         """
-        if self.thickness > self.spacing + 1e-9:
+        if self.thickness > self.spacing() + 1e-9:
             import warnings
 
             warnings.warn(
                 f"cloth thickness {self.thickness:.4f} m (2 x particle_radius) exceeds grid "
-                f"spacing {self.spacing:.4f} m, ratio {self.thickness / self.spacing:.2f}x. This "
+                f"spacing {self.spacing():.4f} m, ratio {self.thickness / self.spacing():.2f}x. This "
                 f"is NOT an error -- particle_radius is a cloth-RIGID rest offset and cannot "
                 f"cause self-collision, which uses self_contact_radius "
-                f"({self.self_contact_radius:.4f} m, {self.self_contact_radius / self.spacing:.2f}x "
+                f"({self.self_contact_radius:.4f} m, {self.self_contact_radius / self.spacing():.2f}x "
                 f"spacing). For reference SIM1 ships 1.40x and Newton's example_cloth_franka.py "
                 f"the same 8 mm radius. Flagged because a diameter well above spacing gives "
                 f"neighbouring particles overlapping collision spheres, which changes grip.",
                 stacklevel=2,
             )
-
-
-    def build_physics(self, newton_cfg, num_envs: int, robot_spec=None):
-        """``NewtonCfg`` for the coupled MJWarp (robot) + VBD (cloth) scene.
-
-        The one structural difference from the cable: the VBD entry owns **particles**, not bodies.
-        A cloth is a particle system, so ``all_particles=True`` is what assigns the sheet to the
-        deformable solver -- a body selector would match nothing and the cloth would be integrated
-        by nobody, presenting as a sheet frozen in mid-air.
-
-        ``robot_spec`` (a ``robots.RobotSpec``, ``robots.FLEXIV_WUJI_RIGHT`` when omitted) names the hand
-        bodies the cloth couples to.
-        """
-        from isaaclab_contrib.coupling import (
-            CouplerEntryCfg,
-            CouplerProxyCfg,
-            CouplerProxyMappingCfg,
-        )
-        from isaaclab_contrib.deformable import NewtonModelCfg, VBDSolverCfg
-        from isaaclab_newton.physics import (
-            MJWarpSolverCfg,
-            NewtonCfg,
-            NewtonCollisionPipelineCfg,
-            NewtonShapeCfg,
-        )
-
-        from isaacsimenvs.robots import FLEXIV_WUJI_RIGHT
-
-        robot_spec = robot_spec or FLEXIV_WUJI_RIGHT
-        rigid_bodies = [r"/World/envs/env_.*/Robot"]
-        robot = r"/World/envs/env_.*/Robot/"
-        segments = ("distal",) if self.proxy_links == "tips" else ("distal", "middle", "proximal")
-        proxy_bodies = [robot + robot_spec.finger_links_regex(*segments)]
-        if self.proxy_links == "hand":
-            palm = (robot_spec.palm_body_name, *robot_spec.palm_side_link_names)
-            proxy_bodies.append(robot + "(" + "|".join(palm) + ")")
-        if self.proxy_table:
-            rigid_bodies.append(r"/World/envs/env_.*/Table")
-            proxy_bodies.append(r"/World/envs/env_.*/Table")
-
-        budget = self.triangle_pair_budget(newton_cfg, num_envs)
-
-        # No VBDSolverCfg subclass here, deliberately. `class_type` carries
-        # "{DIR}.vbd_manager:NewtonVBDManager" and `{DIR}` is substituted against the *defining*
-        # module, so subclassing inside this package makes it hunt for
-        # `isaacsimenvs.tasks.cloth.vbd_manager`. The cable subclasses it only to add
-        # `rigid_body_contact_buffer_size`, which is a body-BODY buffer; a cloth is particles, so
-        # the buffer that matters (`rigid_body_particle_contact_buffer_size`) is already a field.
-        vbd = VBDSolverCfg(
-            iterations=self.vbd_iterations,
-            rigid_body_particle_contact_buffer_size=self.rigid_body_particle_contact_buffer_size,
-            rigid_contact_k_start=self.rigid_contact_k_start,
-            # Self-contact. Without these the folded flap passes through the half it lands on --
-            # `particle_enable_self_contact` defaults to False and this call never set it.
-            particle_enable_self_contact=self.enable_self_contact,
-            particle_self_contact_radius=self.self_contact_radius,
-            particle_self_contact_margin=self.self_contact_margin,
-            particle_collision_detection_interval=self.self_contact_detection_interval,
-        )
-        # `rigid_body_contact_buffer_size` is NOT a field on VBDSolverCfg (the cable subclasses it
-        # for exactly this reason), but it IS in SolverVBD's signature, and the manager passes
-        # through any cfg attribute the signature accepts. Setting it on the instance therefore
-        # reaches the solver without a subclass -- and without a subclass, `{DIR}` in `class_type`
-        # still resolves against isaaclab_contrib rather than this package.
-        #
-        # It defaults to 64. A 32-env cloth run hit "Per-body rigid contact buffer overflowed
-        # 87 > 64" and then died with a CUDA device-side assert. Declaring the field in this config
-        # without wiring it here left it inert: it read as configured and did nothing.
-        vbd.rigid_body_contact_buffer_size = self.rigid_body_contact_buffer_size
-
-        # Same pass-through for two more `SolverVBD` arguments that `VBDSolverCfg` does not
-        # declare. `_filter_solver_kwargs` filters `solver_cfg.to_dict()` against the solver
-        # signature, and isaaclab's `class_to_dict` walks `obj.__dict__`, so instance attributes
-        # set here do reach the solver.
-        #
-        #   * `particle_conservative_bound_relaxation`: Newton 1.5 defaults 0.85; SIM1 ran 0.42.
-        #   * `rigid_avbd_beta`: ships 0.0, which DISABLES AVBD contact ramping and makes
-        #     `rigid_contact_k_start` above a no-op. See the field docstring -- this is the one
-        #     setting here that could plausibly weaken the grip rather than strengthen it.
-        vbd.particle_conservative_bound_relaxation = self.conservative_bound_relaxation
-        vbd.rigid_avbd_beta = self.rigid_avbd_beta
-
-        solver = CouplerProxyCfg(
-            entries=[
-                CouplerEntryCfg(
-                    name="rigid",
-                    solver_cfg=MJWarpSolverCfg(
-                        solver=newton_cfg.solver,
-                        integrator=newton_cfg.integrator,
-                        njmax=newton_cfg.njmax,
-                        nconmax=newton_cfg.nconmax,
-                        impratio=newton_cfg.impratio,
-                        cone=newton_cfg.cone,
-                        iterations=newton_cfg.iterations,
-                        ls_iterations=newton_cfg.ls_iterations,
-                        use_mujoco_contacts=newton_cfg.use_mujoco_contacts,
-                        ccd_iterations=newton_cfg.ccd_iterations,
-                        disable_sensors=newton_cfg.disable_sensors,
-                    ),
-                    bodies=rigid_bodies,
-                ),
-                CouplerEntryCfg(
-                    name="cloth",
-                    solver_cfg=vbd,
-                    # Particles, not bodies -- see the docstring.
-                    all_particles=True,
-                    include_static_shapes=True,
-                    substeps=self.substeps,
-                ),
-            ],
-            proxies=[
-                CouplerProxyMappingCfg(
-                    source="rigid",
-                    destination="cloth",
-                    bodies=proxy_bodies,
-                    mass_scale=self.mass_scale,
-                    mode=self.proxy_mode,
-                    collide_interval=self.collide_interval,
-                    # The proxy builds its OWN pipeline and defaults max_triangle_pairs to a
-                    # GLOBAL 1e6; the outer collision_cfg never reaches it. On the cable that
-                    # silently dropped contacts above ~16 envs for hours.
-                    collision_pipeline=NewtonCollisionPipelineCfg(
-                        rigid_contact_max=newton_cfg.rigid_contact_max,
-                        max_triangle_pairs=budget,
-                    ),
-                )
-            ],
-            iterations=self.coupler_iterations,
-            model_cfg=NewtonModelCfg(
-                soft_contact_ke=self.soft_contact_ke,
-                # `soft_contact_kd` was previously left at the `NewtonModelCfg` default (1.0e-2)
-                # because this call only passed `ke` and `mu`.
-                soft_contact_kd=self.soft_contact_kd,
-                soft_contact_mu=self.soft_contact_mu,
-            ),
-        )
-
-        # `CouplerProxyMappingCfg` does not declare the relaxation fields, but the coupler builds
-        # `SolverCoupledProxy.Proxy(**vars(cfg))`, so instance attributes reach Newton -- the same
-        # pass-through as the VBD arguments above. Set them on `solver.proxies`, NOT on the object
-        # passed in: `CouplerProxyCfg` copies its list on construction, so an attribute set on the
-        # original never reaches the solver (that is how the first wiring of this read 1.0).
-        for proxy_mapping in solver.proxies:
-            proxy_mapping.proxy_relaxation = float(self.proxy_relaxation)
-            proxy_mapping.proxy_relaxation_mode = str(self.proxy_relaxation_mode)
-            proxy_mapping.proxy_relaxation_min = min(float(self.proxy_relaxation_min), float(self.proxy_relaxation))
-
-        return NewtonCfg(
-            solver_cfg=solver,
-            collision_cfg=NewtonCollisionPipelineCfg(
-                rigid_contact_max=newton_cfg.rigid_contact_max,
-                max_triangle_pairs=budget,
-            ),
-            default_shape_cfg=NewtonShapeCfg(),
-            num_substeps=newton_cfg.num_substeps,
-            collision_decimation=newton_cfg.collision_decimation,
-            use_cuda_graph=bool(self.use_cuda_graph),
-        )
-
-    def triangle_pair_budget(self, newton_cfg, num_envs: int) -> int:
-        """Global triangle-pair budget for this sheet at ``num_envs``.
-
-        Scales with particle count as well as env count. The cable overflowed a correctly
-        env-scaled 4.19M as soon as its segment count doubled, and a sheet has far more triangles
-        than a cable -- so geometry has to be in this product, not just ``num_envs``.
-        """
-        base = newton_cfg.resolve_max_triangle_pairs(num_envs)
-        per_env = self.num_particles * self.per_particle_triangle_pairs
-        return int(max(base, num_envs * per_env) * 1.5)

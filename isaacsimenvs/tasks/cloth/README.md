@@ -8,10 +8,13 @@ thing on both, so a policy trained on the rigid pool is evaluated on the VBD clo
 | `Cloth` | `backends/vbd` | Newton (`.venv_isaaclab3`) | VBD particle cloth |
 | `RigidCloth` | `backends/rigid` | PhysX (`.venv_isaacsim`) | pool of 7 hinged-plate fold shapes |
 
-The robot is the real setup's (`ClothEnvCfg`): `robots.FLEXIV_WUJI_RIGHT` (Wuji's HAND2_DRIVE on the
-hand) with the real robot's joint limits (`rizon4s_right_wuji_real_limits.urdf`), its base where the
-real table puts it. `env.hand_sysid=true` uses the identified hand instead (the recipe
-`rigid_cloth_right_wuji_real` sets it, with the real setup's frictions and contact shell).
+The robot is the real setup's: `robots.FLEXIV_WUJI_RIGHT` (Wuji's HAND2_DRIVE on the hand) with the
+real robot's joint limits (`rizon4s_right_wuji_real_limits.urdf`), its base where the real table puts
+it. `env.hand_sysid=true` uses the identified hand instead (`flat7FlexivWujiRHL` sets it, with the
+real setup's frictions and contact shell).
+
+The configuration is `config/`: the fields in `config/schema/`, every value in `config/task.yaml`,
+run recipes and DR blocks beside them (`config/README.md`).
 
 ## Layout
 
@@ -19,8 +22,7 @@ real table puts it. `env.hand_sysid=true` uses the identified hand instead (the 
 cloth/
   __init__.py         task registration; make_env, the gym entry point
   cloth_env.py        ClothEnv(DirectRLEnv): owns a backend and the four task parts below
-  env_cfg.py          ClothEnvCfg: robot, obs, action, reward, reset, termination, DR, cloth
-  cloth_cfg.py        ClothCfg: the sheet the task is defined on (geometry, the fold), both backends
+  config/             schema/ (the configclasses), task.yaml (their values), runs/, dr/, designs/
   mdp/                the task, simulator-independent
     state.py          SimState, SheetLayout, FoldView: what the parts hand each other
     robot.py          RobotLayout: body and joint indices, joint orders, limits, passive spring
@@ -40,12 +42,12 @@ cloth/
     base.py           ClothBackend: build the scene, read the sheet's points, write resets;
                       reset_yaw / sheet_yaw
     scene.py          robot, table, goal marker, ground, light; then the backend's sheet
-    rigid/            RigidBackend (backend.py) on PhysX: config.py, pool.py (PlatePool), scene.py
+    rigid/            RigidBackend (backend.py) on PhysX: pool.py (PlatePool), scene.py
                       (building the pool, shape draws, folded starts), contacts.py,
                       randomization.py (PlateRandomization: the sheet-physics DR), checks.py (startup proofs), physx.py,
                       assets.py, usd.py
-    vbd/              VbdBackend (backend.py) on Newton: config.py, cloth_cfg.py (VbdClothCfg: the
-                      sheet's material, contact, coupling), newton_setup.py, pierce.py,
+    vbd/              VbdBackend (backend.py) on Newton: physics.py (the coupled MJWarp + VBD
+                      solve from the config), newton_setup.py, pierce.py,
                       newton_support/ (Isaac Lab 3.0 compat, patches, USD cache)
   perception/         the point cloud a policy reads with obs.object: pointcloud: pointcloud.py
                       (the two cameras' cloud), observation.py (PointCloudObservation: from the
@@ -141,7 +143,7 @@ LIST=my_list.txt TARGETS=vbd INDEX=<k> experiments/eval.sh        # k = 0 .. 2 x
 
 - Index = (line x targets + target) x starts + start; `TARGETS` (default `pool7 vbd`), `STARTS`
   (default `pinned rand`).
-- The sheet's spawn height: `START_HEIGHT` (default 0.20). VBD runs at the ns6 protocol (`num_substeps 6`, cloth `substeps 2`).
+- The sheet's spawn height: `START_HEIGHT` (default 0.20). VBD runs at the ns6 protocol (`num_substeps 6`, cloth `substeps 2`), the VBD task's own values (`config/task.yaml`).
 - Output: `docs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json`;
   `isaacsimenvs/scripts/evaluation/matrix_summary.py <tag>` tabulates them.
 - `EVAL_SEEDS="3 4 5 6 7 8"` re-tests a picked checkpoint on fresh seeds.

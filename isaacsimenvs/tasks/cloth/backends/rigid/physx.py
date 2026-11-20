@@ -2,7 +2,7 @@
 materials bound per env, articulation properties, GPU buffer sizing.
 
 **Contact matching.** Friction is set with USD physics materials and combine modes -- plates ``min``
-at ``rigid_cloth.friction``, fingertips ``max`` at ``rigid_cloth.fingertip_friction``, everything else
+at ``rigid_cloth.slat_friction``, fingertips ``max`` at ``rigid_cloth.fingertip_slat_friction``, everything else
 PhysX's default 0.5 ``average`` (``physx_chain.friction_model: priority``), or ``cloth_min`` with the
 robot and table average-mode. It has to be USD: a tensor-API material write
 (``set_material_properties``) creates materials with the DEFAULT combine mode (a ``min`` plate

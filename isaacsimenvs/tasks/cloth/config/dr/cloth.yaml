@@ -1,6 +1,6 @@
 # DR block cloth: the sheet's physics on the rigid plates (domain_randomization.cloth; PhysX only).
 # Factors and offsets on the configured values, so the centre of each range is the configuration
-# (rigid_cloth_right_wuji_real for the real setup).
+# (task.yaml, or the recipe's own; flat7FlexivWujiRHL has the real setup's).
 #
 #   friction       plate x0.7-1.5, robot x0.7-1.3, table x0.7-1.3, drawn once per env at startup.
 #                  Needs physx_chain.friction_model: cloth_min. Around the real centres (plate 1.0,
@@ -9,8 +9,8 @@
 #                  (limp to slightly springy), plate mass x0.7-1.5 (flat7DRABC's C layer)
 #
 # The contact shell's per-episode jitter (contact_margin_offset) is part of the shell's
-# configuration and stays where the recipe sets it: +-3 mm by default, +-1 mm in
-# rigid_cloth_right_wuji_real.
+# configuration and stays where task.yaml or the recipe sets it: +-3 mm in task.yaml, +-1 mm with
+# the real setup's 1.5 mm shell (flat7FlexivWujiRHL).
 domain_randomization:
   cloth:
     slat_friction_scale: [0.7, 1.5]

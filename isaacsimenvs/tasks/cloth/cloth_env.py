@@ -45,6 +45,7 @@ class ClothEnv(DirectRLEnv):
     """Fold half a sheet onto the other half."""
 
     def __init__(self, cfg, render_mode: str | None = None, *, backend: type[ClothBackend], **kwargs) -> None:
+        cfg.check()  # after every override (task.yaml, recipe, command line)
         self.robot_spec = robot_spec(cfg.hand_sysid)
         n_joints = self.robot_spec.num_joints
         cfg.action_space = n_joints

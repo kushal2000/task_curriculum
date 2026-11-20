@@ -1,24 +1,26 @@
 """``VbdClothEnvCfg``: the fold task with a VBD cloth sheet, on Isaac Lab 3.0 + Newton.
 
-The task's ``ClothEnvCfg`` with the VBD sheet as its ``cloth`` block (``cloth_cfg.VbdClothCfg``: the
-material, contact and the coupled MJWarp + VBD solve) plus the MJWarp solver settings (``newton``). ``sim.physics`` is replaced by the Newton
-config at construction (``newton_setup.py``).
+The task's ``ClothEnvCfg`` with the VBD sheet as its ``cloth`` block (``vbd_cloth.VbdClothCfg``: the
+material, contact and the coupled MJWarp + VBD solve) plus the MJWarp solver settings (``newton``).
+Values: ``config/task.yaml`` (``common`` + ``vbd``). ``sim.physics`` is replaced by the Newton
+config at construction (``backends/vbd/physics.py``, ``newton_setup.py``).
 """
 
 from __future__ import annotations
 
-# IMPORT ORDER IS LOAD-BEARING. `env_cfg` calls `SimulationCfg(physx=...)` and imports
-# `isaaclab.sim.PhysxCfg` at class-definition time; Isaac Lab 3.0 moved the one and renamed the
-# other, and importing `isaaclab_physx` shadows the `configclass` decorator. The compat shim
-# restores all three, so it runs first.
+# IMPORT ORDER IS LOAD-BEARING. Importing `isaaclab_physx` shadows the `configclass` decorator
+# under Isaac Lab 3.0, and other modules still pass `SimulationCfg(physx=...)`; the compat shim
+# restores both, so it runs first.
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import compat  # isort: skip
 
 compat.install_isaaclab3_compat()
 
+from dataclasses import MISSING  # noqa: E402
+
 from isaaclab.utils import configclass  # noqa: E402
 
-from isaacsimenvs.tasks.cloth.backends.vbd.cloth_cfg import VbdClothCfg  # noqa: E402
-from isaacsimenvs.tasks.cloth.env_cfg import ClothEnvCfg  # noqa: E402
+from .env import ClothEnvCfg  # noqa: E402
+from .vbd_cloth import VbdClothCfg  # noqa: E402
 
 __all__ = ["NewtonSolverCfg", "VbdClothEnvCfg"]
 
@@ -73,16 +75,16 @@ class NewtonSolverCfg:
     own message asked for 1081."""
 
     # --- Contact model, from the task authors' own MuJoCo scene -------------------------------
-    cone: str = "elliptic"
+    cone: str = MISSING
     """Friction cone. MuJoCo's default is ``pyramidal``, which approximates the friction limit
     surface with a box and under combined slip lets a held tool rotate more readily. The
     SimToolReal authors' own MuJoCo model of this robot uses elliptic."""
 
-    impratio: float = 10.0
+    impratio: float = MISSING
     """Frictional-to-normal constraint impedance. The authors use 10, not MuJoCo's default 1; a
     higher ratio stiffens frictional constraints and stops a grasped tool creeping."""
 
-    condim: int = 6
+    condim: int = MISSING
     """Contact dimensionality on the grasping shapes. The tool and fingertip assets already carry
     torsional and rolling friction coefficients, but MuJoCo ignores them below condim 4 and 6
     respectively. Set before the solver compiles -- MuJoCo Warp sizes its constraint arrays at
@@ -94,7 +96,7 @@ class NewtonSolverCfg:
     retracted."""
 
     # --- Pipeline -----------------------------------------------------------------------------
-    use_mujoco_contacts: bool = False
+    use_mujoco_contacts: bool = MISSING
     """Use Newton's own collision pipeline rather than MuJoCo's. Not a performance preference:
     under MuJoCo's pipeline ``separate_worlds=True`` builds the MuJoCo model from world 0 only, so
     per-env collision *meshes* are **silently ignored** -- every world simulates world 0's mesh
@@ -103,15 +105,15 @@ class NewtonSolverCfg:
     and on a mesh scene is also better conditioned (0.43 mm penetration against 6.5-9.2 mm) and
     faster."""
 
-    solver: str = "newton"
-    integrator: str = "implicitfast"
-    iterations: int = 100
-    ls_iterations: int = 15
-    ccd_iterations: int = 35
-    update_data_interval: int = 2
+    solver: str = MISSING
+    integrator: str = MISSING
+    iterations: int = MISSING
+    ls_iterations: int = MISSING
+    ccd_iterations: int = MISSING
+    update_data_interval: int = MISSING
     rigid_contact_max: int = 4_000_000
-    num_substeps: int = 2
-    collision_decimation: int = 0
+    num_substeps: int = MISSING
+    collision_decimation: int = MISSING
     """Re-collide every N substeps; 0 = once per tick. Coupled to :attr:`num_substeps` -- raising
     substeps without also re-colliding more often leaves the solver integrating several steps
     against one stale collision update."""
@@ -123,50 +125,6 @@ class NewtonSolverCfg:
 
     deterministic_mode: str = "not_guaranteed"
 
-    def resolve_max_triangle_pairs(self, num_envs: int) -> int:
-        """Triangle-pair budget for ``num_envs``, honouring an explicit override."""
-        if self.max_triangle_pairs is not None:
-            return int(self.max_triangle_pairs)
-        return max(1_000_000, int(num_envs) * self.per_env_triangle_pairs)
-
-    def build(self, num_envs: int):
-        """Return an ``isaaclab_newton`` ``NewtonCfg``.
-
-        ``num_envs`` is load-bearing, not incidental -- it sizes the triangle-pair budget.
-        """
-        from isaaclab_newton.physics import (
-            MJWarpSolverCfg,
-            NewtonCfg,
-            NewtonCollisionPipelineCfg,
-            NewtonShapeCfg,
-        )
-
-        return NewtonCfg(
-            solver_cfg=MJWarpSolverCfg(
-                solver=self.solver,
-                integrator=self.integrator,
-                njmax=self.njmax,
-                nconmax=self.nconmax,
-                impratio=self.impratio,
-                cone=self.cone,
-                update_data_interval=self.update_data_interval,
-                iterations=self.iterations,
-                ls_iterations=self.ls_iterations,
-                use_mujoco_contacts=self.use_mujoco_contacts,
-                ccd_iterations=self.ccd_iterations,
-                disable_sensors=self.disable_sensors,
-            ),
-            collision_cfg=NewtonCollisionPipelineCfg(
-                rigid_contact_max=self.rigid_contact_max,
-                max_triangle_pairs=self.resolve_max_triangle_pairs(num_envs),
-            ),
-            default_shape_cfg=NewtonShapeCfg(),
-            num_substeps=self.num_substeps,
-            collision_decimation=self.collision_decimation,
-            use_cuda_graph=self.use_cuda_graph,
-            deterministic_mode=self.deterministic_mode,
-        )
-
 
 @configclass
 class VbdClothEnvCfg(ClothEnvCfg):
@@ -175,8 +133,12 @@ class VbdClothEnvCfg(ClothEnvCfg):
     cloth: VbdClothCfg = VbdClothCfg()
     newton: NewtonSolverCfg = NewtonSolverCfg()
 
-    use_gravcomp: bool = True
+    use_gravcomp: bool = MISSING
     """Express the robot's per-body ``disableGravity`` as MuJoCo gravity compensation, leaving
     global gravity at -9.81 so the sheet falls natively (``mjc:gravcomp``, applied as
     ``(1 - gravcomp) * g``). Required: the alternative zeroes global gravity, and the cloth would
     float."""
+
+    def check(self) -> None:
+        super().check()
+        self.cloth.check_thickness()

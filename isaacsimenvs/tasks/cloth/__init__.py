@@ -3,8 +3,8 @@
     Isaacsimenvs-Cloth-Direct-v0       VBD cloth sheet, Newton (``.venv_isaaclab3``)
     Isaacsimenvs-RigidCloth-Direct-v0  fold-shape pool of hinged plates, PhysX (``.venv_isaacsim``)
 
-Both run the Flexiv + right Wuji as the real robot is set up (``env_cfg.ClothEnvCfg``). Start with
-``README.md``.
+Both run the Flexiv + right Wuji as the real robot is set up. Their configuration is ``config/``
+(the fields in ``config/schema/``, the values in ``config/task.yaml``). Start with ``README.md``.
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ import gymnasium as gym
 
 from isaacsimenvs import CLOTH_CONFIG_DIR, PLAY_CONFIG_DIR
 
-# task -> (backend, its config class: the task's defaults)
+# task -> (backend, its config: the configclass with config/task.yaml applied)
 _TASKS = {
-    "Cloth": ("vbd", "backends.vbd.config:VbdClothEnvCfg"),
-    "RigidCloth": ("rigid", "backends.rigid.config:RigidClothEnvCfg"),
+    "Cloth": ("vbd", "config:vbd_cloth_env_cfg"),
+    "RigidCloth": ("rigid", "config:rigid_cloth_env_cfg"),
 }
 
 

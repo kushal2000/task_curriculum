@@ -1,0 +1,218 @@
+# The fold task's values: every value the two task ids start from, in one file.
+#
+#   common   both tasks (the robot as the real setup has it, the observation, action, reward, episode)
+#   rigid    Isaacsimenvs-RigidCloth-Direct-v0: the fold-shape pool of hinged plates on PhysX
+#   vbd      Isaacsimenvs-Cloth-Direct-v0: the VBD cloth sheet on Newton
+#
+# A task's config is `common` with its own section merged on top (config/__init__.py). The fields are
+# defined, with what each one means and why it has this value, in config/schema/*.py; a field there
+# with no default (MISSING) must be given here, and loading fails if one is not.
+#
+# Not here: implementation settings (GPU buffers, CUDA graphs, where parked shapes hover, the
+# viewer camera), which keep their Python defaults; DR ranges, neutral unless a DR block
+# (config/dr/) or this file sets one; the robot's joint dynamics (isaacsimenvs/robots/).
+# Run recipes (config/runs/, experiments/) and the command line change values from here on.
+#
+# YAML 1.1: a float with an exponent needs a dot and a signed exponent (1.0e-5, 5.0e+5), or it is read as a string.
+
+common:
+  # --- the robot, as the real one is set up
+  hand_sysid: false                      # true: the identified right Wuji hand (robots.with_sysid)
+  robot_root_pos: [0.0, 0.51, 0.20]      # base under the real table's geometry
+  robot_self_collision: true
+  robot_self_collision_scope: all
+  assets:
+    robot_urdf: assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf
+    robot_friction: 0.5                  # robot links (priority model)
+    finger_tip_friction: 1.5             # fingertips; the whole robot under cloth_min
+    table_friction: 0.5
+
+  # --- time
+  sim:
+    dt: 0.00833333333                    # 1/120 s to 11 digits, as every policy was trained
+    render_interval: 2
+    gravity: [0.0, 0.0, -9.81]
+  decimation: 2                          # 60 Hz policy
+  episode_length_s: 10.0
+
+  # --- the sheet and the fold (the rigid pool reads the same grid off its plates)
+  cloth:
+    size: 0.10
+    thickness: 0.016
+    resolution: 7
+    start_height: 0.30                   # above reset.table_reset_z
+    table_half_thickness: 0.150          # table root to its collision surface (measured)
+    fold_axis: x
+    num_keypoints: 4
+    max_folded_footprint: 0.65
+    keypoint_tolerance: 0.04
+
+  # --- what the policy and critic read
+  obs:
+    object: keypoints                    # keypoints | pointcloud
+    obs_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot, object_rot,
+               fingertip_pos_rel_palm, keypoints_rel_palm, keypoints_rel_goal, object_scales]
+    state_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot, palm_vel,
+                 object_rot, object_vel, fingertip_pos_rel_palm, keypoints_rel_palm, keypoints_rel_goal,
+                 object_scales, closest_keypoint_max_dist, closest_fingertip_dist, lifted_object,
+                 progress, successes, reward]
+    clamp_abs_observations: 10.0
+    pointcloud:                          # obs.object: pointcloud
+      n_points: 1024
+      goal: none                         # none | label | goal_fixed | goal_any
+      ref_step: 0
+      fk_points: 0
+
+  action:
+    arm_moving_average: 0.1
+    hand_moving_average: 0.1
+    dof_speed_scale: 1.5
+
+  reward:
+    keypoint_rew_scale: 1500.0
+    reach_goal_bonus: 1000.0
+    distance_delta_rew_scale: 50.0
+    fingertip_distance_from_pad: true
+    lifting_bonus_threshold: 0.15
+    kuka_actions_penalty_scale: 0.03
+    hand_actions_penalty_scale: 0.003
+    object_base_size: 0.04
+
+  reset:
+    reset_position_noise_x: 0.1
+    reset_position_noise_y: 0.1
+    reset_position_noise_z: 0.02
+    fixed_start_pose: null               # (x, y, z, qw, qx, qy, qz) pins the sheet's start
+    reset_dof_pos_random_interval_arm: 0.1
+    reset_dof_pos_random_interval_fingers: 0.1
+    reset_dof_vel_random_interval: 0.5
+    table_reset_z: 0.38
+    table_reset_z_range: 0.01
+    table_object_z_offset: 0.25
+
+  termination:
+    success_steps: 1
+
+
+rigid:
+  assets:
+    table_urdf: assets/urdf/table_fold_pool.urdf   # 0.6 x 0.4 m, wider in x only
+  cloth:
+    keypoint_tolerance: 0.015            # 1.5 cm at every sheet size
+
+  # --- PhysX
+  sim:
+    physx:
+      solver_type: 1                     # TGS
+      min_position_iteration_count: 8
+      max_position_iteration_count: 8
+      min_velocity_iteration_count: 0
+      max_velocity_iteration_count: 0
+      bounce_threshold_velocity: 0.2
+      friction_offset_threshold: 0.04
+      friction_correlation_distance: 0.025
+      gpu_max_rigid_patch_count: 2097152
+
+  # --- the plates
+  rigid_cloth:
+    density: 2.0                         # kg/m^2, as the VBD sheet's
+    joint_armature: 1.0e-5               # replaced on PhysX by physx_chain.hinge_armature
+    joint_damping: 0.05
+    joint_stiffness: 0.0
+    slat_friction: 0.3535533905932738             # sqrt(0.25 x 0.5): the VBD cloth against the table
+    fingertip_slat_friction: 0.6123724356957945   # sqrt(0.25 x 1.5): the VBD cloth against a fingertip
+    contact_margin: 0.007                # 16 mm cloth / 2 - 2 mm plate / 2: a fingertip meets the plate where it meets the cloth
+
+  # --- how the contacts are expressed in PhysX
+  physx_chain:
+    friction_model: priority             # priority | cloth_min
+    slat_friction_combine: min
+    fingertip_friction_combine: max
+    friction_buckets: 16
+    friction_seed: 0
+    contact_offset_margin: 0.002
+    solver_position_iterations: 8
+    solver_velocity_iterations: 0
+    hinge_armature: 1.0e-3
+    slat_compliant_stiffness: 0.0
+    slat_compliant_damping: 0.0
+    slat_compliant_acceleration: true
+    slat_max_depenetration_velocity: 0.0
+    size_quantum: 0.001
+
+  # --- which shapes, how big, which starts
+  fold_pool:
+    shapes: [box2-mid, box2diag4-mid, box2x8-mid, cross4-mid, corners8-mid]
+    weights: null                        # null: uniform
+    one_shape_per_env: false
+    fold_lift_from_ply_gap: true
+    size_range: [0.10, 0.20]             # per env, once
+    thickness_range: [0.002, 0.002]      # plate slab, per env, once
+    size_seed: 0
+    reach_shift: [0.0, 1.0]
+    init_fold_prob: 0.0
+    init_fold_deg: [15.0, 120.0]
+    init_fold_starts: single             # single | other
+    goal_task:
+      mode: "off"                        # off | half_fold | any_fold
+      accept_lookalike: false
+      sector_deg: 360.0
+      sector_centre_deg: 180.0
+      sector_margin_deg: 0.0
+
+  # The contact shell: +-3 mm per episode around rigid_cloth.contact_margin.
+  domain_randomization:
+    cloth:
+      contact_margin_offset: [-0.003, 0.003]
+
+
+vbd:
+  assets:
+    table_urdf: assets/urdf/table_narrow.urdf
+  use_gravcomp: true
+
+  # --- the sheet's material, contact and coupling (SIM1 Table 2 unless the field says otherwise)
+  cloth:
+    reset_offset_xy: [0.0, 0.0]
+    density: 2.0                         # kg/m^2
+    tri_ke: 1.0e+2
+    tri_ka: 1.0e+2
+    tri_kd: 1.5e-6
+    edge_ke: 8.0e-4
+    edge_kd: 1.0e-3
+    soft_contact_ke: 5.0e+2
+    soft_contact_kd: 5.0e-3
+    soft_contact_mu: 0.25
+    rigid_contact_k_start: 1.0e+2
+    rigid_avbd_beta: 5.0e+5
+    enable_self_contact: true
+    self_contact_radius: 0.002
+    self_contact_margin: 0.003
+    self_contact_detection_interval: -1
+    conservative_bound_relaxation: 0.42
+    proxy_mode: staggered
+    proxy_links: hand
+    proxy_table: true
+    mass_scale: 1.0
+    collide_interval: 1
+    coupler_iterations: 1
+    proxy_relaxation: 1.0
+    proxy_relaxation_mode: fixed
+    proxy_relaxation_min: 0.1
+    substeps: 2                          # cloth substeps per Newton substep: 1/120 / 6 / 2 = 1/1440 s
+    vbd_iterations: 12
+
+  # --- MJWarp (the robot)
+  newton:
+    num_substeps: 6                      # the ns6 protocol
+    collision_decimation: 0
+    solver: newton
+    integrator: implicitfast
+    iterations: 100
+    ls_iterations: 15
+    ccd_iterations: 35
+    update_data_interval: 2
+    cone: elliptic
+    impratio: 10.0
+    condim: 6
+    use_mujoco_contacts: false

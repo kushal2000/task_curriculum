@@ -32,7 +32,7 @@ VBD_TASK=Isaacsimenvs-Cloth-Direct-v0
 PXPY=(.venv_isaacsim/bin/python); NEWTONPY=(experiments/newton_py)
 CUT="${CUT:-0.015}"
 FOLD=("env.cloth.keypoint_tolerance=$CUT" env.termination.success_steps=10 env.cloth.nan_policy=reset)
-VBD_EXTRA=(env.cloth.start_height=0.20 env.robot_self_collision=false env.newton.njmax=32768 env.newton.num_substeps=6 env.cloth.substeps=2)
+VBD_EXTRA=(env.cloth.start_height=0.20 env.robot_self_collision=false env.newton.njmax=32768)
 SEED="${SEED:-$(( INDEX + 1 ))}"
 echo "[distill] mode=${MODE:-train} teacher=$TEACHER experiment=$EXPERIMENT"
 BACKEND=physx provenance distill

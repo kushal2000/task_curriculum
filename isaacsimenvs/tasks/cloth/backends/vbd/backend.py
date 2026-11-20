@@ -21,7 +21,8 @@ from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
     install_post_construction_patches,
     install_pre_construction_patches,
 )
-from isaacsimenvs.tasks.cloth.env_cfg import ClothDRCfg
+from isaacsimenvs.tasks.cloth.backends.vbd.physics import build_physics
+from isaacsimenvs.tasks.cloth.config.schema.env import ClothDRCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
 from isaacsimenvs.tasks.cloth.mdp.state import SheetLayout
 
@@ -49,7 +50,7 @@ class VbdBackend(ClothBackend):
         install_pre_construction_patches(
             cfg,
             # Coupled MJWarp (robot) + VBD (cloth), sized for this env count.
-            physics_cfg=cfg.cloth.build_physics(cfg.newton, int(cfg.scene.num_envs), robot_spec),
+            physics_cfg=build_physics(cfg.cloth, cfg.newton, int(cfg.scene.num_envs), robot_spec),
         )
 
     def finish_setup(self) -> None:
@@ -123,13 +124,6 @@ class VbdBackend(ClothBackend):
 
         Runs at the end of the scene setup, before replication -- which is also when Newton imports
         the stage: a mesh authored after that point is invisible to the solver."""
-        # Re-validate here, not only in `VbdClothCfg.__post_init__`. Hydra constructs the dataclass
-        # with its DEFAULTS -- which is when `__post_init__` runs and passes -- and only then
-        # assigns the CLI overrides onto the instance. So `env.cloth.thickness=0.03` walks straight
-        # past the thickness/spacing guard: it ran against thickness 0.012 and never saw 0.03.
-        # That is how a 30 mm radius ended up on a 12.5 mm grid, every particle overlapping its
-        # neighbours, which the solver expresses as instability rather than as a config error.
-        self.cfg.cloth._check_thickness()
         from isaaclab.assets import DeformableObject, DeformableObjectCfg
         from isaaclab.sim.utils import find_matching_prims
         from pxr import Sdf, UsdGeom, UsdShade
@@ -175,7 +169,7 @@ class VbdBackend(ClothBackend):
             mp = mat.GetPrim()
             for name, value in (
                 ("newton:density", c.density),
-                ("newton:particleRadius", c.particle_radius),
+                ("newton:particleRadius", c.particle_radius()),
                 ("newton:triKe", c.tri_ke),
                 ("newton:triKa", c.tri_ka),
                 ("newton:triKd", c.tri_kd),
@@ -208,7 +202,7 @@ class VbdBackend(ClothBackend):
 
         print(
             f"[cloth] {c.resolution}x{c.resolution} sheet, {c.size:.3f} m, "
-            f"{c.num_particles} particles, {len(indices) // 3} triangles, "
+            f"{c.num_particles()} particles, {len(indices) // 3} triangles, "
             f"keypoints {self.keypoint_idx}",
             flush=True,
         )

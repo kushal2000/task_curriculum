@@ -48,9 +48,9 @@ def test_guard_zeroes_the_observed_blow_ups():
 
 
 def _reach_goal_bonus() -> float:
-    from isaacsimenvs.tasks.cloth.backends.vbd.config import VbdClothEnvCfg
+    from isaacsimenvs.tasks.cloth.config import vbd_cloth_env_cfg
 
-    return float(VbdClothEnvCfg().reward.reach_goal_bonus)
+    return float(vbd_cloth_env_cfg().reward.reach_goal_bonus)
 
 
 def test_guard_does_not_touch_legitimate_rewards():

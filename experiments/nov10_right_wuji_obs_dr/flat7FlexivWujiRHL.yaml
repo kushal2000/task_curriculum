@@ -1,9 +1,34 @@
-# flat7FlexivWujiRHL: the base recipe on the real setup's centre values (the identified hand, the 11-10
-# contact frictions, the 5 mm contact shell; no hand or friction DR) and table-height DR +-1.5 cm (the
-# kinematic table moves in z at every reset; the base stays put, so the policy cannot see it). The
-# control for flat7FWRHL_dA / _dB (deleted 2026-11-19 with the point-level object DR they used).
-base: rigid_cloth_right_wuji_real
+# flat7FlexivWujiRHL: the base recipe on the real setup's centre values (no hand or friction DR) and
+# table-height DR +-1.5 cm (the kinematic table moves in z at every reset; the base stays put, so the
+# policy cannot see it). The control for flat7FWRHL_dA / _dB (deleted 2026-11-19 with the point-level
+# object DR they used).
+#
+# The real setup's centre values (2026-11-10/11):
+#   hand        the identified right Wuji hand (hand_sysid: armature, joint friction, passive
+#               damping and spring, torque limit 1.0 A x Kt)
+#   frictions   plate 1.0, robot 0.5 (the Wuji fingertip), table 1.0 under cloth_min. A real cloth
+#               on the table is hard to slide or turn; with a finger pressing at N >> the plate's
+#               weight, the plate follows the finger when finger mu > table mu, so the table must
+#               hold harder than a finger. Pairs: plate-table min(1.0, 1.0) = 1.0, plate-robot
+#               min(1.0, 0.5) = 0.5, robot-table (0.5 + 1.0) / 2 = 0.75.
+#   felt        2 mm plate + 2 x 1.5 mm contact shell = 5 mm, instead of the VBD sheet's 16 mm
+#               (real fabrics are under 1 mm, a towel 2-5 mm). The shell's per-episode jitter goes
+#               to +-1 mm with it (3-7 mm); the task's +-3 mm belongs to the 7 mm shell and would
+#               reach below zero here.
+base: rigid_cloth_right_wuji
 
 env:
+  hand_sysid: true
+  assets:
+    finger_tip_friction: 0.5
+    table_friction: 1.0
+  rigid_cloth:
+    slat_friction: 1.0
+    contact_margin: 0.0015
+  physx_chain:
+    friction_model: cloth_min
+  domain_randomization:
+    cloth:
+      contact_margin_offset: [-0.001, 0.001]
   reset:
     table_reset_z_range: 0.015

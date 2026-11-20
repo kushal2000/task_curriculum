@@ -14,7 +14,7 @@
 #   pool     PhysX fold pool, its 5 default shapes, 320 envs
 #   pool7    PhysX fold pool, the 7 flat7 shapes one per env, 448 envs
 #   pool7of  pool7 with every episode from a non-target fold (init_fold_starts=other, 15-180 deg)
-#   vbd      the VBD cloth on Newton, 32 envs, num_substeps 6 / cloth substeps 2 (the ns6 protocol)
+#   vbd      the VBD cloth on Newton, 32 envs (the ns6 protocol: num_substeps 6 / cloth substeps 2, the task's own)
 # STARTS (default "pinned rand"): pinned = DR off (one start state); rand = the env's randomisation on.
 # CKPT_SEL (default best): best | last | ep:<N> (isaacsimenvs/scripts/evaluation/checkpoints.py).
 # START_HEIGHT (default 0.20): the sheet spawn height, as in the policy's training recipe. EVAL_SEEDS (default "1 2"); EXTRA_ARGS: more
@@ -52,7 +52,7 @@ case "$T" in
              TARGS=("${POOL7[@]}" env.fold_pool.init_fold_starts=other env.fold_pool.init_fold_prob=1.0
                     "env.fold_pool.init_fold_deg=[15.0,180.0]") ;;
     vbd)     TASK=Isaacsimenvs-Cloth-Direct-v0;      NAME=vbd;           ENVS=32
-             TARGS=(env.robot_self_collision=false env.newton.njmax=32768 env.newton.num_substeps=6 env.cloth.substeps=2) ;;
+             TARGS=(env.robot_self_collision=false env.newton.njmax=32768) ;;
     *) echo "[eval] unknown target $T (pool, pool7, pool7of, vbd)" >&2; exit 2 ;;
 esac
 # _common.sh picked the interpreter from the (absent) --task; pick it for this target.

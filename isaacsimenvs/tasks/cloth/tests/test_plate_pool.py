@@ -18,7 +18,7 @@ np = pytest.importorskip("numpy")
 
 RES = 7
 fs = load_module("isaacsimenvs/tasks/cloth/mdp/geometry/fold_shapes.py", "fold_shapes")
-SHAPES = [fs.POOL[n] for n in fs.DEFAULT_SHAPES]
+SHAPES = [fs.POOL[n] for n in ("box2-mid", "box2diag4-mid", "box2x8-mid", "cross4-mid", "corners8-mid")]
 
 
 @pytest.fixture(scope="module")

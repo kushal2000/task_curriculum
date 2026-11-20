@@ -1,12 +1,13 @@
-# Cloth task configuration (YAML)
+# Cloth task configuration
 
-Python configclasses beside the code hold every parameter with its default and its documentation;
-the defaults are the task (`RigidClothEnvCfg`, `VbdClothEnvCfg`; Play: `PlayEnvCfg`), robot included.
-The YAML files only change them for a run.
+Everything the cloth task is configured with is in this folder: what the fields are (Python), and
+what they are set to (YAML).
 
 | Path | Contents |
 | --- | --- |
-| `runs/` | Run recipes: `rigid_cloth_right_wuji.yaml` is the base of every PhysX run, `rigid_cloth_right_wuji_real.yaml` the same on the real setup's centre values (the base for DR runs) |
+| `schema/` | The configclasses: every field, its type, what it means and why it has its value, the checks. `env.py` (`ClothEnvCfg`, both tasks), `cloth.py` (the sheet), `rigid.py` (`RigidClothEnvCfg`: plates, pool, PhysX contacts), `vbd.py` + `vbd_cloth.py` (`VbdClothEnvCfg`: the VBD sheet, MJWarp). A task value has no default here (`MISSING`) |
+| `task.yaml` | The values: `common` (both tasks), `rigid`, `vbd`. Every value either task starts from is here |
+| `runs/` | Run recipes: `rigid_cloth_right_wuji.yaml`, the training setup of every PhysX run |
 | `dr/` | DR blocks: named env overlays a recipe switches on with `dr: [...]` |
 | `designs/` | The fold-pool shapes (plates, hinges, seams, folds) with PNG diagrams |
 | `ClothSAPG.yaml` | Learner settings (SAPG); PPO is Play's (`tasks/play/config/`) |
@@ -16,8 +17,8 @@ The YAML files only change them for a run.
 
 A run's config is composed in this order; each layer overrides the ones before it:
 
-1. configclass defaults (Python), chosen by the gym task id: what the task is, for training, evaluation
-   and viewers alike
+1. `task.yaml` on the configclass, chosen by the gym task id (`config/__init__.py`): what the task is,
+   for training, evaluation and viewers alike. Loading fails if a field has no value.
 2. the run recipe (`--experiment`): its `base:` recipe, then its DR blocks in order, then its own `env:` / `agent:`
 3. command-line overrides (`env.scene.num_envs=512`)
 
@@ -27,10 +28,14 @@ needed).
 ## Recipes
 
 ```yaml
-# a keypoint policy with every DR group, on the real setup
-base: rigid_cloth_right_wuji_real
+# a keypoint policy with every DR group, on the real setup's centre values
+base: rigid_cloth_right_wuji
 dr: [proprio, keypoints, action, robot, cloth]
 env:
+  hand_sysid: true                  # centre values: configuration, not DR
+  assets: {finger_tip_friction: 0.5, table_friction: 1.0}
+  rigid_cloth: {slat_friction: 1.0, contact_margin: 0.0015}
+  physx_chain: {friction_model: cloth_min}
   reset:
     table_reset_z_range: 0.015      # not DR: the episode's start distribution
   domain_randomization:
@@ -59,10 +64,11 @@ recipes of one study live beside it in `experiments/<date>_<study>/`.
 ## Centre values and DR
 
 A centre value -- what the robot, the sheet or a contact *is* -- is configuration: `hand_sysid`,
-`assets.*_friction`, `rigid_cloth.*`, `physx_chain.friction_model`. `rigid_cloth_right_wuji_real` sets
-the real setup's. DR is a range around those centres, under `domain_randomization`, in six groups
-(`env_cfg.py`); every range is neutral by default except the rigid sheet's contact-shell jitter
-(`cloth.contact_margin_offset`, +-3 mm), which belongs to the shell's configuration.
+`assets.*_friction`, `rigid_cloth.*`, `physx_chain.friction_model`; `task.yaml` has the task's, and a
+recipe changes them in its `env:` (`experiments/nov10_right_wuji_obs_dr/flat7FlexivWujiRHL.yaml`
+has the real setup's, with where each comes from). DR is a range around those centres, under
+`domain_randomization`, in six groups (`schema/env.py`); every range is neutral by default, and
+`task.yaml` sets one: the rigid sheet's contact-shell jitter (`cloth.contact_margin_offset`, +-3 mm).
 
 ## DR blocks
 

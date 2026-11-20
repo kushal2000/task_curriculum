@@ -67,7 +67,6 @@ __all__ = [
     "load_pool",
     "sized",
     "POOL",
-    "DEFAULT_SHAPES",
     "shape",
 ]
 
@@ -494,12 +493,6 @@ def load_pool(design_dir: str | Path = DESIGN_DIR) -> dict[str, FoldShape]:
 
 #: Every pool shape, loaded from ``DESIGN_DIR`` (the seven of the flat7 recipes).
 POOL: dict[str, FoldShape] = load_pool()
-
-#: ``FoldPoolCfg.shapes`` default (five shapes; the flat7 recipes add ``box4`` and ``star8`` by name).
-DEFAULT_SHAPES: tuple[str, ...] = (
-    "box2-mid", "box2diag4-mid", "box2x8-mid", "cross4-mid", "corners8-mid",
-)
-
 
 def sized(name: str, size: float, thickness: float) -> FoldShape:
     """Pool shape ``name`` at another sheet size and plate thickness (same design, scaled)."""
