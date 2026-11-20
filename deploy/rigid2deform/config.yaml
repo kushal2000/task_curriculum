@@ -303,7 +303,10 @@ perception:
                               #   to its size (640 x 480 -> 512 x 384) and the cloud comes from that
     edge_jump_m: 0.01         # a pixel with a neighbour this much nearer / further is dropped (flying pixels
                               #   between a finger and the cloth below)
-    table_band_m: 0.01        # a point this close above the table top (cloud_obs: 0.33 m above the base; the
+    # table_band_m 0.03, not 0.01 (Nov 19): next to a hand or an arm close over the board, raw depth reads
+    # the black board 1-3 cm too high, in dense patches (15 of the 1024 sent points; 2 cm: 4, 3 cm: 0). The
+    # cost: the robot hand's black parts (11-35 % of its pixels) vanish below 3 cm
+    table_band_m: 0.03        # a point this close above the table top (cloud_obs: 0.33 m above the base; the
                               #   real one: 0.328 at the box centre, Nov 17) or below it, and black, is the
     table_dark_max: 100       #   table: dropped (training's cloud has no table). Black = chroma (brightest -
     table_grey_max: 140       #   darkest RGB channel) <= table_chroma_max, and dark (brightest channel <=
@@ -314,8 +317,19 @@ perception:
                               #   0-5 %, purple / cyan cloth 0 % removed. Still kept: camera B's white logo on
                               #   the table and the robot light's blue glow, the blue tape. A point the colour
                               #   camera does not see counts as black. A dark or grey cloth would go too
+    below_table_m: 0.005      # the box's floor: this far under the table top (training's box: 2 cm, but its
+                              #   cloud has nothing there; Nov 17: 3 such points moved the action by 0.3)
+    table_rim_m: 0.03         # a point at most table_rim_band_m above the table top and this close to the
+    table_rim_band_m: 0.015   #   box's side walls is dropped, whatever its colour: the board's edge, tape, the
+                              #   robot light's glow. Nov 19: 7 of the 1024 sent points were these, 0.6 left
+                              #   (2 cm: 3.9). 0 = off. A cloth lying within this of the box's edge loses that part
     voxel_m: 0.005            # merge both cameras' points, one per voxel this size (uniform density, as
                               #   training's area-weighted sampling), then N_POINTS at random
+    outlier_radius_m: 0.015   # after the voxels: a point with fewer than outlier_min_neighbours others within
+    outlier_min_neighbours: 8 #   this is dropped (0 = off; a surface has ~25). Raw depth's noise 1-2 cm over
+                              #   the black board (above table_band_m, so the colour test misses it) and its
+                              #   flying pixels around the hand: Nov 19, raw 11 unsteady points of the 1024
+                              #   (foundationstereo 2). ~7 ms a step
     ref_plane_m: 0.015        # the reference / goal (perception/cloud_reference.py, at the start): the cloth = the points
                               #   at most this above training's table top (0.33; a hand above the cloth is
                               #   not cloth), the connected piece under the click

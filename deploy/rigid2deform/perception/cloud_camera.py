@@ -24,14 +24,20 @@ camera's newest frameset:
   2. drop invalid pixels and flying ones (a neighbour more than edge_jump_m nearer / further)
   3. pixels -> points in the depth sensor's frame -> the robot base frame (T_base_cam of the extrinsics
      file, which calibrates the colour camera, x the device's depth -> colour transform)
-  4. keep the points in training's box (in_box: the table top, 2 cm below it, no ceiling)
+  4. keep the points in training's box (in_box: the table top, 2 cm below it, no ceiling), but only down to
+     below_table_m under the table top (training's cloud has nothing there; the real one: depth noise)
   5. the table: a point within table_band_m of the table top (or below it) whose colour (the colour
      image's pixel under it) is black is dropped. Black: chroma (brightest - darkest RGB channel) <=
      table_chroma_max, and either dark (brightest channel <= table_dark_max) or a cool grey up to
      table_grey_max (red - blue <= table_warm_max: the glossy tape's highlights; the brown wood is warm,
      R - B ~ +24). Chroma, not HSV saturation: the darkest pixels' S jumps to 130-250. Measured Nov 18
      on both cameras: 0.3-0.6 % of the black tape kept; wood 0-5 %, the purple / cyan cloth 0 % removed
-then both cameras' points together -> one per voxel_m voxel -> at most cloud_obs.N_POINTS (1024) at
+  6. the table's rim: a point at most table_rim_band_m above the table top and within table_rim_m of the
+     box's side walls is dropped whatever its colour (the board's edge, its tape, the robot light's glow:
+     Nov 19, 7 of the 1024 sent points; with 3 cm, 0.6). The arm and the hand, higher, stay
+then both cameras' points together -> one per voxel_m voxel -> no lone ones (a voxel with fewer than
+outlier_min_neighbours others within outlier_radius_m: raw depth's noise over the black board and its
+flying pixels around the hand; a surface has ~25) -> at most cloud_obs.N_POINTS (1024) at
 random -> point_cloud (deploy/utils/link.py send_cloud; t = the older camera frame's time, so the policy
 sees how old it is). The hand and the arm stay in the cloud: training's cloud has them.
 
@@ -85,12 +91,14 @@ class CloudCamera:
         self.T_color_base = self.dev.T_color_depth @ np.linalg.inv(self.T_base_depth)
         self.edge_jump = float(pc.edge_jump_m)
         self.table_top = TABLE_Z_BASE + float(pc.table_band_m)
+        self.floor = TABLE_Z_BASE - float(pc.below_table_m)
+        self.rim, self.rim_top = float(pc.table_rim_m), TABLE_Z_BASE + float(pc.table_rim_band_m)
         self.dark_max, self.grey_max = int(pc.table_dark_max), int(pc.table_grey_max)
         self.chroma_max, self.warm_max = int(pc.table_chroma_max), int(pc.table_warm_max)
         self._rays = {}                                # depth image size -> (H, W, 3) base-frame rays
 
     def points(self, frame, fs: FoundationStereo | None, times: dict) -> tuple[np.ndarray, dict]:
-        """(N, 3) float32 base-frame points of this frameset, after steps 1-5; counts of each step."""
+        """(N, 3) float32 base-frame points of this frameset, after steps 1-6; counts of each step."""
         t0 = time.perf_counter()
         if fs is None:
             depth, K = frame.depth, self.dev.K_depth
@@ -102,7 +110,7 @@ class CloudCamera:
         valid = valid_depth(depth)
         keep = valid & ~depth_edges(depth, self.edge_jump)
         p_all = self.T_base_depth[:3, 3].astype(np.float32) + self._rays[depth.shape] * depth[..., None]
-        inside = keep & in_box(p_all)
+        inside = keep & in_box(p_all) & (p_all[..., 2] >= self.floor)
         p_base = p_all[inside]
         t2 = time.perf_counter()
         low = np.flatnonzero(p_base[:, 2] < self.table_top)
@@ -114,12 +122,15 @@ class CloudCamera:
         black = ~seen | (grey & ((hi <= self.dark_max) | ((hi <= self.grey_max) & cool)))
         drop = np.zeros(len(p_base), bool)
         drop[low[black]] = True
+        xy = p_base[:, :2]
+        rim = ((p_base[:, 2] < self.rim_top) & ~drop
+               & ((xy < BOX_LO_BASE[:2] + self.rim) | (xy > BOX_HI_BASE[:2] - self.rim)).any(axis=1))
         t3 = time.perf_counter()
         for k, dt in zip(STAGES, (t1 - t0, t2 - t1, t3 - t2)):
             times[k] = times.get(k, 0.0) + dt
         counts = {"valid": int(valid.sum()), "edges": int(valid.sum() - keep.sum()), "box": len(p_base),
-                  "table": int(drop.sum())}
-        return p_base[~drop], counts
+                  "table": int(drop.sum()), "rim": int(rim.sum())}
+        return p_base[~(drop | rim)], counts
 
     def overlay(self, image: np.ndarray, xyz: np.ndarray, ref=None) -> np.ndarray:
         """The colour image with base-frame points drawn on it (green, 3 x 3 px), then the reference."""
@@ -138,8 +149,10 @@ class CloudCamera:
         return out
 
 
-def merged_cloud(cams: list, frames: list, fs, voxel_m: float, times: dict, counts: dict) -> np.ndarray:
-    """Every camera's points of these framesets (steps 1-5), together, one per voxel: (N, 3) float32."""
+def merged_cloud(cams: list, frames: list, fs, voxel_m: float, times: dict, counts: dict,
+                 outlier: tuple[float, int] = (0.0, 0)) -> np.ndarray:
+    """Every camera's points of these framesets (steps 1-6), together, one per voxel, without the lone
+    ones (outlier = (radius m, least neighbours); 0 = keep all): (N, 3) float32."""
     parts = []
     for cam, frame in zip(cams, frames):
         pts, c = cam.points(frame, fs, times)
@@ -148,6 +161,12 @@ def merged_cloud(cams: list, frames: list, fs, voxel_m: float, times: dict, coun
             counts[f"{cam.name}:{k}"] = counts.get(f"{cam.name}:{k}", 0) + v
     t0 = time.perf_counter()
     vox = voxel_downsample(np.concatenate(parts), voxel_m)
+    radius, least = outlier
+    if radius > 0 and least > 0 and len(vox):
+        from scipy.spatial import cKDTree
+        near = cKDTree(vox).query_ball_point(vox, radius, return_length=True) - 1     # not itself
+        counts["lone"] = counts.get("lone", 0) + int((near < least).sum())
+        vox = vox[near >= least]
     times["merge"] = times.get("merge", 0.0) + time.perf_counter() - t0
     return vox
 
@@ -215,9 +234,10 @@ def main() -> None:
     rng = np.random.default_rng()
     period = 1.0 / float(pc.rate_hz)
     voxel_m = float(pc.voxel_m)
+    outlier = (float(pc.outlier_radius_m), int(pc.outlier_min_neighbours))
 
     try:
-        ref = cloud_reference.pick(cams[0], cams, lambda frames: merged_cloud(cams, frames, fs, voxel_m, {}, {}),
+        ref = cloud_reference.pick(cams[0], cams, lambda frames: merged_cloud(cams, frames, fs, voxel_m, {}, {}, outlier),
                                    cfg, mode, rng)
     except KeyboardInterrupt:
         if stream is not None:
@@ -240,7 +260,7 @@ def main() -> None:
             last_t = first.t
             frames = [first] + [c.dev.latest() for c in cams[1:]]
 
-            vox = merged_cloud(cams, frames, fs, voxel_m, report["times"], report["counts"])
+            vox = merged_cloud(cams, frames, fs, voxel_m, report["times"], report["counts"], outlier)
             xyz = vox if len(vox) <= N_POINTS else vox[rng.choice(len(vox), N_POINTS, replace=False)]
 
             t_frames = [f.t for f in frames]
@@ -276,12 +296,12 @@ def print_report(report: dict, cams: list, now: float) -> None:
     times = " ".join(f"{k} {1000 * report['times'].get(k, 0.0) / n:.1f}" for k in STAGES)
     per_cam = "; ".join(
         f"{c.name.split('_')[0]} " + " ".join(f"{k} {report['counts'].get(f'{c.name}:{k}', 0) // n}"
-                                               for k in ("valid", "edges", "box", "table"))
+                                               for k in ("valid", "edges", "box", "table", "rim"))
         for c in cams)
     stale = [f"{c.name} {now - c.dev.latest().t:.1f} s" for c in cams if now - c.dev.latest().t > 0.5]
     print(f"[cloud_camera] {report['steps'] / (now - report['t']):.1f} Hz, ms/step: {times}; "
           f"age {1000 * report['age'] / n:.0f} ms; per camera (px / points): {per_cam}; "
-          f"voxels {report['voxels'] // n}, sent {report['sent'] // n}"
+          f"lone {report['counts'].get('lone', 0) // n}, voxels {report['voxels'] // n}, sent {report['sent'] // n}"
           + (f"; NO NEW FRAMES: {', '.join(stale)}" if stale else ""), flush=True)
 
 
