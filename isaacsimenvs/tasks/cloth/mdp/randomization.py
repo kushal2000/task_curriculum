@@ -13,8 +13,8 @@ reset, in a FIXED order (it sets the random stream):
     hand dynamics     (``robot.hand_friction_scale``, ``robot.hand_effort_limit_scale``; PhysX only)
 
 The robot terms are written to the articulation here. The per-step terms (delays, noise) are
-applied where they act: :class:`~.actions.JointController` and
-:class:`~.observations.ObservationBuilder`, each with its own ``delay.DelayLine``.
+applied where they act: :class:`~.actions.JointController` and the sensors in ``perception/``
+(``proprio.py``, ``keypoints.py``), each with its own ``delay.DelayLine``.
 """
 
 from __future__ import annotations
@@ -59,9 +59,9 @@ class DomainRandomization:
         self.proprio_lag = torch.zeros(n, dtype=torch.long, device=dev)
         self.action_lag = torch.zeros(n, dtype=torch.long, device=dev)
         self.keypoints_lag = torch.zeros(n, dtype=torch.long, device=dev)
-        self.object_bias_pos = torch.zeros(n, 3, device=dev)
-        self.object_bias_quat = torch.zeros(n, 4, device=dev)
-        self.object_bias_quat[:, 0] = 1.0
+        self.keypoints_bias_pos = torch.zeros(n, 3, device=dev)
+        self.keypoints_bias_quat = torch.zeros(n, 4, device=dev)
+        self.keypoints_bias_quat[:, 0] = 1.0
         # Columns: arm stiffness, hand stiffness, arm damping, hand damping.
         self.robot_gain_scale = torch.ones(n, 4, device=dev)
         rob = dr.robot
@@ -133,11 +133,11 @@ class DomainRandomization:
         n = env_ids.numel()
         if any(float(v) != 0.0 for v in kp.pos_bias):
             half = torch.as_tensor(tuple(float(v) for v in kp.pos_bias), device=self.device)
-            self.object_bias_pos[env_ids] = (torch.rand(n, 3, device=self.device) * 2.0 - 1.0) * half
+            self.keypoints_bias_pos[env_ids] = (torch.rand(n, 3, device=self.device) * 2.0 - 1.0) * half
         if float(kp.rot_bias_deg) > 0.0:
             ident = torch.zeros(n, 4, device=self.device)
             ident[:, 0] = 1.0
-            self.object_bias_quat[env_ids] = perturb_quat(ident, float(kp.rot_bias_deg))
+            self.keypoints_bias_quat[env_ids] = perturb_quat(ident, float(kp.rot_bias_deg))
 
     def _draw_robot_gains(self, env_ids, rob) -> None:
         """PD gain DR: one stiffness and one damping factor per env, arm and hand separately."""

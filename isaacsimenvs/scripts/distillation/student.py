@@ -7,7 +7,7 @@ block (default the last: coefficient 0, task reward only -- what every evaluatio
 
 ``StudentNet`` is the same LSTM + MLP + mu. Its input is the teacher's proprioceptive observation
 columns (same normaliser) and a PointNet feature in place of the sheet's columns
-(``mdp/observations.OBJECT_FIELDS``): the env's ``obs.object: pointcloud`` vector. ``load_teacher`` copies every teacher weight that still has a counterpart;
+(``perception/keypoints.OBJECT_FIELDS``): the env's ``obs.object: pointcloud`` vector. ``load_teacher`` copies every teacher weight that still has a counterpart;
 the SAPG embedding is a constant, so it is folded into the LSTM input bias.
 
 Torch only -- no rl_games, no Isaac Lab -- so both are unit-tested on CPU.

@@ -29,7 +29,7 @@ cloud is ``xyz`` only):
 
 Every point is ``(xyz - box centre) * scale`` (+ a one-hot label when there is more than one
 group). Torch only, unit-tested on CPU (tests/test_pointcloud.py). Metres, env frame. The env's
-observation of it is ``perception/observation.py``.
+observation of it is ``perception/pointcloud_obs.py``.
 """
 
 from __future__ import annotations

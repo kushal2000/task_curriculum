@@ -30,8 +30,9 @@ class StudentPlayer:
         from isaacsimenvs.scripts.distillation.pc_rl import load_student_any
         from isaacsimenvs.scripts.distillation.student import StudentNet, apply_student_env, split_columns
         from isaacsimenvs.tasks.cloth.mdp.delay import DelayLine
-        from isaacsimenvs.tasks.cloth.mdp.observations import AUX_FIELDS, OBJECT_FIELDS, obs_dim
-        from isaacsimenvs.tasks.cloth.perception.observation import PointCloudObservation
+        from isaacsimenvs.tasks.cloth.mdp.observations import obs_dim
+        from isaacsimenvs.tasks.cloth.perception.keypoints import AUX_FIELDS, OBJECT_FIELDS
+        from isaacsimenvs.tasks.cloth.perception.pointcloud_obs import PointCloudObservation
         from isaacsimenvs.tasks.recipes import dr_block
 
         ckpt = load_student_any(checkpoint_path)             # a distilled student or an RL-trained one

@@ -31,7 +31,8 @@ cloth/
                       the moving half as a rigid object
     task.py           ClothTask: episode start (table, sheet), dones, reward, the goal as state
     goal_tasks.py     GoalTasks: one-fold goal tasks on the rigid pool (fold_pool.goal_task)
-    observations.py   ObservationBuilder: policy and critic vectors, observation DR
+    observations.py   ObservationBuilder: assembles the policy, critic and teacher vectors from the
+                      sensors (perception/) and the task fields
     randomization.py  DomainRandomization: per-episode observation / action / robot DR draws
                       (fixed order); DelayLine
     geometry/         grid.py (sheet grid, keypoints, fold targets), fold_shapes.py (pool shapes),
@@ -49,9 +50,13 @@ cloth/
     vbd/              VbdBackend (backend.py) on Newton: physics.py (the coupled MJWarp + VBD
                       solve from the config), newton_setup.py, pierce.py,
                       newton_support/ (Isaac Lab 3.0 compat, patches, USD cache)
-  perception/         the point cloud a policy reads with obs.object: pointcloud: pointcloud.py
-                      (the two cameras' cloud), observation.py (PointCloudObservation: from the
-                      sim state), robot_surface.py (samples on the robot's link meshes)
+  perception/         the sensors: what the real robot would report, built from the sim state, each
+                      with its per-step DR (noise, delay); never writes the sim
+    proprio.py        ProprioObservation: joints, last targets, palm, fingertips (Play frame)
+    keypoints.py      KeypointObservation: the sheet as a rigid object + 4 keypoints; OBJECT_FIELDS
+    pointcloud_obs.py PointCloudObservation: the cloud with obs.object: pointcloud
+    pointcloud.py     the two cameras' cloud (visibility, noise, crop; torch only)
+    robot_surface.py  samples on the robot's link meshes
   tests/
 ```
 

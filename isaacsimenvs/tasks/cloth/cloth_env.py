@@ -32,11 +32,12 @@ from isaacsimenvs.robots import robot_spec
 
 from .backends.base import ClothBackend
 from .mdp.actions import JointController
-from .mdp.observations import OBJECT_FIELDS, ObservationBuilder, obs_dim
+from .mdp.observations import ObservationBuilder, obs_dim
 from .mdp.randomization import DomainRandomization
 from .mdp.robot import RobotLayout, to_torch
 from .mdp.state import FoldView, SimState
 from .mdp.task import ClothTask
+from .perception.keypoints import OBJECT_FIELDS
 
 __all__ = ["ClothEnv"]
 
@@ -51,7 +52,7 @@ class ClothEnv(DirectRLEnv):
         cfg.action_space = n_joints
         cfg.observation_space = obs_dim(cfg.obs.obs_list, n_joints)
         if cfg.obs.object == "pointcloud":  # [proprio | points (M x D) | mask (M)]
-            from .perception.observation import point_cloud_layout
+            from .perception.pointcloud_obs import point_cloud_layout
 
             m, d = point_cloud_layout(cfg.obs.pointcloud)
             cfg.observation_space = obs_dim([f for f in cfg.obs.obs_list if f not in OBJECT_FIELDS], n_joints) + m * d + m

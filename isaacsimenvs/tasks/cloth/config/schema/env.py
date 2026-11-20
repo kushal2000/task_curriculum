@@ -77,7 +77,7 @@ class ObsCfg:
     clamp_abs_observations: float = MISSING
     object: str = MISSING
     """How the policy sees the sheet. ``keypoints``: the ``obs_list`` fields as listed. ``pointcloud``:
-    the ``obs_list`` fields that are not the sheet's (``observations.OBJECT_FIELDS``), then the cloud
+    the ``obs_list`` fields that are not the sheet's (``perception/keypoints.OBJECT_FIELDS``), then the cloud
     (``pointcloud``); the keypoint vector stays available as the clean ``teacher`` group."""
     pointcloud: PointCloudObsCfg = PointCloudObsCfg()
 

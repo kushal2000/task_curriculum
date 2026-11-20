@@ -92,7 +92,8 @@ class StudentInput:
         import torch
 
         from isaacsimenvs.scripts.distillation.student import split_columns
-        from isaacsimenvs.tasks.cloth.mdp.observations import AUX_FIELDS, OBJECT_FIELDS, obs_dim
+        from isaacsimenvs.tasks.cloth.mdp.observations import obs_dim
+        from isaacsimenvs.tasks.cloth.perception.keypoints import AUX_FIELDS, OBJECT_FIELDS
 
         self.inner = inner
         obs_list = list(inner.cfg.obs.obs_list)
