@@ -25,8 +25,14 @@ RIGHT_DEFAULTS = {"checkpoint": "pretrained_policy/nov6_dr.pth", "config": "pret
 
 
 def check_policy_side(cfg) -> None:
-    """Refuse a policy trained for the other hand than robot.side."""
+    """Refuse a missing checkpoint, or a policy trained for the other hand than robot.side."""
     side, pol = cfg.robot.side, cfg.policy
+    if cfg.robot.mode != "policy":          # only policy mode loads it (runner.py)
+        return
+    # rl_games' restore() skips a missing file silently: the run would go on with random weights
+    for k in ("checkpoint", "config"):
+        if not repo_path(pol[k]).is_file():
+            raise SystemExit(f"[run] policy.{k}={pol[k]}: no such file ({repo_path(pol[k])})")
     if side != "right":
         kept = [k for k, v in RIGHT_DEFAULTS.items() if str(pol[k]) == v]
         if kept:
