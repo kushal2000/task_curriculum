@@ -179,7 +179,7 @@ class A2CBase(BaseAlgorithm):
         # off) writes a weights-only `nn/snap_<name>_ep_<N>.pth` (model + normalizers, enough for
         # eval, ~1/8 the size) that is never deleted -- the points of a score-vs-epoch curve.
         self.periodic_save_every = int(config.get('periodic_save_every', 0))
-        self.periodic_keep = int(config.get('periodic_keep', 15))
+        self.periodic_keep = int(config.get('periodic_keep', 2))
         self.periodic_keep_epochs = {int(e) for e in (config.get('periodic_keep_epochs', None) or [])}
         self.snapshot_every = int(config.get('snapshot_every', 0))
         self.print_stats = config.get('print_stats', True)
@@ -1696,10 +1696,8 @@ class ContinuousA2CBase(A2CBase):
                     if self.save_freq > 0:
                         if int(math.sqrt(epoch_num // self.save_freq)) ** 2 == epoch_num // self.save_freq and epoch_num % self.save_freq == 0:
                             self.save(os.path.join(self.nn_dir, 'last_' + checkpoint_name), all_state_dict)
-                        if epoch_num % 200 == 0:    
+                        if epoch_num % 200 == 0:
                             torch_ext.safe_filesystem_op(os.makedirs, os.path.join(self.experiment_dir, 'last'), exist_ok=True)
-                            if os.path.exists(os.path.join(self.experiment_dir, 'last', 'model.pth')):
-                                os.system(f"cp {os.path.join(self.experiment_dir, 'last', 'model.pth')} {os.path.join(self.experiment_dir, 'last', 'model.pth.old')}")
                             self.save(os.path.join(self.experiment_dir, 'last', 'model'), all_state_dict)
 
                     if (mean_rewards[0] > self.last_mean_rewards and epoch_num >= self.save_best_after
