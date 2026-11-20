@@ -18,6 +18,10 @@ env/
 # Training / experiment outputs
 train_dir/
 outputs/
+deploy/logs/
+deploy/calibration/captures/
+deploy/calibration/compare/
+deploy/calibration/extrinsics/
 wandb/
 videos/
 evals/
@@ -34,8 +38,11 @@ pretrained_assembly/
 
 # Third-party source checkouts (Isaac Lab 3.0 for the Newton backend).
 # Not a submodule by choice: the pinned SHA lives in docs/installation/install_isaaclab3.sh, so the
-# checkout is reproducible without carrying submodule machinery in the repo.
-third_party/
+# checkout is reproducible without carrying submodule machinery in the repo. The real-robot drivers
+# (aioflexiv, aiowuji) ARE submodules: `git submodule update --init third_party/aio*`.
+third_party/*
+!third_party/aioflexiv
+!third_party/aiowuji
 
 # Pytest
 .pytest_cache/
@@ -72,3 +79,7 @@ assets/flexiv_wuji/wuji_hand2_right_sysid_fit_*.json
 # Cluster-specific launch wrappers (partition, GPUs, bad nodes, chained drivers): local to each machine.
 # The scheduler-agnostic launchers are experiments/*.sh.
 /cluster/
+
+# SimToolReal deploy: the lift1 open-loop rollout archive (robot.mode=openloop; tens of MB). Its sim
+# rollouts sit in docs/results/simtoolreal/, ignored with the rest of docs/results above.
+/lift1.zip

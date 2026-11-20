@@ -1,0 +1,345 @@
+# Deploy settings for the rigid2deform policies (branch yiboc_wuji: rigid plates standing in for a
+# deformable sheet) on Flexiv Rizon 4s + right Wuji Hand 2. task picks what the policy does.
+#
+# Two kinds of numbers:
+#   - this file: choices you make when deploying (which robot, gains, safety limits, ...). Edit freely.
+#   - spec file (spec_path below): facts copied from the training env (joint limits, obs layout,
+#     action pipeline, the fold geometry, ...). Never edit by hand; regenerate it with checks/export_fold_spec.py.
+#
+# run.py and policy.py read this file; run.py hands it to the shared nodes (deploy/nodes/) as
+# config=deploy/rigid2deform/config.yaml. Override any value on the command line with dotted keys, e.g.
+#   python run.py robot.mode=home robot.arm=<ROBOT_SN> robot.hand=<HAND_SN>
+#   python run.py mode=pc_goal record.name=fold_try1
+#   python run.py policy.checkpoint=deploy/rigid2deform/policy/box2RW_allDR.pth record.name=fold_try1
+# A key that is not in this file is an error. deploy/utils/config.py prints the merged config.
+#
+# Frames: "env" = the frame the policy observes in (Play's): robot base at (0, 0.8, 0); the fold
+# training table's top is at env z 0.33 m. Lengths in metres, angles in degrees unless the name says otherwise.
+
+task: fold                  # fold: turn one plate of a taped two-plate sheet over onto the other (fold.py)
+spec_path: deploy/rigid2deform/spec/spec_flexiv_wuji_right_fold.json   # robot URDF next to it
+mode: pc_label              # pc_label | pc_goal (point cloud: perception/cloud_camera.py, the reference | the goal)
+                            #   | foundationpose (object.name: two plates) | cotracker (object.name=[cloth]).
+                            #   Picks the perception (perception/main.py) and, with policy.checkpoint null,
+                            #   the network (policy.default_checkpoint); see mode.py. Give run.py and
+                            #   perception/main.py the same one (both read this file)
+
+# ------------------------------------------------------------------------------------------- bus
+# The processes talk over ZMQ (deploy/utils/link.py). Each publisher binds its own port; anyone may subscribe.
+# Every pose on the bus is in the robot base frame.
+bus:
+  host: 127.0.0.1           # the machine the publishers run on
+  object_pose_port: 5560    # perception/main.py -> object_pose, camera_image
+  joint_state_port: 5561    # robot.py -> joint_state
+  policy_port: 5562         # policy.py -> joint_target, goal_pose
+  camera_frame_port: 5563   # perception/main.py (plates and cloth) -> camera_frame (every camera frame, raw, for the recorder)
+  point_cloud_port: 5564    # perception/main.py (point cloud: perception/cloud_camera.py) -> point_cloud (binary, deploy/utils/link.py)
+
+# ----------------------------------------------------------------------------------------- run
+# run.py: robot.py in robot.mode, + viewer.py / recorder.py, + policy.py in policy mode
+run:
+  viewer: true              # start viewer.py; it stays open after robot and policy stop
+  confirm_hardware: true    # type 'go' before real hardware moves
+  duration_s: 300.0         # policy time to run (the episode's own timeout usually ends it first)
+
+# --------------------------------------------------------------------------------------- policy
+# The five runs in policy/ (flat7RW_base, _fricition, _sysid, _allDR, box2RW_allDR; the README says
+# what each trained on) share every spec number the deploy code reads (checks/export_fold_spec.py --compare).
+# The point-cloud students are in policy/pc/. The network must be of the kind `mode` says (keypoints: the
+# five; pointcloud: policy/pc/, and its pc_args.goal the mode's label | goal): policy.py refuses another.
+policy:
+  checkpoint: null          # null = default_checkpoint[mode]; or a path, e.g. deploy/rigid2deform/policy/box2RW_allDR.pth
+  default_checkpoint:
+    pc_label: deploy/rigid2deform/policy/pc/rigidcloth_pc_label_noiseDR_dagger.pth
+    pc_goal: deploy/rigid2deform/policy/pc/rigidcloth_pc_goal_dagger.pth
+    foundationpose: deploy/rigid2deform/policy/flat7RW_base.pth
+    cotracker: deploy/rigid2deform/policy/flat7RW_base.pth
+  config: pretrained_policy/config.yaml   # keypoint checkpoints only (rl_games' network config)
+  expl_coef: 0.0            # keypoint checkpoints only: SAPG block; 0 = the last block (task reward only)
+  joint_state_max_age_s: 0.05   # stop when the newest joint_state is older (robot.py died / stalled)
+
+# ---------------------------------------------------------------------------------------- robot
+robot:
+  mode: policy              # policy | home | free_drive (deploy/nodes/robot.py's docstring); openloop needs
+                            #   an openloop section, which this task has not
+  arm: mujoco               # robot serial number | mujoco (aioflexiv's MuJoCo Rizon)
+  hand: fake                # hand serial number | auto | dry_run (connected, never enabled) | fake (no hand)
+  hand_sn: null             # serial for hand: dry_run
+  mujoco_viewer: false
+
+  arm_gain_scale: 1.0       # real arm kp, kd = sim kp, kd x this
+  # Sim hand gains are Nm/rad; the Wuji firmware takes A/rad and applies ~1.95x the documented law:
+  #   kp_A = kp_Nm / (hand_kp_scale * Kt),  kd_A = kd_Nm / (hand_kd_scale * Kt)
+  # Kt (N m/A, per joint) and the scales come from the aiowuji sysid fit of this hand (WH2KA01260825022,
+  # firmware 2.10.0, fingers-up + palm-down runs, --fit-gear): wuji_hand2_sysid_data_2026-10-14.zip,
+  # reference/mujoco_fit_params.json.
+  hand_kp_scale: 1.9662     # firmware_law.kp_scale
+  hand_kd_scale: 1.9438     # firmware_law.kd_scale
+  hand_kt:                  # N m/A, aiowuji names
+    thumb_S1: 0.4390
+    thumb_S2: 0.2042
+    thumb_S3: 0.2546
+    thumb_S4: 0.2219
+    index_S1: 0.5986
+    index_S2: 0.2324
+    index_S3: 0.1795
+    index_S4: 0.1350
+    middle_S1: 0.6611
+    middle_S2: 0.2009
+    middle_S3: 0.1636
+    middle_S4: 0.1138
+    ring_S1: 0.5567
+    ring_S2: 0.2053
+    ring_S3: 0.1686
+    ring_S4: 0.1635
+    pinky_S1: 0.4777
+    pinky_S2: 0.1090
+    pinky_S3: 0.1002
+    pinky_S4: 0.1570
+  hand_effort_limit: 1.0    # A (aiowuji default 0.5, max 1.5)
+  hand_effort_limit_joints: {}  # per-joint exceptions, aiowuji names (thumb_S1 ... pinky_S4), A
+
+  move_speed: 0.3           # home: arm joint speed limit, rad/s (joint-space move, no table avoidance)
+  hand_move_speed: 0.5      # home, and policy's start: hand joint speed limit, rad/s
+  free_drive_kd_scale: 0.2  # free_drive: arm damping = sim damping x this (kp = 0)
+  free_drive_limit_margin_deg: 10.0  # free_drive: a soft wall starts this far before each arm joint limit
+  free_drive_ramp_s: 0.3    # free_drive: the stiffness goes / comes back over this long, not in one step
+  home_tolerance_arm_deg: 3.0    # every arm joint this close to spec default_q
+  home_tolerance_hand_deg: 15.0  # every hand joint (not checked with hand: dry_run, it hangs limp)
+  rate_hz: 200.0            # joint_state publish / target forward loop
+  target_timeout_s: 0.1     # no new joint_target for this long -> hold the measured pose
+
+  # policy mode safety. A trip: hold the measured pose (the hand keeps its grip), ignore every later
+  # target, report it in joint_state ("tripped"; policy.py then stops). Ctrl-C to end.
+  max_arm_tracking_deg: 25.0     # any arm joint this far from the target it is being sent
+                                 #   (training: < ~19 when the hand presses; mujoco test, no object: 3.2)
+  max_target_step_arm_deg: 2.0   # a new target this far from the last one sent, any arm joint
+                                 #   (training's action pipeline: at most 0.143 deg per policy step)
+  max_target_step_hand_deg: 20.0 # ... any hand joint (pipeline: at most 0.1 x the joint's range per
+                                 #   step, 12.5 deg for thumb_cmc_abd; mujoco test: 11.2)
+
+# --------------------------------------------------------------------------------------- object
+# object.name: what is on the table, from `objects` below. Each object's `perception` says which
+# perception node tracks it and how the policy turns that into the sheet's grid points (sheets/);
+# all of object.name must share one:
+#   foundationpose  [moving plate, stationary plate]: two rigid plates taped along one edge;
+#                   perception/main.py runs deploy/nodes/perception.py: one box to click per plate, in this order
+#   cotracker       [cloth]: a cloth, points on it tracked by CoTracker (perception.cotracker);
+#                   perception/main.py runs perception/cloth_tracker.py: click the points in its window (sheets/cloth_points.py)
+object:
+  name: [plate5_brown, plate5_white]
+
+# Known objects. Plates: scale = the grasp box (scale x 4 cm), not read by this task (fold.py builds
+# object_scales from the sheet size); mesh: a box centred on its origin, long side twice the short one,
+# z thickness: the sheet's size and hinge come from it. FoundationPose returns the pose of this mesh's frame.
+objects:
+  cloth:                      # any square cloth; give fold.sheet_size
+    perception: cotracker
+  plate7_white:
+    perception: foundationpose
+    scale: [3.5, 1.75, 0.05]  # 14 x 7 x 0.2 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate7_white/plate7_white.obj   # 14 x 7 x 0.2 cm box centred on the origin, x long, z thickness; RGB (195, 193, 198) as the D415 sees plate5_white (Nov 12)
+    color: [195, 193, 198]       # RGB as the D415 sees it (measured; nothing reads it now)
+  plate7_brown:
+    perception: foundationpose
+    scale: [3.5, 1.75, 0.05]
+    mesh: deploy/rigid2deform/objects/plate7_brown/plate7_brown.obj   # the same box, RGB (153, 123, 94) as the D415 sees it (Nov 12)
+    color: [153, 123, 94]       # RGB as the D415 sees it (measured; nothing reads it now)
+  plate75_2_white:
+    perception: foundationpose
+    scale: [3.75, 1.875, 0.05]  # 15 x 7.5 x 0.2 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate75_2_white/plate75_2_white.obj   # 15 x 7.5 x 0.2 cm box centred on the origin, x long, z thickness; plate7_white's colour
+    color: [195, 193, 198]       # RGB as the D415 sees plate5_white (measured; nothing reads it now)
+  plate75_2_brown:
+    perception: foundationpose
+    scale: [3.75, 1.875, 0.05]
+    mesh: deploy/rigid2deform/objects/plate75_2_brown/plate75_2_brown.obj   # the same box, plate7_brown's colour
+    color: [153, 123, 94]       # RGB as the D415 sees plate7_brown (measured; nothing reads it now)
+  plate75_5_white:
+    perception: foundationpose
+    scale: [3.75, 1.875, 0.125]  # 15 x 7.5 x 0.5 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate75_5_white/plate75_5_white.obj   # plate75_2_white's box scaled to 5 mm thick
+    color: [195, 193, 198]       # RGB as the D415 sees plate5_white (measured; nothing reads it now)
+  plate75_5_brown:
+    perception: foundationpose
+    scale: [3.75, 1.875, 0.125]
+    mesh: deploy/rigid2deform/objects/plate75_5_brown/plate75_5_brown.obj   # plate75_2_brown's box scaled to 5 mm thick
+    color: [153, 123, 94]       # RGB as the D415 sees plate7_brown (measured; nothing reads it now)
+  plate5_white:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.125] # 10 x 5 x 0.5 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate5_white/plate5_white.obj   # 10 x 5 x 0.5 cm box centred on the origin, x long, z thickness; RGB (195, 193, 198) as the D415 sees it (Nov 12)
+    color: [195, 193, 198]       # RGB as the D415 sees it (measured; nothing reads it now)
+  plate5_brown:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.125]
+    mesh: deploy/rigid2deform/objects/plate5_brown/plate5_brown.obj   # the same box, plate7_brown's colour
+    color: [153, 123, 94]       # RGB as the D415 sees it (measured; nothing reads it now)
+  plate5_2_white:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.05]  # 10 x 5 x 0.2 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate5_2_white/plate5_2_white.obj   # plate5_white's box scaled to 2 mm thick
+    color: [195, 193, 198]       # RGB as the D415 sees plate5_white (measured; nothing reads it now)
+  plate5_2_brown:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.05]
+    mesh: deploy/rigid2deform/objects/plate5_2_brown/plate5_2_brown.obj   # plate5_brown's box scaled to 2 mm thick
+    color: [153, 123, 94]       # RGB as the D415 sees plate5_brown (measured; nothing reads it now)
+  plate5_red:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.125] # 10 x 5 x 0.5 cm grasp box
+    mesh: deploy/rigid2deform/objects/plate5_red/plate5_red.obj   # 10 x 5 x 0.5 cm box centred on the origin, x long, z thickness
+    color: [198, 61, 69]        # RGB as the D415 sees it (Nov 12; tol 40: no stray pixels on hand, table, arm)
+  plate5_green:
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.125]
+    mesh: deploy/rigid2deform/objects/plate5_green/plate5_green.obj   # the same box, green
+    color: [45, 148, 113]       # RGB as the D415 sees it (Nov 12; tol 40: <= 130 stray pixels, on the arm's cyan LED rings)
+  cloth5_purple:              # the 10 x 10 cm two-colour cloth (Nov 15): its purple half
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.025] # 10 x 5 x 0.1 cm grasp box
+    mesh: deploy/rigid2deform/objects/cloth5_purple/cloth5_purple.obj   # plate5_2_white's box scaled to 1 mm thick, purple
+    color: [143, 71, 173]       # RGB from a phone photo (not yet measured on the D415)
+  cloth5_blue:                # ... its blue half
+    perception: foundationpose
+    scale: [2.5, 1.25, 0.025]
+    mesh: deploy/rigid2deform/objects/cloth5_blue/cloth5_blue.obj   # the same box, blue
+    color: [62, 142, 203]       # RGB from a phone photo (not yet measured on the D415)
+
+# ------------------------------------------------------------------------------------------ fold
+# task=fold: the fold-pool policy turns the moving half of the sheet over onto the stationary half
+# (plates: object.name[0] onto object.name[1]). fold.py has what the policy observes and the success test.
+fold:
+  sheet_size: null          # m, the sheet's side (training: 0.10-0.20). Plates: null = their meshes' long side
+                            #   (plate5: 0.10, plate7: 0.14, plate75: 0.15); set, it must match. A cloth: null =
+                            #   the longest side between its clicked corners, as a square's; set, used as is
+  success_tolerance_m: 0.05 # folded = every observed corner within this of its fold target (and the footprint test);
+                            #   null = training's keypoint_tolerance (0.015)
+  timeout_steps: 3600       # the episode's length in policy steps (60 Hz): 3600 = 60 s; 0 = training's 600 (10 s)
+  fake_fold_deg: 0.0        # fake perception: the moving half turned up this far (180 = folded)
+  # plates (perception foundationpose) only. The hinge runs along the plates' long side (from the mesh).
+  hinge_z: null             # m, hinge line above the plates' mid-plane; null = half their thickness (tape on
+                            #   the top face: plate5 / plate75_5 2.5 mm, plate5_2 / plate7 / plate75_2 1 mm). Training's hinge is on the
+                            #   mid-plane: the observed goal stays training's; the success test expects the
+                            #   folded plate 2 x hinge_z higher, where it really lands
+  max_hinge_gap_m: 0.03     # stop when the two plates' hinge edges are further apart (tracking lost / flipped);
+                            #   also the start test (lying flat side by side)
+
+# ----------------------------------------------------------------------------------- perception
+perception:
+  source: camera            # perception/main.py runs: camera (the objects' perception node) | fake (perception/fake_sheet.py: a still sheet)
+  max_age_s: 0.2            # policy.py treats older poses as "object lost" (cotracker: its own, below); also an
+                            #   older point_cloud (a point-cloud policy) stops the run
+
+  # camera (runs in the FoundationPose environment on the robot PC)
+  foundationpose_dir: ~/FoundationPose   # the kushal2000/FoundationPose checkout (estimater.py, generate_mask.py, weights/)
+  extrinsics: deploy/calibration/extrinsics/left_camera_nov7.json   # T_base_cam from calibrate_compare.py (D415 821312062243)
+  camera_serial: null       # null = the extrinsics file's camera_serial; perception/main.py refuses any other camera
+  camera_width: 640         # FoundationPose crops around the object, so a small image is enough
+  camera_height: 480        #   (upstream: 960 x 540 from a ZED)
+  camera_fps: 60            # 6 | 15 | 30 | 60 (D435 at 640 x 480). Pose rate = min(this, FoundationPose's speed)
+  register_iters: 5         # FoundationPose refine iterations at the first frame (upstream default)
+  track_iters: 2            # ... at every later frame (upstream default)
+  parallel_track: true      # several objects: track them at once, one thread + CUDA stream each; false = one by one
+  image_hz: 10.0            # camera_image for the viewer (JPEG); 0 = off
+  image_jpeg_quality: 80
+  frame_stream: true        # also send every camera frame raw (camera_frame) for recorder.py record.camera (cloth too)
+
+  # cotracker (perception/cloth_tracker.py, in the cotracker environment): CoTracker3 online on the same camera
+  # (camera_serial / extrinsics / camera_width / camera_height / camera_fps above; image_hz for the viewer)
+  cotracker:
+    # mode and sigma are perception/cloth_tracker.py's: they go out with object_points and the policy uses those, so
+    # give them to perception/main.py only (run.py's are not read; fake perception sends its own)
+    mode: grid              # what you click and how the points become the grid (sheets/cloth_points.py):
+                            #   grid: the 4 corners, the 49 grid points tracked | kp8: 8 points, the keypoints
+                            #   | fit: the 4 corners + any points on the cloth
+    cotracker_dir: ~/co-tracker   # the co-tracker checkout (cotracker/, rs_tracking/ for snapping clicks)
+    checkpoint: null        # null = <cotracker_dir>/checkpoints/scaled_online.pth
+    snap_radius: 8          # px: a click snaps to the strongest corner this near (m toggles in the window)
+    edge_inset: 0.1         # grid: track the 7 x 7 grid shrunk so its edge rows sit this far (x the side; 0.1 =
+                            #   1.5 cm on a 15 cm cloth) inside the clicked corners, off the cloth/table edge;
+                            #   the corners and edges then come from each half's fit (sent as mode fit). 0 = off
+    iters: 4                # refinement iterations per tracker run (the model's own: 6; 4 is ~30% faster,
+                            #   ~0.4 px worse on average)
+    compile: false          # torch.compile the refinement: 3-4 ms faster with one camera, no gain with two
+                            #   in parallel (perception/stereo_tracker.py); ~2 s to compile at start
+    auto_points: 30         # fit: how many points `a` adds
+    sigma: 0.25             # fit: the moving least squares width, x the side (0 = one rigid fit per half)
+    max_age_s: 0.35         # policy.py: older object_points = lost (results come in 8-frame batches:
+                            #   ~60 ms inference + 133 ms per batch at 60 fps)
+    max_lost_s: null        # a half with < 3 points seen (occluded): the policy keeps observing the last good
+                            #   particles until a frame fits again; null = wait for ever, a number = then stop
+    save_dir: null          # a directory: also an overlay mp4 + npz per run (null: only the bus / recorder)
+    # perception/stereo_tracker.py only: a second camera; A's clicks carried into it (the cloth's plane), matched pixels triangulated
+    stereo_extrinsics: deploy/calibration/extrinsics/right_camera_nov10.json   # camera B (its camera_serial picks it)
+    stereo_rate_hz: 30.0      # the loop: each step takes both cameras' newest frames, tracks, triangulates and
+                              #   publishes; slower if a step takes longer (both trackers ~34 ms on the 5090)
+    stereo_max_reproj_px: 4.0 # px: a triangulated point off by more in either view is not visible
+    stereo_snap: true         # B's 4 outer corners snap to image corners and the rest follow them
+    stereo_snap_radius: 20    # px: ... all 4 by one shift within this of where the calibrations put them
+                              #   (right_camera_nov10: 13 px off, nov14: 6), then each within snap_radius;
+                              #   a click in B's window moves a corner
+    stereo_align: true        # move camera B (position only) so A's points project onto B's at the start;
+                              #   false = B's calibration as it is (13 px off: nothing triangulates)
+
+  # pointcloud (perception/cloud_camera.py, a point-cloud policy's perception; in the foundationstereo environment):
+  # both D415s -> depth -> base frame -> training's box -> no flying pixels, no table -> merged -> voxels
+  # -> at most 1024 random points (cloud_obs.N_POINTS) -> point_cloud. camera_width / camera_height /
+  # camera_fps, image_hz, frame_stream above apply (camera_image and camera_frame: the first camera).
+  pointcloud:
+    depth: foundationstereo   # raw: the D415's own depth through raw_filters | foundationstereo: FoundationStereo
+                              #   on each D415's IR pair (emitter on in both). 5090: FS 31 ms per camera, so
+                              #   ~16 clouds/s; raw: rate_hz
+    extrinsics:               # one file per camera (T_base_cam of its colour camera); its camera_serial picks it
+      - deploy/calibration/extrinsics/left_camera_nov7.json
+      - deploy/calibration/extrinsics/right_camera_nov14.json   # not nov10: the table plane seen by B with nov14
+                              #   is 0.2 mm from A's at the box centre (nov10: 1 cm below; Nov 17, raw depth)
+    rate_hz: 30.0             # clouds per second at most (each waits for a new frame of the first camera)
+    raw_filters: [spatial, temporal]   # raw: librealsense's, in this order, in the disparity domain:
+                              #   spatial | temporal (keeps a missing pixel's depth from earlier frames) |
+                              #   hole_filling (makes up depth in holes: not for clouds); [] = none
+    foundationstereo_dir: ~/FoundationStereo   # the checkout (trt/fs_trt.py)
+    fs_engine: pretrained_models/trt/fs_23-51-11_384x512_it4.plan   # relative to it; the IR pair is resized
+                              #   to its size (640 x 480 -> 512 x 384) and the cloud comes from that
+    edge_jump_m: 0.01         # a pixel with a neighbour this much nearer / further is dropped (flying pixels
+                              #   between a finger and the cloth below)
+    table_band_m: 0.01        # a point this close above the table top (cloud_obs: 0.33 m above the base; the
+                              #   real one: 0.328 at the box centre, Nov 17) or below it, and black, is the
+    table_dark_max: 100       #   table: dropped (training's cloud has no table). Black = chroma (brightest -
+    table_grey_max: 140       #   darkest RGB channel) <= table_chroma_max, and dark (brightest channel <=
+    table_chroma_max: 35      #   table_dark_max) or a cool grey (<= table_grey_max, red - blue <=
+    table_warm_max: 5         #   table_warm_max: the glossy black tape's highlights, V up to 130; the brown
+                              #   wood plate is as dull but warm, R - B ~ +24). Not HSV saturation: noise on
+                              #   the darkest pixels. Nov 18, both cameras: black tape 0.3-0.6 % kept; wood
+                              #   0-5 %, purple / cyan cloth 0 % removed. Still kept: camera B's white logo on
+                              #   the table and the robot light's blue glow, the blue tape. A point the colour
+                              #   camera does not see counts as black. A dark or grey cloth would go too
+    voxel_m: 0.005            # merge both cameras' points, one per voxel this size (uniform density, as
+                              #   training's area-weighted sampling), then N_POINTS at random
+    ref_plane_m: 0.015        # the reference / goal (perception/cloud_reference.py, at the start): the cloth = the points
+                              #   at most this above training's table top (0.33; a hand above the cloth is
+                              #   not cloth), the connected piece under the click
+
+  # fake (perception/main.py -> perception/fake_sheet.py, not nodes/perception.py's fake): the SHEET's pose (hinge line middle,
+  # plates' mid-plane), [x, y, z, qw, qx, qy, qz] in the robot base frame. Default: training's sheet
+  # centre on the 0.33 m table, 5 mm plates. The plates (or points) are sent where they lie in it (fold.fake_fold_deg).
+  fake_pose_base: [0.0, -0.51, 0.3325, 1.0, 0.0, 0.0, 0.0]
+  fake_hz: 30.0
+
+# ---------------------------------------------------------------------------------------- record
+# recorder.py: started by run.py when record.name is set, e.g. run.py record.name=eraser_try1
+record:
+  name: null                # null = do not record. Else -> <dir>/<date>_<time>_<name>.jsonl
+  camera: false             # also record every camera frame (camera_frame) -> <file>.camera.mp4 (H.264)
+  camera_codec: libx264     # libx264 (CPU, ~0.4 core at 640x480 60 fps) | h264_nvenc (GPU; this ffmpeg needs driver >= 610)
+  camera_quality: 23        # x264 -crf / nvenc -cq: lower = better and bigger; 18 ~ visually lossless
+  dir: deploy/rigid2deform/recordings
+  video_fps: 60             # playback.py's mp4 export
+  video_height: 480         # px; the 3D view is 4:3, the camera image is scaled to the same height
+
+# ---------------------------------------------------------------------------------------- viewer
+# viewer.py: a live viser page of everything on the bus (only listens, never publishes)
+viewer:
+  port: 8091                # http://<robot PC>:8091
+  hz: 30.0                  # scene redraws per second
+  stale_s: 0.5              # a topic with nothing newer is marked stale in the status panel

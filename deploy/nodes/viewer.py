@@ -1,0 +1,257 @@
+"""The viewer node: a live viser page of everything on the bus. Only listens, never publishes, so it
+can be started and stopped at any time without touching the run.
+
+    .venv_deploy/bin/python deploy/nodes/viewer.py config=deploy/<task>/config.yaml   # then open http://<robot PC>:8091
+
+Subscribes  joint_state  -> the robot, at its measured joint angles
+            joint_target -> a green see-through robot at the policy's targets
+            object_pose  -> the object mesh
+            object_poses -> the other objects' meshes, each in its own colour (object.name a list)
+            object_points -> tracked points (a cloth): green seen, red not (an object without a mesh
+                            gets a small flat box for its object / goal poses)
+            goal_pose    -> an orange see-through object mesh; its status line, if it has one; its
+                            object_kp / goal_kp, if it has them (rigid2deform): the 4 keypoints the policy
+                            observed (cyan) and their goals (orange), a line between each pair
+            sim_object_pose -> a blue see-through object mesh: where the sim rollout had the object
+                            (robot.mode=openloop)
+            camera_image -> the camera image in the side panel (if perception sends it)
+            point_cloud  -> the policy's live cloud (a point-cloud policy; rigid2deform/perception/cloud_camera.py), light blue;
+                            its reference, if it has one: orange the moving half, dark blue the
+                            stationary one; or its goal (the folded cloth) green; the outline yellow (only with bus.point_cloud_port in the config)
+
+The scene is in the env frame (the training env's): table and robot base where training had them.
+The status panel lists each topic's age and rate, then goal_pose's status line (the task's policy
+writes it), or, without one, the object -> goal keypoint distance against Play's success threshold. playback.py draws recordings with the same build_scene / draw.
+"""
+
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+from omegaconf import OmegaConf
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
+from deploy.utils.config import REPO, load_config, object_meshes, repo_path                                 # noqa: E402
+from deploy.utils.observation import keypoint_distance                                       # noqa: E402
+from deploy.utils.link import (CLOUD_PORT, CLOUD_TOPIC, TOPIC_PORTS, age, decode_jpeg,      # noqa: E402
+                               open_subscriber, recv_cloud, recv_latest)
+from deploy.utils.spec import base_to_env, load_spec                                         # noqa: E402
+
+MESH_DIR = REPO / "assets" / "flexiv_wuji"   # the URDF's mesh paths are relative to it (fetch_assets.sh)
+IDENTITY = np.array([1.0, 0.0, 0.0, 0.0])
+KP_COLOR, GOAL_KP_COLOR = (0, 200, 230), (255, 140, 0)   # goal_pose's object_kp (cyan), goal_kp (orange)
+CLOUD_COLOR = (120, 170, 255)                            # point_cloud
+GOAL_COLOR = (60, 230, 120)                              # point_cloud's goal_xyz (a mode goal policy)
+EXTRA_COLORS = [(0.9, 0.25, 0.6), (0.2, 0.75, 0.85), (0.6, 0.4, 0.9), (0.85, 0.85, 0.2)]
+
+
+def build_scene(server, spec, mesh_paths: list[Path]) -> dict:
+    """Table, robot, target ghost, the objects (object_meshes: the first is the policy's, its mesh also
+    draws the goal and the sim object), and the side panel. Returns the handles."""
+    mesh_path, extra_meshes = mesh_paths[0], mesh_paths[1:]
+    import trimesh
+
+    def load_mesh(path):
+        """The mesh, or for an object without one (a cloth) a 4 x 4 x 0.2 cm box as a marker."""
+        return trimesh.creation.box((0.04, 0.04, 0.002)) if path is None else trimesh.load(path, force="mesh")
+    import yourdfpy
+    from viser.extras import ViserUrdf
+
+    server.scene.set_up_direction("+z")
+    server.scene.add_grid("/floor", width=2.0, height=2.0, cell_size=0.25)
+    server.scene.add_box("/table", dimensions=spec["table_size"], position=spec["table_pos_env"],
+                         color=(0.55, 0.45, 0.35))
+    root = server.scene.add_frame("/robot_root", position=spec["robot_root_pos_env"],
+                                  wxyz=spec["robot_root_quat_wxyz"], show_axes=False)
+
+    def load_urdf():
+        return yourdfpy.URDF.load(spec["urdf_path"], mesh_dir=str(MESH_DIR), build_collision_scene_graph=False)
+
+    robot = ViserUrdf(server, load_urdf(), root_node_name=root.name + "/measured")
+    ghost = ViserUrdf(server, load_urdf(), root_node_name=root.name + "/targets",
+                      mesh_color_override=(0.15, 0.85, 0.35, 0.3))
+    mesh = load_mesh(mesh_path)
+    obj = server.scene.add_mesh_trimesh("/object", mesh)
+    points = server.scene.add_point_cloud("/object_points", points=np.zeros((1, 3), np.float32),
+                                          colors=np.zeros((1, 3), np.uint8), point_size=0.006, visible=False)
+    server.scene.add_frame("/object/axes", axes_length=0.06, axes_radius=0.002)
+    cloud = server.scene.add_point_cloud("/point_cloud", points=np.zeros((1, 3), np.float32), colors=CLOUD_COLOR,
+                                         point_size=0.004, visible=False)
+    ref = {"points": server.scene.add_point_cloud("/point_cloud_ref", points=np.zeros((1, 3), np.float32),
+                                                  colors=np.zeros((1, 3), np.uint8), point_size=0.007, visible=False),
+           "outline": server.scene.add_line_segments("/point_cloud_ref/outline", points=np.zeros((4, 2, 3), np.float32),
+                                                     colors=(255, 230, 0), thickness=0.002, visible=False)}
+    zeros4 = np.zeros((4, 3), np.float32)
+    kp = {"object_kp": server.scene.add_point_cloud("/keypoints/object", points=zeros4, colors=KP_COLOR,
+                                                    point_size=0.014, visible=False),
+          "goal_kp": server.scene.add_point_cloud("/keypoints/goal", points=zeros4, colors=GOAL_KP_COLOR,
+                                                  point_size=0.014, visible=False),
+          "lines": server.scene.add_line_segments("/keypoints/error", points=np.zeros((4, 2, 3), np.float32),
+                                                  colors=KP_COLOR, thickness=0.002, visible=False)}
+    goal = server.scene.add_mesh_simple("/goal", vertices=mesh.vertices, faces=mesh.faces,
+                                        color=(0.95, 0.6, 0.1), opacity=0.4)
+    server.scene.add_frame("/goal/axes", axes_length=0.06, axes_radius=0.002)
+    sim_obj = server.scene.add_mesh_simple("/sim_object", vertices=mesh.vertices, faces=mesh.faces,
+                                           color=(0.2, 0.45, 0.95), opacity=0.4, visible=False)
+    extras = []
+    for i, path in enumerate(extra_meshes, start=1):
+        m = load_mesh(path)
+        extras.append(server.scene.add_mesh_simple(f"/object_{i}", vertices=m.vertices, faces=m.faces,
+                                                   color=EXTRA_COLORS[(i - 1) % len(EXTRA_COLORS)], visible=False))
+        server.scene.add_frame(f"/object_{i}/axes", axes_length=0.06, axes_radius=0.002)
+    return {
+        "robot": robot, "ghost": ghost, "object": obj, "goal": goal, "sim_object": sim_obj, "extras": extras,
+        "points": points, "keypoints": kp, "cloud": cloud, "cloud_ref": ref,
+        # viser's joint order -> index in the spec's joint order
+        "order": [list(spec["joint_names"]).index(j) for j in robot.get_actuated_joint_names()],
+        "show_targets": server.gui.add_checkbox("show joint targets (green)", True),
+        "status": server.gui.add_markdown("waiting for messages ..."),
+        "image": server.gui.add_image(np.zeros((48, 64, 3), np.uint8), label="camera"),
+    }
+
+
+def draw(server, scene: dict, spec, msgs: dict) -> None:
+    """Put the robot, target ghost, object and goal where these messages say (topic -> newest message;
+    missing or None topics are skipped). The camera image is not drawn here (decoding costs ~ms)."""
+    order = scene["order"]
+    with server.atomic():
+        if msgs.get("joint_state") is not None:
+            scene["robot"].update_cfg(msgs["joint_state"]["q"][order])
+        show = scene["show_targets"].value and msgs.get("joint_target") is not None
+        scene["ghost"].show_visual = show
+        if show:
+            scene["ghost"].update_cfg(msgs["joint_target"]["targets"][order])
+        for topic, name in (("object_pose", "object"), ("goal_pose", "goal"), ("sim_object_pose", "sim_object")):
+            if msgs.get(topic) is not None:
+                handle = scene[name]
+                handle.position, handle.wxyz = base_to_env(spec, msgs[topic]["pos"], msgs[topic]["quat_wxyz"])
+                handle.visible = True
+        pts = msgs.get("object_points")
+        if pts is not None and "points" in scene:
+            seen = np.asarray(pts["visible"], dtype=bool)
+            scene["points"].points = base_to_env(spec, np.asarray(pts["pos"], dtype=np.float32),
+                                                 np.array([1.0, 0.0, 0.0, 0.0]))[0].astype(np.float32)
+            scene["points"].colors = np.where(seen[:, None], [[40, 220, 60]], [[230, 40, 40]]).astype(np.uint8)
+            scene["points"].visible = True
+        cloud = msgs.get(CLOUD_TOPIC)
+        if cloud is not None and "cloud" in scene and len(cloud["xyz"]):
+            scene["cloud"].points = base_to_env(spec, np.asarray(cloud["xyz"], dtype=np.float32),
+                                                IDENTITY)[0].astype(np.float32)
+            scene["cloud"].visible = True
+            key = "ref_xyz" if "ref_xyz" in cloud else "goal_xyz"     # the reference or the goal
+            if key in cloud and "cloud_ref" in scene and len(cloud[key]):
+                handles = scene["cloud_ref"]
+                handles["points"].points = base_to_env(spec, np.asarray(cloud[key], dtype=np.float32),
+                                                       IDENTITY)[0].astype(np.float32)
+                handles["points"].colors = (np.where(np.asarray(cloud["ref_moving"], bool)[:, None],
+                                                     [[255, 140, 0]], [[30, 60, 200]]) if key == "ref_xyz" else
+                                            np.full((len(cloud[key]), 3), GOAL_COLOR)).astype(np.uint8)
+                handles["points"].visible = True
+                corners = cloud.get("goal_corners", cloud.get("ref_corners"))
+                if corners is not None:
+                    c = base_to_env(spec, np.asarray(corners, dtype=np.float32), IDENTITY)[0]
+                    handles["outline"].points = np.stack([c, np.roll(c, -1, axis=0)], axis=1).astype(np.float32)
+                    handles["outline"].visible = True
+        goal = msgs.get("goal_pose")
+        if goal is not None and "object_kp" in goal and "keypoints" in scene:
+            kp = scene["keypoints"]
+            ends = {}
+            for key in ("object_kp", "goal_kp"):
+                ends[key] = base_to_env(spec, np.asarray(goal[key], dtype=np.float32), IDENTITY)[0].astype(np.float32)
+                kp[key].points = ends[key]
+            kp["lines"].points = np.stack([ends["object_kp"], ends["goal_kp"]], axis=1)
+            for handle in kp.values():
+                handle.visible = True
+        poses = msgs.get("object_poses")
+        if poses is not None:   # [0] is object_pose's, drawn above
+            for handle, pos, quat in zip(scene.get("extras", []), poses["pos"][1:], poses["quat_wxyz"][1:]):
+                handle.position, handle.wxyz = base_to_env(spec, pos, quat)
+                handle.visible = True
+
+
+def goal_text(spec, last: dict, tolerance: float) -> str:
+    """goal_pose's status line; without one, "object -> goal ..." (Play); "" without the poses."""
+    o, g = last.get("object_pose"), last.get("goal_pose")
+    if g is not None and g.get("status"):
+        return str(g["status"])
+    if o is None or g is None:
+        return ""
+    d = keypoint_distance(spec, *base_to_env(spec, o["pos"], o["quat_wxyz"]),
+                          *base_to_env(spec, g["pos"], g["quat_wxyz"]))
+    return (f"object -> goal (keypoints, worst): **{100 * d:.1f} cm** "
+            f"(success below {100 * tolerance:.1f} cm) · goal {g['goal_index'] + 1}")
+
+
+def status_text(spec, last: dict, rates: dict, stale_s: float, tolerance: float) -> str:
+    """Markdown: one line per topic, then the object -> goal distance."""
+    lines = []
+    for topic, m in last.items():
+        if m is None:
+            lines.append(f"- `{topic}`: nothing yet")
+        else:
+            a = age(m)
+            flag = " **STALE**" if a > stale_s else ""
+            lines.append(f"- `{topic}`: {rates[topic]:.0f} Hz, {1000 * a:.0f} ms old{flag}")
+    state = last.get("joint_state")
+    if state is not None and state.get("tripped"):
+        lines.insert(0, f"**SAFETY TRIP: {state['tripped']}**\n")
+    return "\n".join(lines) + "\n\n" + goal_text(spec, last, tolerance)
+
+
+def success_tolerance(cfg, spec) -> float:
+    """m: the keypoint distance under which the object counts as at the goal (Play: goals.success_tolerance;
+    a config without it: training's)."""
+    tol = OmegaConf.select(cfg, "goals.success_tolerance", default=None)
+    return (tol or spec["success_tolerance_final"]) * spec["keypoint_scale"]
+
+
+def main() -> None:
+    import viser
+
+    cfg = load_config()
+    vc = cfg.viewer
+    spec = load_spec(repo_path(cfg.spec_path))
+    tolerance = success_tolerance(cfg, spec)
+
+    server = viser.ViserServer(host="0.0.0.0", port=vc.port)
+    scene = build_scene(server, spec, object_meshes(cfg, allow_missing=True))
+    subs = {topic: open_subscriber(cfg.bus.host, cfg.bus[port], topic) for topic, port in TOPIC_PORTS.items()}
+    cloud_sub = (open_subscriber(cfg.bus.host, cfg.bus[CLOUD_PORT], CLOUD_TOPIC, latest_only=False)
+                 if CLOUD_PORT in cfg.bus else None)
+    topics = list(TOPIC_PORTS) + ([CLOUD_TOPIC] if cloud_sub is not None else [])
+    last = dict.fromkeys(topics)                       # newest message per topic
+    counts = dict.fromkeys(topics, 0)                  # messages since t_rate
+    t_rate = time.time()
+    print(f"[viewer] http://localhost:{vc.port}", flush=True)
+
+    while True:
+        t0 = time.perf_counter()
+        new = {}
+        for topic, sub in subs.items():
+            m = recv_latest(sub)
+            if m is not None:
+                new[topic] = last[topic] = m
+                counts[topic] += 1
+        while cloud_sub is not None and (m := recv_cloud(cloud_sub)) is not None:   # all queued: the rate
+            new[CLOUD_TOPIC] = last[CLOUD_TOPIC] = m
+            counts[CLOUD_TOPIC] += 1
+        if new:
+            draw(server, scene, spec, last)
+        if "camera_image" in new:
+            scene["image"].image = decode_jpeg(new["camera_image"]["jpeg"])
+
+        now = time.time()
+        if now - t_rate >= 1.0:
+            rates = {k: v / (now - t_rate) for k, v in counts.items()}
+            counts, t_rate = dict.fromkeys(topics, 0), now
+            scene["status"].content = status_text(spec, last, rates, vc.stale_s, tolerance)
+
+        time.sleep(max(0.0, 1.0 / vc.hz - (time.perf_counter() - t0)))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
