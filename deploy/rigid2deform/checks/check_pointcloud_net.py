@@ -1,11 +1,11 @@
-"""Check the point-cloud policy (utils/pointcloud_net.py + cloud_obs.py) against its golden file, on the CPU.
+"""Check the point-cloud policy (utils/pointcloud_net.py + pc_obs.py) against its golden file, on the CPU.
 
 The golden file (pc_deploy_handoff/make_golden.py, run on the cluster with the TRAINING code) holds a
 40-step input sequence and the training network's actions on it. Here:
 
   1. load    policy.checkpoint through policy_net.load_policy_net: a pointcloud net, its pc_args = the
-             golden's, a cloud cloud_obs.py builds
-  2. points  cloud_obs.featurize on the golden's raw inputs (live_base; from ref_step on, mode label:
+             golden's, a cloud pc_obs.py builds
+  2. points  pc_obs.featurize on the golden's raw inputs (live_base; from ref_step on, mode label:
              ref_base + ref_moving, mode goal: the goal cloud make_golden.py made of them, GOLDEN_GOAL)
              = the golden's points and mask (the training code's featurisation)
   3. actions net.act on those points, step after step (the LSTM carried) = the golden's actions (< 1e-4)
@@ -32,7 +32,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
-from deploy.rigid2deform import cloud_obs                                               # noqa: E402
+from deploy.rigid2deform import pc_obs                                               # noqa: E402
 from deploy.utils.config import load_config, repo_path                                  # noqa: E402
 from deploy.utils.observation import OBJECT_FIELDS, build_keypoints_obs, build_proprio, keypoints_obs_fields   # noqa: E402
 from deploy.utils.policy_net import load_policy_net                                     # noqa: E402
@@ -62,19 +62,19 @@ def check_points(g, pc: dict) -> None:
     for t in range(len(g["actions"])):
         live = g["live_base"][t]
         live = live[np.isfinite(live).all(-1)]                       # NaN rows = padding
-        if cloud_obs.mode_of(pc) == "label":
+        if pc_obs.mode_of(pc) == "label":
             ref = (g["ref_base"][t], g["ref_moving"][t]) if t >= ref_step else (None, None)
-            points, mask = cloud_obs.featurize(live, pc, *ref)
+            points, mask = pc_obs.featurize(live, pc, *ref)
         else:
             goal = golden_goal(g["ref_base"][t], g["ref_moving"][t]) if t >= ref_step else None
-            points, mask = cloud_obs.featurize(live, pc, goal_base=goal)
+            points, mask = pc_obs.featurize(live, pc, goal_base=goal)
         if not np.array_equal(mask, g["mask"][t]):
             raise SystemExit(f"[points] step {t}: mask differs in {int((mask != g['mask'][t]).sum())} slots")
         worst = max(worst, float(np.abs(points - g["points"][t]).max()))
     if worst > POINT_TOL:
         raise SystemExit(f"[points] max point error {worst:.2e} > {POINT_TOL:.0e}")
     print(f"[points]  ok: {len(g['actions'])} steps, max point error {worst:.1e}, "
-          f"{'reference' if cloud_obs.mode_of(pc) == 'label' else 'goal'} from step {ref_step}, "
+          f"{'reference' if pc_obs.mode_of(pc) == 'label' else 'goal'} from step {ref_step}, "
           f"M = {g['points'].shape[1]}, D = {g['points'].shape[2]}")
 
 
@@ -137,9 +137,9 @@ def check_one(checkpoint: str, golden: str) -> None:
     golden_pc = json.loads(str(g["pc_args"]))
     if golden_pc != net.pc_args:
         raise SystemExit(f"[load] checkpoint pc_args {net.pc_args} != the golden's {golden_pc}")
-    cloud_obs.check_supported(net.pc_args, net.point_dim)
-    print(f"[load]    ok: {Path(checkpoint).name} ({Path(golden).name}): {net.kind}, mode {cloud_obs.mode_of(net.pc_args)}, "
-          f"labels {cloud_obs.labels_of(net.pc_args)}, proprio {net.n_proprio}, point dim {net.point_dim}")
+    pc_obs.check_supported(net.pc_args, net.point_dim)
+    print(f"[load]    ok: {Path(checkpoint).name} ({Path(golden).name}): {net.kind}, mode {pc_obs.mode_of(net.pc_args)}, "
+          f"labels {pc_obs.labels_of(net.pc_args)}, proprio {net.n_proprio}, point dim {net.point_dim}")
 
     check_points(g, net.pc_args)
     check_actions(g, net)

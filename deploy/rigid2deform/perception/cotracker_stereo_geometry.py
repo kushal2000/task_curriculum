@@ -3,7 +3,7 @@ pixels, and nudging a camera's position so its view agrees with the other camera
 
 All points are in the robot base frame unless a name says otherwise. T_base_cam is a camera's 4 x 4 pose
 in the base frame (its extrinsics). Pixels are undistorted (the RealSense colour stream reports no
-distortion; stereo_tracker.py checks that).
+distortion; cotracker_stereo_node.py checks that).
 """
 
 from __future__ import annotations

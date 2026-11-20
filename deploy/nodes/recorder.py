@@ -17,7 +17,7 @@ frame's time to the .jsonl:
     {"topic": "camera_frame", "msg": {"seq": <perception's>, "t": <camera frame time>, "frame": <index in the mp4>}}
 About 15 MB/min without the camera (joint_state at 200 Hz is most of it).
 
-point_cloud (a point-cloud policy's rigid2deform/perception/cloud_camera.py; configs with bus.point_cloud_port) is always recorded,
+point_cloud (a point-cloud policy's rigid2deform/perception/pc_node.py; configs with bus.point_cloud_port) is always recorded,
 to <same name>.cloud.npz, written when the recorder stops (~12 kB per cloud: ~20 MB/min at 30 Hz):
     xyz (T, max n, 3) float32, base frame, NaN past each cloud's n; n (T,); t (T,); seq (T,);
     t_cams (T, cameras); depth (raw | foundationstereo, the last cloud's); and the non-live group the clouds

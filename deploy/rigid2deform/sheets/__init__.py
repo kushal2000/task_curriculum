@@ -4,10 +4,10 @@ a module (no classes).
 config.yaml: object.name lists what is on the table; every one of those objects' `perception` (all the
 same) picks the source here and the perception node to run:
 
-| perception     | object.name                 | source module    | node (topic)                                         |
-|----------------|-----------------------------|------------------|------------------------------------------------------|
-| foundationpose | [moving plate, stationary]  | rigid_plates.py  | deploy/nodes/perception.py (object_poses)            |
-| cotracker      | [cloth]                     | cloth_points.py  | rigid2deform/perception/cloth_tracker.py (object_points) |
+| perception     | object.name                | source module   | node (topic)                                              |
+|----------------|----------------------------|-----------------|-----------------------------------------------------------|
+| foundationpose | [moving plate, stationary] | rigid_plates.py | deploy/nodes/perception.py (object_poses)                 |
+| cotracker      | [cloth]                    | cloth_points.py | rigid2deform/perception/cotracker_node.py (object_points) |
 
 Every source module has:
     TOPIC                               what to subscribe

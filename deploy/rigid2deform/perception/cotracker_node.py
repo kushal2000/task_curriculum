@@ -1,7 +1,7 @@
 """The cloth's perception node (objects with perception: cotracker): RealSense -> CoTracker3 online ->
 object_points over ZMQ, in the robot base frame. Usually started by perception/main.py; on its own:
 
-    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/perception/cloth_tracker.py object.name=[cloth] \
+    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/perception/cotracker_node.py object.name=[cloth] \
         [perception.cotracker.mode=grid|kp8|fit] [fold.sheet_size=0.15]
 
 Runs in the cotracker environment (~/co-tracker, see realsense_track.py; + pyzmq). Opens the camera the
@@ -60,7 +60,7 @@ from deploy.utils.link import FRAME_PORT, encode_jpeg, open_publisher, send, sen
 from deploy.utils.spec import load_spec                                           # noqa: E402
 
 CONFIG = HERE.parent / "config.yaml"
-WINDOW = "cloth_tracker"
+WINDOW = "cotracker_node"
 CORNER_LABELS = ["S far A", "S far B", "M far B", "M far A"]
 KP8_LABELS = ["S far A", "S far B", "S near A", "S near B", "M near A", "M near B", "M far A", "M far B"]
 PERIMETER = {"kp8": [0, 1, 7, 6], "grid": [0, 1, 2, 3], "fit": [0, 1, 2, 3]}   # the 4 outer corners, around the edge
@@ -258,7 +258,7 @@ class Tracker:
     49 points: 35 ms a window instead of 57; the tracks move 0.01 px on average, 0.5 at most).
     stride: frames the window moves per run (None = the model's own, 8: results in batches of 8). Smaller =
     fresher results, same cost per run (35 ms), so more runs; needs online_step in the co-tracker checkout.
-    Each tracker runs on its own CUDA stream, so two of them (stereo_tracker.py) can run at once.
+    Each tracker runs on its own CUDA stream, so two of them (cotracker_stereo_node.py) can run at once.
     Encoder caching (the co-tracker checkout's online_reuse_fmaps): a window shares all but its newest
     `stride` frames with the last one, so only those are encoded (fp16: 34 -> 26 ms at stride 8, 23 at 4;
     the tracks agree within 0.7 px).
@@ -282,24 +282,24 @@ class Tracker:
         source = inspect.getsource(type(self.model.model).forward)
         self.model.model.online_reuse_fmaps = "online_reuse_fmaps" in source
         if not self.model.model.online_reuse_fmaps:
-            print("[cloth_tracker] this co-tracker checkout has no online_reuse_fmaps: every window encodes "
+            print("[cotracker_node] this co-tracker checkout has no online_reuse_fmaps: every window encodes "
                   "all its frames", flush=True)
         if stride is not None and int(stride) != self.model.step:
             if "online_step" not in source:
-                raise SystemExit("[cloth_tracker] a stride other than 8 needs the co-tracker checkout's online_step "
+                raise SystemExit("[cotracker_node] a stride other than 8 needs the co-tracker checkout's online_step "
                                  "(cotracker3_online.py: step = getattr(self, \"online_step\", S // 2))")
             if not 1 <= int(stride) <= self.window // 2:
-                raise SystemExit(f"[cloth_tracker] stride {stride}: 1 .. {self.window // 2}")
+                raise SystemExit(f"[cotracker_node] stride {stride}: 1 .. {self.window // 2}")
             self.model.model.online_step = self.model.step = int(stride)
         self.step = self.model.step
         if iters is not None:
             if "getattr(self, 'iters'" not in inspect.getsource(type(self.model).forward):
-                raise SystemExit("[cloth_tracker] iters needs the co-tracker checkout's predictor.py iters attribute")
+                raise SystemExit("[cotracker_node] iters needs the co-tracker checkout's predictor.py iters attribute")
             self.model.iters = int(iters)
         self.compiled = bool(compile)
         if self.compiled:
             if "graph_break" not in inspect.getsource(type(self.model.model).forward_window):
-                raise SystemExit("[cloth_tracker] compile needs the co-tracker checkout's graph break per refinement "
+                raise SystemExit("[cotracker_node] compile needs the co-tracker checkout's graph break per refinement "
                                  "iteration (without it fp16 tracks come out wrong)")
             self.model.model.forward_window = torch.compile(self.model.model.forward_window, dynamic=False)
         self.inference_ms = 0.0
@@ -348,8 +348,8 @@ class Tracker:
 # --- the node -------------------------------------------------------------------------------------
 class Node:
     def __init__(self, cfg, publish: bool = True, half: bool = False, stride: int | None = None):
-        """publish=False: no sockets (a second camera of stereo_tracker.py, which publishes through the first).
-        half, stride: Tracker's (stereo_tracker.py: two trackers have to fit in one stride)."""
+        """publish=False: no sockets (a second camera of cotracker_stereo_node.py, which publishes through the first).
+        half, stride: Tracker's (cotracker_stereo_node.py: two trackers have to fit in one stride)."""
         from deploy.calibration.realsense import RealSense
 
         self.cfg, p, c = cfg, cfg.perception, cfg.perception.cotracker
@@ -371,14 +371,14 @@ class Node:
         self.T_base_cam = np.asarray(calib["T_base_cam"], dtype=float)
         serial = p.camera_serial or calib.get("camera_serial")
         if calib.get("camera_serial") is not None and serial != calib["camera_serial"]:
-            raise SystemExit(f"[cloth_tracker] perception.camera_serial={serial}, but {calib_path.name} is for "
+            raise SystemExit(f"[cotracker_node] perception.camera_serial={serial}, but {calib_path.name} is for "
                              f"camera {calib['camera_serial']}")
         cdir = Path(str(c.cotracker_dir)).expanduser()
         sys.path.insert(0, str(cdir))
         from rs_tracking.point_placement import corner_strength_map, sample_points_in_mask, snap_to_corner
         self._snap, self._strength_map, self._sample = snap_to_corner, corner_strength_map, sample_points_in_mask
         ckpt = str(Path(str(c.checkpoint)).expanduser()) if c.checkpoint else str(cdir / "checkpoints/scaled_online.pth")
-        print(f"[cloth_tracker] loading CoTracker3 online ({ckpt}) ...", flush=True)
+        print(f"[cotracker_node] loading CoTracker3 online ({ckpt}) ...", flush=True)
         self.tracker = Tracker(ckpt, p.camera_width, p.camera_height, half, stride, c.iters, c.compile)
         self.cam = RealSense(serial=serial, width=p.camera_width, height=p.camera_height, fps=p.camera_fps)
         self.cam.start()
@@ -386,7 +386,7 @@ class Node:
         self.capture = Capture(self.cam, cfg.bus[FRAME_PORT] if p.frame_stream and publish else None)
         self.capture.start()
         self.pub = open_publisher(cfg.bus.object_pose_port) if publish else None
-        print(f"[cloth_tracker] {self.cam.name} {self.cam.serial}, {p.camera_width}x{p.camera_height} at "
+        print(f"[cotracker_node] {self.cam.name} {self.cam.serial}, {p.camera_width}x{p.camera_height} at "
               f"{p.camera_fps} fps, extrinsics {calib_path.name}, mode {self.mode}, sheet "
               + (f"{100 * self.size_cfg:.1f} cm (fold.sheet_size)" if self.size_cfg else "measured from the clicked corners"),
               flush=True)
@@ -424,7 +424,7 @@ class Node:
             u, v, _ = self._snap(self.gray, self.strength, u, v, int(self.cfg.perception.cotracker.snap_radius))
         if self.mode == "fit" and len(self.clicks) >= 4:
             if cv2.pointPolygonTest(np.array(self.clicks[:4], np.float32), (u, v), True) < INSIDE_MARGIN_PX:
-                print("[cloth_tracker] outside the cloth: not added", flush=True)
+                print("[cotracker_node] outside the cloth: not added", flush=True)
                 return
         self.clicks.append((u, v))
         self.raw.append((float(x), float(y)))
@@ -438,7 +438,7 @@ class Node:
                self._sample(self.gray, mask, int(self.cfg.perception.cotracker.auto_points), border=6)]
         self.clicks += pts
         self.raw += pts
-        print(f"[cloth_tracker] {len(pts)} points added ({len(self.clicks) - 4} on the cloth)", flush=True)
+        print(f"[cotracker_node] {len(pts)} points added ({len(self.clicks) - 4} on the cloth)", flush=True)
 
     def freeze(self):
         self.frozen = self.capture.newest
@@ -450,7 +450,7 @@ class Node:
         """The window: live view, SPACE freezes, click, SPACE starts tracking (window closed). q quits."""
         cv2.namedWindow(WINDOW)
         cv2.setMouseCallback(WINDOW, self.on_mouse)
-        print(f"[cloth_tracker] in the window: SPACE freezes the frame, click the {self.mode} points "
+        print(f"[cotracker_node] in the window: SPACE freezes the frame, click the {self.mode} points "
               "(the banner says which), SPACE starts tracking", flush=True)
         try:
             while True:
@@ -467,7 +467,7 @@ class Node:
                     if self.frozen is None:
                         self.freeze()
                     elif len(self.clicks) < NEED[self.mode]:
-                        print(f"[cloth_tracker] {NEED[self.mode] - len(self.clicks)} more click(s) first", flush=True)
+                        print(f"[cotracker_node] {NEED[self.mode] - len(self.clicks)} more click(s) first", flush=True)
                     else:
                         return
                 elif key == ord("r"):
@@ -488,13 +488,13 @@ class Node:
         lay = layout(self.geom, self.mode, self.clicks, self.frozen[1], self.intr, self.inset)
         measured = lay["size_measured"]
         if self.size_cfg is None and not np.isfinite(measured):
-            print("[cloth_tracker] no depth on the cloth to measure it: click again, or set fold.sheet_size", flush=True)
+            print("[cotracker_node] no depth on the cloth to measure it: click again, or set fold.sheet_size", flush=True)
             return False
         self.set_size(self.size_cfg or measured)
         self.lay = lay
         sides = lay["sides"]
         uneven = np.isfinite(sides).all() and sides.min() < 0.85 * sides.max()
-        print(f"[cloth_tracker] tracking {len(lay['queries'])} points ({self.mode}"
+        print(f"[cotracker_node] tracking {len(lay['queries'])} points ({self.mode}"
               + (f", {100 * self.inset:.0f}% of the side in from the edges" if self.inset else "") + "); corner sides "
               f"{np.round(100 * sides, 1).tolist()} cm -> sheet {100 * self.geom['size']:.1f} cm square "
               f"({'fold.sheet_size' if self.size_cfg else 'the longest side'})"
@@ -517,7 +517,7 @@ class Node:
             np.savez_compressed(out, mode=self.mode, unit=self.lay["unit"], queries=self.lay["queries"],
                                 size_measured=self.lay["size_measured"], sheet_size=self.geom["size"],
                                 T_base_cam=self.T_base_cam, **{k: np.asarray(v) for k, v in self.log.items()})
-            print(f"[cloth_tracker] saved {out} and its mp4", flush=True)
+            print(f"[cotracker_node] saved {out} and its mp4", flush=True)
         self.log = None
 
     # ---- one tracked frame -------------------------------------------------------------------------
@@ -528,7 +528,7 @@ class Node:
 
     def emit(self, frame, uv, ok, xyz, send_now: bool = True) -> dict:
         """One tracked frame out: object_points + the log. xyz (N, 3) this camera's frame, ok (N) usable.
-        send_now=False: not sent, only returned as r["msg"] (stereo_tracker.py sends it from its own loop)."""
+        send_now=False: not sent, only returned as r["msg"] (cotracker_stereo_node.py sends it from its own loop)."""
         t = frame[2]
         pos = xyz @ self.T_base_cam[:3, :3].T + self.T_base_cam[:3, 3]
         msg = {"seq": self.seq, "t": t, "mode": self.points_mode,
@@ -575,7 +575,7 @@ class Node:
                 sc = last["sc"]
                 state = ("a half has < 3 points seen" if sc is None else
                          f"fold {last['angle']:.0f} deg, error {100 * sc['fold_error']:.1f} cm, footprint {sc['footprint']:.2f}")
-                print(f"[cloth_tracker] {n / (time.time() - t_print):.0f} Hz, seen {last['ok'].sum()}/{len(last['ok'])}, "
+                print(f"[cotracker_node] {n / (time.time() - t_print):.0f} Hz, seen {last['ok'].sum()}/{len(last['ok'])}, "
                       f"inference {self.tracker.inference_ms:.0f} ms, latency {1000 * (time.time() - t):.0f} ms; {state}",
                       flush=True)
                 n, t_print = 0, time.time()
@@ -672,10 +672,10 @@ class Node:
 
 def main() -> None:
     if any(a.startswith("config=") for a in sys.argv[1:]):
-        raise SystemExit(f"[cloth_tracker] this script reads {CONFIG.relative_to(REPO)}; drop config=")
+        raise SystemExit(f"[cotracker_node] this script reads {CONFIG.relative_to(REPO)}; drop config=")
     cfg = load_config(path=CONFIG)
     if sheet_perception(cfg) != "cotracker":
-        raise SystemExit(f"[cloth_tracker] object.name={cfg.object.name}: not a cotracker object (object.name=cloth)")
+        raise SystemExit(f"[cotracker_node] object.name={cfg.object.name}: not a cotracker object (object.name=cloth)")
     cp.check(cfg)
     node = Node(cfg)
     try:

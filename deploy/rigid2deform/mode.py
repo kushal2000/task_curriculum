@@ -1,13 +1,13 @@
 """config.yaml's `mode`: which perception runs and, unless policy.checkpoint is given, which network.
 
-| mode           | perception (perception/main.py)                 | network (policy.checkpoint null)       |
-|----------------|-------------------------------------------------|----------------------------------------|
-| pc_label       | cloud_camera.py, the reference (label)          | policy.default_checkpoint.pc_label     |
-| pc_goal        | cloud_camera.py, the goal                       | policy.default_checkpoint.pc_goal      |
-| foundationpose | deploy/nodes/perception.py, object.name plates  | policy.default_checkpoint.foundationpose |
-| cotracker      | cloth_tracker.py, object.name=[cloth]           | policy.default_checkpoint.cotracker    |
+| mode           | perception (perception/main.py)                | network (policy.checkpoint null)         |
+|----------------|------------------------------------------------|------------------------------------------|
+| pc_label       | pc_node.py, the reference (label)              | policy.default_checkpoint.pc_label       |
+| pc_goal        | pc_node.py, the goal                           | policy.default_checkpoint.pc_goal        |
+| foundationpose | deploy/nodes/perception.py, object.name plates | policy.default_checkpoint.foundationpose |
+| cotracker      | cotracker_node.py, object.name=[cloth]         | policy.default_checkpoint.cotracker      |
 
-perception.source=fake keeps the mode and sends a still sheet instead (fake_cloud.py / fake_sheet.py).
+perception.source=fake keeps the mode and sends a still sheet instead (pc_fake_node.py / fake_sheet.py).
 Every rigid2deform entry point calls resolve(cfg) right after loading the config; policy.py's check
 refuses a checkpoint of another kind (or point-cloud mode) than the mode says.
 """
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from omegaconf import DictConfig
 
-#: mode -> (network kind (deploy/utils/policy_net.py), point-cloud mode (cloud_obs.mode_of) or None)
+#: mode -> (network kind (deploy/utils/policy_net.py), point-cloud mode (pc_obs.mode_of) or None)
 MODES = {"pc_label": ("pointcloud", "label"), "pc_goal": ("pointcloud", "goal"),
          "foundationpose": ("keypoints", None), "cotracker": ("keypoints", None)}
 

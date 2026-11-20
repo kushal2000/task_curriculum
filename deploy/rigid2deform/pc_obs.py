@@ -74,7 +74,7 @@ def mode_of(pc: dict) -> str:
     """'label' | 'goal': the non-live group these pc_args take. SystemExit for a pc_args.goal not built here."""
     mode = MODE_OF_GOAL.get(pc.get("goal"))
     if mode is None:
-        raise SystemExit(f"[cloud_obs] pc_args.goal={pc.get('goal')}: supported "
+        raise SystemExit(f"[pc_obs] pc_args.goal={pc.get('goal')}: supported "
                          + ", ".join(f"{g} (mode {m})" for g, m in MODE_OF_GOAL.items()))
     return mode
 
@@ -83,9 +83,9 @@ def check_supported(pc: dict, point_dim: int) -> None:
     """SystemExit unless the checkpoint's cloud is one this file builds, the network's width agreeing."""
     mode_of(pc)
     if int(pc.get("fk_points", 0)) > 0 or int(pc.get("n_points", N_POINTS)) != N_POINTS:
-        raise SystemExit(f"[cloud_obs] supported: no fk points, {N_POINTS} points; the checkpoint has {pc}")
+        raise SystemExit(f"[pc_obs] supported: no fk points, {N_POINTS} points; the checkpoint has {pc}")
     if point_dim != 3 + len(labels_of(pc)):
-        raise SystemExit(f"[cloud_obs] the network takes {point_dim} numbers per point, {pc} gives {3 + len(labels_of(pc))}")
+        raise SystemExit(f"[pc_obs] the network takes {point_dim} numbers per point, {pc} gives {3 + len(labels_of(pc))}")
 
 
 def featurize(live_base: np.ndarray, pc: dict, ref_base: np.ndarray | None = None,

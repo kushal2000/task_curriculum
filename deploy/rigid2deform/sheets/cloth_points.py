@@ -1,5 +1,5 @@
 """Sheet source perception=cotracker: a real cloth, points on it tracked by CoTracker
-(deploy/rigid2deform/perception/cloth_tracker.py, topic object_points) -> the sheet's particles.
+(deploy/rigid2deform/perception/cotracker_node.py, topic object_points) -> the sheet's particles.
 
 object_points (one per tracked camera frame; t = that frame's time):
     mode           perception.cotracker.mode the points were clicked for (the node's config; the policy
@@ -129,7 +129,7 @@ def measured_size(msg) -> float:
     """m: the node's size_measured (the longest side between the clicked corners)."""
     size = float(msg["size_measured"])
     if not np.isfinite(size):
-        raise SystemExit("[fold] cloth_tracker could not measure the cloth (no depth on it): set fold.sheet_size")
+        raise SystemExit("[fold] cotracker_node could not measure the cloth (no depth on it): set fold.sheet_size")
     print(f"[fold] cloth: {100 * size:.1f} cm square (the longest side between the clicked corners)", flush=True)
     return size
 
@@ -174,7 +174,7 @@ def start(state: dict, msg) -> dict:
     """The first message: its mode / sigma (the node's) from now on; the sheet lies flat."""
     mode = str(msg["mode"])
     if mode not in MODES:
-        raise SystemExit(f"[fold] cloth_tracker sent mode {mode}: not one of {' | '.join(MODES)}")
+        raise SystemExit(f"[fold] cotracker_node sent mode {mode}: not one of {' | '.join(MODES)}")
     state["mode"], state["sigma_unit"] = mode, float(msg["sigma"])
     state["sigma"] = state["sigma_unit"] * state["geom"]["size"]
     m = _measure(state, msg)

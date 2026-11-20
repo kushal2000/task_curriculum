@@ -1,7 +1,7 @@
-"""A stand-in for the point-cloud perception node (cloud_camera.py), to test policy.py's point-cloud loop
+"""A stand-in for the point-cloud perception node (pc_node.py), to test policy.py's point-cloud loop
 without cameras: a still, flat, square sheet, as point_cloud messages (deploy/utils/link.py send_cloud).
 
-    .venv_deploy/bin/python deploy/rigid2deform/perception/fake_cloud.py [overrides]
+    .venv_deploy/bin/python deploy/rigid2deform/perception/pc_fake_node.py [overrides]
     .venv_deploy/bin/python deploy/rigid2deform/run.py robot.arm=mujoco robot.hand=fake [mode=pc_goal]
 
 The sheet: side fold.sheet_size (null: 0.15 m), at perception.fake_pose_base (the sheet's pose: hinge
@@ -15,7 +15,7 @@ perception.fake_hz. Each message:
     goal:  goal_xyz (192, 3) the sheet folded: the moving half turned over onto the stationary one
            (x -> -x), 192 random of both layers, at the same height (as training's goal), goal_corners
            (4, 3) the folded sheet's (the stationary half: S far A, S far B, fold line B, fold line A)
-  (as cloud_reference.py)
+  (as pc_ref_goal.py)
   depth       "fake"; t_cams [t]
 """
 
@@ -27,7 +27,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
-from deploy.rigid2deform.cloud_obs import BOX_HI_BASE, BOX_LO_BASE, N_POINTS, N_REF   # noqa: E402
+from deploy.rigid2deform.pc_obs import BOX_HI_BASE, BOX_LO_BASE, N_POINTS, N_REF   # noqa: E402
 from deploy.rigid2deform.mode import cloud_mode, resolve                     # noqa: E402
 from deploy.rigid2deform.fold import quat_to_mat                             # noqa: E402
 from deploy.utils.config import load_config                                  # noqa: E402
@@ -39,8 +39,8 @@ NOISE_M = 0.001
 
 
 def crop_mask(p_base: np.ndarray) -> np.ndarray:
-    """(N,) inside training's box (cloud_obs.BOX_LO_BASE .. BOX_HI_BASE, no top) and finite. The real
-    node's version: cloud_camera.py in_box."""
+    """(N,) inside training's box (pc_obs.BOX_LO_BASE .. BOX_HI_BASE, no top) and finite. The real
+    node's version: pc_node.py in_box."""
     return np.isfinite(p_base).all(-1) & (p_base >= BOX_LO_BASE).all(-1) & (p_base <= BOX_HI_BASE).all(-1)
 
 
@@ -71,11 +71,11 @@ def main() -> None:
     size = float(cfg.fold.sheet_size or 0.15)
     mode = cloud_mode(resolve(cfg))
     if mode is None:
-        raise SystemExit(f"[fake_cloud] mode={cfg.mode} is not a point-cloud mode (pc_label | pc_goal)")
+        raise SystemExit(f"[pc_fake_node] mode={cfg.mode} is not a point-cloud mode (pc_label | pc_goal)")
     sheet, moving, folded = sheet_points(size, cfg.perception.fake_pose_base)
     inside = crop_mask(sheet)
     if not inside.all():
-        print(f"[fake_cloud] {int((~inside).sum())} of {len(sheet)} sheet points are outside training's box", flush=True)
+        print(f"[pc_fake_node] {int((~inside).sum())} of {len(sheet)} sheet points are outside training's box", flush=True)
     rng = np.random.default_rng(0)
     pick = rng.choice(len(sheet), N_REF, replace=False)
     sheet_corners = corners(size, cfg.perception.fake_pose_base)
@@ -83,13 +83,13 @@ def main() -> None:
         fields = {"ref_xyz": sheet[pick], "ref_moving": moving[pick], "ref_corners": sheet_corners}
         what = f"reference {N_REF} ({int(moving[pick].sum())} moving)"
     else:
-        s = sheet_corners                    # the folded sheet: the stationary half (as cloud_reference.py)
+        s = sheet_corners                    # the folded sheet: the stationary half (as pc_ref_goal.py)
         fields = {"goal_xyz": folded[pick], "goal_corners": np.array([s[0], s[1], (s[1] + s[2]) / 2, (s[0] + s[3]) / 2])}
         what = f"goal {N_REF} (the folded sheet)"
 
     pub = open_publisher(cfg.bus[CLOUD_PORT])
     hz = float(cfg.perception.fake_hz)
-    print(f"[fake_cloud] a {100 * size:.0f} cm sheet at {list(cfg.perception.fake_pose_base)}: {len(sheet)} points "
+    print(f"[pc_fake_node] a {100 * size:.0f} cm sheet at {list(cfg.perception.fake_pose_base)}: {len(sheet)} points "
           f"(sending at most {N_POINTS}), {what} for mode {mode}, on port "
           f"{cfg.bus[CLOUD_PORT]} at {hz:g} Hz. Ctrl-C stops.", flush=True)
     seq = 0

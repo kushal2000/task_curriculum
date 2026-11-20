@@ -2,7 +2,7 @@
 points, to compare before any of it feeds the policy. No robot, no ZMQ.
 
     ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/checks/cloth_track_view.py --mode grid
-(perception/cloth_tracker.py is the pipeline's version: the same clicks, then object_points for the policy.)
+(perception/cotracker_node.py is the pipeline's version: the same clicks, then object_points for the policy.)
     ... --mode fit                      # or kp8; --save DIR keeps an overlay mp4 + an npz per run
 
 Camera: the D415 through ~/co-tracker/rs_tracking (CoTracker3 online: 16-frame windows, stride 8, so
@@ -186,7 +186,7 @@ class Plan:
         if args.sheet_size:
             self.size = float(args.sheet_size)
         elif sides is not None:
-            self.size = float(sides.max())   # a square of the longest side (as perception/cloth_tracker.py)
+            self.size = float(sides.max())   # a square of the longest side (as perception/cotracker_node.py)
         else:
             raise ValueError("too little depth on the sheet to measure it: give --sheet_size")
         sides = np.full(4, np.nan) if sides is None else sides

@@ -10,6 +10,8 @@ its right, and the video is written next to the recording (<recording>.mp4, H.26
 The camera image comes from <recording>.camera.mp4 (record.camera=true, every camera frame), or, in
 recordings made before that, from the 10 Hz JPEGs (camera_image) in the .jsonl.
 
+Point clouds come from <recording>.cloud.npz when the JSONL stores cloud indices.
+
 The config comes from the recording (spec, object, success tolerance as they were); command-line
 overrides apply on top (e.g. viewer.port, record.video_fps).
 """
@@ -25,7 +27,7 @@ from omegaconf import OmegaConf
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # repo root, for deploy.*
 from deploy.utils.config import object_meshes, repo_path                            # noqa: E402
-from deploy.utils.link import FRAME_TOPIC, decode_jpeg, from_json    # noqa: E402
+from deploy.utils.link import CLOUD_TOPIC, FRAME_TOPIC, decode_jpeg, from_json  # noqa: E402
 from deploy.utils.spec import load_spec                              # noqa: E402
 from deploy.utils.video import VideoReader, VideoWriter              # noqa: E402
 from deploy.nodes.viewer import build_scene, draw, goal_text, success_tolerance   # noqa: E402
@@ -41,6 +43,24 @@ def load_recording(path: Path) -> tuple[dict, dict]:
                 config = d["msg"]["config"]
             else:
                 topics.setdefault(d["topic"], []).append(from_json(d["msg"]))
+    indexed_clouds = [msg for msg in topics.get(CLOUD_TOPIC, []) if "xyz" not in msg and "index" in msg]
+    if indexed_clouds:
+        cloud_path = path.with_suffix(".cloud.npz")
+        try:
+            archive = np.load(cloud_path, allow_pickle=False)
+        except FileNotFoundError:
+            print(f"[playback] missing {cloud_path}; indexed point clouds will be skipped", file=sys.stderr)
+            for msg in indexed_clouds:
+                msg["xyz"] = np.empty((0, 3), dtype=np.float32)
+        else:
+            with archive:
+                xyz = archive["xyz"]
+                reference = {key: archive[key] for key in
+                             ("ref_xyz", "ref_moving", "ref_corners", "goal_xyz", "goal_corners")
+                             if key in archive}
+                for msg in indexed_clouds:
+                    msg["xyz"] = xyz[msg["index"], :msg["n"]]
+                    msg.update(reference)
     return config, {k: (np.array([m["t"] for m in msgs]), msgs) for k, msgs in topics.items()}
 
 

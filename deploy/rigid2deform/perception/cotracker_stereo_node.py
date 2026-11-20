@@ -1,9 +1,9 @@
 """Two-camera cloth tracking for a policy that uses the newest points: one loop at stereo_rate_hz.
 
     stereo_tracker            (the ~/.bashrc alias), or
-    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/perception/stereo_tracker.py object.name=[cloth]
+    ~/miniconda3/envs/cotracker/bin/python deploy/rigid2deform/perception/cotracker_stereo_node.py object.name=[cloth]
 
-Start: click the cloth in A's window, check the points in B's window (stereo_picker.py), SPACE.
+Start: click the cloth in A's window, check the points in B's window (cotracker_stereo_picker.py), SPACE.
 
 Then, every step:
   1. wait for camera A's next frame, take it and B's newest (the cameras run free at camera_fps)
@@ -31,10 +31,10 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
-from deploy.rigid2deform.perception.cloth_tracker import GREEN, RED, WHITE, Node, draw_grid, panel, pt   # noqa: E402
+from deploy.rigid2deform.perception.cotracker_node import GREEN, RED, WHITE, Node, draw_grid, panel, pt   # noqa: E402
 from deploy.rigid2deform.sheets import cloth_points, sheet_perception                         # noqa: E402
-from deploy.rigid2deform.perception.stereo_geometry import base_to_cam, projection_matrix, triangulate   # noqa: E402
-from deploy.rigid2deform.perception.stereo_picker import CameraBPicker                                   # noqa: E402
+from deploy.rigid2deform.perception.cotracker_stereo_geometry import base_to_cam, projection_matrix, triangulate   # noqa: E402
+from deploy.rigid2deform.perception.cotracker_stereo_picker import CameraBPicker                                   # noqa: E402
 from deploy.utils.config import load_config, repo_path                                        # noqa: E402
 from deploy.utils.link import encode_jpeg, send                                               # noqa: E402
 
@@ -46,7 +46,7 @@ class StereoTracker:
     def __init__(self, cfg):
         c = cfg.perception.cotracker
         if str(c.mode) not in ("grid", "kp8"):
-            raise SystemExit(f"[stereo_tracker] mode {c.mode}: stereo needs grid or kp8 (B's points come from A's clicks)")
+            raise SystemExit(f"[cotracker_stereo_node] mode {c.mode}: stereo needs grid or kp8 (B's points come from A's clicks)")
         self.cfg, self.cot = cfg, c
         self.rate_hz = float(c.stereo_rate_hz)
 
@@ -58,7 +58,7 @@ class StereoTracker:
         self.b = Node(cfg_b, publish=False, half=True, stride=1)
         for cam in (self.a, self.b):
             if any(abs(k) > 1e-9 for k in cam.intr.coeffs):
-                raise SystemExit(f"[stereo_tracker] camera {cam.cam.serial} has lens distortion: undistort first")
+                raise SystemExit(f"[cotracker_stereo_node] camera {cam.cam.serial} has lens distortion: undistort first")
         self.T_b_calib = self.b.T_base_cam.copy()
         self.Pa = self.Pb = None                         # projection matrices, set in start()
         self.last_good = None                            # (N, 3) each point's last triangulated position
@@ -84,7 +84,7 @@ class StereoTracker:
         self.Pb = projection_matrix(b.intr, b.T_base_cam)
         b.tracker.start(pick.frame, pick.queries)
         self.last_good = np.full((len(pick.queries), 3), np.nan)
-        print(f"[stereo_tracker] tracking {len(pick.queries)} points at {self.rate_hz:.0f} Hz (the first "
+        print(f"[cotracker_stereo_node] tracking {len(pick.queries)} points at {self.rate_hz:.0f} Hz (the first "
               f"{a.tracker.window - 1} steps fill CoTracker's window); camera B moved {100 * pick.shift_m:.1f} cm "
               f"to match A ({pick.calib_error_px:.1f} -> {pick.aligned_error_px:.1f} px)", flush=True)
         return True
@@ -172,7 +172,7 @@ class StereoTracker:
         steps, published, points = max(s["steps"], 1), max(s["published"], 1), max(s["points"], 1)
         fold = ("filling the window" if r is None else
                 "a half has < 3 points" if r["sc"] is None else f"fold {r['angle']:.0f} deg")
-        print(f"[stereo_tracker] {s['steps'] / dt:.0f} Hz, step {s['step_ms'] / steps:.0f} ms, points "
+        print(f"[cotracker_stereo_node] {s['steps'] / dt:.0f} Hz, step {s['step_ms'] / steps:.0f} ms, points "
               f"{s['age_ms'] / published:.0f} ms old when sent, A/B frames {s['gap_ms'] / steps:.0f} ms apart | "
               f"triangulated {100 * s['triangulated'] / points:.0f}%, held {100 * s['held'] / points:.0f}%, "
               f"{s['err_sum'] / max(s['triangulated'], 1):.1f} px "
@@ -187,10 +187,10 @@ class StereoTracker:
 def main():
     cfg = load_config(path=CONFIG)
     if sheet_perception(cfg) != "cotracker":
-        raise SystemExit(f"[stereo_tracker] object.name={cfg.object.name}: not a cotracker object (use object.name=[cloth])")
+        raise SystemExit(f"[cotracker_stereo_node] object.name={cfg.object.name}: not a cotracker object (use object.name=[cloth])")
     cloth_points.check(cfg)
     if not repo_path(cfg.perception.cotracker.stereo_extrinsics).is_file():
-        raise SystemExit(f"[stereo_tracker] {cfg.perception.cotracker.stereo_extrinsics}: no such file")
+        raise SystemExit(f"[cotracker_stereo_node] {cfg.perception.cotracker.stereo_extrinsics}: no such file")
     tracker = StereoTracker(cfg)
     try:
         tracker.run()

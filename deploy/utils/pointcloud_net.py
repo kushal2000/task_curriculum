@@ -5,7 +5,7 @@ from the keypoint fold policy, inputs = the robot's own fields of the observatio
 cloud. Taken from pc_deploy_handoff/pc_student_ref.py (2026-11-17), the reference the training code
 was checked against; rigid2deform/checks/check_pointcloud_net.py checks this copy against its golden
 files. Load it through policy_net.load_policy_net (it tells the two kinds of checkpoint apart). What
-goes into the cloud and how it becomes the network's input is the task's: rigid2deform/cloud_obs.py.
+goes into the cloud and how it becomes the network's input is the task's: rigid2deform/pc_obs.py.
 
     proprio (P) -> (p - mean) / sqrt(var + 1e-5) -> clamp(-5, 5) ----------------------------------+
     points (M, D), mask (M) -> PointNet -> feature (64) ---------------------------------------------+
@@ -83,7 +83,7 @@ class PointCloudNet:
     """A loaded point-cloud policy with its LSTM memory, for policy_net.load_policy_net.
 
     net.act((proprio, points, mask)) -> (27,) action, once per step, in order; net.reset() forgets.
-    net.pc_args: the cloud the checkpoint was trained on (rigid2deform/cloud_obs.py builds it);
+    net.pc_args: the cloud the checkpoint was trained on (rigid2deform/pc_obs.py builds it);
     net.n_proprio, net.point_dim: the input sizes.
     """
 

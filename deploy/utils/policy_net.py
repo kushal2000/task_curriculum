@@ -15,7 +15,7 @@ Two kinds of network, told apart by the checkpoint itself (checkpoint_kind):
 |------------|--------------------------------------------|----------------------------------------|-----------------|
 | keypoints  | rl_games SAPG (+ policy.config, expl_coef) | (134,) observation.build_keypoints_obs | KeypointNet     |
 | pointcloud | a distilled student: {model, pc_args, ...} | (proprio, points, mask), see           | pointcloud_net. |
-|            |                                            | rigid2deform/cloud_obs.py              | PointCloudNet   |
+|            |                                            | rigid2deform/pc_obs.py                 | PointCloudNet   |
 
 Both run on the CPU, one thread, one robot; both are LSTMs (net.reset() at an episode's start).
 """
