@@ -2,7 +2,7 @@
 
 The fields, what they mean and their checks; the values are ``config/task.yaml`` (a field with no
 default here is MISSING until that file sets it). A backend's config adds its own blocks
-(``rigid.py``, ``vbd.py``). The robot is the real setup's: ``robots.FLEXIV_WUJI_RIGHT`` (the
+(``rigid_cloth.py``, ``vbd.py``). The robot is the real setup's: ``robots.FLEXIV_WUJI_RIGHT`` (the
 identified hand with ``hand_sysid``) with the real robot's joint limits (``assets.robot_urdf``), its
 base where the real table puts it (``robot_root_pos``).
 """

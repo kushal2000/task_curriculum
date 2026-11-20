@@ -26,7 +26,7 @@ from isaacsimenvs.tasks.cloth.backends.rigid import checks, contacts
 from isaacsimenvs.tasks.cloth.backends.rigid import scene as pool_scene
 from isaacsimenvs.tasks.cloth.backends.rigid.physx import DEFAULT_MU, size_gpu_buffers
 from isaacsimenvs.tasks.cloth.backends.rigid.randomization import PlateRandomization
-from isaacsimenvs.tasks.cloth.config.schema.rigid import CLOTH_FOLD_LIFT, RigidClothEnvCfg
+from isaacsimenvs.tasks.cloth.config.schema.rigid_cloth import CLOTH_FOLD_LIFT, RigidClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
 from isaacsimenvs.tasks.cloth.mdp.state import SheetLayout
 

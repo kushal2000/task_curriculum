@@ -5,7 +5,7 @@ what they are set to (YAML).
 
 | Path | Contents |
 | --- | --- |
-| `schema/` | The configclasses: every field, its type, what it means and why it has its value, the checks. `env.py` (`ClothEnvCfg`, both tasks), `cloth.py` (the sheet), `rigid.py` (`RigidClothEnvCfg`: plates, pool, PhysX contacts), `vbd.py` + `vbd_cloth.py` (`VbdClothEnvCfg`: the VBD sheet, MJWarp). A task value has no default here (`MISSING`) |
+| `schema/` | The configclasses: every field, its type, what it means and why it has its value, the checks. `env.py` (`ClothEnvCfg`, both tasks), `cloth.py` (the sheet), `rigid_cloth.py` (`RigidClothEnvCfg`: plates, pool, PhysX contacts), `vbd.py` + `vbd_cloth.py` (`VbdClothEnvCfg`: the VBD sheet, MJWarp). A task value has no default here (`MISSING`) |
 | `task.yaml` | The values: `common` (both tasks), `rigid`, `vbd`. Every value either task starts from is here |
 | `runs/` | Run recipes: `rigid_cloth_right_wuji.yaml`, the training setup of every PhysX run |
 | `dr/` | DR blocks: named env overlays a recipe switches on with `dr: [...]` |

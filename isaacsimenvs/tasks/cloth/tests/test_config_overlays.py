@@ -37,7 +37,7 @@ SCENE_FIELDS = {
 
 SCHEMA = "isaacsimenvs/tasks/cloth/config/schema"
 CLOTH_CFG = [f"{SCHEMA}/env.py", f"{SCHEMA}/cloth.py"]
-RIGID_CLOTH_CFG = [f"{SCHEMA}/rigid.py", *CLOTH_CFG]
+RIGID_CLOTH_CFG = [f"{SCHEMA}/rigid_cloth.py", *CLOTH_CFG]
 VBD_CLOTH_CFG = [f"{SCHEMA}/vbd.py", f"{SCHEMA}/vbd_cloth.py", *CLOTH_CFG]
 
 def _collect_classes(modules: list[str]) -> dict:

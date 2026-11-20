@@ -128,7 +128,7 @@ def _task_cfg(cfg, backend: str):
 def rigid_cloth_env_cfg():
     """``RigidClothEnvCfg`` with task.yaml (``common`` + ``rigid``): the gym entry point of
     Isaacsimenvs-RigidCloth-Direct-v0."""
-    from .schema.rigid import RigidClothEnvCfg
+    from .schema.rigid_cloth import RigidClothEnvCfg
 
     return _task_cfg(RigidClothEnvCfg(), "rigid")
 
