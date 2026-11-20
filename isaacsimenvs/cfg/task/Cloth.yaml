@@ -220,7 +220,15 @@ newton:
   impratio: 10.0                # default 1.0
   condim: 6                     # fidelity, not score: measured neutral post-fix
   use_mujoco_contacts: false    # default true silently ignores per-env meshes
-  num_substeps: 2
+  # 12 (with cloth.substeps 1, so the cloth dt stays 1/1440 s): stability-first sweep 2026-11-19
+  # (docs/reports/1_vbd_cloth/physics_sweep.md, "Update 2026-11-19"). 12/1 vs 6/2: ~60% fewer uncommanded thumb jumps,
+  # hand joint-limit overrun ~0, the fewest blow-ups; every 6/2 config blew up 4-20 per 1000 zero-shot episodes. Costs
+  # ~40% sim throughput. History: 6 (with cloth.substeps 2), physics sweep 2026-11-18
+  # (docs/reports/1_vbd_cloth/physics_sweep.md). 400-epoch denim finetunes, full-surface contact, 16 mm, eval on
+  # denim/towel/chiffon: 4/3 -> 6/2 took 4 cm fold 60% (38% on a 2nd seed) -> 85%, falls 2% -> 2%, training blow-ups
+  # 18 -> 12. Costs ~30% training fps. Was 4 (Wuji finger limits: MuJoCo clamps a limit's time constant to >= 2x the
+  # step; at 2 they were 40-100x too soft).
+  num_substeps: 12
   deterministic_mode: not_guaranteed
 
 use_gravcomp: true
@@ -246,12 +254,23 @@ meshify: false
 #     immediately after building the table.
 cloth:
   size: 0.10
-  # thickness and resolution are ONE decision: 16 mm particles need >= 16.7 mm spacing, and
-  # `max_resolution_for_thickness` is exactly 7. Was 12 mm at resolution 9 (81 particles).
+  # thickness and resolution are ONE decision: particles need spacing >= thickness (16.7 mm at
+  # resolution 7). Was 12 mm at resolution 9 (81 particles), then SIM1's 16 mm.
   resolution: 7                          # 49 particles / 72 triangles
-  thickness: 0.016                       # SIM1 particle radius 0.008; spacing is 16.7 mm
+  # SIM1 particle radius 0.008. Physics sweep 2026-11-18 compared 16 vs 8 mm (full-surface contact, 6/2 substeps,
+  # 400-epoch denim finetunes): 16 mm 4 cm fold 85% [82-87] vs 66-73%, falls 2% vs 11-12%, training blow-ups 12 vs
+  # 35-41. 8 mm transfers better ZERO-shot from the PhysX prior but finetunes worse. Both pass the realism gate.
+  # 2026-11-19: 8 mm. With 12/1 substeps and table friction 0.6, 8 mm ties the best 16 mm configs on zero-shot fold
+  # rate pooled over denim/towel/chiffon (45-46% vs 41-49%) with half the falls (15-16% vs 30-40%); 16 mm lets the hand
+  # shove the sheet around (contact shell 8 mm off the finger). Finetuned (denim, 400 ep): 74% 4 cm, 61% 1.5 cm.
+  thickness: 0.008
+  # Edges and triangle faces collide with the hand and table, not only particles. The intended contact model:
+  # never compare against particle-only contact (user decision 2026-11-18).
+  full_surface_contact: true
   proxy_mode: staggered                  # the cable result: lagged shakes deformables loose
-  substeps: 6                            # cloth dt 1/1440 s, matching SIM1; was 2 (1/480)
+  # x robot num_substeps 6 -> cloth dt 1/1440 s, matching SIM1. Do NOT change the cloth dt: the realism gate fails
+  # both ways (1/960 s: 7x7 droop +20-30 deg; 1/1920 s: denim/towel folds stop holding). Was 3 at robot 4, 6 at robot 2.
+  substeps: 1                            # x robot 12 = 1/1440 s (2026-11-19; was 2 at robot 6)
   vbd_iterations: 12                     # SIM1 lift2 (acone uses 16); was 10, Newton's default
   # A GENUINE drop. The table's collision surface is at table_reset_z + 0.150, not + 0.045, so the
   # old 0.15 spawned the sheet 0.2 mm above it -- in contact -- and it was ejected upward at
@@ -268,9 +287,15 @@ cloth:
   edge_kd: 1.0e-3                        # was 1.0e-2
 
   # --- contact (SIM1 Table 2) ----------------------------------------------------------------
-  soft_contact_ke: 500.0                 # was 8.0e3
+  # 500. A 2026-11-19 head-to-head (8 mm, 12/1, table mu 0.6; 400-epoch denim finetunes, 3 fabrics x 2 seeds) beat
+  # ke 2000: 4 cm fold 74% vs 71%, 1.5 cm 61% vs 40%, falls 8% vs 25%, thumb probe uncommanded jumps 176 vs 244.
+  # ke 2000 only helps the standalone press test (dragged-finger pierces). Was 8.0e3 originally.
+  soft_contact_ke: 500.0
   soft_contact_kd: 5.0e-3                # NEW: was silently inheriting NewtonModelCfg's 1.0e-2
   soft_contact_mu: 0.25                  # was 10.0 (effective vs fingertips: 3.9 -> 0.61)
+  # Effective cloth-on-table friction (0 = sqrt(soft_contact_mu * table_friction) = 0.36). 0.6 (2026-11-19): halves
+  # zero-shot falls (35% -> 15% at 8 mm) at no fold cost; the press test's sheet slip under a dragging finger drops ~2x.
+  table_contact_mu: 0.6
 
   # --- self-contact: OFF until now, so a folded flap fell through the half beneath it ---------
   enable_self_contact: true
@@ -281,6 +306,6 @@ cloth:
 
   # --- AVBD contact ramping: NOT from SIM1 ----------------------------------------------------
   # Their solver has no contact ramping at all. This is Newton 1.5's own AVBD, which ships disabled
-  # (beta 0) and which silently makes rigid_contact_k_start a no-op. Most likely of these changes
-  # to go the wrong way -- A/B against 0.0.
+  # (beta 0) and which silently makes rigid_contact_k_start a no-op. A/B'd 2026-11-18: 0.0 helps
+  # particle contact zero-shot (+10-18 pts 4 cm) but HURTS full-surface contact (chiffon 1.5 cm 33% -> 10%, same checkpoint), so it stays.
   rigid_avbd_beta: 500000.0

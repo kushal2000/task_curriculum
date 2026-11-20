@@ -1,0 +1,1 @@
+env.cloth.full_surface_contact=true env.cloth.thickness=0.008 env.newton.num_substeps=12 env.cloth.substeps=1 env.cloth.table_contact_mu=0.6 env.cloth.soft_contact_ke=500.0
