@@ -16,7 +16,33 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))                     # repo root, for deploy.*
+from deploy.utils.config import repo_path                     # noqa: E402
 from deploy.utils.runner import run                           # noqa: E402
 
+# config.yaml's policy defaults are the right hand's policy. Both hands take the same 134 obs and 27
+# actions, so nothing downstream would notice a right policy driving the left hand.
+RIGHT_DEFAULTS = {"checkpoint": "pretrained_policy/nov6_dr.pth", "config": "pretrained_policy/config.yaml"}
+
+
+def check_policy_side(cfg) -> None:
+    """Refuse a policy trained for the other hand than robot.side."""
+    side, pol = cfg.robot.side, cfg.policy
+    if side != "right":
+        kept = [k for k, v in RIGHT_DEFAULTS.items() if str(pol[k]) == v]
+        if kept:
+            raise SystemExit(f"[run] robot.side={side} with the right hand's default "
+                             f"{' and '.join(f'policy.{k}={RIGHT_DEFAULTS[k]}' for k in kept)}: "
+                             f"give the {side} policy's policy.checkpoint=... policy.config=...")
+    # rl_games' experiment name, e.g. 0_play_flexiv_left_dr: if it names a side, it must be robot.side
+    from omegaconf import OmegaConf
+    path = repo_path(pol.config)
+    name = str(OmegaConf.select(OmegaConf.load(path), "train.params.config.full_experiment_name") or "") \
+        if path.is_file() else ""
+    other = "left" if side == "right" else "right"
+    if other in name.lower().split("_"):
+        raise SystemExit(f"[run] robot.side={side} but policy.config {pol.config} is from run {name!r} "
+                         f"(the {other} hand)")
+
+
 if __name__ == "__main__":
-    run(HERE / "config.yaml", HERE / "policy.py")
+    run(HERE / "config.yaml", HERE / "policy.py", check=check_policy_side)

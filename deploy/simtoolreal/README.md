@@ -145,6 +145,9 @@ Everything else is unchanged:
   URDF FK and in the sim).
 - robot.py reads the hand's side from its firmware and refuses a mismatch (`robot.check_side=false` skips it).
 - Hand gains: no left sysid yet, so the right hand's `robot.hand_kt` is used (same motors and gearing).
+- run.py refuses `robot.side=left` with the right hand's default `policy.checkpoint` / `policy.config`, and a
+  `policy.config` whose experiment name is the other hand's: both hands take the same 134 obs and 27 actions,
+  so nothing else would catch a right policy on the left hand.
 
 ```bash
 PY=.venv_deploy/bin/python; D=deploy/simtoolreal; R=docs/results/simtoolreal/<left goals dir>
@@ -155,12 +158,13 @@ python third_party/aiowuji/examples/00_move.py <LEFT_HAND_SN> --delta 0.3 --max-
 
 $PY $D/run.py robot.mode=home $ARM
 ~/miniconda3/envs/foundationpose/bin/python $D/perception.py
-$PY $D/run.py $ARM policy.checkpoint=pretrained_policy/<left>.pth \
+$PY $D/run.py $ARM policy.checkpoint=pretrained_policy/<left>/policy.pth policy.config=pretrained_policy/<left>/config.yaml \
     goals.from_rollout=$R/openloop.npz goals.timeout_steps=1200
 ```
 
-Without hardware: `$PY $D/run.py robot.side=left robot.arm=mujoco robot.hand=fake policy.checkpoint=<left>.pth`.
-The goals file for the left policy comes from `checks/record_lift.py --task Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0 --goals train`.
+Preview in sim first: record the left policy in Isaac Sim (`checks/record_lift.py --task Isaacsimenvs-PlayFlexivWujiHumanLike-Direct-v0 --goals train`,
+on a Linux GPU machine), then play the recording in viser: `$PY $D/checks/view_lifts.py $R/top0 $R/top1 $R/top2`.
+That recording's `top<i>/openloop.npz` is also the goals file above. HARDWARE_CHECKS.md step 4 has the full sequence.
 The left spec comes from `checks/export_spec.py --side left` (its docstring has the command).
 
 ## robot modes

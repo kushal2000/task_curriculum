@@ -37,7 +37,7 @@ STREAM_WH = (640, 480)        # perception's stream: the 4:3 centre of the calib
 
 def camera_view(extrinsics: Path, spec: dict):
     """(T_env_cam 4x4, vertical fov rad, aspect, in_view(p_env (N,3), margin_px) -> (N,) bool)."""
-    from utils.spec import env_to_base
+    from deploy.utils.spec import env_to_base
     e = json.loads(extrinsics.read_text())
     T_base_cam, K = np.array(e["T_base_cam"]), e["intrinsics"]
     T_cam_base = np.linalg.inv(T_base_cam)
@@ -90,7 +90,6 @@ def main() -> None:
     p.add_argument("--camera", type=Path, default=CAMERA, help="extrinsics json (T_base_cam, intrinsics); 'none': off")
     args = p.parse_args()
 
-    spec = load_spec(REPO / "deploy/simtoolreal/spec/spec_flexiv_wuji_right_hl.json")
     rolls = {}
     for d in args.dirs:
         if (d / "openloop.npz").exists():
@@ -101,6 +100,13 @@ def main() -> None:
             print(f"[view] {d}: no openloop.npz (no clean lift), skipped", flush=True)
     if not rolls:
         raise SystemExit("[view] nothing to show")
+    # The hand comes from the recording's joint names (left: l_*, right: r_*); one viewer shows one robot.
+    sides = {"left" if any(str(j).startswith("l_") for j in r["joint_names"]) else "right" for r in rolls.values()}
+    if len(sides) > 1:
+        raise SystemExit("[view] left- and right-hand recordings mixed: view them separately")
+    side = sides.pop()
+    spec = load_spec(REPO / f"deploy/simtoolreal/spec/spec_flexiv_wuji_{side}_hl.json")
+    print(f"[view] {side} hand", flush=True)
 
     server = viser.ViserServer(port=args.port)
     server.scene.set_up_direction("+z")
