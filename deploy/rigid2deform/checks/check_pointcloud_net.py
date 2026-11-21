@@ -3,8 +3,9 @@
 The golden file (pc_deploy_handoff/make_golden.py, run on the cluster with the TRAINING code) holds a
 40-step input sequence and the training network's actions on it. Here:
 
-  1. load    policy.checkpoint through policy_net.load_policy_net: a pointcloud net, its pc_args = the
-             golden's, a cloud pc_obs.py builds
+  1. load    policy.checkpoint through policy_net.load_policy_net: a pointcloud net, its cloud (env
+             obs.pointcloud) = the golden's pc_args converted by training's legacy_env_overrides, a cloud
+             pc_obs.py builds
   2. points  pc_obs.featurize on the golden's raw inputs (live_base; from ref_step on, mode label:
              ref_base + ref_moving, mode goal: the goal cloud make_golden.py made of them, GOLDEN_GOAL)
              = the golden's points and mask (the training code's featurisation)
@@ -35,7 +36,8 @@ sys.path.insert(0, str(HERE.parents[2]))    # repo root, for deploy.*
 from deploy.rigid2deform import pc_obs                                               # noqa: E402
 from deploy.utils.config import load_config, repo_path                                  # noqa: E402
 from deploy.utils.observation import OBJECT_FIELDS, build_keypoints_obs, build_proprio, keypoints_obs_fields   # noqa: E402
-from deploy.utils.policy_net import load_policy_net                                     # noqa: E402
+from deploy.utils.pointcloud_net import STUDENT_PY                                      # noqa: E402
+from deploy.utils.policy_net import load_policy_net, training_module                    # noqa: E402
 from deploy.utils.robot_model import load_robot_model                                   # noqa: E402
 from deploy.utils.spec import load_spec                                                 # noqa: E402
 
@@ -134,14 +136,15 @@ def check_one(checkpoint: str, golden: str) -> None:
     cfg = load_config([f"policy.checkpoint={checkpoint}"], path=CONFIG)
     net = load_policy_net(cfg, num_actions=27, kinds=("pointcloud",))
     g = np.load(repo_path(golden))
-    golden_pc = json.loads(str(g["pc_args"]))
-    if golden_pc != net.pc_args:
-        raise SystemExit(f"[load] checkpoint pc_args {net.pc_args} != the golden's {golden_pc}")
-    pc_obs.check_supported(net.pc_args, net.point_dim)
-    print(f"[load]    ok: {Path(checkpoint).name} ({Path(golden).name}): {net.kind}, mode {pc_obs.mode_of(net.pc_args)}, "
-          f"labels {pc_obs.labels_of(net.pc_args)}, proprio {net.n_proprio}, point dim {net.point_dim}")
+    student = training_module(STUDENT_PY, "_pc_student")
+    golden_pc = student.legacy_env_overrides(json.loads(str(g["pc_args"])))["obs"]["pointcloud"]
+    if golden_pc != {k: net.cloud.get(k) for k in golden_pc}:   # a new checkpoint also has e.g. chunk
+        raise SystemExit(f"[load] checkpoint cloud {net.cloud} != the golden's {golden_pc}")
+    pc_obs.check_supported(net.cloud, net.point_dim)
+    print(f"[load]    ok: {Path(checkpoint).name} ({Path(golden).name}): {net.kind}, mode {pc_obs.mode_of(net.cloud)}, "
+          f"labels {pc_obs.labels_of(net.cloud)}, proprio {net.n_proprio}, point dim {net.point_dim}")
 
-    check_points(g, net.pc_args)
+    check_points(g, net.cloud)
     check_actions(g, net)
     check_proprio(cfg, net.n_proprio)
     check_time(g, net)

@@ -24,7 +24,7 @@ one the checkpoint's mode says (pc_obs.mode_of):
   goal   the goal, the sheet folded by hand and photographed before the run (then unfolded where it
          was): goal_xyz (R <= 192, 3) base frame
 Each step: build_proprio (103) + pc_obs.featurize (live + that group, which the network gets only
-from step pc_args.ref_step on, 12: training masked it before) -> the network -> action_to_targets.
+from step net.cloud ref_step on, 12: training masked it before) -> the network -> action_to_targets.
 There is no success test (no tracked sheet): the run stops on timeout (fold.timeout_steps),
 run.duration_s, a safety trip, or a stale joint_state / point_cloud (perception.max_age_s). Publishes
 joint_target, and goal_pose with a status line for the viewer (its pose: where the moving half lands,
@@ -200,7 +200,7 @@ def non_live_group(msg: dict, pc: dict) -> dict:
 
 def run_fold_cloud(cfg, spec, model, net, pub) -> None:
     """task=fold with a point-cloud policy; see the docstring."""
-    pc = net.pc_args
+    pc = net.cloud
     ref_step = int(pc["ref_step"])
     dt = spec["policy_dt"]
     max_steps = int(round(cfg.run.duration_s / dt))
@@ -303,10 +303,10 @@ def check(cfg) -> None:
         raise SystemExit(f"[policy] a point-cloud policy needs bus.{CLOUD_PORT} (its perception's port)")
     spec = load_spec(repo_path(cfg.spec_path))
     net = load_policy_net(cfg, num_actions=len(spec["joint_names"]), kinds=("pointcloud",))
-    pc_obs.check_supported(net.pc_args, net.point_dim)   # a cloud pc_obs.py builds
-    if pc_obs.mode_of(net.pc_args) != cloud_mode(mode):
-        raise SystemExit(f"[policy] mode={mode}, but {cfg.policy.checkpoint} is a {pc_obs.mode_of(net.pc_args)} "
-                         f"network: give mode=pc_{pc_obs.mode_of(net.pc_args)} or policy.checkpoint=null")
+    pc_obs.check_supported(net.cloud, net.point_dim)   # a cloud pc_obs.py builds
+    if pc_obs.mode_of(net.cloud) != cloud_mode(mode):
+        raise SystemExit(f"[policy] mode={mode}, but {cfg.policy.checkpoint} is a {pc_obs.mode_of(net.cloud)} "
+                         f"network: give mode=pc_{pc_obs.mode_of(net.cloud)} or policy.checkpoint=null")
 
 
 def main() -> None:

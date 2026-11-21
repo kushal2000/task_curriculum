@@ -1,18 +1,21 @@
 """The point-cloud fold policies' cloud input: robot-base-frame points -> the network's (M, D) points + mask.
 
 From pc_deploy_handoff (2026-11-17): pc_student_ref.py's featurisation, the training code's
-scene_pointcloud.py (branch pc_round2). The network is deploy/utils/pointcloud_net.py; the robot's own
+scene_pointcloud.py (branch pc_round2). The network is deploy/utils/pointcloud_net.py (training's
+StudentNet); the robot's own
 103 numbers, deploy/utils/observation.py build_proprio.
 
-    check_supported(net.pc_args, net.point_dim)            # once, at load
-    points, mask = featurize(live_base, net.pc_args, ref_base, ref_moving)   # mode label
-    points, mask = featurize(live_base, net.pc_args, goal_base=goal_base)    # mode goal
+    check_supported(net.cloud, net.point_dim)            # once, at load
+    points, mask = featurize(live_base, net.cloud, ref_base, ref_moving)   # mode label
+    points, mask = featurize(live_base, net.cloud, goal_base=goal_base)    # mode goal
     action = net.act((proprio, points, mask))
 
 The mode says which non-live group the policy takes: label (rigidcloth_pc_label_*: the flat cloth, its
-points labelled by half) or goal (rigidcloth_pc_goal_*: the folded sheet). The checkpoint stores it as
-pc_args.goal by training's names, first = label, scene = goal; mode_of translates, and only it and
-labels_of (training's code as is) see training's names. Supported so far, no fk points. The cloud is the
+points labelled by half) or goal (rigidcloth_pc_goal_*: the folded sheet). net.cloud is the checkpoint's
+env obs.pointcloud (training's names; pointcloud_net.py converts a checkpoint saved before 11-19): goal
+label = mode label, goal_fixed = mode goal (goal_any, the shape at any yaw: not built here); mode_of
+translates, and only it and labels_of (training's PointCloudSetup.labels as is) see training's names.
+Supported so far, no fk points. The cloud is the
 live group, then one of the other two:
 
 | group     | slots | label                       | mode  | what                                              |
@@ -53,28 +56,28 @@ N_POINTS, N_REF = 1024, 192
 
 
 def labels_of(pc: dict) -> tuple[str, ...]:
-    """The one-hot label columns for these pc_args (none when the cloud has one group). Training's code as
-    is, so training's pc_args.goal names (first | scene | shape)."""
+    """The one-hot label columns for this cloud (none when it has one group). Training's
+    PointCloudSetup.labels as is, so training's goal names (none | label | goal_fixed | goal_any)."""
     out = ["live"]
-    if pc["goal"] == "first":
+    if pc["goal"] == "label":
         out += ["ref_moving", "ref_stationary"]
-    elif pc["goal"] in ("scene", "shape"):
-        out += ["goal"]
+    if pc["goal"] in ("goal_fixed", "goal_any"):
+        out.append("goal")
     if int(pc.get("fk_points", 0)) > 0:
         out.append("fk")
     return tuple(out) if len(out) > 1 else ()
 
 
-#: pc_args.goal (training's name, as the checkpoint stores it) -> the mode: which non-live group
-MODE_OF_GOAL = {"first": "label", "scene": "goal"}
+#: obs.pointcloud.goal (training's name, as the checkpoint stores it) -> the mode: which non-live group
+MODE_OF_GOAL = {"label": "label", "goal_fixed": "goal"}
 MODES = tuple(MODE_OF_GOAL.values())      # label: the reference group | goal: the goal group
 
 
 def mode_of(pc: dict) -> str:
-    """'label' | 'goal': the non-live group these pc_args take. SystemExit for a pc_args.goal not built here."""
+    """'label' | 'goal': the non-live group this cloud takes. SystemExit for a goal not built here."""
     mode = MODE_OF_GOAL.get(pc.get("goal"))
     if mode is None:
-        raise SystemExit(f"[pc_obs] pc_args.goal={pc.get('goal')}: supported "
+        raise SystemExit(f"[pc_obs] obs.pointcloud.goal={pc.get('goal')}: supported "
                          + ", ".join(f"{g} (mode {m})" for g, m in MODE_OF_GOAL.items()))
     return mode
 

@@ -1,6 +1,6 @@
 """The point-cloud fold policies' non-live group of points, taken once at the start: pc_node.py runs
 `pick` before it streams, and every point_cloud message then carries the same one. Which one the
-checkpoint's mode says (pc_obs.mode_of); policy.py feeds it to the network from step pc_args.ref_step (12) on, as
+checkpoint's mode says (pc_obs.mode_of); policy.py feeds it to the network from step ref_step (12) on, as
 training did. To take it again, restart the node (and the run: the policy keeps the first message's).
 
 Both come from the FLAT cloth and one click (training's sheet is square, at any heading, folded along its

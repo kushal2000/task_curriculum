@@ -14,10 +14,11 @@ Two kinds of network, told apart by the checkpoint itself (checkpoint_kind):
 | kind       | checkpoint                                 | obs for net.act                        | class           |
 |------------|--------------------------------------------|----------------------------------------|-----------------|
 | keypoints  | rl_games SAPG (+ policy.config, expl_coef) | (134,) observation.build_keypoints_obs | KeypointNet     |
-| pointcloud | a distilled student: {model, pc_args, ...} | (proprio, points, mask), see           | pointcloud_net. |
+| pointcloud | a distilled student: {model, env, ...}     | (proprio, points, mask), see           | pointcloud_net. |
 |            |                                            | rigid2deform/pc_obs.py                 | PointCloudNet   |
 
-Both run on the CPU, one thread, one robot; both are LSTMs (net.reset() at an episode's start).
+Both run on the CPU, one thread, one robot; both are LSTMs (net.reset() at an episode's start). Both
+networks are the training code's own, loaded by path (training_module): player.py, distillation/student.py.
 """
 
 import importlib.util
@@ -35,12 +36,21 @@ OBJECT_LOST_BELOW_TABLE = 0.05   # m: object this far below the table top = fell
 KINDS = ("keypoints", "pointcloud")
 
 
+def training_module(relpath: str, name: str):
+    """A file of the training code (relpath from the repo root), loaded by path: importing the isaacsimenvs
+    package would pull in Isaac Lab. The file must not import isaacsimenvs itself."""
+    spec = importlib.util.spec_from_file_location(name, REPO / relpath)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _read_checkpoint(path: Path):
     return torch.load(path, map_location="cpu", weights_only=False)
 
 
 def _kind(ckpt) -> str:
-    if isinstance(ckpt, dict) and "pc_args" in ckpt:
+    if isinstance(ckpt, dict) and ("env" in ckpt or "pc_args" in ckpt):   # pc_args: saved before 11-19
         return "pointcloud"
     inner = ckpt.get(0, ckpt) if isinstance(ckpt, dict) else {}           # rl_games SAPG: {0: {...}}
     model = inner.get("model", {}) if isinstance(inner, dict) else {}
@@ -48,8 +58,8 @@ def _kind(ckpt) -> str:
 
 
 def checkpoint_kind(checkpoint: Path) -> str:
-    """'pointcloud' (a point-cloud policy: a distilled student, which carries pc_args, or an rl_games one
-    with a PointNet) or 'keypoints' (rl_games, no PointNet)."""
+    """'pointcloud' (a point-cloud policy: a distilled student, which carries env (pc_args before 11-19),
+    or an rl_games one with a PointNet) or 'keypoints' (rl_games, no PointNet)."""
     return _kind(_read_checkpoint(checkpoint))
 
 
@@ -82,11 +92,7 @@ class KeypointNet:
     kind = "keypoints"
 
     def __init__(self, checkpoint: Path, config: Path, expl_coef: float, num_actions: int) -> None:
-        # load player.py by path: importing the isaacsimenvs package would pull in Isaac Lab
-        path = REPO / "isaacsimenvs" / "scripts" / "evaluation" / "player.py"
-        module_spec = importlib.util.spec_from_file_location("_play_player", path)
-        player = importlib.util.module_from_spec(module_spec)
-        module_spec.loader.exec_module(player)
+        player = training_module("isaacsimenvs/scripts/evaluation/player.py", "_play_player")
         self.player = player.PretrainedPlayer(config_path=config, checkpoint_path=checkpoint, num_envs=1,
                                               device="cpu", num_observations=NUM_OBS, num_actions=num_actions,
                                               expl_coef=expl_coef)
