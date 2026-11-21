@@ -1,0 +1,43 @@
+# Left Wuji Hand 2 sysid fit: hand WH2JA01260828013, firmware 2.13.1, fitted 2026-11-21.
+# Same layout as config.yaml's robot block. config.yaml is unchanged (it keeps the right hand's values);
+# pass these as overrides on the left-hand run.py commands:
+#
+#   LEFT_GAINS="robot.hand_kp_scale=2.0971 robot.hand_kd_scale=0.9949 robot.hand_kt.thumb_S1=0.4988 robot.hand_kt.thumb_S2=0.4988 robot.hand_kt.thumb_S3=0.2494 robot.hand_kt.thumb_S4=0.2494 robot.hand_kt.index_S1=1.5125 robot.hand_kt.index_S2=0.1513 robot.hand_kt.index_S3=0.2269 robot.hand_kt.index_S4=0.2269 robot.hand_kt.middle_S1=1.8859 robot.hand_kt.middle_S2=0.1886 robot.hand_kt.middle_S3=0.2829 robot.hand_kt.middle_S4=0.2829 robot.hand_kt.ring_S1=1.2215 robot.hand_kt.ring_S2=0.1222 robot.hand_kt.ring_S3=0.1832 robot.hand_kt.ring_S4=0.1832 robot.hand_kt.pinky_S1=0.9354 robot.hand_kt.pinky_S2=0.0935 robot.hand_kt.pinky_S3=0.1403 robot.hand_kt.pinky_S4=0.1403"
+#   $PY $D/run.py robot.side=left ... $LEFT_GAINS
+#
+# Recordings (third_party/aiowuji/logs/, not committed): fingers-up sysid-20261121T191207Z,
+# palm-down sysid-20261120T192104Z. Fit:
+#   sysid_fit.py logs/sysid-20261121T191207Z:fingers-up logs/sysid-20261120T192104Z \
+#       --gravity 0 -9.81 0 --fit-gear --out logs/sysid-20261121T191207Z/fit-gravfix
+# The palm-down run is passed with --gravity 0 -9.81 0, not :palm-down: sysid_fit.py's MOUNTS has palm-down
+# as +y in the wrist frame, which is right only for the right hand (the left palm faces -y). With :palm-down
+# every Kt pinned at the 10x search bound.
+#
+# Fit: window RMS 5.0-8.0 mrad per finger; per-finger Kt scale vs the vendor default 0.94-1.89
+# (--fit-gear fits one scale per finger, so within a finger the joints keep the vendor's ratios).
+# Caveat: the firmware-law residual is 0.075 A (right hand: 0.012 A) and kd_scale (0.995) is about
+# half the right hand's 1.944, so treat hand_kd_scale with care: dry run first (robot.hand=dry_run).
+robot:
+  hand_kp_scale: 2.0971     # firmware_law.kp_scale (right hand: 1.9662)
+  hand_kd_scale: 0.9949     # firmware_law.kd_scale (right hand: 1.9438); lag_steps 4
+  hand_kt:                  # N m/A, aiowuji names
+    thumb_S1: 0.4988
+    thumb_S2: 0.4988
+    thumb_S3: 0.2494
+    thumb_S4: 0.2494
+    index_S1: 1.5125
+    index_S2: 0.1513
+    index_S3: 0.2269
+    index_S4: 0.2269
+    middle_S1: 1.8859
+    middle_S2: 0.1886
+    middle_S3: 0.2829
+    middle_S4: 0.2829
+    ring_S1: 1.2215
+    ring_S2: 0.1222
+    ring_S3: 0.1832
+    ring_S4: 0.1832
+    pinky_S1: 0.9354
+    pinky_S2: 0.0935
+    pinky_S3: 0.1403
+    pinky_S4: 0.1403
