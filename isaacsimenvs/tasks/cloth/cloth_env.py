@@ -170,6 +170,8 @@ class ClothEnv(DirectRLEnv):
     def _get_rewards(self) -> torch.Tensor:
         state, view = self._step_state
         reward = self.task.compute_reward(state, view)
+        if observer := getattr(self, "evaluation_step_observer", None):
+            observer(view, self.task.termination_reasons, self.task.nonfinite_envs)
         self._publish_metrics()
         self.backend.add_episode_final(self.extras["episode_final"], self.task.termination_reasons, self.episode_length_buf)
         return reward

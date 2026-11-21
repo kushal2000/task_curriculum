@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import statistics
 import sys
@@ -164,7 +165,16 @@ def main() -> None:
         action="store_true",
         help="skip the contact-buffer overflow check (results will be measured on dropped contacts)",
     )
+    parser.add_argument("--cloth-standard", metavar="MANIFEST", help="Score acquisition and released persistence on VBD.")
+    parser.add_argument("--cloth-fabric", help="Named fabric for standardized results.")
+    parser.add_argument("--cloth-start-offset", type=int, default=0)
+    parser.add_argument("--cloth-pinned", action="store_true")
     args_cli, hydra_args = parser.parse_known_args()
+    if args_cli.cloth_standard and (
+        args_cli.task != "Isaacsimenvs-Cloth-Direct-v0" or not args_cli.out or not args_cli.cloth_fabric
+        or args_cli.randomize or args_cli.stochastic or args_cli.skip_episodes or args_cli.allow_overflow
+    ):
+        parser.error("Standard cloth scoring requires the VBD task, --out, --cloth-fabric, and deterministic settings.")
     sys.argv = [sys.argv[0]] + hydra_args
 
     # Kit is required by the PhysX backend and impossible for the Newton one, which runs kit-less
@@ -200,6 +210,15 @@ def main() -> None:
         if args_cli.single_variant:
             use_single_object_variant()
 
+        if args_cli.cloth_standard:
+            if not getattr(env_cfg.cloth, "full_surface_contact", False) or env_cfg.cloth.collide_interval != 1:
+                raise ValueError("Standard cloth scoring needs cloth-physics full-surface contact refreshed each step")
+            step_dt = env_cfg.sim.dt * env_cfg.decimation
+            # Isaac Lab uses ceil; absorb the decimal representation of the default timestep.
+            steps = math.floor(10.0 / step_dt + 1e-6)
+            env_cfg.episode_length_s = math.nextafter(steps * step_dt, 0.0)
+            env_cfg.termination.success_steps = 1_000_000
+
         env = gym.make(args_cli.task, cfg=env_cfg)
         inner = env.unwrapped
         device = inner.device
@@ -214,6 +233,18 @@ def main() -> None:
             num_actions=int(inner.cfg.action_space),
             expl_coef=args_cli.sapg_expl_coef,
         )
+
+        if args_cli.cloth_standard:
+            from isaacsimenvs.scripts.evaluation.cloth_standard import run_standard
+
+            try:
+                env.reset()
+                assert_no_buffer_overflow(env)
+                player.reset_rnn()
+                run_standard(env, player, args_cli)
+            finally:
+                env.close()
+            return
 
         # Reset, then one zero-action tick, matching the reference runner's timing. Getting this
         # wrong shifts the whole rollout by a step.

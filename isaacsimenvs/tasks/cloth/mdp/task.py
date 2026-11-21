@@ -160,7 +160,10 @@ class ClothTask:
         cfg = self.cfg.reset
         dev = self.device
         n = env_ids.numel()
-        if cfg.fixed_start_pose is not None:
+        eval_poses = getattr(self, "evaluation_start_poses", None)
+        if eval_poses is not None:
+            pos, rot = eval_poses[env_ids, :3], eval_poses[env_ids, 3:]
+        elif cfg.fixed_start_pose is not None:
             fixed = torch.as_tensor(cfg.fixed_start_pose, device=dev, dtype=torch.float32)
             pos = fixed[:3].unsqueeze(0).expand(n, -1)
             rot = fixed[3:].unsqueeze(0).expand(n, -1)
