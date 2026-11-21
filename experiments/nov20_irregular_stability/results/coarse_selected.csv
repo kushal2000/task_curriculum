@@ -1,0 +1,8 @@
+fabric,tri_ke,tri_ka,soft_contact_ke,table_contact_mu,eval_envs,baseline_nonfinite,baseline_ejected,baseline_falls,baseline_pierces,baseline_folds_15mm,baseline_press_failures,selected_nonfinite,selected_ejected,selected_falls,selected_pierces,selected_folds_15mm,selected_press_failures,mesh_seed
+big_napkin,10.0,10.0,1000.0,0.6,64,0,0,12,1,10,6,0,0,10,0,10,6,0
+chiffon,10,10,500,1.0,64,0,1,19,2,8,8,0,1,2,1,23,6,0
+cotton,40.0,40.0,1000.0,0.6,64,0,0,15,1,6,6,0,0,17,0,11,5,0
+denim,10.0,10.0,1000.0,0.6,64,0,1,13,1,15,6,0,0,14,1,15,5,0
+napkin,10,10,500,0.6,64,1,1,13,3,12,7,0,0,11,0,9,5,19
+silk,10.0,10.0,500,0.6,64,0,0,7,0,10,6,0,0,7,0,10,6,0
+towel,10.0,10.0,500.0,1.0,64,0,0,22,0,8,6,0,0,7,0,11,6,0

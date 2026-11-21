@@ -148,9 +148,11 @@ class FoldGeometry:
         ax = self.axis
         crease_local = rest[:, ax].max() - layout.size / 2.0  # the crease at the sheet's midline (= 0)
         self.moving_idx = torch.tensor(
-            sorted(set(half_indices(layout.resolution, layout.fold_axis, positive=True))), device=device, dtype=torch.long
+            layout.moving_idx if layout.moving_idx is not None else
+            half_indices(layout.resolution, layout.fold_axis, positive=True), device=device, dtype=torch.long
         )
         self.stationary_idx = torch.tensor(
+            layout.stationary_idx if layout.stationary_idx is not None else
             half_indices(layout.resolution, layout.fold_axis, positive=False), device=device, dtype=torch.long
         )
 
@@ -389,5 +391,7 @@ class FoldGeometry:
         """Triangle indices for :meth:`folded_half_w`. Winding reversed: a fold is a reflection, and
         the rest winding would leave every folded triangle facing down (rendered as a black back face)."""
         lay = self.layout
-        _, idx = half_mesh(float(lay.size), int(lay.resolution), lay.fold_axis)
+        idx = lay.moving_triangles
+        if idx is None:
+            _, idx = half_mesh(float(lay.size), int(lay.resolution), lay.fold_axis)
         return [v for t in range(0, len(idx), 3) for v in reversed(idx[t : t + 3])]

@@ -173,6 +173,9 @@ vbd:
 
   # --- the sheet's material, contact and coupling (SIM1 Table 2 unless the field says otherwise)
   cloth:
+    thickness: 0.008
+    full_surface_contact: true
+    table_contact_mu: 0.6
     reset_offset_xy: [0.0, 0.0]
     density: 2.0                         # kg/m^2
     tri_ke: 1.0e+2
@@ -199,12 +202,12 @@ vbd:
     proxy_relaxation: 1.0
     proxy_relaxation_mode: fixed
     proxy_relaxation_min: 0.1
-    substeps: 2                          # cloth substeps per Newton substep: 1/120 / 6 / 2 = 1/1440 s
+    substeps: 1                          # 1/120 / 12 / 1 = 1/1440 s
     vbd_iterations: 12
 
   # --- MJWarp (the robot)
   newton:
-    num_substeps: 6                      # the ns6 protocol
+    num_substeps: 12
     collision_decimation: 0
     solver: newton
     integrator: implicitfast

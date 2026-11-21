@@ -1,0 +1,8 @@
+fabric,tri_ke,tri_ka,baseline_pressed_error_cm,selected_pressed_error_cm,baseline_nonfinite,baseline_ejected,baseline_falls,baseline_pierces,baseline_sustained_pierces,baseline_folds_15mm,baseline_press_failures,selected_nonfinite,selected_ejected,selected_falls,selected_pierces,selected_sustained_pierces,selected_folds_15mm,selected_press_failures
+big_napkin,10.0,10.0,1.899500961595755,1.899500961595755,0,0,16,2,0,6,4,0,0,16,2,0,6,4
+chiffon,40.0,40.0,10.001997773573711,10.001878076716206,2,0,7,1,0,17,5,0,0,12,0,0,15,5
+cotton,100.0,100.0,1.930908410766779,1.8134098420798397,0,0,16,0,0,6,4,0,0,14,0,0,16,3
+denim,200.0,200.0,2.798229832820545,2.156946647380631,1,0,19,1,0,6,4,0,0,15,0,0,15,3
+napkin,10.0,10.0,2.1393999033358253,2.1393999033358253,0,0,15,0,0,12,4,0,0,15,0,0,12,4
+silk,40.0,40.0,1.8742077693922776,1.7524936016031927,4,0,10,0,0,7,4,1,0,11,1,0,18,4
+towel,200,200,2.771550809404432,1.7783314768590546,1,0,16,4,1,3,4,0,0,23,1,0,4,3

@@ -49,6 +49,7 @@ def solver_kwargs():
         "substeps": entry.substeps,
         "signature": set(inspect.signature(SolverVBD.__init__).parameters),
         "cloth": cfg.cloth,
+        "physics": physics,
     }
 
 
@@ -98,21 +99,30 @@ def test_soft_contact_triplet_is_forwarded(solver_kwargs):
     assert (m.soft_contact_ke, m.soft_contact_kd, m.soft_contact_mu) == (500.0, 5.0e-3, 0.25)
 
 
-def test_cloth_substeps_reach_the_coupler_entry(solver_kwargs):
-    """Substeps live on the CouplerEntryCfg, not on the solver cfg, so they need their own check.
-    2 cloth substeps in each of 6 MJWarp substeps (the ns6 protocol): cloth dt 1/1440 s."""
-    assert solver_kwargs["substeps"] == 2
+def test_tuned_contact_profile_reaches_coupled_solver(solver_kwargs):
+    physics = solver_kwargs["physics"]
+    cloth = solver_kwargs["cloth"]
+    assert solver_kwargs["substeps"] == 1
+    assert physics.num_substeps == 12
+    assert cloth.thickness == pytest.approx(0.008)
+    assert cloth.table_contact_mu == pytest.approx(0.6)
+    assert physics.solver_cfg.proxies[0].collision_pipeline.enable_rigid_soft_full_surface_contact
 
 
-def test_thickness_and_resolution_stay_on_the_guard_boundary(solver_kwargs):
-    """16 mm particles need >= 16.7 mm spacing; resolution 7 is the finest grid that admits it.
+@pytest.mark.parametrize("suffix", ["measured", "vbd_coarse", "vbd"])
+def test_fabric_presets_fit_backend_config(suffix):
+    from isaacsimenvs.tasks.cloth.config import apply_values, vbd_cloth_env_cfg
+    from isaacsimenvs.tasks.cloth.utils.fabrics import cloth_params
 
-    These two are one decision. The guard (``VbdClothCfg.check_thickness``) only warns, so a recipe
-    that raised `resolution` without lowering `thickness` would still run.
-    """
-    c = solver_kwargs["cloth"]
-    assert c.thickness <= c.spacing() + 1e-9
-    assert c.resolution <= c.max_resolution_for_thickness()
+    for fabric in ("denim", "towel", "chiffon", "cotton", "silk", "napkin", "big_napkin"):
+        cfg = vbd_cloth_env_cfg()
+        apply_values(cfg, {"cloth": cloth_params(f"{fabric}_{suffix}", plastic=True)})
+        mesh = cfg.cloth.sheet_mesh()
+        assert cfg.cloth.num_particles() == len(mesh.verts)
+        assert len(set(mesh.corner_idx)) == 4
+        assert set(mesh.corner_idx) <= set(mesh.moving_idx)
+        assert mesh.half_mesh()[1]
+        assert cfg.cloth.mesh_kind == ("grid" if suffix == "measured" else "irregular")
 
 
 def _cloth_overlays():

@@ -18,11 +18,9 @@ from pathlib import Path
 import isaaclab.sim as sim_utils
 import torch
 from isaaclab.assets import Articulation, RigidObject
-from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.sim.utils import get_current_stage
 
 from isaacsimenvs.robots import usd as robot_usd
-from isaacsimenvs.tasks.cloth.mdp.geometry.grid import half_mesh
 
 __all__ = ["setup_scene"]
 
@@ -53,7 +51,7 @@ def setup_scene(backend) -> None:
     )
     backend.table = RigidObject(robot_usd.build_rigid_object_cfg("/World/envs/env_.*/Table", [table_path]))
     backend.goal_viz = RigidObject(robot_usd.build_rigid_object_cfg("/World/envs/env_.*/GoalViz", [marker_path]))
-    spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
+    backend.spawn_ground()
     light = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
     light.func("/World/Light", light)
 
@@ -105,8 +103,7 @@ def _write_goal_marker(backend, path: Path) -> str:
     draws, so a flat mesh is what the folded half looks like.)"""
     from pxr import Gf, Usd, UsdGeom, UsdPhysics, Vt
 
-    c = backend.cfg.cloth
-    verts, indices = half_mesh(float(c.size), int(c.resolution), c.fold_axis)
+    verts, indices = backend.goal_marker_mesh()
     stage = Usd.Stage.CreateNew(str(path))
     root = UsdGeom.Xform.Define(stage, "/goal_marker").GetPrim()
     stage.SetDefaultPrim(root)

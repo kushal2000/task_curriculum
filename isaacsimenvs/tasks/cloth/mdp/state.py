@@ -47,6 +47,9 @@ class SheetLayout:
     object_scale: torch.Tensor  # (N, 3) the observed sheet size, normalised (``object_scales``)
     xy_scale: torch.Tensor | None = None  # (N,) per-env in-plane size factor
     env_size: torch.Tensor | None = None  # (N,) per-env side length [m]
+    moving_idx: list[int] | None = None
+    stationary_idx: list[int] | None = None
+    moving_triangles: list[int] | None = None
     goal_tasks: object | None = None  # one-fold goal tasks (``goal_tasks.GoalTasks``), rigid pool only
 
 

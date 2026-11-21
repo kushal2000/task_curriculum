@@ -1,0 +1,28 @@
+# napkin_vbd_coarse: napkin_vbd on a 17 mm irregular mesh (50 particles on 10 cm, as the 7x7 grid), 2026-11-16.
+# bending_stiffness_scale re-fit with the elastic cantilever probe (outputs/cloth_probe/coarse_cal, fit.json);
+# fold/press checks in outputs/cloth_probe/coarse17. Rheology as napkin_vbd. Header of napkin_vbd below.
+# napkin: the irregular-mesh hinge-rheology cloth (isaacsimenvs/tasks/cloth/utils/hinge_rheology.py), 2026-11-17.
+# Bending comes from the measured rigidity B (per-edge B / w_e) and a calibrated bending_stiffness_scale so the 5 cm
+# cantilever droops like the swatch (outputs/cloth_probe/v4, v5). Contact as the env: 8 mm particle radius,
+# 2 mm self-contact. Swatch target: unpressed fold springs back; pressed fold holds.
+cloth:
+  mesh_kind: irregular
+  edge_length: 0.017
+  mesh_seed: 19  # Alternate triangulation reduced robot falls and press pass-through.
+  density: 0.04
+  tri_ke: 10.0
+  tri_ka: 10.0
+  edge_kd: 2.0e-05
+  soft_contact_ke: 500.0
+  soft_contact_mu: 0.265
+  bending_rigidity: 1.467e-05
+  bending_stiffness_scale: 1.36
+  friction_ratio: 0.3
+  friction_slip_curvature: 20.0
+  yield_curvature: 55.0   # 0 = no permanent set
+  yield_hardening: 0.0
+  creep_curvature: 100.0   # held tighter than this, the crease sets with time constant creep_tau
+  creep_tau: 0.3
+measured:
+  cantilever_deg: 25
+  bending_rigidity: 1.467e-05

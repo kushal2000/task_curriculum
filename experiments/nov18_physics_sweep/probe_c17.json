@@ -1,0 +1,102 @@
+{
+ "c17": {
+  "chiffon": {
+   "density": 0.01778,
+   "tri": 10.0,
+   "kd": 8.89e-06,
+   "mu": 0.265,
+   "B": 2.749e-06,
+   "stiffness_scale": 1.12,
+   "friction_ratio": 0.3,
+   "friction_slip": 20.0,
+   "yield_curvature": Infinity,
+   "hardening": 0.0,
+   "creep_curvature": Infinity,
+   "creep_tau": Infinity
+  },
+  "silk": {
+   "density": 0.1156,
+   "tri": 10.0,
+   "kd": 5.78e-05,
+   "mu": 0.0622,
+   "B": 3.358e-05,
+   "stiffness_scale": 1.37,
+   "friction_ratio": 0.3,
+   "friction_slip": 20.0,
+   "yield_curvature": 55.0,
+   "hardening": 0.0,
+   "creep_curvature": 100.0,
+   "creep_tau": 0.3
+  },
+  "napkin": {
+   "density": 0.04,
+   "tri": 10.0,
+   "kd": 2e-05,
+   "mu": 0.265,
+   "B": 1.467e-05,
+   "stiffness_scale": 1.36,
+   "friction_ratio": 0.3,
+   "friction_slip": 20.0,
+   "yield_curvature": 55.0,
+   "hardening": 0.0,
+   "creep_curvature": 100.0,
+   "creep_tau": 0.3
+  },
+  "cotton": {
+   "density": 0.1156,
+   "tri": 10.0,
+   "kd": 5.78e-05,
+   "mu": 0.265,
+   "B": 3.358e-05,
+   "stiffness_scale": 1.37,
+   "friction_ratio": 0.3,
+   "friction_slip": 20.0,
+   "yield_curvature": 30.0,
+   "hardening": 0.0,
+   "creep_curvature": 90.0,
+   "creep_tau": 0.3
+  },
+  "big_napkin": {
+   "density": 0.08,
+   "tri": 10.0,
+   "kd": 4e-05,
+   "mu": 0.265,
+   "B": 2.324e-05,
+   "stiffness_scale": 1.35,
+   "friction_ratio": 0.3,
+   "friction_slip": 20.0,
+   "yield_curvature": 30.0,
+   "hardening": 0.0,
+   "creep_curvature": 90.0,
+   "creep_tau": 0.3
+  },
+  "towel": {
+   "density": 0.3244,
+   "tri": 10.0,
+   "kd": 0.000162,
+   "mu": 0.667,
+   "B": 9.26e-06,
+   "stiffness_scale": 0.96,
+   "friction_ratio": 0.3,
+   "friction_slip": 20.0,
+   "yield_curvature": Infinity,
+   "hardening": 0.0,
+   "creep_curvature": Infinity,
+   "creep_tau": Infinity
+  },
+  "denim": {
+   "density": 0.1822,
+   "tri": 10.0,
+   "kd": 9.11e-05,
+   "mu": 0.265,
+   "B": 2.802e-06,
+   "stiffness_scale": 0.5,
+   "friction_ratio": 0.3,
+   "friction_slip": 20.0,
+   "yield_curvature": Infinity,
+   "hardening": 0.0,
+   "creep_curvature": Infinity,
+   "creep_tau": Infinity
+  }
+ }
+}

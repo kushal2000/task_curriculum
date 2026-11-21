@@ -43,6 +43,35 @@ class VbdClothCfg(ClothCfg):
     keeps the farthest point at any yaw where a 10 cm sheet's would be (0.0707 m for 20 cm)."""
 
 
+    # VBD topology, constitutive model, and contact.
+    mesh_kind: str = "grid"
+    mesh_seed: int = 0
+    edge_length: float = 0.017
+    bending_rigidity: float = 0.0  # measured B [N m]; zero keeps uniform edge stiffness
+    bending_stiffness_scale: float = 1.0
+    friction_ratio: float = 0.0
+    friction_slip_curvature: float = 20.0
+    yield_curvature: float = 0.0
+    yield_hardening: float = 0.0
+    creep_curvature: float = 0.0
+    creep_tau: float = 0.0
+    natural_curvature: float = 0.0
+    plastic_yield_curvature: float = 0.0  # grid preset yield [1/m]
+    plastic_set_curvature: float = 0.0
+    table_contact_mu: float = 0.0  # effective cloth/table coefficient; zero uses material product
+    self_contact_mu: float = 0.0  # zero inherits soft_contact_mu
+    friction_epsilon: float = 0.01
+    full_surface_contact: bool = False
+    full_surface_sdf_resolution: int = 0
+
+    def sheet_mesh(self):
+        from isaacsimenvs.tasks.cloth.utils.cloth_geometry import sheet_mesh
+
+        return sheet_mesh(
+            self.size, self.fold_axis, self.mesh_kind, self.resolution, self.edge_length,
+            seed=self.mesh_seed,
+        )
+
     # --- material -------------------------------------------------------------------------
     density: float = MISSING
     """Surface density [kg/m^2]. **Per AREA, not per volume.**
@@ -106,19 +135,8 @@ class VbdClothCfg(ClothCfg):
     """Cloth substeps inside one coupled step, i.e. the VBD timestep is ``sim.dt / newton.num_substeps
     / substeps``.
 
-    **The cloth dt is 1/1440 s, matching SIM1** (60 Hz with 24 substeps, 0.694 ms). task.yaml gets
-    there as 1/120 / 6 / 2: the ns6 protocol (2026-11-12), six MJWarp substeps so the light Wuji
-    fingers do not chatter against the sheet, two cloth substeps in each. Before that it was 1/120 /
-    2 / 6 (the same cloth dt, a third of the MJWarp substeps), and before that 1/120 / 2 / 2 (1/480 s).
-
-    **This directly contradicts a cable measurement**: on the cable there was a sharp optimum at 2,
-    with 1 peaking at 37 m/s and 4/8/16 degrading monotonically, on the theory that fewer, larger
-    substeps mean fewer proxy exchanges per step and the exchange is where the energy enters. That
-    was never re-measured for the sheet, and the cloth is a different solver entry, but it is a
-    direct conflict and not a gap -- if the sheet gains energy at reset or under contact, revert
-    this first.
-
-    Costs 3x the VBD work per policy step of the 1/480 s setting, on top of the iteration increase."""
+    The tuned profile uses one cloth step per robot substep, keeping the cloth dt at 1/1440 s.
+    """
 
     vbd_iterations: int = MISSING
     """VBD solver iterations per substep.
@@ -338,10 +356,10 @@ class VbdClothCfg(ClothCfg):
         return 0.5 * self.thickness
 
     def num_particles(self) -> int:
-        return self.resolution**2
+        return self.sheet_mesh().num_particles
 
     def spacing(self) -> float:
-        return self.size / (self.resolution - 1)
+        return self.edge_length if self.mesh_kind == "irregular" else self.size / (self.resolution - 1)
 
     def max_resolution_for_thickness(self) -> int:
         """Finest grid whose spacing still admits this thickness without self-overlap."""
@@ -374,7 +392,7 @@ class VbdClothCfg(ClothCfg):
             import warnings
 
             warnings.warn(
-                f"cloth thickness {self.thickness:.4f} m (2 x particle_radius) exceeds grid "
+                f"cloth thickness {self.thickness:.4f} m (2 x particle_radius) exceeds nominal mesh "
                 f"spacing {self.spacing():.4f} m, ratio {self.thickness / self.spacing():.2f}x. This "
                 f"is NOT an error -- particle_radius is a cloth-RIGID rest offset and cannot "
                 f"cause self-collision, which uses self_contact_radius "

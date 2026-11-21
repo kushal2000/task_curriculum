@@ -14,7 +14,7 @@
 #   pool     PhysX fold pool, its 5 default shapes, 320 envs
 #   pool7    PhysX fold pool, the 7 flat7 shapes one per env, 448 envs
 #   pool7of  pool7 with every episode from a non-target fold (init_fold_starts=other, 15-180 deg)
-#   vbd      the VBD cloth on Newton, 32 envs (the ns6 protocol: num_substeps 6 / cloth substeps 2, the task's own)
+#   vbd      the VBD cloth on Newton, 32 envs (12 robot / 1 cloth substep)
 # STARTS (default "pinned rand"): pinned = DR off (one start state); rand = the env's randomisation on.
 # CKPT_SEL (default best): best | last | ep:<N> (isaacsimenvs/scripts/evaluation/checkpoints.py).
 # START_HEIGHT (default 0.20): the sheet spawn height, as in the policy's training recipe. EVAL_SEEDS (default "1 2"); EXTRA_ARGS: more

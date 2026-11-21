@@ -17,13 +17,13 @@ import torch
 from isaaclab.utils.math import quat_from_matrix
 
 from isaacsimenvs.tasks.cloth.backends.base import ClothBackend, reset_yaw
+from isaacsimenvs.tasks.cloth.backends.vbd.materials import configure_friction, configure_materials, install_bending
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
     install_post_construction_patches,
     install_pre_construction_patches,
 )
 from isaacsimenvs.tasks.cloth.backends.vbd.physics import build_physics
 from isaacsimenvs.tasks.cloth.config.schema.env import ClothDRCfg
-from isaacsimenvs.tasks.cloth.mdp.geometry.grid import corner_indices, grid_mesh
 from isaacsimenvs.tasks.cloth.mdp.state import SheetLayout
 
 __all__ = ["VbdBackend"]
@@ -47,16 +47,52 @@ class VbdBackend(ClothBackend):
         }
         if moved:
             raise NotImplementedError(f"domain_randomization.cloth is the rigid plates' DR; on VBD keep it neutral, got {moved}")
+        self.mesh = cfg.cloth.sheet_mesh()
+        self._plasticity = None
+        self._material_solver = None
         install_pre_construction_patches(
             cfg,
             # Coupled MJWarp (robot) + VBD (cloth), sized for this env count.
             physics_cfg=build_physics(cfg.cloth, cfg.newton, int(cfg.scene.num_envs), robot_spec),
         )
 
+    def construction_context(self):
+        return configure_materials(self)
+
     def finish_setup(self) -> None:
+        from isaaclab_newton.physics import NewtonManager
+
+        self._install_solver_materials(NewtonManager._model, NewtonManager._solver)
         install_post_construction_patches(self)
 
+    def _install_solver_materials(self, model, solver) -> None:
+        if self._material_solver is solver:
+            return
+        c = self.cfg.cloth
+        entry = solver._entries["cloth"]
+        if c.table_contact_mu > 0 or c.self_contact_mu > 0:
+            configure_friction(solver, entry.view, c)
+        if c.bending_rigidity > 0 or c.plastic_yield_curvature > 0:
+            dt = self.cfg.sim.dt / self.cfg.newton.num_substeps / c.substeps
+            self._plasticity = install_bending(model, entry, c, dt)
+            hinges = model.edge_indices.numpy()
+            world = model.particle_world.numpy()[hinges[:, 2]]
+            world[(hinges[:, 0] < 0) | (hinges[:, 1] < 0)] = -1
+            self._edge_world = torch.as_tensor(world, dtype=torch.long, device=str(model.device))
+        self._material_solver = solver
+
+    def end_reset(self, env_ids: torch.Tensor) -> None:
+        if self._plasticity is not None:
+            import warp as wp
+
+            edges = torch.isin(self._edge_world, env_ids).nonzero().flatten().to(torch.int32)
+            if edges.numel():
+                self._plasticity.reset(wp.from_torch(edges))
+
     # ------------------------------------------------------------------ the sheet, for the task
+
+    def goal_marker_mesh(self):
+        return self.mesh.half_mesh()
 
     def sheet_layout(self) -> SheetLayout:
         c = self.cfg.cloth
@@ -70,6 +106,9 @@ class VbdBackend(ClothBackend):
             # offset and has no say in a fold (``mdp/fold.py``).
             fold_lift=c.self_contact_radius,
             object_scale=self.object_scale,
+            moving_idx=self.mesh.moving_idx,
+            stationary_idx=self.mesh.stationary_idx,
+            moving_triangles=self.mesh.half_mesh()[1],
         )
 
     def read_points(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -119,6 +158,13 @@ class VbdBackend(ClothBackend):
 
     # ------------------------------------------------------------------ the scene
 
+    def spawn_ground(self) -> None:
+        from isaaclab.sim import CollisionPropertiesCfg, CuboidCfg
+
+        # The VBD scene runs without Kit or Nucleus. A local static box has its top at z=0.
+        ground = CuboidCfg(size=(100.0, 100.0, 0.1), collision_props=CollisionPropertiesCfg())
+        ground.func("/World/ground", ground, translation=(0.0, 0.0, -0.05))
+
     def install_sheet(self) -> None:
         """Author the sheet and register it as a deformable.
 
@@ -129,11 +175,11 @@ class VbdBackend(ClothBackend):
         from pxr import Sdf, UsdGeom, UsdShade
 
         c = self.cfg.cloth
-        verts, indices = grid_mesh(c.size, c.resolution)
+        verts, indices = self.mesh.verts, self.mesh.indices
         self.rest_local = verts
         # Corners of the moving half, not points along one edge: four points spanning an area
         # determine a rotation; four collinear points do not.
-        self.keypoint_idx = corner_indices(c.resolution, c.fold_axis)
+        self.keypoint_idx = self.mesh.corner_idx
 
         prim_path = "/World/envs/env_.*/Cloth"
         spawn_z = float(self.cfg.reset.table_reset_z) + c.start_height
@@ -201,7 +247,7 @@ class VbdBackend(ClothBackend):
         self._write_object_scale()
 
         print(
-            f"[cloth] {c.resolution}x{c.resolution} sheet, {c.size:.3f} m, "
+            f"[cloth] {c.mesh_kind} sheet, {c.size:.3f} m, "
             f"{c.num_particles()} particles, {len(indices) // 3} triangles, "
             f"keypoints {self.keypoint_idx}",
             flush=True,

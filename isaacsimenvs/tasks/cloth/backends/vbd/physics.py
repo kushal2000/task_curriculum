@@ -83,6 +83,7 @@ def build_physics(cloth, newton_cfg, num_envs: int, robot_spec=None):
     # It defaults to 64. A 32-env cloth run hit "Per-body rigid contact buffer overflowed
     # 87 > 64" and then died with a CUDA device-side assert. Declaring the field in this config
     # without wiring it here left it inert: it read as configured and did nothing.
+    vbd.friction_epsilon = cloth.friction_epsilon
     vbd.rigid_body_contact_buffer_size = cloth.rigid_body_contact_buffer_size
 
     # Same pass-through for two more `SolverVBD` arguments that `VBDSolverCfg` does not
@@ -139,6 +140,7 @@ def build_physics(cloth, newton_cfg, num_envs: int, robot_spec=None):
                 collision_pipeline=NewtonCollisionPipelineCfg(
                     rigid_contact_max=newton_cfg.rigid_contact_max,
                     max_triangle_pairs=budget,
+                    enable_rigid_soft_full_surface_contact=cloth.full_surface_contact,
                 ),
             )
         ],
@@ -148,7 +150,7 @@ def build_physics(cloth, newton_cfg, num_envs: int, robot_spec=None):
             # `soft_contact_kd` was previously left at the `NewtonModelCfg` default (1.0e-2)
             # because this call only passed `ke` and `mu`.
             soft_contact_kd=cloth.soft_contact_kd,
-            soft_contact_mu=cloth.soft_contact_mu,
+            soft_contact_mu=cloth.self_contact_mu or cloth.soft_contact_mu,
         ),
     )
 

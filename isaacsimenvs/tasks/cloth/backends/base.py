@@ -53,6 +53,12 @@ class ClothBackend:
 
     # ------------------------------------------------------------------ construction
 
+    def construction_context(self):
+        """Scope backend-specific hooks around simulator construction."""
+        from contextlib import nullcontext
+
+        return nullcontext()
+
     def build_scene(self, scene, sim) -> None:
         """Spawn every asset; the scene builder ends with :meth:`install_sheet`."""
         self.scene, self.sim = scene, sim
@@ -61,6 +67,11 @@ class ClothBackend:
 
         # Through the module: the Newton backend wraps it with the scene replication.
         scene_builder.setup_scene(self)
+
+    def spawn_ground(self) -> None:
+        from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
+
+        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
 
     def install_sheet(self) -> None:
         """Author the sheet and fill ``object_scale`` (N, 3)."""
@@ -73,6 +84,12 @@ class ClothBackend:
         """The env is complete. ``reset_table(env_ids)`` draws and places the table (the task's)."""
 
     # ------------------------------------------------------------------ the sheet, for the task
+
+    def goal_marker_mesh(self):
+        from isaacsimenvs.tasks.cloth.mdp.geometry.grid import half_mesh
+
+        c = self.cfg.cloth
+        return half_mesh(float(c.size), int(c.resolution), c.fold_axis)
 
     def sheet_layout(self) -> SheetLayout:
         raise NotImplementedError
