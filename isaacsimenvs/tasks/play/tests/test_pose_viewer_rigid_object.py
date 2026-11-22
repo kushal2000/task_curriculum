@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer import build_pose_viewer_html
+from isaacsimenvs.scripts.visualization.wandb_viewer.pose_viewer import build_pose_viewer_html
 
 # A hammer, as `handle_head_primitives` emits it: cylinder handle + box head.
 HAMMER_URDF = """<?xml version="1.0"?>
@@ -113,7 +113,7 @@ def test_deformables_survive_the_opt_out():
 def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10) -> str:
     import types
 
-    from isaacsimenvs.scripts.visualization.interactive_viewer.cloth_viewer import ClothPoseViewerWrapper
+    from isaacsimenvs.scripts.visualization.wandb_viewer.cloth_viewer import ClothPoseViewerWrapper
 
     n_particles = resolution * resolution
     n_half = resolution * ((resolution + 1) // 2)
@@ -145,10 +145,8 @@ def _cloth_wrapper_html(resolution: int = 9, size: float = 0.10) -> str:
     wrapper.env = types.SimpleNamespace(unwrapped=inner)
     wrapper._object_urdf_text = HAMMER_URDF
     wrapper._table_urdf_text = TABLE_URDF
-    wrapper._hole_urdf_text = None
     wrapper._object_urdf_path = None
     wrapper._table_urdf_path = None
-    wrapper._hole_urdf_path = None
     wrapper.github_raw_base = "https://raw.githubusercontent.com/kushal2000/task_curriculum/main/"
     wrapper.url_check = "skip"
     return ClothPoseViewerWrapper._build_html(wrapper, frames)
@@ -194,8 +192,8 @@ def test_the_hammer_strings_are_a_discriminating_check():
 @pytest.mark.parametrize(
     "module_name, class_name, expected",
     [
-        ("isaacsimenvs.scripts.visualization.interactive_viewer.cloth_viewer", "ClothPoseViewerWrapper", True),
-        ("isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer", "PlayPoseViewerWrapper", True),
+        ("isaacsimenvs.scripts.visualization.wandb_viewer.cloth_viewer", "ClothPoseViewerWrapper", True),
+        ("isaacsimenvs.scripts.visualization.wandb_viewer.pose_viewer", "PlayPoseViewerWrapper", True),
     ],
 )
 def test_network_kwargs_are_offered_by_signature_not_module_name(module_name, class_name, expected):
@@ -210,5 +208,5 @@ def test_network_kwargs_are_offered_by_signature_not_module_name(module_name, cl
 
 def test_cloth_viewer_module_name_defeats_the_old_substring_test():
     """Pin the exact reason the old gate failed, so it cannot be reintroduced."""
-    module_name = "isaacsimenvs.scripts.visualization.interactive_viewer.cloth_viewer"
+    module_name = "isaacsimenvs.scripts.visualization.wandb_viewer.cloth_viewer"
     assert "play.pose_viewer" not in module_name

@@ -881,7 +881,7 @@ def read_student_camera_image(env) -> torch.Tensor:
         depth_policy = _crop_student_image(env, _preprocess_student_depth(env, depth_noisy_m))
         image_parts.append(depth_policy)
         # Stash the cropped, normalized policy view + the matching clean view
-        # for the interactive viewer's clean/noisy A/B. When noise is off the
+        # for the wandb viewer's clean/noisy A/B. When noise is off the
         # two are identical (cheap, and avoids branching in the viewer).
         env._last_student_image_noisy = depth_policy.detach()
         if bool(getattr(env.cfg.student_obs, "use_depth_aug", False)):

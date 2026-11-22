@@ -41,8 +41,8 @@ import math
 import os
 import sys
 
-# Which interactive-viewer wrapper a task needs. Both render into the same three.js page
-# (utils/interactive_viewer/index.template.html) and log it with wandb.Html; they differ
+# Which wandb-viewer wrapper a task needs. Both render into the same three.js page
+# (scripts/visualization/wandb_viewer/index.template.html) and log it with wandb.Html; they differ
 # only in what geometry they hand the browser.
 #
 #   Play   the robot, whose STL meshes the browser must fetch from GitHub raw
@@ -51,8 +51,8 @@ import sys
 #
 # Matched by id prefix (`Isaacsimenvs-<name>`), so `RigidCloth` (PhysX) gets no viewer, as before.
 _POSE_VIEWERS = {
-    "Cloth": "isaacsimenvs.scripts.visualization.interactive_viewer.cloth_viewer:ClothPoseViewerWrapper",
-    "Play": "isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer:PlayPoseViewerWrapper",
+    "Cloth": "isaacsimenvs.scripts.visualization.wandb_viewer.cloth_viewer:ClothPoseViewerWrapper",
+    "Play": "isaacsimenvs.scripts.visualization.wandb_viewer.pose_viewer:PlayPoseViewerWrapper",
 }
 
 
@@ -155,7 +155,7 @@ def main() -> None:
     parser.add_argument("--capture_viewer_len", type=int, default=600)
     parser.add_argument("--capture_viewer_interval", type=int, default=6000)
     parser.add_argument("--capture_viewer_env_id", type=int, default=0)
-    parser.add_argument("--capture_viewer_wandb_key", default="interactive_viewer")
+    parser.add_argument("--capture_viewer_wandb_key", default="wandb_viewer")
     parser.add_argument(
         "--capture_viewer_github_raw_base",
         default="",
@@ -329,7 +329,7 @@ def main() -> None:
 
                 viewer_cls = getattr(importlib.import_module(module_name), class_name)
                 viewer_kwargs = dict(
-                    output_dir=Path(hydra_run_dir) / "interactive_viewer",
+                    output_dir=Path(hydra_run_dir) / "wandb_viewer",
                     capture_len=args_cli.capture_viewer_len,
                     capture_interval=args_cli.capture_viewer_interval,
                     env_id=args_cli.capture_viewer_env_id,
@@ -340,7 +340,7 @@ def main() -> None:
                 #
                 # Decided by INSPECTING THE SIGNATURE, not by matching the module name. The
                 # previous test was `"play.pose_viewer" in module_name`, which is false for
-                # `isaacsimenvs.scripts.visualization.interactive_viewer.cloth_viewer` even though ClothPoseViewerWrapper
+                # `isaacsimenvs.scripts.visualization.wandb_viewer.cloth_viewer` even though ClothPoseViewerWrapper
                 # subclasses PlayPoseViewerWrapper and needs both -- so cloth silently ran with
                 # `github_raw_base=None` and `url_check="skip"`. The first was masked, because
                 # `_derive_github_raw_base()` rebuilds the same URL from `git remote` + the

@@ -78,7 +78,7 @@ For evaluation and viewers the env answers `fold_error()`, `fold_targets_w()`,
 `object_pos_w()`; anything else is on `env.task`, `env.backend` or `env.robot_layout`.
 
 The robot (`RobotSpec` and the URDF -> USD pipeline) is `isaacsimenvs/robots/`, shared with the Play
-task; the training-time interactive viewer is `isaacsimenvs/scripts/visualization/interactive_viewer/`.
+task; the training-time wandb viewer is `isaacsimenvs/scripts/visualization/wandb_viewer/`.
 The fold shapes are YAML designs with a PNG each in `isaacsimenvs/tasks/cloth/config/designs/`
 (regenerate the PNGs with `isaacsimenvs/scripts/visualization/rigid_cloth/render_designs.py`).
 

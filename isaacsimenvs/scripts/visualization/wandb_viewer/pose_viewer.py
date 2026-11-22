@@ -18,7 +18,7 @@ from urllib.parse import quote
 import gymnasium as gym
 import numpy as np
 
-from isaacsimenvs.scripts.visualization.interactive_viewer import create_html, make_embedded_robot, make_url_robot
+from isaacsimenvs.scripts.visualization.wandb_viewer import create_html, make_embedded_robot, make_url_robot
 
 
 
@@ -197,10 +197,6 @@ def object_urdf_for_env(env, env_id: int) -> tuple[str, Path]:
     return urdf_path.read_text(encoding="utf-8"), urdf_path
 
 
-def object_urdf_text_for_env(env, env_id: int) -> str:
-    return object_urdf_for_env(env, env_id)[0]
-
-
 def table_urdf_for_env(env, env_id: int) -> tuple[str, Path]:
     """Return the table URDF text assigned to one env."""
 
@@ -209,20 +205,6 @@ def table_urdf_for_env(env, env_id: int) -> tuple[str, Path]:
         urdf_path = Path(table_paths[env_id % len(table_paths)])
         return urdf_path.read_text(encoding="utf-8"), urdf_path
     return TABLE_URDF_PATH.read_text(encoding="utf-8"), TABLE_URDF_PATH
-
-
-def table_urdf_text_for_env(env, env_id: int) -> str:
-    return table_urdf_for_env(env, env_id)[0]
-
-
-def hole_urdf_for_env(env, env_id: int) -> tuple[str, Path] | tuple[None, None]:
-    """Return the peg-in-hole receptive URDF text when the env exposes one."""
-
-    hole_paths = getattr(env, "_hole_urdf_paths", None)
-    if not hole_paths:
-        return None, None
-    urdf_path = Path(hole_paths[env_id % len(hole_paths)])
-    return urdf_path.read_text(encoding="utf-8"), urdf_path
 
 
 def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
@@ -247,7 +229,6 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
     robot_root_pos = env.robot.data.root_pos_w[env_id] - origin
     goal_pos = env.goal_viz.data.root_pos_w[env_id] - origin
     table_pos = env.table.data.root_pos_w[env_id] - origin
-    hole = getattr(env, "hole", None)
 
     frame = {
         "env_id": int(env_id),
@@ -261,9 +242,6 @@ def capture_pose_viewer_frame(env, env_id: int) -> dict[str, Any]:
     obj = getattr(env, "object", None)
     if obj is not None:
         frame["object_pose"] = _pose_xyzw(obj.data.root_pos_w[env_id] - origin, obj.data.root_quat_w[env_id])
-    if hole is not None:
-        hole_pos = hole.data.root_pos_w[env_id] - origin
-        frame["hole_pose"] = _pose_xyzw(hole_pos, hole.data.root_quat_w[env_id])
     return frame
 
 
@@ -272,10 +250,8 @@ def build_pose_viewer_html(
     frames: list[dict[str, Any]],
     object_urdf_text: str | None,
     table_urdf_text: str,
-    hole_urdf_text: str | None = None,
     object_urdf_path: Path | None = None,
     table_urdf_path: Path | None = None,
-    hole_urdf_path: Path | None = None,
     github_raw_base: str | None = None,
     url_check: str = "skip",
     deformables: dict | None = None,
@@ -307,12 +283,6 @@ def build_pose_viewer_html(
             source_urdf_path=table_urdf_path,
             raw_base=raw_base,
         )
-    if hole_urdf_text is not None and hole_urdf_path is not None:
-        hole_urdf_text = _rewrite_embedded_urdf_mesh_urls(
-            hole_urdf_text,
-            source_urdf_path=hole_urdf_path,
-            raw_base=raw_base,
-        )
 
     timestamps = np.arange(len(frames), dtype=np.float32) / 60.0
     robots = [
@@ -341,9 +311,6 @@ def build_pose_viewer_html(
         )
         object_poses["object"] = np.stack([frame["object_pose"] for frame in frames])
         object_poses["goal"] = np.stack([frame["goal_pose"] for frame in frames])
-    if hole_urdf_text is not None and all("hole_pose" in frame for frame in frames):
-        robots.insert(2, make_embedded_robot(name="hole", urdf_text=hole_urdf_text))
-        object_poses["hole"] = np.stack([frame["hole_pose"] for frame in frames])
 
     return create_html(
         joint_names=frames[0]["robot_joint_names"],
@@ -367,7 +334,7 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         capture_len: int,
         capture_interval: int,
         env_id: int = 0,
-        wandb_key: str = "interactive_viewer",
+        wandb_key: str = "wandb_viewer",
         github_raw_base: str | None = None,
         url_check: str = "skip",
     ) -> None:
@@ -396,7 +363,6 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         self._table_urdf_text, self._table_urdf_path = table_urdf_for_env(
             inner, self.env_id
         )
-        self._hole_urdf_text, self._hole_urdf_path = hole_urdf_for_env(inner, self.env_id)
 
         self._step = 0
         self._capture_index = 0
@@ -492,10 +458,8 @@ class PlayPoseViewerWrapper(gym.Wrapper):
             frames=frames,
             object_urdf_text=self._object_urdf_text,
             table_urdf_text=self._table_urdf_text,
-            hole_urdf_text=self._hole_urdf_text,
             object_urdf_path=self._object_urdf_path,
             table_urdf_path=self._table_urdf_path,
-            hole_urdf_path=self._hole_urdf_path,
             github_raw_base=self.github_raw_base,
             url_check=self.url_check,
             robot_urdf_relative_path=self.env.unwrapped.cfg.assets.robot_urdf,

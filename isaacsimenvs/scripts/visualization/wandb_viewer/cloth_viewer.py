@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer import (
+from isaacsimenvs.scripts.visualization.wandb_viewer.pose_viewer import (
     PlayPoseViewerWrapper,
     build_pose_viewer_html,
     capture_pose_viewer_frame,
@@ -91,10 +91,8 @@ class ClothPoseViewerWrapper(PlayPoseViewerWrapper):
             frames=frames,
             object_urdf_text=self._object_urdf_text,
             table_urdf_text=self._table_urdf_text,
-            hole_urdf_text=self._hole_urdf_text,
             object_urdf_path=self._object_urdf_path,
             table_urdf_path=self._table_urdf_path,
-            hole_urdf_path=self._hole_urdf_path,
             github_raw_base=self.github_raw_base,
             url_check=self.url_check,
             # The sheet is the manipuland, not the spawned rigid tool -- see the note in

@@ -1,1 +1,1 @@
-"""Viewers and renderers: live policy viewers, interactive HTML captures, design and robot plots."""
+"""Viewers and renderers: live policy viewers, interactive HTML captures, fold-design plots."""
