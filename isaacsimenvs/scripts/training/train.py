@@ -245,6 +245,13 @@ def main() -> None:
         # duplicates with `409 ... Duplicate entry for key 'runs.PRIMARY'`, while four copies
         # of every capture race over the same files.
         is_main_rank = int(os.getenv("RANK", "0")) == 0
+        if is_main_rank:
+            # What the policy was trained in, for its evaluations (scripts/evaluation/training_run.py).
+            import json
+
+            os.makedirs(hydra_run_dir, exist_ok=True)
+            with open(os.path.join(hydra_run_dir, "run.json"), "w") as f:
+                json.dump({"task": args_cli.task, "experiment": args_cli.experiment, "overrides": hydra_args}, f, indent=1)
 
         rl_device = args_cli.rl_device
         if args_cli.distributed:

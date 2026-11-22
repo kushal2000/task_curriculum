@@ -129,28 +129,36 @@ RUN_TAG=vbdRW_sharpa experiments/train.sh --task Isaacsimenvs-Cloth-Direct-v0 --
 
 ## Evaluation
 
-The metric is held folds on the VBD cloth, 32 episodes x 2 eval seeds per cell, in 4 cells:
+The metric is held folds within 1.5 cm (held 10 steps), 2 eval seeds per cell. Every fold policy goes
+through `experiments/eval.sh`: keypoint policies and point-cloud students (distilled or RL-trained; the
+checkpoint says which, `eval.py`). Three cells per checkpoint by default, plus one opt-in:
 
-- start: pinned (one fixed start state) or rand (`--randomize`)
-- keypoint cutoff: 4 cm or 1.5 cm
+| cell | world | episodes |
+|---|---|---|
+| `rigidbody_flat:rand` | PhysX, the policy's OWN training recipe (physics, DR, start height, accept_lookalike), the 7 shapes, flat starts, the half fold (`goal_task` `half_fold`) | 448 |
+| `rigidbody_folded:rand` (opt-in) | the same from a random reachable folded state with one more fold as the goal (`goal_task` `any_fold`, below) | 448 |
+| `vbd:pinned` / `vbd:rand` | the VBD cloth with the VBD task's own physics for every policy (ns6: `num_substeps 6`, cloth `substeps 2`) | 32 |
 
-The key metrics are 1.5 cm pinned and 1.5 cm rand. `experiments/eval.sh` runs them for one checkpoint,
-a training array, or a list file (one checkpoint per line):
+Rigid body is rand only. A goal point-cloud student has no VBD cell (no goal cloud there).
+The key metrics are VBD pinned and rand. The recipe is found next to the checkpoint (`run.json`, written
+by `train.py` since 2026-11-22; `args.json` of `distill_pc`); an older checkpoint names it. One checkpoint,
+a training array (`RUN_TAG` + `TRAIN_JOB`), or a list file, one checkpoint per line:
 
 ```
-<tag> <seed> <checkpoint .pth>
-<tag> <seed> <run name> <best | last | ep:N>      # resolved when the job runs
+<tag> <seed> <recipe | auto> <checkpoint .pth>
+<tag> <seed> <recipe | auto> <run name> <best | last | ep:N>      # resolved when the job runs
 ```
 
 ```bash
-LIST=my_list.txt TARGETS=vbd INDEX=<k> experiments/eval.sh        # k = 0 .. 2 x lines - 1
+LIST=my_list.txt INDEX=<k> experiments/eval.sh        # k = 0 .. 3 x lines - 1
+CKPT=<pth> TAG=<tag> RECIPE=experiments/nov15_dr_delay/flat7RW_fricSysid INDEX=<0..2> experiments/eval.sh
+CKPT=<pth> TAG=<tag> CELLS=rigidbody_folded:rand INDEX=0 experiments/eval.sh
 ```
 
-- Index = (line x targets + target) x starts + start; `TARGETS` (default `pool7 vbd`), `STARTS`
-  (default `pinned rand`).
-- The sheet's spawn height: `START_HEIGHT` (default 0.20). VBD runs at the ns6 protocol (`num_substeps 6`, cloth `substeps 2`), the VBD task's own values (`config/task.yaml`).
-- Output: `docs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json`;
-  `isaacsimenvs/scripts/evaluation/matrix_summary.py <tag>` tabulates them.
+- Index = line x cells + cell; `CELLS` (default `rigidbody_flat:rand vbd:pinned vbd:rand`).
+- The sheet's spawn height on VBD: `START_HEIGHT` (default 0.20); rigid uses the recipe's.
+- Output: `docs/results/px_matrix/<tag>_s<seed>__on_<target>__<start>__1p5cm_s<es>.json`;
+  `isaacsimenvs/scripts/evaluation/matrix_summary.py <tag>` tabulates them (one row per tag).
 - `EVAL_SEEDS="3 4 5 6 7 8"` re-tests a picked checkpoint on fresh seeds.
 
 ## Goal tasks (rigid pool)
@@ -167,5 +175,5 @@ the goal as a cloud of the folded sheet (`obs.pointcloud.goal` `goal_fixed` / `g
   drawn in a sector instead of at any yaw.
 
 Recipes in `experiments/nov17_goal_pointcloud/` (`rigidcloth_pc_half_fold`, `rigidcloth_pc_any_fold`,
-the hard-mode teacher `rigidcloth_any_fold_teacher`); `distill_pc` evaluations then report success
-per shape, per travel direction and by flat / folded start.
+the hard-mode teacher `rigidcloth_any_fold_teacher`). `any_fold` is also the `rigidbody_folded` cell of
+`experiments/eval.sh`.

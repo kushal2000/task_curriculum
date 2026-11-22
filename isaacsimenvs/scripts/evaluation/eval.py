@@ -86,6 +86,56 @@ def _summarise(goals: list[int], lengths: list[int]) -> dict:
     }
 
 
+#: Exit code of a combination that cannot be evaluated (experiments/eval.sh skips it).
+NOT_APPLICABLE = 3
+#: Point-cloud goal groups that need fold_pool.goal_task (obs.pointcloud.goal).
+GOAL_CLOUDS = ("goal_fixed", "goal_any")
+
+
+def _student_checkpoint(path: str) -> dict | None:
+    """The point-cloud student in ``path`` (``pc_rl.load_student_any``'s format), or ``None`` for an
+    rl_games keypoint policy."""
+    import torch
+
+    ckpt = torch.load(path, map_location="cpu", weights_only=False)
+    if not isinstance(ckpt, dict):
+        return None
+    model = (ckpt[0] if 0 in ckpt else ckpt).get("model", {})
+    if "env" in ckpt or "pc_args" in ckpt or "a2c_network.pointnet.out.0.weight" in model:
+        from isaacsimenvs.scripts.distillation.pc_rl import load_student_any
+
+        return load_student_any(path)
+    return None
+
+
+def _plain(v):
+    if isinstance(v, (list, tuple)):
+        return [_plain(x) for x in v]
+    return v
+
+
+def _check_student_cloud(env_cfg, saved: dict) -> None:
+    """The recipe's cloud must be the one the student was trained on (saved in its checkpoint):
+    another point count, camera or goal changes what its network reads."""
+    obs = saved["obs"]
+    wrong = [f"object {env_cfg.obs.object!r} != {obs['object']!r}"] if env_cfg.obs.object != obs["object"] else []
+    for k, v in obs["pointcloud"].items():
+        have = getattr(env_cfg.obs.pointcloud, k, "<missing>")
+        if _plain(have) != _plain(v):
+            wrong.append(f"pointcloud.{k} {have!r} != {v!r}")
+    if wrong:
+        raise ValueError("the recipe's point cloud is not the student's: " + "; ".join(wrong))
+
+
+def _exit_if_not_applicable(env_cfg) -> None:
+    """A goal point cloud exists on the rigid fold pool only (``fold_pool.goal_task``), not on VBD."""
+    obs = getattr(env_cfg, "obs", None)
+    if (getattr(obs, "object", None) == "pointcloud" and obs.pointcloud.goal in GOAL_CLOUDS
+            and getattr(env_cfg, "fold_pool", None) is None):
+        print("[episodes] NOT APPLICABLE: a goal point cloud needs the rigid fold pool", flush=True)
+        os._exit(NOT_APPLICABLE)
+
+
 def main() -> None:
     from isaaclab.app import AppLauncher
 
@@ -110,7 +160,19 @@ def main() -> None:
         "whole pool under a fixed seed, so changing the count changes *which* objects the envs "
         "get, not just how many exist. PlayEnvCfg ships 100 for training.",
     )
-    parser.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
+    parser.add_argument(
+        "--checkpoint",
+        default=DEFAULT_CHECKPOINT,
+        help="An rl_games keypoint policy, or a point-cloud student (distill_pc's student_*.pth or an "
+        "RL-trained point-cloud actor): a student is recognised from the file and reads the env's cloud.",
+    )
+    parser.add_argument(
+        "--experiment",
+        default=None,
+        help="Build the env from this run recipe (the policy's training recipe) before the overrides. "
+        "'auto': the recipe and env overrides recorded next to the checkpoint (run.json / args.json, "
+        "training_run.py). Default: the task's own config.",
+    )
     parser.add_argument("--policy_config", default=DEFAULT_POLICY_CFG)
     parser.add_argument(
         "--sapg_expl_coef",
@@ -165,7 +227,16 @@ def main() -> None:
         help="skip the contact-buffer overflow check (results will be measured on dropped contacts)",
     )
     args_cli, hydra_args = parser.parse_known_args()
-    sys.argv = [sys.argv[0]] + hydra_args
+    train_overrides: list[str] = []
+    if args_cli.experiment == "auto":
+        from isaacsimenvs.scripts.evaluation.training_run import training_run, without_keys
+
+        run_info = training_run(args_cli.checkpoint)
+        if run_info is None:
+            raise SystemExit(f"--experiment auto: no run.json / args.json near {args_cli.checkpoint}; name its recipe")
+        args_cli.experiment = run_info["experiment"]
+        train_overrides = without_keys(run_info["overrides"], hydra_args)
+    sys.argv = [sys.argv[0]] + train_overrides + hydra_args
 
     # Kit is required by the PhysX backend and impossible for the Newton one, which runs kit-less
     # and has no Isaac Sim in its venv. Rather than a flag the caller has to remember to match to
@@ -187,7 +258,9 @@ def main() -> None:
     from isaacsimenvs.scripts.evaluation.player import PretrainedPlayer
     from isaacsimenvs.tasks.loader import hydra_task_config_with_yaml
 
-    @hydra_task_config_with_yaml(args_cli.task, "")
+    student = _student_checkpoint(args_cli.checkpoint)
+
+    @hydra_task_config_with_yaml(args_cli.task, "", experiment=args_cli.experiment)
     def run(env_cfg, agent_cfg) -> None:
         env_cfg.scene.num_envs = args_cli.num_envs
         env_cfg.sim.device = args_cli.sim_device
@@ -199,21 +272,35 @@ def main() -> None:
             disable_randomization(env_cfg)
         if args_cli.single_variant:
             use_single_object_variant()
+        if student is not None:
+            from isaacsimenvs.scripts.distillation.student import apply_student_env
+
+            if args_cli.experiment is None:
+                # No recipe (the VBD target): the student's cloud from its checkpoint; its DR only with --randomize.
+                apply_student_env(env_cfg, student["env"], with_dr=args_cli.randomize)
+            else:
+                _check_student_cloud(env_cfg, student["env"])
+        _exit_if_not_applicable(env_cfg)
 
         env = gym.make(args_cli.task, cfg=env_cfg)
         inner = env.unwrapped
         device = inner.device
         num_envs = inner.num_envs
 
-        player = PretrainedPlayer(
-            config_path=args_cli.policy_config,
-            checkpoint_path=args_cli.checkpoint,
-            num_envs=num_envs,
-            device=args_cli.rl_device,
-            num_observations=int(inner.cfg.observation_space),
-            num_actions=int(inner.cfg.action_space),
-            expl_coef=args_cli.sapg_expl_coef,
-        )
+        if student is not None:
+            from isaacsimenvs.scripts.distillation.student_player import EnvCloudStudentPlayer
+
+            player = EnvCloudStudentPlayer(inner, student, args_cli.rl_device)
+        else:
+            player = PretrainedPlayer(
+                config_path=args_cli.policy_config,
+                checkpoint_path=args_cli.checkpoint,
+                num_envs=num_envs,
+                device=args_cli.rl_device,
+                num_observations=int(inner.cfg.observation_space),
+                num_actions=int(inner.cfg.action_space),
+                expl_coef=args_cli.sapg_expl_coef,
+            )
 
         # Reset, then one zero-action tick, matching the reference runner's timing. Getting this
         # wrong shifts the whole rollout by a step.
@@ -372,7 +459,10 @@ def main() -> None:
             "max_steps": args_cli.max_steps,
             "steps_run": step,
             "checkpoint": args_cli.checkpoint,
-            "sapg_expl_coef": args_cli.sapg_expl_coef,
+            "policy": "pointcloud_student" if student is not None else "keypoint",
+            "experiment": args_cli.experiment,
+            "training_overrides": train_overrides,
+            "sapg_expl_coef": args_cli.sapg_expl_coef if student is None else None,
             "success_tolerance": args_cli.success_tolerance,
             "keypoint_scale": getattr(inner.cfg.reward, "keypoint_scale", None),
             "randomization": bool(args_cli.randomize),

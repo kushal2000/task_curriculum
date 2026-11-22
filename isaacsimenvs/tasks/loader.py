@@ -68,7 +68,7 @@ def hydra_task_config_with_yaml(
                 if exp.get("task", short_name) != short_name:
                     raise ValueError(f"experiment {experiment!r} is for {exp['task']}, not {short_name}")
                 env_cfg.from_dict(exp.get("env") or {})
-                if exp.get("agent"):
+                if exp.get("agent") and agent_cfg is not None:   # (an evaluation loads no agent config)
                     if isinstance(agent_cfg, dict):
                         agent_cfg = deep_merge(agent_cfg, exp["agent"])
                     else:

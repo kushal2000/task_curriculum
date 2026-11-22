@@ -1,11 +1,14 @@
-"""Tabulate experiments/eval.sh results: held folds per seed for every target, start and cutoff.
+"""Tabulate experiments/eval.sh results: held folds per training seed in every cell, at 1.5 cm.
 
-    python3 isaacsimenvs/scripts/evaluation/matrix_summary.py one_flat one_initfold box3 [--md docs/reports/4_physx/eval_matrix.md]
+    python3 isaacsimenvs/scripts/evaluation/matrix_summary.py flat7RW_base rigidcloth_ftGateFric [--md out.md]
 
-Reads docs/results/px_matrix/<tag>_s<seed>__on_<target>__<pinned|rand>__<4cm|1p5cm>_s<es>.json and
-prints, per cell, the held folds of each training seed (summed over the two eval seeds) and the share
-over all seeds. A missing file shows as "?" so an unfinished or failed task cannot pass as a zero. A
-target with no file at all for a tag (the 7-shape targets before 2026-10-12) is left out.
+Reads docs/results/px_matrix/<tag>_s<seed>__on_<target>__<start>__1p5cm_s<es>.json. One row per tag;
+per cell the held folds of each training seed (summed over the eval seeds) and the share over all
+seeds. A missing file shows as "?" so an unfinished or failed task cannot pass as a zero; a cell with
+no file for any seed (e.g. the VBD cells of a goal point-cloud student) shows "-"; the opt-in
+rigidbody_folded column only appears when a tag has it. Results
+under the pre-2026-11-22 target names (physx_pool7 / physx_pool7of: task defaults, not the policy's
+own recipe) are not read.
 """
 
 from __future__ import annotations
@@ -15,23 +18,20 @@ import glob
 import json
 import os
 
-TARGETS = [
-    ("physx_pool", "PhysX pool"),
-    ("physx_box3", "PhysX box3"),
-    ("newton_pool", "Newton pool"),
-    ("newton_box3", "Newton box3"),
-    ("vbd", "VBD cloth"),
-    ("physx_pool7", "PhysX 7-shape pool"),
-    ("physx_pool7of", "PhysX 7-shape, folded starts"),
+CELLS = [
+    ("rigidbody_flat", "rand", "rigid flat rand"),
+    ("rigidbody_folded", "rand", "rigid folded rand"),
+    ("vbd", "pinned", "VBD pinned"),
+    ("vbd", "rand", "VBD rand"),
 ]
-COLS = [(s, c) for c in ("4cm", "1p5cm") for s in ("pinned", "rand")]
 
 
-def cell(tag: str, target: str, start: str, cut: str) -> str:
-    parts, held_all, n_all = [], 0, 0
+def cell(tag: str, target: str, start: str) -> str:
+    parts, held_all, n_all, any_file = [], 0, 0, False
     for seed in (1, 2, 3):
         held = n = 0
-        files = sorted(glob.glob(f"docs/results/px_matrix/{tag}_s{seed}__on_{target}__{start}__{cut}_s*.json"))
+        files = sorted(glob.glob(f"docs/results/px_matrix/{tag}_s{seed}__on_{target}__{start}__1p5cm_s*.json"))
+        any_file |= bool(files)
         for path in files:
             d = json.load(open(path))
             held += int(d["termination_reasons"].get("fold_held", 0))
@@ -42,26 +42,29 @@ def cell(tag: str, target: str, start: str, cut: str) -> str:
             parts.append(str(held))
             held_all += held
             n_all += n
+    if not any_file:
+        return "-"
+    while parts and parts[-1] == "?":      # seeds the tag never had
+        parts.pop()
     share = f" ({100 * held_all / n_all:.0f}%)" if n_all else ""
-    return ", ".join(parts) + share
+    return ", ".join(parts or ["?"]) + share
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("tags", nargs="+")
-    p.add_argument("--md", default=None, help="also write the tables as markdown here")
+    p.add_argument("--md", default=None, help="also write the table as markdown here")
     a = p.parse_args()
-    out = []
-    for tag in a.tags:
-        out.append(f"### {tag}\n")
-        out.append("held folds per training seed (2 eval seeds summed; pool targets of 640, 7-shape of 896, others of 64)\n")
-        out.append("| target | " + " | ".join(f"{c} {s}" for s, c in COLS) + " |")
-        out.append("|---|" + "---|" * len(COLS))
-        for key, name in TARGETS:
-            if not glob.glob(f"docs/results/px_matrix/{tag}_s[123]__on_{key}__*.json"):
-                continue
-            out.append(f"| {name} | " + " | ".join(cell(tag, key, s, c) for s, c in COLS) + " |")
-        out.append("")
+    rows = {tag: [cell(tag, t, s) for t, s, _ in CELLS] for tag in a.tags}
+    # an opt-in cell (rigidbody_folded) only when some tag has it
+    cols = [i for i, (t, _, _) in enumerate(CELLS) if t != "rigidbody_folded" or any(r[i] != "-" for r in rows.values())]
+    out = [
+        "held folds per training seed at 1.5 cm (2 eval seeds summed: rigid body of 896, VBD of 64)\n",
+        "| tag | " + " | ".join(CELLS[i][2] for i in cols) + " |",
+        "|---|" + "---|" * len(cols),
+    ]
+    for tag, r in rows.items():
+        out.append(f"| {tag} | " + " | ".join(r[i] for i in cols) + " |")
     text = "\n".join(out)
     print(text)
     if a.md:

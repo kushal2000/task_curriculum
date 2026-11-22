@@ -1,0 +1,49 @@
+"""What a checkpoint was trained with: its run recipe and env overrides (stdlib only).
+
+    python -m isaacsimenvs.scripts.evaluation.training_run <checkpoint .pth>
+
+``train.py`` writes ``run.json`` into its Hydra run directory, two levels above ``nn/<file>.pth``;
+``distill_pc.py`` writes ``args.json`` next to its student checkpoints. Checkpoints trained before
+2026-11-22 have no ``run.json``: their recipe has to be named (``experiments/eval.sh`` LIST column).
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+#: Env overrides of the training command that are not part of the policy's world.
+_NOT_CARRIED = ("env.scene.num_envs",)
+
+
+def _key(override: str) -> str:
+    return override.split("=", 1)[0].lstrip("+~")
+
+
+def training_run(checkpoint: str | Path) -> dict | None:
+    """``{"experiment": <recipe or None>, "overrides": [env.* hydra overrides]}``, or ``None`` if
+    nothing next to the checkpoint records it."""
+    for folder in list(Path(checkpoint).resolve().parents)[:3]:
+        run = folder / "run.json"
+        if run.is_file():
+            meta = json.loads(run.read_text())
+            overrides = [o for o in meta.get("overrides", [])
+                         if _key(o).startswith("env.") and _key(o) not in _NOT_CARRIED]
+            return {"experiment": meta.get("experiment"), "overrides": overrides}
+        args = folder / "args.json"
+        if args.is_file():
+            meta = json.loads(args.read_text())
+            if "experiment" in meta:
+                return {"experiment": meta["experiment"], "overrides": []}
+    return None
+
+
+def without_keys(overrides: list[str], given: list[str]) -> list[str]:
+    """``overrides`` minus those whose key is also in ``given`` (Hydra rejects a key set twice)."""
+    keys = {_key(o) for o in given}
+    return [o for o in overrides if _key(o) not in keys]
+
+
+if __name__ == "__main__":
+    print(json.dumps(training_run(sys.argv[1])))
