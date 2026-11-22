@@ -6,8 +6,7 @@ folded goal sheet. The episode's camera errors (``domain_randomization.pointclou
 episode's first observation. ``fk_points`` are built from the body poses the delayed proprioception
 gives (``domain_randomization.proprio``), so they agree with the joint angles the policy reads.
 
-``ObservationBuilder`` owns one; a viewer playing a point-cloud student on a keypoint env builds its
-own (``scripts/distillation/student_player.py``).
+``ObservationBuilder`` owns one.
 """
 
 from __future__ import annotations
