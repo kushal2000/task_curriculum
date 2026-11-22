@@ -5,7 +5,7 @@
 # cloud 0-6 steps late, proprioception 0-3 and actions 0-2 steps late.
 #
 #   experiments/distill.sh (TEACHER=<keypoint teacher> NAME=<name>), or
-#   distill_pc --mode train --experiment experiments/nov16_pointcloud_dagger/rigidcloth_pc_dagger ...
+#   distill_pc --experiment experiments/nov16_pointcloud_dagger/rigidcloth_pc_dagger ...
 #
 # The study's other students are this recipe with overrides: A (no goal group) env.obs.pointcloud.goal=none;
 # clean: the domain_randomization.{pointcloud,proprio,action} values at 0; no FK env.obs.pointcloud.fk_points=0;

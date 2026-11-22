@@ -11,7 +11,7 @@ is the privileged state as for every run.
   (the embedding's input weights start at zero, so every SAPG block is the student at first) and
   ``network.pc.init_sigma`` takes the exploration noise of a state-policy checkpoint.
 * ``student_from_rl`` -- an rl_games checkpoint of that actor as a ``StudentNet`` state dict (one
-  SAPG block, embedding folded into the LSTM bias), so ``distill_pc --mode eval`` runs it;
+  SAPG block, embedding folded into the LSTM bias), so ``experiments/eval.sh`` runs it;
   ``write_student_env`` puts the env settings it needs next to the checkpoints.
 """
 
@@ -36,7 +36,7 @@ def flat_dim(n_proprio: int, num_points: int, point_dim: int) -> int:
 
 def write_student_env(run_dir, env: dict, layout: dict, teacher: str | None) -> None:
     """Next to the checkpoints: the env settings the actor reads through (``student.student_env``),
-    for ``distill_pc --mode eval`` and the viewer."""
+    for the VBD evaluation (``scripts/evaluation/eval.py``) and the viewer."""
     Path(run_dir).mkdir(parents=True, exist_ok=True)
     (Path(run_dir) / "student_env.json").write_text(json.dumps({"env": env, "layout": layout, "teacher": teacher}, indent=1))
 
@@ -129,7 +129,7 @@ def register_network() -> None:
                     self.proprio_rms.eval()
                 proprio = self.proprio_rms(proprio)
                 # Half precision for the per-point MLP in the rollout too (training already runs
-                # under autocast, and so do the distill_pc evaluations).
+                # under autocast, and so do the evaluations).
                 with torch.autocast("cuda", dtype=torch.float16, enabled=obs.is_cuda):
                     feat = self.pointnet(points, mask)
                 feat = feat.to(proprio.dtype)
