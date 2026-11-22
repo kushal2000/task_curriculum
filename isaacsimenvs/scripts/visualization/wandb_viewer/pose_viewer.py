@@ -324,7 +324,14 @@ def build_pose_viewer_html(
 
 
 class PlayPoseViewerWrapper(gym.Wrapper):
-    """Gym wrapper that periodically writes pose-only interactive HTML rollouts."""
+    """Gym wrapper that writes pose-only interactive HTML rollouts of one env when asked.
+
+    ``request_capture`` (called by the training loop when it saves a checkpoint) arms a capture; it
+    starts at env ``env_id``'s next episode start and ends at that episode's end (or after
+    ``capture_len`` frames), so every rollout is one whole episode of the policy at that epoch. The
+    epoch-0 rollout (the starting policy) records from the first step. Training's stochastic actions
+    and randomisation stay on: this is a look at the policy, not an evaluation.
+    """
 
     def __init__(
         self,
@@ -332,7 +339,6 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         *,
         output_dir: str | Path,
         capture_len: int,
-        capture_interval: int,
         env_id: int = 0,
         wandb_key: str = "wandb_viewer",
         github_raw_base: str | None = None,
@@ -350,7 +356,6 @@ class PlayPoseViewerWrapper(gym.Wrapper):
 
         self.output_dir = Path(output_dir)
         self.capture_len = int(capture_len)
-        self.capture_interval = int(capture_interval)
         self.env_id = int(env_id)
         self.wandb_key = wandb_key
         self.github_raw_base = github_raw_base
@@ -365,8 +370,12 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         )
 
         self._step = 0
-        self._capture_index = 0
+        # Every env starts on a fresh episode, so the epoch-0 rollout (the starting policy) records
+        # from the first step rather than waiting for env ``env_id``'s first reset.
         self._frames: list[dict[str, Any]] | None = []
+        #: (epoch, global_step) of the armed capture, and of the one being recorded.
+        self._pending: tuple[int, int] | None = None
+        self._label: tuple[int, int] = (0, 0)
         # Per-capture buffers of (C, H, W) student-camera frames (numpy, [0, 1] floats).
         # _depth_frames is the policy's actual input (noise-on path).
         # _depth_frames_clean is the same view without depth augmentation,
@@ -378,16 +387,32 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         self.output_dir.mkdir(parents=True, exist_ok=True)
         print(
             "[pose_viewer] enabled: "
-            f"env_id={self.env_id} len={self.capture_len} interval={self.capture_interval} "
+            f"env_id={self.env_id} max_len={self.capture_len} "
             f"output_dir={self.output_dir}",
             flush=True,
         )
+
+    def request_capture(self, *, epoch: int, global_step: int) -> None:
+        """Record env ``env_id``'s next whole episode, labelled with this epoch and step."""
+        if self._pending is not None or self._frames is not None:
+            print(f"[pose_viewer] epoch {epoch}: a rollout is still being recorded, skipped", flush=True)
+            return
+        self._pending = (int(epoch), int(global_step))
+
+    def _episode_started(self) -> bool:
+        """Whether env ``env_id`` was reset in the step just taken (its state is a fresh start)."""
+        buf = getattr(self.env.unwrapped, "episode_length_buf", None)
+        return buf is None or int(buf[self.env_id]) == 0
 
     def step(self, action):
         result = self.env.step(action)
         self._step += 1
 
-        if self._frames is None and self.capture_interval > 0 and self._step % self.capture_interval == 0:
+        started = self._episode_started()
+        if self._frames and started:
+            self._finalize_capture()
+        if self._frames is None and self._pending is not None and started:
+            self._label, self._pending = self._pending, None
             self._frames = []
             self._depth_frames = []
             self._depth_frames_clean = []
@@ -472,14 +497,13 @@ class PlayPoseViewerWrapper(gym.Wrapper):
             self._frames = None
             return
 
-        suffix = "partial" if partial else f"step_{self._step:09d}"
-        html_path = self.output_dir / f"pose_viewer_{suffix}_{self._capture_index:04d}.html"
+        epoch = self._label[0]
+        html_path = self.output_dir / f"rollout_ep{epoch:06d}{'_partial' if partial else ''}.html"
         html_text = self._build_html(frames)
         html_path.write_text(html_text, encoding="utf-8")
         print(f"[pose_viewer] wrote {len(frames)} frames to {html_path}", flush=True)
         self._log_wandb(html_text)
 
-        self._capture_index += 1
         self._frames = None
         self._depth_frames = []
         self._depth_frames_clean = []
@@ -494,8 +518,10 @@ class PlayPoseViewerWrapper(gym.Wrapper):
             return
 
         try:
-            wandb.log({self.wandb_key: wandb.Html(html_text)})
-            print(f"[pose_viewer] logged WandB Html key={self.wandb_key} step={self._step}", flush=True)
+            epoch, global_step = self._label
+            wandb.log({self.wandb_key: wandb.Html(html_text), f"{self.wandb_key}_epoch": epoch,
+                       "global_step": global_step})
+            print(f"[pose_viewer] logged WandB Html key={self.wandb_key} epoch={epoch}", flush=True)
         except Exception as exc:
             print(f"[pose_viewer] WandB log failed: {exc}", flush=True)
 
@@ -517,7 +543,7 @@ class PlayPoseViewerWrapper(gym.Wrapper):
             try:
                 video = _to_uint8_grayscale_rgb(frames)
                 key = f"{self.wandb_key}_{label}"
-                wandb.log({key: wandb.Video(video, fps=30, format="mp4")})
+                wandb.log({key: wandb.Video(video, fps=30, format="mp4"), "global_step": self._label[1]})
                 print(f"[pose_viewer] logged WandB Video key={key} "
                       f"shape={video.shape} dtype={video.dtype}", flush=True)
             except Exception as exc:

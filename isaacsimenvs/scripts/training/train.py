@@ -49,8 +49,10 @@ import sys
 #          (hence --capture_viewer_github_raw_base)
 #   Cloth  the robot plus the sheet and its fold target as deformable channels
 #
-# Matched by id prefix (`Isaacsimenvs-<name>`), so `RigidCloth` (PhysX) gets no viewer, as before.
+# Matched by id prefix (`Isaacsimenvs-<name>`). The PhysX sheet (`RigidCloth`) reads out as the same
+# grid of points as the VBD one, so it takes the cloth viewer too.
 _POSE_VIEWERS = {
+    "RigidCloth": "isaacsimenvs.scripts.visualization.wandb_viewer.cloth_viewer:ClothPoseViewerWrapper",
     "Cloth": "isaacsimenvs.scripts.visualization.wandb_viewer.cloth_viewer:ClothPoseViewerWrapper",
     "Play": "isaacsimenvs.scripts.visualization.wandb_viewer.pose_viewer:PlayPoseViewerWrapper",
 }
@@ -150,10 +152,16 @@ def main() -> None:
     parser.add_argument(
         "--capture_viewer",
         action="store_true",
-        help="Write periodic pose-only interactive HTML viewers; does not enable Isaac cameras.",
+        help="Write a pose-only interactive HTML rollout (one episode of env --capture_viewer_env_id) at "
+        "every --capture_viewer_epochs epochs and log it to wandb; does not enable Isaac cameras.",
     )
-    parser.add_argument("--capture_viewer_len", type=int, default=600)
-    parser.add_argument("--capture_viewer_interval", type=int, default=6000)
+    parser.add_argument("--capture_viewer_len", type=int, default=600, help="Frame cap of one rollout")
+    parser.add_argument(
+        "--capture_viewer_epochs",
+        type=int,
+        default=500,
+        help="A rollout every this many epochs (plus one at epoch 0)",
+    )
     parser.add_argument("--capture_viewer_env_id", type=int, default=0)
     parser.add_argument("--capture_viewer_wandb_key", default="wandb_viewer")
     parser.add_argument(
@@ -168,7 +176,8 @@ def main() -> None:
         help="Whether to HEAD-check the robot URDF URL before writing viewer HTML.",
     )
     # --- wandb ---
-    parser.add_argument("--wandb_activate", action="store_true")
+    parser.add_argument("--wandb_activate", action="store_true",
+                        help="Log to wandb; the best and last checkpoints are uploaded at the end")
     parser.add_argument("--wandb_project", default="isaacsimenvs")
     parser.add_argument("--wandb_group", default="")
     parser.add_argument("--wandb_entity", default="")
@@ -313,6 +322,7 @@ def main() -> None:
                 disable_logger=True,
             )
 
+        viewer = None
         if args_cli.capture_viewer and is_main_rank:
             from pathlib import Path
 
@@ -331,7 +341,6 @@ def main() -> None:
                 viewer_kwargs = dict(
                     output_dir=Path(hydra_run_dir) / "wandb_viewer",
                     capture_len=args_cli.capture_viewer_len,
-                    capture_interval=args_cli.capture_viewer_interval,
                     env_id=args_cli.capture_viewer_env_id,
                     wandb_key=args_cli.capture_viewer_wandb_key,
                 )
@@ -354,7 +363,7 @@ def main() -> None:
                     viewer_kwargs["github_raw_base"] = args_cli.capture_viewer_github_raw_base
                 if "url_check" in accepted:
                     viewer_kwargs["url_check"] = args_cli.capture_viewer_url_check
-                env = viewer_cls(env, **viewer_kwargs)
+                env = viewer = viewer_cls(env, **viewer_kwargs)
 
         # Clip bounds live in the rl_games YAML (params.env.*). Default to
         # +inf if absent so a task without clip YAML just runs unbounded —
@@ -369,6 +378,12 @@ def main() -> None:
         )
 
         observers = [EnvStatsAlgoObserver()]
+        checkpoint_observer = None
+        if is_main_rank and not args_cli.test:
+            from isaacsimenvs.scripts.training.checkpoint_observer import CheckpointObserver
+
+            checkpoint_observer = CheckpointObserver(viewer=viewer, rollout_every=args_cli.capture_viewer_epochs)
+            observers.append(checkpoint_observer)
         if args_cli.wandb_activate and is_main_rank:
             from isaacsimenvs.scripts.training.wandb_observer import WandbAlgoObserver
 
@@ -387,7 +402,23 @@ def main() -> None:
                     "wandb_logcode_dir": args_cli.wandb_logcode_dir,
                 }
             )
-            observers.append(WandbAlgoObserver(wandb_cfg))
+            # What a run is, for filtering on wandb: the full env and agent config plus how it was launched.
+            try:
+                env_cfg_dict = env_cfg.to_dict()
+            except Exception as exc:  # a config value wandb cannot take must not cost the run its logging
+                print(f"[train] env config not uploaded to wandb: {exc}", flush=True)
+                env_cfg_dict = {}
+            run_config = {
+                "task": args_cli.task,
+                "experiment": args_cli.experiment,
+                "checkpoint": args_cli.checkpoint,
+                "checkpoint_load_mode": args_cli.checkpoint_load_mode if args_cli.checkpoint else None,
+                "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+                "overrides": hydra_args,
+                "env": env_cfg_dict,
+                "agent": agent_cfg,
+            }
+            observers.append(WandbAlgoObserver(wandb_cfg, run_config=run_config))
 
         if args_cli.critic_checkpoint:
             # Start the central value network (and its normalisers) from another run's FULL checkpoint,
@@ -436,6 +467,14 @@ def main() -> None:
                 pstats.Stats(os.getenv("PC_PROFILE")).sort_stats("cumulative").print_stats(70)
         else:
             runner.run(_run_args)
+
+        if checkpoint_observer is not None:
+            checkpoint_observer.upload_checkpoints()
+        if args_cli.wandb_activate and is_main_rank:
+            import wandb
+
+            if wandb.run is not None:
+                wandb.finish()  # waits for the uploads; os._exit below would cut them off
 
     run()
 

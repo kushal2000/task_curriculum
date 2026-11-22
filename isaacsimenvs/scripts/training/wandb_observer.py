@@ -38,9 +38,11 @@ def _retry(times: int, exceptions: tuple):
 class WandbAlgoObserver(AlgoObserver):
     """Initialize wandb before rl_games' summary writer so sync_tensorboard works."""
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, run_config: dict | None = None):
         super().__init__()
         self.cfg = cfg
+        #: Uploaded as wandb.config beside the wandb settings: task, recipe, prior, env / agent config.
+        self.run_config = run_config or {}
 
     def before_init(self, base_name, config, experiment_name):
         import wandb
@@ -56,7 +58,7 @@ class WandbAlgoObserver(AlgoObserver):
         print(f"[Wandb] unique id: {wandb_unique_id}")
 
         cfg = self.cfg
-        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         # Default log_code scope is the isaacsimenvs package; the full repo is
         # 19 GB and `wandb.run.log_code` walks every file (slow init). Override
         # via `wandb_logcode_dir=<path>` to point elsewhere, or `=''` unchanged.
@@ -105,3 +107,18 @@ class WandbAlgoObserver(AlgoObserver):
 
         cfg_dict = self.cfg if isinstance(self.cfg, dict) else omegaconf_to_dict(self.cfg)
         wandb.config.update(cfg_dict, allow_val_change=True)
+        try:
+            wandb.config.update(_jsonable(self.run_config), allow_val_change=True)
+        except Exception as exc:
+            print(f"[Wandb] run config upload failed: {exc}")
+
+
+def _jsonable(value):
+    """``value`` with everything wandb.config cannot hold (classes, callables, tensors) as its str."""
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    return str(value)

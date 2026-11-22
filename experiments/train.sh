@@ -17,7 +17,11 @@
 #   RUN_TAG          the run's tag in its name (default run)
 #   PRIORS="a b c"   one --checkpoint per array index (index k starts from the k-th), e.g. seed-wise finetunes
 #   SMOKE=1          a 5-epoch smoke at 192 envs (overrides the recipe's size)
-#   WANDB=1          log to wandb: project $WANDB_PROJECT (default fold_pool), group px_<RUN_TAG>_<job>
+#   WANDB=0          no wandb (default on, off with SMOKE=1). Project $WANDB_PROJECT (default task_curriculum);
+#                    group = the study, i.e. the recipe's folder experiments/<study>/ ($WANDB_GROUP overrides;
+#                    "misc" for a recipe outside experiments/ or none); tags kind, recipe, RUN_TAG, seed, job.
+#                    The best and last checkpoints are uploaded at the end as artifact ckpt-<name>.
+#   VIEWER=0         no interactive HTML rollouts (default: one episode every 500 epochs and at epoch 0, on wandb)
 # The header lines ([px_train] / [vbd_train]) are what the run record parses; keep their format.
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh" "$@"
 [ -n "$TASK" ] || { echo "[train] pass --task <gym id>" >&2; exit 2; }
@@ -69,10 +73,18 @@ if [ "${SMOKE:-0}" = 1 ]; then
     ARGS+=(env.scene.num_envs=192 agent.params.config.max_epochs=5 agent.params.config.minibatch_size=6144
            agent.params.config.central_value_config.minibatch_size=6144 agent.params.config.expl_coef_block_size=32)
 fi
-if [ "${WANDB:-0}" = 1 ]; then
-    ARGS+=(--wandb_activate --wandb_project "${WANDB_PROJECT:-fold_pool}" --wandb_group "px_${RUN_TAG:-run}_${JOB}"
-           --wandb_name "$NAME")
+[ "${SMOKE:-0}" = 1 ] && WANDB="${WANDB:-0}"
+WANDB="${WANDB:-1}"
+if [ "$WANDB" = 1 ]; then
+    case "$EXPERIMENT" in
+        *experiments/*/*) STUDY="$(basename "$(dirname "$EXPERIMENT")")" ;;
+        *)                STUDY=misc ;;
+    esac
+    RECIPE="$(basename "${EXPERIMENT:-none}" .yaml)"
+    ARGS+=(--wandb_activate --wandb_project "${WANDB_PROJECT:-task_curriculum}" --wandb_group "${WANDB_GROUP:-$STUDY}"
+           --wandb_name "$NAME" --wandb_tags "$KIND" "recipe:$RECIPE" "tag:${RUN_TAG:-run}" "s$SEED" "job:$JOB")
 fi
+[ "${VIEWER:-1}" = 1 ] && ! has '^--capture_viewer$' && ARGS+=(--capture_viewer)
 
 # The run's size as it will be used (recipe, then the command line), for the header.
 read -r ENVS EPOCHS MINIBATCH DR < <("${PY[@]}" - "$EXPERIMENT" "${ARGS[@]}" <<'PY' 2>/dev/null
