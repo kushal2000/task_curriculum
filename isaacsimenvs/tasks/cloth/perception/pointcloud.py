@@ -12,6 +12,9 @@ says what it belongs to. Built from the sim's state without rendering:
   occlusion: cloth by robot, robot by cloth, either by itself;
 * noise -- per-camera calibration error, depth noise along the ray, random drops, a per-episode
   delay of the whole cloud (all off by default; ``domain_randomization.pointcloud``);
+* real-cloud effects -- what the real cloud was measured to differ by (also off by default; DR
+  block ``pointcloud_real``): robot points lost close over the table, floating points, a larger
+  cloth share; and ``cameras`` builds the cloud from one camera instead of two;
 * crop and count -- the box, then ``n_points`` candidates drawn with probability proportional to
   the surface area each stands for (uniform density over what is visible, like a voxel filter).
 
@@ -41,11 +44,17 @@ import torch
 
 from isaacsimenvs.tasks.cloth.mdp.delay import DelayLine
 
-__all__ = ["GOAL_MODES", "PointCloudSetup", "PointCloud", "look_at", "quat_rotate"]
+__all__ = ["CAMERA_SETS", "GOAL_MODES", "PointCloudSetup", "PointCloud", "look_at", "quat_rotate"]
 
 #: The goal group of the cloud (module doc). Checkpoints from before 2026-11-19 name them first /
 #: scene / shape (``scripts/distillation/student.legacy_env_overrides`` translates).
 GOAL_MODES = ("none", "label", "goal_fixed", "goal_any")
+
+#: ``PointCloudSetup.cameras`` -> the one camera the cloud comes from (0 = A, 1 = B; None: both).
+CAMERA_SETS = {"ab": None, "a": 0, "b": 1}
+
+#: The ``last_robot_low`` diagnostic counts the robot points below this height over the table [m].
+ROBOT_LOW_HEIGHT = 0.03
 
 
 @dataclass
@@ -75,6 +84,9 @@ class PointCloudSetup:
     """The box starts this far below the table top. No upper face: the cameras' view ends it."""
 
     # --- cameras (RealSense D415 depth: 65 x 40 deg) ---
+    cameras: str = "ab"
+    """The cameras the cloud comes from: ``ab`` (both), ``a`` or ``b`` (one). With one camera the
+    ``goal_fixed`` group carries that camera's calibration error (the real goal is cut from its cloud)."""
     cam_a_base: tuple[float, float, float] = (0.6446, -0.9631, 0.8564)
     """Camera A's optical centre in the robot base frame (left_camera_nov7.json, ``T_base_cam``).
     Env frame = base + ``robot_root_pos``."""
@@ -107,9 +119,27 @@ class PointCloudSetup:
     delay_max: int = 0
     """The cloud is this many policy steps old at most (per-episode lag, uniform in 0..max)."""
 
+    # --- real-cloud effects (all off by default; DR block pointcloud_real) ---
+    near_table_drop_episode_prob: float = 0.0
+    """The share of episodes that lose robot points close over the table (the real black hand and arm
+    vanish with the black table there). The cloth's points stay."""
+    near_table_drop_height_range: tuple[float, float] = (0.0, 0.0)
+    """In such an episode: the height [m] over the table top below which robot points are lost."""
+    near_table_drop_prob_range: tuple[float, float] = (0.0, 0.0)
+    """In such an episode: the probability that a robot point below that height is lost."""
+    outlier_frac_range: tuple[float, float] = (0.0, 0.0)
+    """Floating points: per episode, this share of the live cloud is robot points moved along their
+    camera's ray."""
+    outlier_shift_range: tuple[float, float] = (0.02, 0.05)
+    """How far a floating point moves [m], per point; towards or away from the camera, 50/50."""
+    cloth_weight_range: tuple[float, float] = (1.0, 1.0)
+    """Per-episode factor on the cloth's sampling weight (its share of the cloud against the robot's)."""
+
     def __post_init__(self) -> None:
         if self.goal_mode not in GOAL_MODES:
             raise ValueError(f"goal_mode must be one of {GOAL_MODES}, got {self.goal_mode!r}")
+        if self.cameras not in CAMERA_SETS:
+            raise ValueError(f"cameras must be one of {tuple(CAMERA_SETS)}, got {self.cameras!r}")
 
     @property
     def labels(self) -> tuple[str, ...]:
@@ -218,6 +248,15 @@ class PointCloud:
         self.depth_std = torch.zeros(n, device=dev)
         self.drop_p = torch.zeros(n, device=dev)
         self.lag = torch.zeros(n, dtype=torch.long, device=dev)
+        # The real-cloud effects' per-episode draws; these values are the effects switched off.
+        self.table_z = float(table_z)
+        self.only_cam = CAMERA_SETS[cfg.cameras]
+        self.drops_near_table = float(cfg.near_table_drop_episode_prob) > 0.0
+        self.near_table_height = torch.zeros(n, device=dev)
+        self.near_table_prob = torch.zeros(n, device=dev)
+        self.has_outliers = float(cfg.outlier_frac_range[1]) > 0.0
+        self.outlier_frac = torch.zeros(n, device=dev)
+        self.cloth_weight = torch.ones(n, device=dev)
         self.fresh = torch.ones(n, dtype=torch.bool, device=dev)
         self.delay = DelayLine(n, cfg.delay_max, (cfg.n_points, 4), dev, torch.float16)
         k = int(cfg.n_ref)
@@ -225,9 +264,14 @@ class PointCloud:
         self.ref_mask = torch.zeros(n, k, dtype=torch.bool, device=dev)
         self.ref_moving = torch.zeros(n, k, dtype=torch.bool, device=dev)
         self.ref_valid = torch.zeros(n, dtype=torch.bool, device=dev)
+        # Diagnostics of the last live cloud, before the delay (logs, viewers, tests).
         self.last_cloth_share = torch.zeros(n, device=dev)
         self.last_visible_frac = torch.ones(n, device=dev)
         self.last_count = torch.zeros(n, device=dev)
+        #: ``(n,)`` robot points within ``ROBOT_LOW_HEIGHT`` over the table top.
+        self.last_robot_low = torch.zeros(n, device=dev)
+        #: ``(n, n_points)`` the floating points.
+        self.last_outlier = torch.zeros(n, int(cfg.n_points), dtype=torch.bool, device=dev)
 
     def _rotations(self, cams: torch.Tensor) -> torch.Tensor:
         if self.rots0 is not None:
@@ -251,6 +295,16 @@ class PointCloud:
         self.depth_std[ids] = _uniform(c.depth_noise_std_range, (m,), dev)
         self.drop_p[ids] = _uniform(c.drop_prob_range, (m,), dev)
         self.lag[ids] = torch.randint(0, int(c.delay_max) + 1, (m,), device=dev)
+        # The real-cloud effects. Each draws only when it is on, so a run without them keeps the
+        # random stream it had before they existed.
+        if self.drops_near_table:
+            on = torch.rand(m, device=dev) < float(c.near_table_drop_episode_prob)
+            self.near_table_height[ids] = _uniform(c.near_table_drop_height_range, (m,), dev) * on
+            self.near_table_prob[ids] = _uniform(c.near_table_drop_prob_range, (m,), dev) * on
+        if self.has_outliers:
+            self.outlier_frac[ids] = _uniform(c.outlier_frac_range, (m,), dev)
+        if tuple(c.cloth_weight_range) != (1.0, 1.0):
+            self.cloth_weight[ids] = _uniform(c.cloth_weight_range, (m,), dev)
         self.fresh[ids] = True
         self.ref_valid[ids] = False
         self.ref_mask[ids] = False
@@ -307,9 +361,12 @@ class PointCloud:
         n, k = particles.shape[0], self.n_cloth
         cloth, moving, w_cloth = self.cloth_candidates(particles)
         pts = torch.cat((cloth, self.robot_points(body_pos, body_quat)), dim=1)                # (n, P, 3)
+        w_cloth = w_cloth * self.cloth_weight[sl].unsqueeze(1)
         weight = torch.cat((w_cloth, self.pool_w.unsqueeze(0).expand(n, -1)), dim=1)
         cams = self.cams[sl]
         vis = self.visible(pts, cams, self.rots[sl])
+        if self.only_cam is not None:       # one camera: the other one sees nothing
+            vis[:, 1 - self.only_cam] = False
         seen = vis[:, 0] | vis[:, 1]
         self.last_visible_frac[sl] = seen[:, :k].float().mean(dim=1)
         # A point both cameras see comes from either; then that camera's depth noise and calibration error.
@@ -318,11 +375,11 @@ class PointCloud:
         pick = use_b.unsqueeze(-1)
         ray = torch.nn.functional.normalize(pts - torch.where(pick, cams[:, 1:2], cams[:, 0:1]), dim=-1)
         pts = pts + ray * (torch.randn(seen.shape, device=dev) * self.depth_std[sl].unsqueeze(1)).unsqueeze(-1)
-        rel, cr, ct = pts - self.centre, self.calib_r[sl], self.calib_t[sl]
-        pts = torch.where(pick, torch.matmul(rel, cr[:, 1].transpose(1, 2)) + ct[:, 1:2],
-                          torch.matmul(rel, cr[:, 0].transpose(1, 2)) + ct[:, 0:1]) + self.centre
+        pts = torch.where(pick, self._calibration_error(pts, 1, sl), self._calibration_error(pts, 0, sl))
         ok = seen & (torch.rand(seen.shape, device=dev) >= self.drop_p[sl].unsqueeze(1))
         ok = ok & ((pts >= self.box_lo) & (pts <= self.box_hi)).all(dim=-1) & torch.isfinite(pts).all(dim=-1)
+        if self.drops_near_table:
+            ok[:, k:] &= ~self._lost_near_table(pts[:, k:], sl)
         # n_points candidates, probability proportional to area (Gumbel top-k = weighted, no repeats).
         gumbel = -torch.log(-torch.log(torch.rand(seen.shape, device=dev).clamp(1e-9, 1.0 - 1e-9)))
         key = torch.where(ok, torch.log(weight.clamp(min=1e-12)) + gumbel, torch.full_like(gumbel, float("-inf")))
@@ -334,7 +391,47 @@ class PointCloud:
         top, idx = key.topk(int(c.n_points), dim=1)
         mask = torch.isfinite(top)
         xyz = torch.gather(pts, 1, idx.unsqueeze(-1).expand(-1, -1, 3)) * mask.unsqueeze(-1)
-        return xyz, mask, torch.gather(cam, 1, idx), idx < k, (pts[:, :k], ok[:, :k], moving)
+        cam = torch.gather(cam, 1, idx)
+        is_cloth = idx < k
+        is_robot = mask & ~is_cloth
+        self.last_robot_low[sl] = (is_robot & (xyz[..., 2] < self.table_z + ROBOT_LOW_HEIGHT)).float().sum(dim=1)
+        if self.has_outliers:
+            xyz, mask = self._float_outliers(xyz, mask, is_robot, cam, sl)
+        return xyz, mask, cam, is_cloth, (pts[:, :k], ok[:, :k], moving)
+
+    # ------------------------------------------------------------------ camera and real-cloud effects
+
+    def _calibration_error(self, pts: torch.Tensor, cam: int, sl: slice = slice(None)) -> torch.Tensor:
+        """``pts`` as camera ``cam``'s cloud has them: its per-episode rigid error about the box centre."""
+        rot, shift = self.calib_r[sl, cam], self.calib_t[sl, cam].unsqueeze(1)
+        return torch.matmul(pts - self.centre, rot.transpose(1, 2)) + shift + self.centre
+
+    def _lost_near_table(self, robot_pts: torch.Tensor, sl: slice) -> torch.Tensor:
+        """``(n, P)``: the robot points this step loses close over the table (``near_table_drop_*``)."""
+        low = robot_pts[..., 2] < (self.table_z + self.near_table_height[sl]).unsqueeze(1)
+        return low & (torch.rand(low.shape, device=robot_pts.device) < self.near_table_prob[sl].unsqueeze(1))
+
+    def _float_outliers(self, xyz, mask, is_robot, cam, sl: slice):
+        """``(xyz, mask)`` with some robot points turned into floating points (``outlier_*``).
+
+        Each robot point floats with the probability that makes the expected number of floating
+        points the episode's share ``outlier_frac`` of the cloud. A floating point moves along the
+        ray of the camera it came from; one that leaves the box is dropped from the cloud.
+        """
+        c, dev = self.cfg, xyz.device
+        want = self.outlier_frac[sl] * mask.float().sum(dim=1)
+        prob = (want / is_robot.float().sum(dim=1).clamp(min=1.0)).clamp(max=1.0).unsqueeze(1)
+        floats = is_robot & (torch.rand(mask.shape, device=dev) < prob)
+        distance = _uniform(c.outlier_shift_range, mask.shape, dev)
+        sign = torch.where(torch.rand(mask.shape, device=dev) < 0.5, -1.0, 1.0)
+        origin = torch.gather(self.cams[sl], 1, cam.unsqueeze(-1).expand(-1, -1, 3))
+        ray = torch.nn.functional.normalize(xyz - origin, dim=-1)
+        moved = xyz + ray * (distance * sign).unsqueeze(-1)
+        inside = ((moved >= self.box_lo) & (moved <= self.box_hi)).all(dim=-1)
+        mask = mask & (~floats | inside)
+        xyz = torch.where(floats.unsqueeze(-1), moved, xyz) * mask.unsqueeze(-1)
+        self.last_outlier[sl] = floats & mask
+        return xyz, mask
 
     # ------------------------------------------------------------------ the observation
 
@@ -391,6 +488,8 @@ class PointCloud:
             if bool(take.any()):
                 if c.goal_mode == "goal_fixed":
                     pts = self._sample_sheet(goal_now, int(c.n_ref))
+                    if self.only_cam is not None:   # the real goal is cut from that camera's cloud
+                        pts = self._calibration_error(pts, self.only_cam)
                     ok = ((pts >= self.box_lo) & (pts <= self.box_hi)).all(dim=-1) & torch.isfinite(pts).all(dim=-1)
                 else:
                     pts = self._sample_sheet(goal_rest, int(c.n_ref))

@@ -198,3 +198,68 @@ def test_robot_surface_resolves_fixed_links():
     fk = rs.fk_subset(surf, 128)
     assert len(set(fk.tolist())) == 128
     assert not any(links[i].startswith(("link3", "link4")) for i in surf["link"][fk])
+
+
+def test_one_camera_sees_less_and_marks_its_points():
+    torch.manual_seed(0)
+    plate = _plate((0.0, 0.0, TABLE_Z + 0.10), 0.05)
+    pos, quat = _bodies(2)
+    for cams, want in (("a", 0), ("b", 1)):
+        cloud = _make(plate=plate, cameras=cams)
+        _, mask = cloud.observe(torch.zeros(2, dtype=torch.long), _grid(2), pos, quat)
+        assert (cloud.last_cam[:, :1024][mask] == want).all()
+
+
+def test_robot_points_near_the_table_are_dropped_cloth_stays():
+    torch.manual_seed(0)
+    low = _plate((0.21, 0.0, TABLE_Z + 0.01), 0.04)                           # 1 cm over the table, beside the sheet
+    kw = dict(near_table_drop_episode_prob=1.0, near_table_drop_height_range=(0.03, 0.03),
+              near_table_drop_prob_range=(1.0, 1.0))
+    pos, quat = _bodies(2)
+    counts = []
+    for extra in ({}, kw):
+        cloud = _make(plate=low, **extra)
+        points, mask = cloud.observe(torch.zeros(2, dtype=torch.long), _grid(2), pos, quat)
+        x = _xyz(cloud, points)[..., 0]
+        counts.append((int((mask & (x > 0.16)).sum()), int((mask & (x < 0.15)).sum())))
+    assert counts[0][0] > 100 and counts[1][0] == 0                           # the low plate is gone
+    assert counts[1][1] >= counts[0][1] > 100                                 # the sheet is not
+
+
+def test_outliers_are_robot_points_moved_along_the_ray():
+    torch.manual_seed(0)
+    plate = _plate((0.12, 0.0, TABLE_Z + 0.10), 0.04)
+    cloud = _make(plate=plate, outlier_frac_range=(0.05, 0.05))
+    pos, quat = _bodies(2)
+    points, mask = cloud.observe(torch.zeros(2, dtype=torch.long), _grid(2), pos, quat)
+    out = cloud.last_outlier
+    share = float(out.sum()) / float(mask.sum())
+    assert 0.03 < share < 0.07, share
+    xyz = _xyz(cloud, points)[:, :1024]
+    assert (xyz[out][:, 0] > 0.05).all()                                      # robot points only
+    dz = (xyz[out][:, 2] - (TABLE_Z + 0.10)).abs()
+    assert float(dz.min()) > 0.008 and float(dz.max()) < 0.05                 # 2-5 cm along a slanted ray
+
+
+def test_cloth_weight_raises_the_cloth_share():
+    torch.manual_seed(0)
+    plate = _plate((0.15, 0.0, TABLE_Z + 0.10), 0.15)                         # 0.09 m^2 beside a 0.04 m^2 sheet
+    pos, quat = _bodies(2)
+    shares = []
+    for rng in ((1.0, 1.0), (1.8, 1.8)):
+        cloud = _make(plate=plate, n_points=256, cloth_weight_range=rng)
+        cloud.observe(torch.zeros(2, dtype=torch.long), _grid(2), pos, quat)
+        shares.append(float(cloud.last_cloth_share.mean()))
+    assert shares[1] > shares[0] * 1.25, shares
+
+
+def test_one_camera_goal_carries_the_calibration_error():
+    torch.manual_seed(0)
+    cloud = _make(goal_mode="goal_fixed", cameras="a")
+    cloud.calib_t[:, 0] = torch.tensor([[0.05, -0.04, 0.0], [-0.03, 0.05, 0.0]])
+    pos, quat = _bodies(2)
+    rest = _grid(2, at=torch.zeros(3))
+    points, mask = cloud.observe(torch.zeros(2, dtype=torch.long), _grid(2), pos, quat, goal_now=_grid(2), goal_rest=rest)
+    goal = _xyz(cloud, points)[:, 1024:]
+    off = goal.mean(dim=1)[:, :2] - CENTRE[:2]
+    assert torch.allclose(off, cloud.calib_t[:, 0, :2], atol=0.012)

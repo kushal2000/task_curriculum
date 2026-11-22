@@ -472,7 +472,7 @@ def main() -> None:
         }
         log_path = out_dir / "log.jsonl"
         win = {"s_ep": 0, "s_ok": 0, "t_ep": 0, "t_ok": 0, "loss_act": 0.0, "loss_aux": 0.0, "upd": 0,
-               "e_palm": 0.0, "e_goal": 0.0, "vis": 0.0, "pts": 0.0, "cloth": 0.0, "it": 0, "skipped": 0,
+               "e_palm": 0.0, "e_goal": 0.0, "vis": 0.0, "pts": 0.0, "cloth": 0.0, "low": 0.0, "outl": 0.0, "it": 0, "skipped": 0,
                "bin_sum": torch.zeros(len(DRAG_BINS), device=device), "bin_cnt": torch.zeros(len(DRAG_BINS), device=device)}
         first_iter = int(student_ckpt.get("iter", 0)) if student_ckpt is not None else 0
         t0 = time.time()
@@ -503,6 +503,8 @@ def main() -> None:
                 win["vis"] += float(cloud.last_visible_frac.mean()) / h
                 win["pts"] += float(cloud.last_count.mean()) / h
                 win["cloth"] += float(cloud.last_cloth_share.mean()) / h
+                win["low"] += float(cloud.last_robot_low.mean()) / h
+                win["outl"] += float(cloud.last_outlier.float().sum(dim=1).mean()) / h
                 obs, _rew, terminated, truncated, extras = env.step(act)
                 ended = terminated.bool() | truncated.bool()
                 if bool(ended.any()):
@@ -569,6 +571,7 @@ def main() -> None:
                     "teacher_episodes": win["t_ep"],
                     "visible_cloth_fraction": round(win["vis"] / k, 4),
                     "cloud_points": round(win["pts"] / k, 1), "cloth_share": round(win["cloth"] / k, 4),
+                    "robot_points_low_3cm": round(win["low"] / k, 2), "outlier_points": round(win["outl"] / k, 2),
                     "skipped_minibatches": win["skipped"],
                     "gpu_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2) if torch.cuda.is_available() else None,
                 }
@@ -577,7 +580,7 @@ def main() -> None:
                     f.write(json.dumps(row) + "\n")
                 for key in ("s_ep", "s_ok", "t_ep", "t_ok", "upd", "it"):
                     win[key] = 0
-                for key in ("loss_act", "loss_aux", "e_palm", "e_goal", "vis", "pts", "cloth"):
+                for key in ("loss_act", "loss_aux", "e_palm", "e_goal", "vis", "pts", "cloth", "low", "outl"):
                     win[key] = 0.0
                 win["bin_sum"].zero_()
                 win["bin_cnt"].zero_()

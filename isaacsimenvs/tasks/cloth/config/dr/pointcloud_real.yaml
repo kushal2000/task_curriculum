@@ -1,0 +1,15 @@
+# DR block pointcloud_real: what the real cloud differs by from the sim's (measured on the robot, 11-21),
+# on top of block pointcloud (list both: dr: [pointcloud, pointcloud_real]). The cloud up to 8 steps late;
+# in 70% of the episodes the robot's points in a band 0-3 cm over the table are dropped with probability
+# 0.5-1 (real: 4-5 points a frame within 3 cm of the table, sim 18-21); 0-8% of the cloud are robot points
+# moved 2-5 cm along their camera's ray (real raw depth: ~6% floating points, FoundationStereo ~0.7%);
+# the cloth's sampling weight x 1.0-1.8 (the real cloth's share is ~1.5x the sim's).
+domain_randomization:
+  pointcloud:
+    delay_max: 8
+    near_table_drop_episode_prob: 0.7
+    near_table_drop_height_range: [0.0, 0.03]
+    near_table_drop_prob_range: [0.5, 1.0]
+    outlier_frac_range: [0.0, 0.08]
+    outlier_shift_range: [0.02, 0.05]
+    cloth_weight_range: [1.0, 1.8]

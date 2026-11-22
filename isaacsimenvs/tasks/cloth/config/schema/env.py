@@ -66,6 +66,9 @@ class PointCloudObsCfg:
     """Points on the forearm and hand from forward kinematics of the (delayed) joint state (0: none)."""
     chunk: int = 1024
     """Envs per batch when the cloud is built (memory, not the result)."""
+    cameras: str = "ab"
+    """The cameras the cloud comes from: ``ab`` (both), ``a`` (left_camera_nov7) or ``b``. With one
+    camera the ``goal_fixed`` group carries that camera's calibration error."""
 
 
 @configclass
@@ -191,6 +194,22 @@ class PointCloudDRCfg:
     """The std of the per-point noise along the camera ray [m], drawn in this range; the noise every step."""
     drop_prob_range: tuple[float, float] = (0.0, 0.0)
     """The share of visible points dropped (holes, segmentation misses), drawn in this range; the drops every step."""
+
+    # What the real cloud was measured to differ by (DR block ``pointcloud_real``).
+    near_table_drop_episode_prob: float = 0.0
+    """The share of episodes that lose robot points close over the table (real: the black hand and arm
+    go with the black table). The cloth's points stay."""
+    near_table_drop_height_range: tuple[float, float] = (0.0, 0.0)
+    """In such an episode: the height [m] over the table top below which robot points are lost, drawn in this range."""
+    near_table_drop_prob_range: tuple[float, float] = (0.0, 0.0)
+    """In such an episode: the probability that a robot point below that height is lost, drawn in this range; the losses every step."""
+    outlier_frac_range: tuple[float, float] = (0.0, 0.0)
+    """Floating points: this share of the live cloud, drawn in the range, is robot points moved along
+    their camera's ray; the points every step."""
+    outlier_shift_range: tuple[float, float] = (0.02, 0.05)
+    """How far a floating point moves [m], per point; towards or away from the camera, 50/50."""
+    cloth_weight_range: tuple[float, float] = (1.0, 1.0)
+    """Factor on the cloth's sampling weight (its share of the cloud against the robot's), drawn in this range."""
 
 
 @configclass

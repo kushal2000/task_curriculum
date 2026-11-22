@@ -27,10 +27,17 @@ def point_cloud_setup(obs_pc, dr_pc) -> PointCloudSetup:
         raise ValueError(f"obs.pointcloud.goal must be one of {GOAL_MODES}, got {obs_pc.goal!r}")
     return PointCloudSetup(
         n_points=int(obs_pc.n_points), goal_mode=str(obs_pc.goal), ref_step=int(obs_pc.ref_step),
-        fk_points=int(obs_pc.fk_points), chunk=int(obs_pc.chunk),
+        fk_points=int(obs_pc.fk_points), chunk=int(obs_pc.chunk), cameras=str(obs_pc.cameras),
+        # the camera errors
         cam_pos_noise=tuple(dr_pc.cam_pos_noise), calib_xyz=tuple(dr_pc.calib_xyz),
         calib_rot_deg=float(dr_pc.calib_rot_deg), depth_noise_std_range=tuple(dr_pc.depth_noise_std_range),
         drop_prob_range=tuple(dr_pc.drop_prob_range), delay_max=int(dr_pc.delay_max),
+        # the real-cloud effects
+        near_table_drop_episode_prob=float(dr_pc.near_table_drop_episode_prob),
+        near_table_drop_height_range=tuple(dr_pc.near_table_drop_height_range),
+        near_table_drop_prob_range=tuple(dr_pc.near_table_drop_prob_range),
+        outlier_frac_range=tuple(dr_pc.outlier_frac_range), outlier_shift_range=tuple(dr_pc.outlier_shift_range),
+        cloth_weight_range=tuple(dr_pc.cloth_weight_range),
     )
 
 
@@ -69,7 +76,7 @@ class PointCloudObservation:
         print(
             f"[pointcloud] {setup.n_points} live points from {setup.n_cloth_cand} cloth + {self.cloud.n_robot} robot "
             f"candidates ({len(surf['links'])} links), image {self.cloud.w}x{self.cloud.h}, goal {setup.goal_mode}, "
-            f"fk {setup.fk_points}, labels {self.cloud.labels or 'none'}, cloud delay 0-{setup.delay_max}",
+            f"fk {setup.fk_points}, labels {self.cloud.labels or 'none'}, cloud delay 0-{setup.delay_max}, cameras {setup.cameras}",
             flush=True,
         )
 
