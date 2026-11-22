@@ -86,3 +86,7 @@ assets/flexiv_wuji/wuji_hand2_right_sysid_fit_*.json
 
 # Overleaf paper clone (its own git repo, synced with Overleaf)
 RSS2027_Rigid2Deform/
+
+# Local run artifacts and tool caches from the other branches (debug_outputs/train_logs, .cache/usd, ...)
+debug_outputs/
+.cache/
