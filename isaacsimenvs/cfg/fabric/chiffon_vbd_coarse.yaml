@@ -14,7 +14,7 @@ cloth:
   tri_ka: 10.0
   edge_kd: 8.89e-06
   soft_contact_mu: 0.265
-  table_contact_mu: 1.0
+  table_contact_mu: 0.363970  # tan(20 degrees), measured slide onset
   bending_rigidity: 2.749e-06
   bending_stiffness_scale: 1.12
   friction_ratio: 0.3

@@ -7,7 +7,8 @@ with one VBD substep each, 12 VBD iterations, full-surface contact, effective cl
 There are three presets for each of denim, towel, chiffon, cotton, silk, napkin, and big napkin.
 The suffixes are `_measured` for the 7×7 grid, `_vbd_coarse` for 17 mm irregular edges, and `_vbd`
 for 10 mm irregular edges. The irregular presets include per-hinge bending and fabric-specific
-contact or membrane settings. To evaluate a preset with the cleanup branch's held-fold protocol:
+contact or membrane settings. Named presets override the default table friction with the measured
+slide-onset coefficient, calculated as tan(slide angle). To evaluate a preset with the cleanup branch's held-fold protocol:
 
 ```bash
 FABRIC_ARGS=$(experiments/newton_py isaacsimenvs/tasks/cloth/utils/fabrics.py denim_vbd_coarse)

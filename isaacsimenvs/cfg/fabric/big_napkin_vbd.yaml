@@ -4,6 +4,7 @@
 # cantilever droops like the swatch (outputs/cloth_probe/v4, v5). Contact as the env: 8 mm particle radius,
 # 2 mm self-contact. Swatch target: unpressed fold stays.
 cloth:
+  table_contact_mu: 0.363970  # tan(20 degrees), measured slide onset
   mesh_kind: irregular
   edge_length: 0.010
   density: 0.08

@@ -15,7 +15,7 @@ cloth:
   edge_kd: 0.000162
   soft_contact_ke: 500.0
   soft_contact_mu: 0.667
-  table_contact_mu: 1.0  # Fixed-simulator sweep reduced falls and sheet slip.
+  table_contact_mu: 0.577350  # tan(30 degrees), measured slide onset
   bending_rigidity: 9.26e-06
   bending_stiffness_scale: 0.96
   friction_ratio: 0.3

@@ -3,6 +3,7 @@
 # for the measured bending length; edge_kd = 1e-3 x density / 2.0; soft_contact_mu = mu_table^2 / 0.5
 # (Cloth.yaml table_friction 0.5); tri_ke = tri_ka from denim.yaml (stretch not measured).
 cloth:
+  table_contact_mu: 0.363970  # tan(20 degrees), measured slide onset
   density: 0.1822
   tri_ke: 200.0
   tri_ka: 200.0
