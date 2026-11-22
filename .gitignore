@@ -83,3 +83,6 @@ assets/flexiv_wuji/wuji_hand2_right_sysid_fit_*.json
 # SimToolReal deploy: the lift1 open-loop rollout archive (robot.mode=openloop; tens of MB). Its sim
 # rollouts sit in docs/results/simtoolreal/, ignored with the rest of docs/results above.
 /lift1.zip
+
+# Overleaf paper clone (its own git repo, synced with Overleaf)
+RSS2027_Rigid2Deform/
