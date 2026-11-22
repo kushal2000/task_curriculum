@@ -90,3 +90,8 @@ RSS2027_Rigid2Deform/
 # Local run artifacts and tool caches from the other branches (debug_outputs/train_logs, .cache/usd, ...)
 debug_outputs/
 .cache/
+
+# Local leftovers from kushal/2026-11-18_pc_experiments_scratch (logs, plots, the adapter checkpoint)
+/experiments/nov16/
+/experiments/nov17/
+/experiments/nov18/
