@@ -66,3 +66,6 @@ pretrained_assembly/
 *.swp
 .idea/
 .vscode/
+
+# Assembled adapter start checkpoint (40 MB); rebuild with experiments/nov18/pointnet_adapter/assemble.py
+experiments/nov18/pointnet_adapter/encoder_15cm_2mm/adapter_prior.pth
