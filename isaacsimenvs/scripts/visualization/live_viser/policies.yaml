@@ -1,0 +1,13 @@
+# The viewer's default policy menu (--policies FILE replaces it), one entry per policy:
+#   "<menu name>": <checkpoint, from the repo root>
+#   "<menu name>": {checkpoint: <path>, recipe: <its training recipe>}
+# The rigid targets build the env from the starting policy's training recipe: run.json / args.json beside
+# the checkpoint, else the entry's recipe (as experiments/eval.sh's list column). A point-cloud student is
+# recognised from its checkpoint.
+
+"flat7RW_base s1 ep1500":
+  checkpoint: outputs/2026-11-11/02-51-52/0_pxpool_flat7RW_base_s1_277681/nn/snap_0_pxpool_flat7RW_base_s1_277681_ep_1500.pth
+  recipe: rigid_cloth_right_wuji
+"Play prior nov8 (right Wuji, not trained on folds)":
+  checkpoint: pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth
+  recipe: rigid_cloth_right_wuji

@@ -7,7 +7,7 @@ Launchers that run on any GPU machine, and the recipes of past studies.
 | `train.sh` | `isaacsimenvs/scripts/training/train.py` (any task; seed, run name, SAPG by default) |
 | `eval.sh` | fold evaluation: checkpoints x targets (PhysX pool, VBD cloth) x starts x cutoffs |
 | `distill.sh` | point-cloud student distillation and its evaluations |
-| `viewer.sh` | the live policy viewer (`live_viser.py`) |
+| `viewer.sh` | the live policy viewer (`isaacsimenvs/scripts/visualization/live_viser/`), one target per viewer |
 | `bake_robot.sh` | a robot's URDF -> USD cache for the kit-less Newton runs |
 | `newton_py` | the Newton venv's python (with the C++ runtime it needs) |
 

@@ -34,9 +34,8 @@ from isaacsimenvs.scripts.evaluation.contact_guard import (
 )
 from isaacsimenvs.scripts.evaluation.protocol import disable_randomization, set_present, use_single_object_variant
 
-#: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums. Both this
-#: module and its sibling print the identical line, so a render that disagrees with an evaluation
-#: can be diffed step by step instead of reasoned about.
+#: RC_TRACE=<n> prints the first n rollout steps as (obs, action, fold error) checksums, so two runs
+#: that disagree can be diffed step by step instead of reasoned about.
 _TRACE = int(os.environ.get("RC_TRACE", "0") or 0)
 
 from isaacsimenvs import PRETRAINED_CHECKPOINT, PRETRAINED_CONFIG  # noqa: E402
@@ -352,7 +351,6 @@ def main() -> None:
         try:
           while step < args_cli.max_steps and not bool(contributed.all()):
               action = player.get_action(obs["policy"], deterministic=not args_cli.stochastic)
-              # The twin of the trace in `render_newton.py`; see `_TRACE`.
               if _TRACE and step < _TRACE:
                   print(
                       f"[trace] step {step} obs {float(obs['policy'].double().sum()):+.6f} "

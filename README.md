@@ -50,7 +50,7 @@ TEACHER=<pth> NAME=<name> EXPERIMENT=experiments/nov16_pointcloud_dagger/rigidcl
 TEACHER=<pth> MODE=evalall STUDENT=<student.pth> TAG=<name> experiments/distill.sh
 
 # Watch a policy live in a browser
-experiments/viewer.sh --task Isaacsimenvs-RigidCloth-Direct-v0
+experiments/viewer.sh rigidbody_flat --policy <pth>       # or vbd / rigidbody_folded, the eval targets
 ```
 
 The launchers are scheduler-agnostic: on a cluster, submit them as the batch command (array index =

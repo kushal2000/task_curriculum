@@ -35,8 +35,7 @@ from isaacsimenvs.scripts.visualization.wandb_viewer.pose_viewer import (
 
 __all__ = ["ClothPoseViewerWrapper", "capture_cloth_viewer_frame"]
 
-#: Matches the offscreen renderer (`eval/render_newton.py`) so a wandb clip and an mp4 of the same
-#: run are directly comparable. Nothing here may be blue -- the table, floor and sky all are.
+#: Nothing here may be blue -- the table, floor and sky all are.
 MOVING_COLOR = (0.95, 0.30, 0.10)      # vermilion: the half that must travel
 STATIONARY_COLOR = (0.98, 0.78, 0.15)  # gold: the half that must not
 GOAL_COLOR = (0.15, 0.85, 0.35)        # green: where the moving half must end up
