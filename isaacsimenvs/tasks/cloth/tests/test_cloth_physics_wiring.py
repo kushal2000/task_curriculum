@@ -157,3 +157,21 @@ def test_cloth_friction_defaults_and_cloth_cloth_override():
     cfg.cloth.cloth_cloth_friction = 0.4
     assert friction.used(cfg.cloth)
     assert build_physics(cfg.cloth, cfg.newton, num_envs=4).solver_cfg.model_cfg.soft_contact_mu == 0.4
+
+
+def test_eval_vbd_yaml_sets_the_null_frictions():
+    """task.yaml leaves the cloth frictions null; the VBD eval file sets them. Isaac Lab's from_dict
+    alone refuses a float for a None field, so the loader sets those first (tasks/loader.py)."""
+    from pathlib import Path
+
+    import yaml
+
+    from isaacsimenvs.tasks.cloth.config import vbd_cloth_env_cfg
+    from isaacsimenvs.tasks.loader import _set_null_fields
+
+    env = yaml.safe_load((Path(__file__).resolve().parents[1] / "config/eval/vbd.yaml").read_text())["env"]
+    cfg = vbd_cloth_env_cfg()
+    _set_null_fields(cfg, env)
+    cfg.from_dict(env)
+    for field in ("cloth_cloth_friction", "cloth_table_friction", "cloth_fingertip_friction", "cloth_robot_friction"):
+        assert getattr(cfg.cloth, field) == env["cloth"][field], field

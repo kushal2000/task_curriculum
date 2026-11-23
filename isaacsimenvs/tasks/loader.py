@@ -18,8 +18,9 @@ decorator does.
 
 from __future__ import annotations
 
+import dataclasses
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 import hydra
 from hydra.core.config_store import ConfigStore
@@ -33,6 +34,33 @@ from isaaclab.utils import replace_slices_with_strings, replace_strings_with_sli
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
 from isaacsimenvs.tasks.recipes import deep_merge, load_recipe
+
+
+def _set_null_fields(cfg, data: Mapping) -> None:
+    """Give the fields that are ``None`` in ``cfg`` and set in ``data`` their value.
+
+    Isaac Lab's ``from_dict`` checks a value against the type of the field's current value, so a
+    field that is ``None`` (``null`` in task.yaml, e.g. ``cloth.cloth_table_friction``) cannot take a
+    float from a recipe, a protocol or the command line. Set those here first, as the annotation
+    reads (an int for a float becomes a float, a list for a tuple a tuple); ``from_dict`` then sees
+    a value of the right type. Every other field is left to ``from_dict``.
+    """
+    if not dataclasses.is_dataclass(cfg):
+        return
+    annotations = {f.name: str(f.type) for f in dataclasses.fields(cfg)}
+    for key, value in data.items():
+        if key not in annotations:
+            continue
+        current = getattr(cfg, key)
+        if isinstance(value, Mapping):
+            _set_null_fields(current, value)
+        elif current is None and value is not None:
+            kind = annotations[key].split("|")[0].strip()
+            if kind == "float" and isinstance(value, int) and not isinstance(value, bool):
+                value = float(value)
+            elif kind.startswith("tuple") and isinstance(value, list):
+                value = tuple(value)
+            setattr(cfg, key, value)
 
 
 def hydra_task_config_with_yaml(
@@ -69,6 +97,7 @@ def hydra_task_config_with_yaml(
             if exp:
                 if exp.get("task", short_name) != short_name:
                     raise ValueError(f"experiment {experiment!r} is for {exp['task']}, not {short_name}")
+                _set_null_fields(env_cfg, exp.get("env") or {})
                 env_cfg.from_dict(exp.get("env") or {})
                 if exp.get("agent") and agent_cfg is not None:   # (an evaluation loads no agent config)
                     if isinstance(agent_cfg, dict):
@@ -95,6 +124,7 @@ def hydra_task_config_with_yaml(
             ):
                 resolved = OmegaConf.to_container(hydra_cfg, resolve=True)
                 resolved = replace_strings_with_slices(resolved)
+                _set_null_fields(env_cfg, resolved["env"])
                 env_cfg.from_dict(resolved["env"])
                 env_cfg_restored = replace_strings_with_env_cfg_spaces(env_cfg)
                 if isinstance(agent_cfg, dict) or agent_cfg is None:
