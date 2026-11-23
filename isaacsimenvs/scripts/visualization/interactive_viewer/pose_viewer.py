@@ -7,6 +7,8 @@ Three.js/URDF HTML viewer that can be opened locally or logged to WandB.
 
 from __future__ import annotations
 
+import sys
+
 import time
 import urllib.request
 import subprocess
@@ -535,8 +537,18 @@ class PlayPoseViewerWrapper(gym.Wrapper):
         try:
             wandb.log({self.wandb_key: wandb.Html(html_text)})
             print(f"[pose_viewer] logged WandB Html key={self.wandb_key} step={self._step}", flush=True)
-        except Exception as exc:
-            print(f"[pose_viewer] WandB log failed: {exc}", flush=True)
+        except KeyboardInterrupt:
+            raise
+        except BaseException as exc:
+            # Never let the upload end the training run: a resumed point-cloud RL run died here (2026-11-23)
+            # with an error that is not an Exception and that wandb's excepthook then failed to print.
+            # The page is on disk already; say what wandb raised and go on.
+            import traceback
+
+            print(f"[pose_viewer] WandB log failed ({type(exc).__module__}.{type(exc).__name__}): {exc!r}", flush=True)
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
+            return
 
         if not self._depth_frames and not self._depth_frames_clean:
             return
