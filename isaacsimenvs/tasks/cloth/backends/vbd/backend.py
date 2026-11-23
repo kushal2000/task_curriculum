@@ -91,10 +91,16 @@ class VbdBackend(ClothBackend):
         from isaaclab_newton.physics import NewtonManager
 
         patterns = [re.compile(body) for body in self._proxy_bodies]
-        prepare = NewtonManager.__dict__["_prepare_builder_for_finalize"]
+        # Not always a classmethod: newton_support/patches.py (condim, gravcomp) replace it with a plain
+        # function taking the builder alone. Call it the way those patches do.
+        original = NewtonManager._prepare_builder_for_finalize
 
-        def prepare_with_sdfs(cls, builder):
-            prepare.__func__(cls, builder)
+        def prepare_with_sdfs(cls_or_builder, builder=None):
+            if builder is None:
+                builder = cls_or_builder
+                original(builder)
+            else:
+                original(cls_or_builder, builder)
             meshes = (newton.GeoType.MESH, newton.GeoType.CONVEX_MESH)
             for shape, (kind, body) in enumerate(zip(builder.shape_type, builder.shape_body)):
                 if kind not in meshes:
@@ -106,7 +112,7 @@ class VbdBackend(ClothBackend):
                 if touched:
                     builder.shape_force_sdf[shape] = True
 
-        with patch.object(NewtonManager, "_prepare_builder_for_finalize", classmethod(prepare_with_sdfs)):
+        with patch.object(NewtonManager, "_prepare_builder_for_finalize", prepare_with_sdfs):
             yield
 
     def _install_plasticity(self, model, coupled_solver) -> None:
