@@ -173,12 +173,14 @@ vbd:
   # --- the sheet's material, contact and coupling (SIM1 Table 2 unless the field says otherwise)
   cloth:
     reset_offset_xy: [0.0, 0.0]
+    mesh_diagonals: uniform              # cell cut; alternate = checkerboard (eval/vbd.yaml)
     density: 2.0                         # kg/m^2
     tri_ke: 1.0e+2
     tri_ka: 1.0e+2
     tri_kd: 1.5e-6
     edge_ke: 8.0e-4
     edge_kd: 1.0e-3
+    plastic_yield_curvature: 0.0         # bending plasticity [1/m]; 0 = elastic (backends/vbd/plasticity.py)
     soft_contact_ke: 5.0e+2
     soft_contact_kd: 5.0e-3
     soft_contact_mu: 0.25                # the cloth's own mu: cloth-rigid sqrt(0.25 x shape mu), cloth-cloth 0.25
@@ -196,6 +198,7 @@ vbd:
     proxy_mode: staggered
     proxy_links: hand
     proxy_table: true
+    full_surface_contact: false          # true: edge/face contact too, not only particles (eval/vbd.yaml)
     mass_scale: 1.0
     collide_interval: 1
     coupler_iterations: 1

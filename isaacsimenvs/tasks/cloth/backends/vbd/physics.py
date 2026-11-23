@@ -140,6 +140,9 @@ def build_physics(cloth, newton_cfg, num_envs: int, robot_spec=None):
                 collision_pipeline=NewtonCollisionPipelineCfg(
                     rigid_contact_max=newton_cfg.rigid_contact_max,
                     max_triangle_pairs=budget,
+                    # Edge / face contacts too, not only particles (needs the meshes' SDFs:
+                    # VbdBackend.construction_context).
+                    enable_rigid_soft_full_surface_contact=bool(cloth.full_surface_contact),
                 ),
             )
         ],

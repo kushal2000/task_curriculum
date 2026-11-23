@@ -42,6 +42,13 @@ class VbdClothCfg(ClothCfg):
     ``reach_shift`` -- by the growth of the half-diagonal, ``(size - 0.10) * sqrt(2) / 2``, which
     keeps the farthest point at any yaw where a 10 cm sheet's would be (0.0707 m for 20 cm)."""
 
+    mesh_diagonals: str = MISSING
+    """How each grid cell is cut into two triangles: ``uniform``, ``alternate`` (checkerboard) or
+    ``flipped`` (``mdp/geometry/grid.py`` ``grid_mesh``). A uniform cut gives the mesh a handedness
+    that couples bending to twist, so a released fold springs back with one end of the crease lifted;
+    the checkerboard has none. Particles, keypoints and fold targets do not depend on it. The measured
+    fabrics' plasticity is fitted per cut (``config/eval/fabric/``)."""
+
 
     # --- material -------------------------------------------------------------------------
     density: float = MISSING
@@ -95,6 +102,13 @@ class VbdClothCfg(ClothCfg):
     dimensionally portable even though the saturation argument says it should not matter."""
     edge_kd: float = MISSING
     """Bending damping. SIM1 Table 2 (was 1.0e-2 here)."""
+    plastic_yield_curvature: float = MISSING
+    """Bending plasticity [1/m]: a hinge bent past ``kappa x hinge width`` (16.7 mm along the grid,
+    11.8 mm across the diagonals) keeps the excess as its new rest angle, so a pressed fold stays
+    partly folded. 0 = off, the purely elastic sheet (SIM1 has none). ``backends/vbd/plasticity.py``.
+
+    A mesh-level value: the measured fabrics' (``config/eval/fabric/``) were fitted by a scripted
+    fold-press-release test on the 7x7 grid, per cell cut (``mesh_diagonals``; each file says which)."""
 
     # --- coupling (defaults carried from the cable result) --------------------------------
     proxy_mode: str = MISSING
@@ -328,6 +342,16 @@ class VbdClothCfg(ClothCfg):
 
     proxy_table: bool = MISSING
     """The table must be in the proxy set or the sheet falls through it."""
+
+    full_surface_contact: bool = MISSING
+    """Cloth <-> rigid contact on the cloth's whole surface, not only at its particles.
+
+    False: a rigid shape meets the sheet only at the particles (spheres of radius ``thickness / 2``), so
+    a fingertip can pass between particles where the grid is coarse next to the thickness (on the 7x7
+    sheet, below ~12 mm). True: Newton adds edge and face contacts
+    (``enable_rigid_soft_full_surface_contact`` on the proxy's collision pipeline). Those sample each
+    rigid mesh's SDF, so the proxied meshes get one built at finalize (``VbdBackend.construction_context``).
+    Port of origin/cloth-physics (2026-11-21)."""
 
     color: tuple[float, float, float] = (0.85, 0.35, 0.55)
 

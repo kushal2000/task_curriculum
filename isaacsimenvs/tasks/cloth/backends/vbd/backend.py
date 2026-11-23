@@ -11,13 +11,17 @@ The sheet is authored as a flat ``UsdGeom.Mesh`` grid before the environments ar
 
 from __future__ import annotations
 
+import re
+from contextlib import ExitStack, contextmanager
+from unittest.mock import patch
+
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import patches  # noqa: F401  (first: the Isaac Lab 3.0 shims)
 
 import torch
 from isaaclab.utils.math import quat_from_matrix
 
 from isaacsimenvs.tasks.cloth.backends.base import ClothBackend, reset_yaw
-from isaacsimenvs.tasks.cloth.backends.vbd import friction
+from isaacsimenvs.tasks.cloth.backends.vbd import friction, plasticity
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
     install_post_construction_patches,
     install_pre_construction_patches,
@@ -48,26 +52,96 @@ class VbdBackend(ClothBackend):
         }
         if moved:
             raise NotImplementedError(f"domain_randomization.cloth is the rigid plates' DR; on VBD keep it neutral, got {moved}")
-        install_pre_construction_patches(
-            cfg,
-            # Coupled MJWarp (robot) + VBD (cloth), sized for this env count.
-            physics_cfg=build_physics(cfg.cloth, cfg.newton, int(cfg.scene.num_envs), robot_spec),
-        )
+        self._plasticity: plasticity.BendingPlasticity | None = None
+        self._edge_env: torch.Tensor | None = None  # (edges,) the env of each hinge, -1 on boundary edges
+        # Coupled MJWarp (robot) + VBD (cloth), sized for this env count.
+        physics_cfg = build_physics(cfg.cloth, cfg.newton, int(cfg.scene.num_envs), robot_spec)
+        # The proxied body selectors, while they are still regexes (the coupler resolves them to ids).
+        self._proxy_bodies = [str(b) for proxy in physics_cfg.solver_cfg.proxies for b in proxy.bodies]
+        install_pre_construction_patches(cfg, physics_cfg=physics_cfg)
 
+    @contextmanager
     def construction_context(self):
+        from isaaclab_newton.physics import NewtonManager
+
         # The cloth solver's own copy of the shapes' mu, when a cloth.cloth_*_friction is set.
-        return friction.construction_hooks(self.cfg.cloth)
+        with friction.construction_hooks(self.cfg.cloth), ExitStack() as stack:
+            if self.cfg.cloth.full_surface_contact:
+                stack.enter_context(self._proxy_mesh_sdfs())
+            if self.cfg.cloth.plastic_yield_curvature > 0:
+                # Plasticity wraps the VBD solver's step: installed right before Newton captures its
+                # CUDA graph, so the graph holds it (re-capturing after construction fails).
+                capture = NewtonManager.__dict__["_capture_or_defer_graph"]
+                backend = self
+
+                def install_then_capture(cls):
+                    backend._install_plasticity(cls._model, cls._solver)
+                    return capture.__func__(cls)
+
+                stack.enter_context(patch.object(NewtonManager, "_capture_or_defer_graph", classmethod(install_then_capture)))
+            yield
+
+    @contextmanager
+    def _proxy_mesh_sdfs(self):
+        """Build an SDF at finalize for every mesh shape the cloth touches (``cloth.full_surface_contact``):
+        Newton's edge / face contacts sample it, and raise for a participating mesh without one. The
+        proxied bodies' meshes (the hand) and the static particle-colliding ones; analytic shapes (the
+        table box) need none. As origin/cloth-physics ``configure_materials``."""
+        import newton
+        from isaaclab_newton.physics import NewtonManager
+
+        patterns = [re.compile(body) for body in self._proxy_bodies]
+        prepare = NewtonManager.__dict__["_prepare_builder_for_finalize"]
+
+        def prepare_with_sdfs(cls, builder):
+            prepare.__func__(cls, builder)
+            meshes = (newton.GeoType.MESH, newton.GeoType.CONVEX_MESH)
+            for shape, (kind, body) in enumerate(zip(builder.shape_type, builder.shape_body)):
+                if kind not in meshes:
+                    continue
+                if body >= 0:
+                    touched = any(p.search(builder.body_label[body] or "") for p in patterns)
+                else:
+                    touched = bool(builder.shape_flags[shape] & newton.ShapeFlags.COLLIDE_PARTICLES)
+                if touched:
+                    builder.shape_force_sdf[shape] = True
+
+        with patch.object(NewtonManager, "_prepare_builder_for_finalize", classmethod(prepare_with_sdfs)):
+            yield
+
+    def _install_plasticity(self, model, coupled_solver) -> None:
+        if self._plasticity is not None or model is None or coupled_solver is None:
+            return
+        self._plasticity = plasticity.install(model, coupled_solver, self.cfg.cloth)
+        if self._plasticity is not None:
+            hinges = model.edge_indices.numpy()
+            env = model.particle_world.numpy()[hinges[:, 2]]
+            env[(hinges[:, 0] < 0) | (hinges[:, 1] < 0)] = -1
+            self._edge_env = torch.as_tensor(env, dtype=torch.long, device=str(model.device))
 
     def finish_setup(self) -> None:
         from isaaclab_newton.physics import NewtonManager
 
         c = self.cfg.cloth
+        # Normally installed at graph capture (construction_context); here if nothing captured.
+        self._install_plasticity(NewtonManager._model, NewtonManager._solver)
         # Before install_post_construction_patches: its notify_solver refreshes the model views,
         # which is when the cloth's copy is re-written from the final shape frictions.
         tips = self.robot_spec.fingertip_link_names
         friction.install(NewtonManager._solver, c, tips)
         install_post_construction_patches(self)
         print(f"[cloth] friction: {friction.report(NewtonManager._solver, tips)}", flush=True)
+
+    def end_reset(self, env_ids: torch.Tensor) -> None:
+        # The reset sheets are flat again: so are their hinges' rest angles (plasticity's set).
+        if self._plasticity is None:
+            return
+        import warp as wp
+
+        ids = torch.as_tensor(env_ids, device=self._edge_env.device, dtype=torch.long).reshape(-1)
+        edges = torch.isin(self._edge_env, ids).nonzero().flatten().to(torch.int32)
+        if edges.numel():
+            self._plasticity.reset(wp.from_torch(edges))
 
     # ------------------------------------------------------------------ the sheet, for the task
 
@@ -142,7 +216,7 @@ class VbdBackend(ClothBackend):
         from pxr import Sdf, UsdGeom, UsdShade
 
         c = self.cfg.cloth
-        verts, indices = grid_mesh(c.size, c.resolution)
+        verts, indices = grid_mesh(c.size, c.resolution, c.mesh_diagonals)
         self.rest_local = verts
         # Corners of the moving half, not points along one edge: four points spanning an area
         # determine a rotation; four collinear points do not.
