@@ -43,7 +43,6 @@ common:
     start_height: 0.30                   # above reset.table_reset_z
     table_half_thickness: 0.150          # table root to its collision surface (measured)
     fold_axis: x
-    num_keypoints: 4
     max_folded_footprint: 0.65
     keypoint_tolerance: 0.04
 

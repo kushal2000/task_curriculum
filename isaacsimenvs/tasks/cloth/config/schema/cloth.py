@@ -109,10 +109,6 @@ class ClothCfg:
     fold_axis: str = MISSING
     """Axis normal to the fold line, in cloth-local coordinates: the ``+`` half folds onto ``-``."""
 
-    num_keypoints: int = MISSING
-    """Tracked keypoints on the moving half. Four matches the task's existing keypoint machinery
-    and is the minimum that pins a folded flap's position *and* orientation."""
-
     max_folded_footprint: float = MISSING
     """Largest sheet extent along the fold axis, as a fraction of ``size``, that still counts as
     folded.
