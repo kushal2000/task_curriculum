@@ -263,6 +263,9 @@ def main() -> None:
             h.colors = np.tile(np.asarray(h.colors).reshape(-1, 3)[:1], (len(pts), 1))
 
     last = {"aux": None}
+    from isaacsimenvs.tasks.play.utils.obs_utils import PLAY_ROBOT_ROOT_POS
+    _root_shift = (torch.as_tensor(inner.cfg.robot_root_pos, device=device)
+                   - torch.as_tensor(PLAY_ROBOT_ROOT_POS, device=device))
     timing: dict = {}
 
     def draw() -> None:
@@ -293,7 +296,8 @@ def main() -> None:
             kp_true = _keypoints_world(o_pos, o_quat, kp_off)[0]
             c_pos, c_quat = inner.shapes.canonical_goal_pose(inner._asset[sl], o_pos, o_quat, g_pos, g_quat, kp_off)
             gkp_true = _keypoints_world(c_pos, c_quat, kp_off)[0]
-            palm = kp_true - inner._obs_fields[0]["keypoints_rel_palm"][e].reshape(-1, 3)
+            # The palm centre, env frame: the observed palm_pos is in Play's robot frame (obs_utils).
+            palm = inner._obs_fields[0]["palm_pos"][e] + (_root_shift if _root_shift is not None else 0.0)
             est_aux = last["aux"][e].float().view(2, -1, 3) / scale
             kp_est = palm + est_aux[0]
             gkp_est = kp_est - est_aux[1]

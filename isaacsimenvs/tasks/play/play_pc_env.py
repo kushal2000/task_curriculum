@@ -35,7 +35,7 @@ from isaacsimenvs.tasks.cloth.perception.pointcloud import PointCloud, PointClou
 
 from .play_env import PlayEnv
 from .play_pc_env_cfg import PlayPCEnvCfg
-from .utils.object_surface import EnvShapes, ShapeBank
+from .utils.object_surface import EnvShapes, ShapeBank, matrix_from_quat
 from .utils.obs_utils import _episode_start, _keypoints_world, _stack_obs_dict, compute_obs_dim
 
 __all__ = ["PlayPCEnv", "OBJECT_FIELDS", "AUX_FIELDS", "pc_layout"]
@@ -127,6 +127,16 @@ class PlayPCEnv(PlayEnv):
         org = self.scene.env_origins
         return (self.object.data.root_pos_w - org, self.object.data.root_quat_w,
                 self.goal_viz.data.root_pos_w - org, self.goal_viz.data.root_quat_w)
+
+    def _spawn_lift(self, env_ids: torch.Tensor, quat: torch.Tensor) -> torch.Tensor:
+        """The lowest origin height (env frame) at which these envs' tools, turned by ``quat`` (wxyz),
+        clear the table top by ``reset.spawn_min_clearance`` (lowest of the scored surface samples)."""
+        es = getattr(self, "env_shapes", None)
+        if es is None:                                       # the base class's first reset, before the bank
+            return torch.full((env_ids.numel(),), -1.0e9, device=self.device)
+        lowest = torch.matmul(es.fixed[env_ids], matrix_from_quat(quat).transpose(1, 2))[..., 2].min(dim=1).values
+        top = self._table_z_per_env[env_ids] + float(self._table_half_height)
+        return top + float(self.cfg.reset.spawn_min_clearance) - lowest
 
     def _goal_distance(self) -> torch.Tensor:
         """Two-sided surface distance tool <-> goal [m] (max over points; the mean kept for logging)."""

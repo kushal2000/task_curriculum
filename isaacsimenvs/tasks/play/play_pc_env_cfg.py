@@ -88,6 +88,10 @@ class PCAssetsCfg(AssetsCfg):
 
 @configclass
 class PCResetCfg(ResetCfg):
+    spawn_min_clearance: float = 0.01
+    """A tool spawns with its lowest surface point at least this far above the table top (PlayPCEnv._spawn_lift):
+    the origin alone at table_object_z_offset puts long tools spawned near vertical into the table
+    (~5% of resets over the pool, up to 15 cm deep; checked 2026-11-23)."""
     target_volume_mins: tuple[float, float, float] = (-0.25, 0.13, 0.35)
     target_volume_maxs: tuple[float, float, float] = (0.25, 0.49, 0.60)
 

@@ -417,6 +417,11 @@ def _reset_object_pose(env, env_ids: torch.Tensor) -> None:
             dim=-1,
         )
         quat = random_orientation(n, device=env.device)
+        # A task that knows its tools' shapes (play_pc_env) lifts a spawn whose lowest point would be
+        # inside the table (a long tool spawned near vertical: the origin is only table_object_z_offset up).
+        lift = getattr(env, "_spawn_lift", None)
+        if lift is not None:
+            pos_local = torch.cat((pos_local[:, :2], torch.maximum(pos_local[:, 2:], lift(env_ids, quat).unsqueeze(-1))), dim=-1)
 
     pose = torch.cat([pos_local + env_origins, quat], dim=-1)
     env.object.write_root_pose_to_sim(pose, env_ids=env_ids)
