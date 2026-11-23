@@ -164,11 +164,19 @@ class PlayPCEnv(PlayEnv):
         # actor: the camera cloud of the tool and the robot
         self.cloud.reset_mask(start)
         k = int(pc.n_object_cand)
-        cand = self.env_shapes.points_w(obj_pos, obj_quat, "pool", k)
-        area = (self.env_shapes.area / k).view(n, 1, 1).expand(-1, k, 1)
-        body_pos = self.robot.data.body_pos_w - org
-        body_quat = self.robot.data.body_quat_w
-        live, live_mask = self.cloud.observe(self.episode_length_buf, torch.cat((cand, area), dim=-1), body_pos, body_quat)
+        if bool(pc.visibility):
+            cand = self.env_shapes.points_w(obj_pos, obj_quat, "pool", k)
+            area = (self.env_shapes.area / k).view(n, 1, 1).expand(-1, k, 1)
+            body_pos = self.robot.data.body_pos_w - org
+            body_quat = self.robot.data.body_quat_w
+            live, live_mask = self.cloud.observe(self.episode_length_buf, torch.cat((cand, area), dim=-1), body_pos, body_quat)
+        else:
+            # No camera model: clean samples on the whole tool surface, all valid (kept on the cloud
+            # object as last_xyz / last_mask for the viewers).
+            xyz = self.env_shapes.points_w(obj_pos, obj_quat, "pool", int(pc.n_points))
+            live_mask = torch.ones(n, int(pc.n_points), dtype=torch.bool, device=self.device)
+            self.cloud.last_xyz, self.cloud.last_mask = xyz, live_mask
+            live = (xyz - self.cloud.centre) * float(pc.scale)
         # actor: the goal cloud, clean and whole
         centre, scale = self.cloud.centre, float(pc.scale)
         goal_pts = self.env_shapes.points_w(goal_pos, goal_quat, "pool", int(pc.n_goal))

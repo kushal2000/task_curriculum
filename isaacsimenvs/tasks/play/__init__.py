@@ -68,3 +68,6 @@ _register("Isaacsimenvs-PlayFlexivWujiRightHumanLikePC-Direct-v0", "PlayPCEnvCfg
 # ... on the cloth tasks' robot and table: real joint limits, 0.6 x 0.4 m table 0.33 m above the base.
 _register("Isaacsimenvs-PlayFlexivWujiRightRealLimitsPC-Direct-v0", "PlayPCRealEnvCfg",
           cfg_module="play_pc_env_cfg", env="play_pc_env:PlayPCEnv")
+# ... with every randomization off and a clean whole-surface tool cloud (no camera model).
+_register("Isaacsimenvs-PlayFlexivWujiRightRealLimitsPCClean-Direct-v0", "PlayPCRealCleanEnvCfg",
+          cfg_module="play_pc_env_cfg", env="play_pc_env:PlayPCEnv")

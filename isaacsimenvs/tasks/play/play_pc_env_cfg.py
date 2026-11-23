@@ -35,6 +35,9 @@ class PointCloudCfg:
     tool_only: bool = True
     """The live cloud keeps only the tool's points (as after segmentation on the real setup); the robot
     still occludes the tool in the camera model, but its points are dropped. Its pose is in proprio."""
+    visibility: bool = True
+    """The live cloud through the camera model (visibility, occlusion, crop, noise, drops, delay).
+    False: ``n_points`` clean samples on the tool's whole surface every step, all valid."""
     use_warp: bool = True
     """The cameras' visibility test as fused Warp kernels (cloth/perception/visibility_warp.py)."""
     n_object_cand: int = 768
@@ -139,3 +142,47 @@ class PlayPCRealEnvCfg(PlayPCEnvCfg):
     assets: PCRealAssetsCfg = PCRealAssetsCfg()
     reset: PCRealResetCfg = PCRealResetCfg()
     robot_root_pos: tuple[float, float, float] = (0.0, 0.8, -0.05)
+
+
+@configclass
+class PCCleanDomainRandomizationCfg(PCDomainRandomizationCfg):
+    """No randomization: no observation / action delay or noise, no object-pose noise, no pushes,
+    nominal frictions (the robot's gains are nominal by default)."""
+
+    use_obs_delay: bool = False
+    use_action_delay: bool = False
+    action_delay_max: int = 0
+    use_object_state_delay_noise: bool = False
+    joint_velocity_obs_noise_std: float = 0.0
+    joint_pos_obs_noise_std: float = 0.0
+    action_noise_std: float = 0.0
+    force_scale: float = 0.0
+    torque_scale: float = 0.0
+    force_prob_range: tuple[float, float] = (0.0, 0.0)
+    torque_prob_range: tuple[float, float] = (0.0, 0.0)
+    object_friction_scale_range: tuple[float, float] = (1.0, 1.0)
+
+
+@configclass
+class PCCleanPointCloudCfg(PointCloudCfg):
+    visibility: bool = False
+    depth_noise_std_range: tuple[float, float] = (0.0, 0.0)
+    drop_prob_range: tuple[float, float] = (0.0, 0.0)
+    delay_max: int = 0
+    proprio_delay_max: int = 0
+
+
+@configclass
+class PCRealCleanResetCfg(PCRealResetCfg):
+    table_reset_z_range: float = 0.0
+
+
+@configclass
+class PlayPCRealCleanEnvCfg(PlayPCRealEnvCfg):
+    """``PlayPCRealEnvCfg`` with every randomization off: the live cloud is clean samples on the tool's
+    whole surface (no cameras: no visibility / occlusion / noise / drops / delay), no proprioception or
+    action delay or noise, no pushes, nominal frictions, a fixed table height."""
+
+    domain_randomization: PCCleanDomainRandomizationCfg = PCCleanDomainRandomizationCfg()
+    pointcloud: PCCleanPointCloudCfg = PCCleanPointCloudCfg()
+    reset: PCRealCleanResetCfg = PCRealCleanResetCfg()
