@@ -47,14 +47,14 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def _register(task_id: str, cfg_class: str) -> None:
+def _register(task_id: str, cfg_class: str, cfg_module: str = "play_env_cfg", env: str = "play_env:PlayEnv") -> None:
     gym.register(
         id=task_id,
-        entry_point="isaacsimenvs.tasks.play.play_env:PlayEnv",
+        entry_point=f"isaacsimenvs.tasks.play.{env}",
         order_enforce=False,
         disable_env_checker=True,
         kwargs={
-            "env_cfg_entry_point": f"isaacsimenvs.tasks.play.play_env_cfg:{cfg_class}",
+            "env_cfg_entry_point": f"isaacsimenvs.tasks.play.{cfg_module}:{cfg_class}",
             "rl_games_cfg_entry_point": str(PLAY_CONFIG_DIR / "PlayPPO.yaml"),
             "rl_games_sapg_cfg_entry_point": str(PLAY_CONFIG_DIR / "PlaySAPG.yaml"),
         },
@@ -62,3 +62,6 @@ def _register(task_id: str, cfg_class: str) -> None:
 
 
 _register("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0", "PlayEnvCfg")
+# The same task observed as point clouds: camera cloud + goal cloud for the actor (play_pc_env).
+_register("Isaacsimenvs-PlayFlexivWujiRightHumanLikePC-Direct-v0", "PlayPCEnvCfg",
+          cfg_module="play_pc_env_cfg", env="play_pc_env:PlayPCEnv")

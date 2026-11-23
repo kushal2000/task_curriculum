@@ -90,7 +90,8 @@ def build_trajectory_payload(
     - timestamps: (T,)
     - object_poses[name]: (T, 7) with columns [x, y, z, qx, qy, qz, qw]
     - robot_base_poses: (T, 7) with columns [x, y, z, qx, qy, qz, qw]
-    - deformables[name]: {"indices": (F*3,), "vertices": (T, V, 3), "color": (3,)}
+    - deformables[name]: {"indices": (F*3,), "vertices": (T, V, 3), "color": (3,)}; with
+      "point_size" [m] (and empty indices) the vertices are drawn as a point cloud
 
     Derived shapes inside the payload:
     - joint positions: (T, J)
@@ -183,6 +184,8 @@ def _build_deformables(deformables: dict, *, num_frames: int) -> dict:
             entry["color"] = [float(c) for c in spec["color"]]
         if spec.get("opacity") is not None:
             entry["opacity"] = float(spec["opacity"])
+        if spec.get("point_size") is not None:      # drawn as a point cloud (no indices)
+            entry["point_size"] = float(spec["point_size"])
         out[name] = entry
     return out
 

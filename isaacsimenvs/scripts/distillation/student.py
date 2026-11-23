@@ -20,7 +20,7 @@ from torch import nn
 
 __all__ = [
     "STUDENT_DR_GROUPS", "apply_student_env", "legacy_env_overrides", "split_columns", "student_env",
-    "PointNet", "TeacherNet", "StudentNet",
+    "PointNet", "TeacherNet", "StudentNet", "SplitStudentNet",
 ]
 
 #: The camera errors the 11-16 students called version C (``--noise``): ``config/dr/pointcloud.yaml``
@@ -239,3 +239,30 @@ class StudentNet(_Core):
             mus.append(mu)
             auxs.append(self.aux(h))
         return torch.stack(mus), torch.stack(auxs)
+
+
+class SplitStudentNet(StudentNet):
+    """``StudentNet`` with the cloud split in two, each with its own PointNet: the first ``n_live``
+    points (the cameras' live cloud) and the rest (the goal cloud). The two features are concatenated
+    after the proprioception: ``[proprio | f_live | f_goal]``. Separate weights, as the two clouds
+    differ in kind -- partial, noisy and delayed with the robot in it, against a clean whole surface."""
+
+    def __init__(
+        self, n_proprio: int, num_actions: int, point_dim: int, aux_dim: int, n_live: int,
+        feat_dim: int = 64, use_rnn_state: bool = True,
+    ) -> None:
+        _Core.__init__(self, n_proprio + 2 * feat_dim, num_actions)
+        self.n_proprio, self.feat_dim, self.aux_dim, self.n_live = int(n_proprio), int(feat_dim), int(aux_dim), int(n_live)
+        self.use_rnn_state = bool(use_rnn_state)
+        self.register_buffer("mean", torch.zeros(n_proprio))
+        self.register_buffer("var", torch.ones(n_proprio))
+        self.pointnet = PointNet(point_dim, out_dim=feat_dim)
+        self.goal_pointnet = PointNet(point_dim, out_dim=feat_dim)
+        self.aux = nn.Sequential(nn.Linear(self.rnn_units, 256), nn.ELU(), nn.Linear(256, aux_dim))
+
+    def encode(self, proprio: torch.Tensor, points: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        p = ((proprio - self.mean) / torch.sqrt(self.var + 1e-5)).clamp(-5.0, 5.0)
+        k = self.n_live
+        f_live = self.pointnet(points[:, :k], mask[:, :k]).to(p.dtype)
+        f_goal = self.goal_pointnet(points[:, k:], mask[:, k:]).to(p.dtype)
+        return torch.cat((p, f_live, f_goal), dim=-1)

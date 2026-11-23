@@ -192,6 +192,11 @@ def compute_intermediate_values(env) -> None:
     goal_kp = _keypoints_world(goal_pos, goal_rot, kp_offsets)
 
     env._keypoints_max_dist = torch.norm(obj_kp - goal_kp, dim=-1).max(dim=-1).values
+    # A task may score the goal by another distance (the point-cloud task: the tool's surfaces,
+    # play_pc_env.PlayPCEnv._goal_distance); the reward and the success test below read it unchanged.
+    goal_distance = getattr(env, "_goal_distance", None)
+    if goal_distance is not None:
+        env._keypoints_max_dist = goal_distance()
 
     # Legacy -1 sentinel: first observed value becomes closest-so-far.
     sentinel = env._closest_keypoint_max_dist < 0.0
@@ -499,6 +504,8 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     policy_tensor = policy_tensor.clamp(-clip, clip)
     state_tensor = state_tensor.clamp(-clip, clip)
 
+    # Kept for a task that assembles its own observation from these fields (play_pc_env).
+    env._obs_fields = (obs_clean, obs_noisy)
     return {"policy": policy_tensor, "critic": state_tensor}
 
 
