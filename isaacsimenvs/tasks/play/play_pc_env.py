@@ -105,6 +105,7 @@ class PlayPCEnv(PlayEnv):
         table_z = float(self.cfg.reset.table_reset_z) + float(self._table_half_height)
         self.cloud = _ToolCloud(setup, n, 2, cams, table_z, surf["body"], surf["offset"], surf["weight"], dev, cam_rots=rots)
         self.cloud.manipuland_only = bool(pc.tool_only)
+        self.cloud.use_warp = bool(pc.use_warp)
         self.proprio_delay = DelayLine(n, int(pc.proprio_delay_max), self.layout["n_proprio"], dev)
         self._proprio_lag = torch.zeros(n, dtype=torch.long, device=dev)
         self._goal_dist_mean = torch.zeros(n, device=dev)

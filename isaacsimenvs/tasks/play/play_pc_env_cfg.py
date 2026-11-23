@@ -35,6 +35,8 @@ class PointCloudCfg:
     tool_only: bool = True
     """The live cloud keeps only the tool's points (as after segmentation on the real setup); the robot
     still occludes the tool in the camera model, but its points are dropped. Its pose is in proprio."""
+    use_warp: bool = True
+    """The cameras' visibility test as fused Warp kernels (cloth/perception/visibility_warp.py)."""
     n_object_cand: int = 768
     """Tool surface candidates drawn per step before the camera model (with the robot's)."""
     n_goal: int = 64
