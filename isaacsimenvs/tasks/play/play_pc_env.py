@@ -61,6 +61,7 @@ def pc_layout(cfg, num_joints: int) -> dict:
         "n_critic_state": compute_obs_dim(critic, num_joints), "n_critic_points": int(pc.n_critic),
         "critic_dim": compute_obs_dim(critic, num_joints) + 6 * int(pc.n_critic),
         "teacher_dim": compute_obs_dim(cfg.obs.obs_list, num_joints),
+        "widths": [int(w) for w in pc.pointnet_widths], "compile": bool(pc.compile_pointnet),
     }
 
 
@@ -86,7 +87,7 @@ class PlayPCEnv(PlayEnv):
         self._configure_gym_env_spaces()
 
         # The tools: surface samples, SDFs, symmetries (one-time, ~25 s for the 600-tool pool).
-        self.shapes = ShapeBank(self._object_urdf_paths, dev, k_fixed=int(pc.n_critic),
+        self.shapes = ShapeBank(self._object_urdf_paths, dev, k_fixed=int(pc.n_score),
                                 with_symmetries=bool(pc.teacher_canonical_goal))
         self._asset = self._object_asset_index_per_env
 
@@ -172,8 +173,9 @@ class PlayPCEnv(PlayEnv):
 
         # critic: state without the keypoint view + the clean scored clouds
         crit_state = _stack_obs_dict(clean, lay["critic_fields"]).clamp(-clip, clip)
-        cur_c = (self.shapes.points_w(self._asset, obj_pos, obj_quat, "fixed") - centre) * scale
-        goal_c = (self.shapes.points_w(self._asset, goal_pos, goal_quat, "fixed") - centre) * scale
+        kc = int(pc.n_critic)           # the scored samples are in random order: the first kc are a uniform subset
+        cur_c = (self.shapes.points_w(self._asset, obj_pos, obj_quat, "fixed")[:, :kc] - centre) * scale
+        goal_c = (self.shapes.points_w(self._asset, goal_pos, goal_quat, "fixed")[:, :kc] - centre) * scale
         critic = torch.cat((crit_state, cur_c.flatten(1), goal_c.flatten(1)), dim=1)
 
         # teacher: the clean keypoint vector, goal canonicalised over the tool's symmetries

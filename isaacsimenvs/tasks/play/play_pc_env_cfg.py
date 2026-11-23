@@ -41,8 +41,15 @@ class PointCloudCfg:
     """Tool surface candidates drawn per step before the camera model (with the robot's)."""
     n_goal: int = 64
     """Goal points: the tool's whole surface at the goal pose, clean, redrawn every step."""
-    n_critic: int = 256
-    """Points per cloud of the critic's clean current and goal clouds (the scored sample set)."""
+    n_critic: int = 64
+    """Points per cloud of the critic's clean current and goal clouds (a subset of the scored set)."""
+    n_score: int = 256
+    """Surface samples per tool the goal distance is scored on (object_surface.ShapeBank k_fixed)."""
+    pointnet_widths: tuple[int, ...] = (32, 64, 128)
+    """The per-point MLP of each PointNet (actor: live and goal). At 24576 envs x 128 points the
+    training update is dominated by it: (64, 128, 256) costs ~1.7x as much."""
+    compile_pointnet: bool = True
+    """torch.compile the PointNets' per-point MLP (student.PointNet): 2.8x faster training update."""
     scale: float = 10.0
     """Every point is ``(xyz - crop box centre) * scale``."""
     # Camera errors, per episode (cloth dr/pointcloud.yaml, version C), and the cloud's delay.

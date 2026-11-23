@@ -170,10 +170,15 @@ class TeacherNet(_Core):
 class PointNet(nn.Module):
     """Per-point MLP -> masked max-pool -> linear. An env with no valid point gets a zero feature."""
 
-    def __init__(self, point_dim: int, widths=(64, 128, 256), out_dim: int = 64) -> None:
+    def __init__(self, point_dim: int, widths=(64, 128, 256), out_dim: int = 64, compile: bool = False) -> None:
         super().__init__()
         self.point_mlp = _mlp((point_dim, *widths))
         self.out = nn.Sequential(nn.Linear(widths[-1], out_dim), nn.LayerNorm(out_dim))
+        # torch.compile fuses the per-point MLP's elementwise work (ELU, casts, the max-pool): at
+        # 197k x 64 points the eager version is memory-bound (GEMMs ~12% of its time), 2.8x slower.
+        # Chunks then hold ~1M points, whatever the cloud size.
+        self.compiled = bool(compile)
+        self._pooled_fn = torch.compile(self._pooled) if self.compiled else self._pooled
 
     #: Envs per chunk of the per-point MLP. Its (B, M, W) activations are the network's whole memory
     #: cost: 24576 envs x 1024 points x 256 channels is 12 GB in half precision for ONE layer. So the
@@ -190,14 +195,15 @@ class PointNet(nn.Module):
         first = mask.to(torch.uint8).argmax(dim=1)
         fill = points[torch.arange(points.shape[0], device=points.device), first].unsqueeze(1)
         x = torch.where(mask.unsqueeze(-1), points, fill)
-        if x.shape[0] <= self.chunk:
-            f = self._pooled(x)                                                                  # (B, W)
+        chunk = max(1, (1 << 20) // max(int(x.shape[1]), 1)) if self.compiled else self.chunk
+        if x.shape[0] <= chunk:
+            f = self._pooled_fn(x)                                                               # (B, W)
         elif torch.is_grad_enabled():
             from torch.utils.checkpoint import checkpoint
 
-            f = torch.cat([checkpoint(self._pooled, c, use_reentrant=False) for c in x.split(self.chunk)])
+            f = torch.cat([checkpoint(self._pooled_fn, c, use_reentrant=False) for c in x.split(chunk)])
         else:
-            f = torch.cat([self._pooled(c) for c in x.split(self.chunk)])
+            f = torch.cat([self._pooled_fn(c) for c in x.split(chunk)])
         f = torch.where(mask.any(dim=1, keepdim=True), f, torch.zeros_like(f))
         return self.out(f)
 
@@ -266,15 +272,15 @@ class SplitStudentNet(StudentNet):
 
     def __init__(
         self, n_proprio: int, num_actions: int, point_dim: int, aux_dim: int, n_live: int,
-        feat_dim: int = 64, use_rnn_state: bool = True,
+        feat_dim: int = 64, use_rnn_state: bool = True, widths=(64, 128, 256), compile: bool = False,
     ) -> None:
         _Core.__init__(self, n_proprio + 2 * feat_dim, num_actions)
         self.n_proprio, self.feat_dim, self.aux_dim, self.n_live = int(n_proprio), int(feat_dim), int(aux_dim), int(n_live)
         self.use_rnn_state = bool(use_rnn_state)
         self.register_buffer("mean", torch.zeros(n_proprio))
         self.register_buffer("var", torch.ones(n_proprio))
-        self.pointnet = PointNet(point_dim, out_dim=feat_dim)
-        self.goal_pointnet = PointNet(point_dim, out_dim=feat_dim)
+        self.pointnet = PointNet(point_dim, widths=tuple(widths), out_dim=feat_dim, compile=compile)
+        self.goal_pointnet = PointNet(point_dim, widths=tuple(widths), out_dim=feat_dim, compile=compile)
         self.aux = nn.Sequential(nn.Linear(self.rnn_units, 256), nn.ELU(), nn.Linear(256, aux_dim))
 
     def encode(self, proprio: torch.Tensor, points: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
