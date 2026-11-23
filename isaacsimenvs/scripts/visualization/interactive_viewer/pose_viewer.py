@@ -208,7 +208,10 @@ def table_urdf_for_env(env, env_id: int) -> tuple[str, Path]:
     if table_paths:
         urdf_path = Path(table_paths[env_id % len(table_paths)])
         return urdf_path.read_text(encoding="utf-8"), urdf_path
-    return TABLE_URDF_PATH.read_text(encoding="utf-8"), TABLE_URDF_PATH
+    # The env's own table (Flexiv tasks: table_narrow_flexiv.urdf, a 4 cm slab -- not the 30 cm block).
+    cfg_table = getattr(getattr(getattr(env, "cfg", None), "assets", None), "table_urdf", None)
+    urdf_path = REPO_ROOT / cfg_table if cfg_table else TABLE_URDF_PATH
+    return urdf_path.read_text(encoding="utf-8"), urdf_path
 
 
 def table_urdf_text_for_env(env, env_id: int) -> str:

@@ -271,6 +271,7 @@ def main() -> None:
             h.colors = np.tile(np.asarray(h.colors).reshape(-1, 3)[:1], (len(pts), 1))
 
     last = {"aux": None, "teacher": None}
+    timing: dict = {}
 
     def draw() -> None:
         e = state["env"]
@@ -357,7 +358,11 @@ def main() -> None:
             mu, aux, rnn = pol["net"].step(x[:, :n_p], x[:, n_p:n_p + 3 * m].reshape(-1, m, 3),
                                            x[:, n_p + 3 * m:n_p + 4 * m] > 0.5, rnn, start)
         last["aux"], last["teacher"] = aux, obs["teacher"]
+        torch.cuda.synchronize()
+        t1 = time.time()
         obs, _r, term, trunc, _ = env.step(mu.float().clamp(-1.0, 1.0))
+        torch.cuda.synchronize()
+        t2 = time.time()
         ep_goals += inner._is_success.cpu().numpy().astype(np.int64)
         start = term.bool() | trunc.bool()
         for e in start.nonzero(as_tuple=True)[0].cpu().numpy():
@@ -368,6 +373,12 @@ def main() -> None:
         state["t"] += 1
         state["step_once"] = False
         draw()
+        t3 = time.time()
+        for k, v in (("policy", t1 - t0), ("env", t2 - t1), ("draw", t3 - t2)):
+            timing[k] = 0.95 * timing.get(k, v) + 0.05 * v
+        if state["t"] % 200 == 0:
+            print("[viser_play_pc] ms/step: " + ", ".join(f"{k} {v * 1e3:.1f}" for k, v in timing.items())
+                  + f" (real time {float(inner.step_dt) * 1e3:.1f})", flush=True)
         time.sleep(max(0.0, float(inner.step_dt) / g_speed.value - (time.time() - t0)))
     env.close()
     app.close()
