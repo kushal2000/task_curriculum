@@ -123,6 +123,11 @@ def _write_tool(layer, path: str, tool: dict, goal: bool) -> None:
             attr(shape, "radius", Sdf.ValueTypeNames.Double, r)
             attr(shape, "height", Sdf.ValueTypeNames.Double, s["length"])
             attr(shape, "extent", Sdf.ValueTypeNames.Float3Array, [Gf.Vec3f(-r, -r, -hh - r), Gf.Vec3f(r, r, hh + r)])
+        # Render colours (a camera / video run; PhysX ignores them): the tool brown, the goal translucent green.
+        attr(shape, "primvars:displayColor", Sdf.ValueTypeNames.Color3fArray,
+             [Gf.Vec3f(0.2, 0.8, 0.3) if goal else Gf.Vec3f(0.6, 0.35, 0.15)])
+        if goal:
+            attr(shape, "primvars:displayOpacity", Sdf.ValueTypeNames.FloatArray, [0.35])
         attr(shape, "physxCollision:contactOffset", Sdf.ValueTypeNames.Float, CONTACT_OFFSET)
         attr(shape, "physxCollision:restOffset", Sdf.ValueTypeNames.Float, REST_OFFSET)
         if goal:

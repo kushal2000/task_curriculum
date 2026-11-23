@@ -8,7 +8,7 @@ The env (``Isaacsimenvs-PlayFlexivWujiRightHumanLikePC-Direct-v0``, ``tasks/play
 the student ``policy`` = ``[proprio | live cloud | goal cloud | mask]`` and the teacher ``teacher``, the
 clean keypoint vector with the goal turned to the symmetric equivalent nearest the tool. The student
 (``student.SplitStudentNet``: one PointNet per cloud, then the teacher's LSTM + MLP, initialised from
-the teacher) drives the env -- the teacher with probability ``beta``, falling from 1 to 0 over
+the teacher) drives the env -- the teacher with probability ``beta``, one draw per episode, falling from 1 to 0 over
 ``--beta_iters`` -- the teacher labels every visited state, and the student regresses the label and,
 from an auxiliary head, the teacher's keypoint fields. Truncated BPTT over ``--horizon`` steps.
 
@@ -132,6 +132,10 @@ def main() -> None:
         else:
             student.load_teacher(teacher, torch.tensor(proprio_cols))
         opt = torch.optim.Adam(student.parameters(), lr=float(args.lr))
+        if args.student and "opt" in sc:
+            opt.load_state_dict(sc["opt"])
+            for g in opt.param_groups:
+                g["lr"] = float(args.lr)
         amp = not args.no_amp
         scaler = torch.amp.GradScaler("cuda", enabled=amp)
 
@@ -162,7 +166,7 @@ def main() -> None:
         (out / "student_meta.json").write_text(json.dumps(meta, indent=1, default=str))
 
         def save(it: int, name: str) -> None:
-            torch.save({"model": student.state_dict(), "iter": it, **meta}, out / name)
+            torch.save({"model": student.state_dict(), "opt": opt.state_dict(), "iter": it, **meta}, out / name)
 
         win: dict = {}
 
@@ -174,9 +178,14 @@ def main() -> None:
         print(f"[distill_play] {n} envs x {h} steps/iter, {args.iters} iters, minibatch {args.mb_envs}, "
               f"beta 1->0 over {args.beta_iters}, amp {amp}, student {sum(p.numel() for p in student.parameters()) / 1e6:.1f}M",
               flush=True)
+        def beta_at(it: int) -> float:
+            return max(0.0, 1.0 - it / max(int(args.beta_iters), 1))
+
+        # Who drives an env is drawn once per episode (redrawn at its reset), so an episode is all teacher
+        # or all student and the per-driver goal counts are each driver's own.
+        use_teacher = torch.rand(n, device=device) < beta_at(first_iter)
         for it in range(first_iter, int(args.iters)):
-            beta = max(0.0, 1.0 - it / max(int(args.beta_iters), 1))
-            use_teacher = torch.rand(n, device=device) < beta
+            beta = beta_at(it)
             state0 = (s_state[0].detach().clone(), s_state[1].detach().clone())
             student.eval()
             t_roll = time.time()
@@ -202,6 +211,8 @@ def main() -> None:
                         add(f"{who}_ep", sel.sum())
                         add(f"{who}_goals", (goals * sel).sum())
                 start = ended
+                if bool(ended.any()):
+                    use_teacher = torch.where(ended, torch.rand(n, device=device) < beta, use_teacher)
             frames += n * h
             add("t_roll", time.time() - t_roll)
 
