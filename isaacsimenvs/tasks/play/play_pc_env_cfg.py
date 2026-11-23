@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from isaaclab.utils import configclass
 
-from .play_env_cfg import DomainRandomizationCfg, PlayEnvCfg, ResetCfg
+from .play_env_cfg import AssetsCfg, DomainRandomizationCfg, PlayEnvCfg, ResetCfg
 
 __all__ = ["PlayPCEnvCfg", "PointCloudCfg"]
 
@@ -61,6 +61,15 @@ class PointCloudCfg:
 
 
 @configclass
+class PCAssetsCfg(AssetsCfg):
+    # The tools and the robot authored into every env (utils/author_tools.py, robots/usd.py) instead of
+    # spawned from USD files: the same bodies (2048-env A/B: identical masses, inertias, limits, gains,
+    # and identical states after 120 steps), scene setup 468 -> 60 s at 2048 envs.
+    author_tool_prims: bool = True
+    author_robot_prims: bool = True
+
+
+@configclass
 class PCResetCfg(ResetCfg):
     target_volume_mins: tuple[float, float, float] = (-0.25, 0.13, 0.35)
     target_volume_maxs: tuple[float, float, float] = (0.25, 0.49, 0.60)
@@ -82,6 +91,7 @@ class PCDomainRandomizationCfg(DomainRandomizationCfg):
 
 @configclass
 class PlayPCEnvCfg(PlayEnvCfg):
+    assets: PCAssetsCfg = PCAssetsCfg()
     reset: PCResetCfg = PCResetCfg()
     domain_randomization: PCDomainRandomizationCfg = PCDomainRandomizationCfg()
     pointcloud: PointCloudCfg = PointCloudCfg()

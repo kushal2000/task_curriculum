@@ -1108,7 +1108,10 @@ def setup_scene(env) -> None:
     bake_root = Path(env._tmp_asset_dir) / "baked_usd"
     usd_work_dir.mkdir(parents=True, exist_ok=True)
 
-    object_raw_usds = [
+    # assets.author_tool_prims: the tools are written into the stage directly (utils/author_tools.py),
+    # so neither the importer nor the bake runs for them.
+    author_tools = bool(getattr(assets_cfg, "author_tool_prims", False))
+    object_raw_usds = [] if author_tools else [
         robot_usd.convert_urdf_to_usd(
             str(urdf), usd_work_dir, fix_base=False, replace_cylinders_with_capsules=True,
         )
@@ -1206,12 +1209,38 @@ def setup_scene(env) -> None:
     _materialize_env_prims(env)
 
     # 4. Spawn assets.
-    env.robot = Articulation(robot_usd.build_robot_articulation_usd_cfg(
-        robot_usd_path, spec=env.robot_spec, root_pos=env.cfg.robot_root_pos))
+    robot_cfg = robot_usd.build_robot_articulation_usd_cfg(
+        robot_usd_path, spec=env.robot_spec, root_pos=env.cfg.robot_root_pos)
+    if bool(getattr(assets_cfg, "author_robot_prims", False)):
+        # One flattened, physics-only robot file, referenced from every env (robots/usd.py).
+        flat_path, flat_root = robot_usd.flatten_robot_usd(
+            robot_usd_path, Path(env._tmp_asset_dir) / "robot_flat.usd",
+            strip_render_only=not bool(getattr(assets_cfg, "keep_robot_visuals", False)))
+        robot_usd.author_robot_references(
+            get_current_stage(), [f"/World/envs/env_{i}" for i in range(env.num_envs)],
+            flat_path, flat_root, tuple(env.cfg.robot_root_pos))
+        robot_cfg = robot_cfg.replace(spawn=None)
+    env.robot = Articulation(robot_cfg)
+    _log_scene_step(setup_t0, f"spawned robot ({'authored references' if robot_cfg.spawn is None else 'usd spawner'})")
     env.table = RigidObject(robot_usd.build_rigid_object_cfg("/World/envs/env_.*/Table", table_usd_paths))
-    env.object = RigidObject(robot_usd.build_rigid_object_cfg("/World/envs/env_.*/Object", object_usd_paths))
-    env.goal_viz = RigidObject(robot_usd.build_rigid_object_cfg("/World/envs/env_.*/GoalViz", goalviz_usd_paths))
-    _log_scene_step(setup_t0, "spawned robot/table/object/goalviz")
+    _log_scene_step(setup_t0, "spawned table")
+    if author_tools:
+        from isaaclab.assets import RigidObjectCfg
+
+        from .author_tools import author_tool_prims
+
+        tool_of_env = [i % len(urdf_paths) for i in range(env.num_envs)]
+        env_paths = [f"/World/envs/env_{i}" for i in range(env.num_envs)]
+        author_tool_prims(get_current_stage(), env_paths, env._object_urdf_paths, tool_of_env)
+        env.object = RigidObject(RigidObjectCfg(prim_path="/World/envs/env_.*/Object", spawn=None))
+        env.goal_viz = RigidObject(RigidObjectCfg(prim_path="/World/envs/env_.*/GoalViz", spawn=None))
+        import carb
+
+        carb.settings.get_settings().set_bool("/isaaclab/spawn/multi_assets", True)   # envs differ
+    else:
+        env.object = RigidObject(robot_usd.build_rigid_object_cfg("/World/envs/env_.*/Object", object_usd_paths))
+        env.goal_viz = RigidObject(robot_usd.build_rigid_object_cfg("/World/envs/env_.*/GoalViz", goalviz_usd_paths))
+    _log_scene_step(setup_t0, f"spawned object/goalviz ({'authored' if author_tools else 'usd files'})")
 
     # 5. Ground plane + dome light (global, outside env_*).
     spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
@@ -1219,7 +1248,12 @@ def setup_scene(env) -> None:
     light_cfg.func("/World/Light", light_cfg)
 
     # 6. Per-env scale tensor for spawned Objects.
-    _build_object_scale_tensor(env, object_scales_normalized, len(object_usd_paths))
+    if author_tools:
+        env._object_asset_index_per_env = torch.tensor(tool_of_env, device=env.device, dtype=torch.long)
+        env._object_scale_per_env = torch.as_tensor(
+            object_scales_normalized, device=env.device, dtype=torch.float32)[env._object_asset_index_per_env]
+    else:
+        _build_object_scale_tensor(env, object_scales_normalized, len(object_usd_paths))
     # ... and each env's object collision-box corners and the table's half height, which keep
     # goals clear of the table (reset.goal_table_clearance_m).
     pool_corners = torch.stack([

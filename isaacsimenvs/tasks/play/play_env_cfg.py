@@ -78,6 +78,14 @@ class AssetsCfg:
         "brush",
     )
     num_assets_per_type: int = 100
+    # Write the tools' prims into the stage directly (utils/author_tools.py) instead of converting each
+    # URDF to USD and spawning the files (MultiUsdFileCfg): the same bodies, minutes faster at 24k envs.
+    author_tool_prims: bool = False
+    # Reference one flattened, physics-only robot USD from every env instead of the spawner's per-env
+    # clone (robots/usd.py: flatten_robot_usd, author_robot_references). keep_robot_visuals keeps the
+    # render-only prims (a video / camera run).
+    author_robot_prims: bool = False
+    keep_robot_visuals: bool = False
 
     # Shuffle the procedural pool after generation. Legacy default (True)
     # gives env i uniform coverage over types via i % len(pool). Debug/parity

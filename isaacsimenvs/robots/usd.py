@@ -537,3 +537,79 @@ def bake_usd(
 
     stage.GetRootLayer().Save()
     return str(baked_usd_path)
+
+
+# ----------------------------------------------------------------------------
+# Flattened robot, referenced from every env (no spawner clone)
+# ----------------------------------------------------------------------------
+
+
+def flatten_robot_usd(usd_path: str, out_path: Path, *, strip_render_only: bool = True) -> tuple[str, str]:
+    """The baked robot as ONE layer (the importer's base / physics / sensor sub-layers inlined), the
+    render-only subtrees (per-link ``visuals``, ``Looks``) dropped. Returns ``(path, root prim path)``.
+
+    Every env references this file and composition costs per prim per env, so the visual meshes cost
+    minutes at 24k envs and PhysX never reads them (after gen_mechanics' common/usd_flatten.py). A
+    subtree goes only if nothing under it carries physics; the collider count is checked. Without the
+    flatten, a reference from an env prim composes the converter's nested references one level short.
+    ``strip_render_only=False`` keeps the robot renderable (a camera / video run)."""
+    from pxr import Usd, UsdPhysics
+
+    stage = Usd.Stage.Open(str(usd_path), Usd.Stage.LoadAll)
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    stage.Flatten().Export(str(out_path))
+    flat = Usd.Stage.Open(str(out_path))
+    root = flat.GetDefaultPrim() or next(p for p in flat.GetPseudoRoot().GetChildren() if p.IsValid())
+
+    def walk(prim):
+        return Usd.PrimRange(prim, Usd.TraverseInstanceProxies(Usd.PrimDefaultPredicate))
+
+    def physical(prim) -> bool:
+        return any(p.HasAPI(UsdPhysics.CollisionAPI) or p.HasAPI(UsdPhysics.RigidBodyAPI)
+                   or p.HasAPI(UsdPhysics.ArticulationRootAPI) or p.HasAPI(UsdPhysics.MaterialAPI)
+                   or p.IsA(UsdPhysics.Joint) for p in walk(prim))
+
+    def colliders() -> int:
+        return sum(1 for p in walk(root) if p.HasAPI(UsdPhysics.CollisionAPI))
+
+    before, n_col = sum(1 for _ in walk(root)), colliders()
+    removed = 0
+    if strip_render_only:
+        doomed, it = [], iter(walk(root))
+        for prim in it:
+            if prim.GetName() in ("visuals", "Looks") and not physical(prim):
+                doomed.append(prim.GetPath())
+                it.PruneChildren()
+        for path in doomed:
+            flat.RemovePrim(path)
+        if colliders() != n_col:
+            raise RuntimeError(f"stripping render-only prims changed the collider count ({n_col} -> {colliders()})")
+        removed = before - sum(1 for _ in walk(root))
+    flat.GetRootLayer().Save()
+    print(f"[robot_usd] flattened {Path(usd_path).name} -> {out_path.name}: {before - removed} prims "
+          f"({removed} render-only dropped), {n_col} colliders", flush=True)
+    return str(out_path), str(root.GetPath())
+
+
+def author_robot_references(stage, env_paths: list[str], usd_path: str, root_prim: str,
+                            root_pos: tuple[float, float, float]) -> None:
+    """``<env>/Robot`` in every env: one reference to the flattened robot, at ``root_pos``, written in one
+    ``Sdf.ChangeBlock`` (Articulation then takes ``spawn=None``)."""
+    from pxr import Gf, Sdf
+
+    layer = stage.GetRootLayer()
+    with Sdf.ChangeBlock():
+        for env_path in env_paths:
+            spec = Sdf.CreatePrimInLayer(layer, f"{env_path}/Robot")
+            spec.specifier = Sdf.SpecifierDef
+            spec.typeName = "Xform"
+            spec.referenceList.explicitItems.append(Sdf.Reference(str(usd_path), Sdf.Path(root_prim)))
+            for name, tname, value in (
+                ("xformOp:translate", Sdf.ValueTypeNames.Double3, Gf.Vec3d(*[float(v) for v in root_pos])),
+                ("xformOp:orient", Sdf.ValueTypeNames.Quatd, Gf.Quatd(1.0, Gf.Vec3d(0.0, 0.0, 0.0))),
+                ("xformOp:scale", Sdf.ValueTypeNames.Double3, Gf.Vec3d(1.0, 1.0, 1.0)),
+            ):
+                Sdf.AttributeSpec(spec, name, tname).default = value
+            Sdf.AttributeSpec(spec, "xformOpOrder", Sdf.ValueTypeNames.TokenArray, Sdf.VariabilityUniform).default = [
+                "xformOp:translate", "xformOp:orient", "xformOp:scale"]
