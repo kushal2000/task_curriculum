@@ -148,7 +148,8 @@ def main() -> None:
         net_args = {**c["net_args"], "compile": False}   # same math; no compile wait at a handful of envs
         net = SplitStudentNet(n_p, n_act, 3, int(c["model"]["aux.2.weight"].shape[0]), **net_args).to(device)
         net.load_state_dict(c["model"])
-        pol.update(net=net.eval(), path=path, iter=c.get("iter"), net_args=c["net_args"])
+        pol.update(net=net.eval(), path=path, iter=c.get("iter"), net_args=c["net_args"],
+                   aux=float(c.get("aux_coef", 1.0)) > 0)   # an untrained aux head is not drawn
         print(f"[viser_play_pc] loaded {path} (iter {c.get('iter')})", flush=True)
 
     load(ckpt)
@@ -289,7 +290,9 @@ def main() -> None:
         set_points("goal", inner._last_goal_cloud[e].float().cpu().numpy(), g_show["goal"].value)
 
         err_kp = err_gkp = float("nan")
-        if last["aux"] is not None:
+        for k in ("kp_true", "kp_est", "gkp_true", "gkp_est"):
+            clouds[k].visible = False
+        if last["aux"] is not None and pol["aux"]:
             tob = last["teacher"][e]
             palm = tob[palm_cols]
             true_aux = tob[aux_cols].view(2, -1, 3)

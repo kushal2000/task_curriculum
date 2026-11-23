@@ -47,7 +47,9 @@ def main() -> None:
     p.add_argument("--mb_envs", type=int, default=1024)
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--beta_iters", type=int, default=200)
-    p.add_argument("--aux_coef", type=float, default=1.0)
+    p.add_argument("--aux_coef", type=float, default=1.0,
+                   help="weight of the auxiliary keypoint regression; 0 trains on the actions alone (the keypoint\n"
+                        "labels are ambiguous under a tool's symmetries)")
     p.add_argument("--grad_norm", type=float, default=1.0)
     p.add_argument("--no_amp", action="store_true")
     p.add_argument("--log_every", type=int, default=10)
@@ -162,7 +164,8 @@ def main() -> None:
         start = torch.ones(n, dtype=torch.bool, device=device)
         meta = {"env": {"task": args.task, "layout": {k: v for k, v in lay.items()},
                         "pointcloud": inner.cfg.pointcloud.to_dict()},
-                "net": "SplitStudentNet", "net_args": net_args, "teacher": args.teacher}
+                "net": "SplitStudentNet", "net_args": net_args, "teacher": args.teacher,
+                "aux_coef": float(args.aux_coef)}
         (out / "student_meta.json").write_text(json.dumps(meta, indent=1, default=str))
 
         def save(it: int, name: str) -> None:
@@ -224,7 +227,7 @@ def main() -> None:
                                                   (state0[0][:, mb], state0[1][:, mb]), buf["start"][:, mb])
                     loss_act = ((mu.float() - buf["act"][:, mb]) ** 2).mean()
                     loss_aux = ((aux.float() - buf["aux"][:, mb]) ** 2).mean()
-                    loss = loss_act + float(args.aux_coef) * loss_aux
+                    loss = loss_act + float(args.aux_coef) * loss_aux if args.aux_coef > 0 else loss_act
                 if not bool(torch.isfinite(loss)):
                     add("skipped", 1)
                     continue
