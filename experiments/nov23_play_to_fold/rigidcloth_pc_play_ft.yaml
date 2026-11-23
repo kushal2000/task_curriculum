@@ -1,0 +1,34 @@
+# rigidcloth_pc_play_ft: SAPG on Yibo's base fold pool (real joint limits, the real table), finetuning the
+# point-cloud Play student (DAgger, tasks/play/play_pc_env.py) -- the actor reads the fold task in the
+# Play student's representation, so every weight transfers (--pc_init_student <student.pth>):
+#   current: 64 visible points of the cloth only (the camera model: the robot occludes, its points dropped)
+#   goal:    64 points of the folded goal sheet where it belongs (goal_fixed, taken at step 12)
+#   one PointNet per cloud, bare xyz, widths 32-64-128 (compiled), proprioception as the Play student's.
+# Camera errors: no extrinsics randomization (the cameras are calibrated); depth noise, drops and the
+# cloud / proprioception / action delays as rigidcloth_pc_rl. The finetune lr of rigidcloth_pc_dagger_rl.
+#
+#   TASK=Isaacsimenvs-RigidCloth-Direct-v0 NAME=0_... sbatch experiments/nov22_play_pointcloud/rl_scratch.sbatch \
+#       --experiment experiments/nov23_play_to_fold/rigidcloth_pc_play_ft.yaml \
+#       --pc_init_student <play student .pth> --pc_init_sigma pretrained_policy/flexiv_wuji/model.pth
+base: experiments/nov17_pointcloud_rl/rigidcloth_pc_dagger_rl.yaml
+
+env:
+  obs:
+    pointcloud:
+      n_points: 64
+      goal: goal_fixed
+      ref_step: 12
+      n_ref: 64
+      manipuland_only: true
+      labels: false
+      split_goal: true
+      pointnet_widths: [32, 64, 128]
+      compile_pointnet: true
+  fold_pool:
+    goal_task:
+      mode: half_fold
+  domain_randomization:
+    pointcloud:
+      cam_pos_noise: [0.0, 0.0, 0.0]
+      calib_xyz: [0.0, 0.0, 0.0]
+      calib_rot_deg: 0.0

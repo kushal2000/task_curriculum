@@ -68,6 +68,9 @@ class PointCloudSetup:
     """``none``, ``label`` (first-frame cloth cloud with moving / stationary labels), ``goal_fixed``
     or ``goal_any`` (a cloud of the folded goal sheet, in place / as a bare shape at any yaw)."""
     n_ref: int = 192
+    use_labels: bool = True
+    """One-hot group labels on every point when the cloud has more than one group. False: bare xyz (a
+    policy that reads the groups as separate clouds, each with its own encoder, needs no labels)."""
     ref_step: int = 0
     fk_points: int = 0
     """Forward-kinematics points on the forearm and hand (0: none)."""
@@ -120,7 +123,9 @@ class PointCloudSetup:
 
     @property
     def labels(self) -> tuple[str, ...]:
-        """The label columns; empty when the cloud has one group only."""
+        """The label columns; empty when the cloud has one group only (or ``use_labels`` is off)."""
+        if not self.use_labels:
+            return ()
         out = ["live"]
         if self.goal_mode == "label":
             out += ["ref_moving", "ref_stationary"]

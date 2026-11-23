@@ -93,8 +93,17 @@ class ObservationBuilder:
     def pointcloud_layout(self) -> dict:
         """The point-cloud policy vector ``[proprio | points (M x D) | mask (M)]``:
         ``{n_proprio, num_points, point_dim}``."""
-        return {"n_proprio": obs_dim(self.proprio_fields, self.robot.num_joints),
-                "num_points": self.pointcloud.num_points, "point_dim": self.pointcloud.point_dim}
+        out = {"n_proprio": obs_dim(self.proprio_fields, self.robot.num_joints),
+               "num_points": self.pointcloud.num_points, "point_dim": self.pointcloud.point_dim}
+        pc = self.cfg.obs.pointcloud
+        if bool(getattr(pc, "split_goal", False)):
+            # Two clouds, one PointNet each (pc_rl): the live group, then the goal group.
+            setup = self.pointcloud.setup
+            if setup.goal_mode not in ("goal_fixed", "goal_any") or setup.fk_points > 0:
+                raise ValueError("obs.pointcloud.split_goal needs goal goal_fixed / goal_any and no fk points")
+            out.update(split_goal=True, n_live=int(setup.n_points),
+                       widths=list(pc.pointnet_widths), compile=bool(pc.compile_pointnet))
+        return out
 
     def reset(self, env_ids: torch.Tensor) -> None:
         self.proprio.reset(env_ids)

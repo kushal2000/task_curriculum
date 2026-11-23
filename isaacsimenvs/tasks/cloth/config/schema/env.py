@@ -66,6 +66,19 @@ class PointCloudObsCfg:
     """Points on the forearm and hand from forward kinematics of the (delayed) joint state (0: none)."""
     chunk: int = 1024
     """Envs per batch when the cloud is built (memory, not the result)."""
+    # --- the point-cloud Play student's representation (all off by default: the scene cloud above) ---
+    n_ref: int = 192
+    """Points of the ``goal`` group."""
+    manipuland_only: bool = False
+    """The live cloud keeps only the cloth's visible points: the robot still occludes it in the camera
+    model, but its own points are dropped (as the point-cloud Play task's tool-only cloud)."""
+    labels: bool = True
+    """One-hot group labels on the points. False: bare xyz."""
+    split_goal: bool = False
+    """The actor reads the live and the goal groups as two clouds, one PointNet each (pc_rl, as the
+    point-cloud Play student); needs ``goal`` goal_fixed / goal_any and no fk points."""
+    pointnet_widths: tuple[int, ...] = (64, 128, 256)
+    compile_pointnet: bool = False
 
 
 @configclass
