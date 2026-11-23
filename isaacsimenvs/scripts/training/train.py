@@ -382,6 +382,12 @@ def main() -> None:
 
         observers = [EnvStatsAlgoObserver()]
         if args_cli.wandb_activate and is_main_rank:
+            # pandas imported now, before wandb captures the console: wandb.log imports it lazily
+            # (is_pandas_data_frame) on its first media value, and that import's C-extension load
+            # writing through wandb's console capture deadlocked a resumed run at its first viewer
+            # page (stack dump, 2026-11-23).
+            import pandas  # noqa: F401
+
             from isaacsimenvs.scripts.training.wandb_observer import WandbAlgoObserver
 
             # WandbAlgoObserver expects attribute access (cfg.wandb_project,
