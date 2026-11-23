@@ -12,7 +12,7 @@
 # NAME (default play_pc_dagger), ENVS (24576), ITERS (2000). Writes outputs/distill_play/<NAME>_<job>/.
 set -uo pipefail
 cd /share/portal/kk837/task_curriculum
-export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES PYTHONPATH="$PWD"
+export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES PYTHONPATH="$PWD" PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export TMPDIR="/tmp/${USER}_${SLURM_JOB_ID:-local}"; mkdir -p "$TMPDIR"
 NAME="${NAME:-play_pc_dagger}"; RUN="${NAME}_${SLURM_JOB_ID:-local}"
 echo "[play_pc] host=$(hostname -s) job=${SLURM_JOB_ID:-local} commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain --untracked-files=no)" && echo YES || echo no)"

@@ -1,0 +1,291 @@
+[play_pc] host=portal-compute-04 job=902331 commit=47acc7d dirty=no
+NVIDIA RTX 6000 Ada Generation, 49140 MiB
+[INFO][AppLauncher]: Using device: cuda:0
+[INFO][AppLauncher]: Loading experience file: /share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaaclab/apps/isaaclab.python.headless.kit
+Loading user config located at: '/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaacsim/kit/data/Kit/Isaac-Sim/5.1/user.config.json'
+[Info] [carb] Logging to file: /share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/isaacsim/kit/logs/Kit/Isaac-Sim/5.1/kit_20261122_232826.log
+2026-11-23T04:28:28Z [1,237ms] [Warning] [omni.usd_config.extension] Enable omni.materialx.libs extension to use MaterialX
+2026-11-23T04:28:28Z [2,071ms] [Warning] [omni.platforminfo.plugin] failed to open the default display.  Can't verify X Server version.
+2026-11-23T04:28:29Z [2,327ms] [Warning] [carb] Acquiring non optional plugin interface which is not listed as dependency: [omni::physx::IPhysxBenchmarks v1.0] (plugin: <default plugin>), by client: omni.physics.physx.plugin. Add it to CARB_PLUGIN_IMPL_DEPS() macro of a client.
+2026-11-23T04:28:29Z [2,351ms] [Warning] [omni.isaac.dynamic_control] omni.isaac.dynamic_control is deprecated as of Isaac Sim 4.5. No action is needed from end-users.
+2026-11-23T04:28:53Z [26,887ms] [Warning] [carb.cudainterop.plugin] CUDA_VISIBLE_DEVICES environment variable is set.
+2026-11-23T04:28:53Z [26,888ms] [Warning] [carb.cudainterop.plugin] Note CUDA device enumeration and Omniverse device enumeration are different.
+2026-11-23T04:28:53Z [26,888ms] [Warning] [carb.cudainterop.plugin] Setting CUDA_VISIBLE_DEVICES can lead to undesired behavior or crashes.
+
+|---------------------------------------------------------------------------------------------|
+| Driver Version: 570.124.06    | Graphics API: Vulkan
+|=============================================================================================|
+| GPU | Name                             | Active | LDA | GPU Memory | Vendor-ID | LUID       |
+|     |                                  |        |     |            | Device-ID | UUID       |
+|     |                                  |        |     |            | Bus-ID    |            |
+|---------------------------------------------------------------------------------------------|
+| 0   | NVIDIA RTX 6000 Ada Generation   | Yes: 0 |     | 49386   MB | 10de      | 0          |
+|     |                                  |        |     |            | 26b1      | 1fb41f52.. |
+|     |                                  |        |     |            | 41        |            |
+|=============================================================================================|
+| OS: 24.04.4 LTS (Noble Numbat) ubuntu, Version: 24.04.4, Kernel: 6.8.0-138-generic
+| Processor: AMD EPYC 9654 96-Core Processor
+| Cores: 192 | Logical Cores: 384
+|---------------------------------------------------------------------------------------------|
+| Total Memory (MB): 1547671 | Free Memory: 1391362
+| Total Page/Swap (MB): 4095 | Free Page/Swap: 3605
+|---------------------------------------------------------------------------------------------|
+2026-11-23T04:28:55Z [28,573ms] [Warning] [gpu.foundation.plugin] CPU performance profile is set to conservative. This profile gradually sets the CPU frequency based on the current load and may not deliver best performance.
+2026-11-23T04:28:55Z [28,586ms] [Warning] [gpu.foundation.plugin] IOMMU is enabled.
+2026-11-23T04:28:58Z [31,305ms] [Warning] [omni.kvdb.plugin] Disabling key-value database because another kit process is locking it
+[INFO]: Parsing configuration from: isaacsimenvs.tasks.play.play_pc_env_cfg:PlayPCEnvCfg
+[INFO]: Parsing configuration from: /share/portal/kk837/task_curriculum/isaacsimenvs/tasks/play/config/PlaySAPG.yaml
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/kk837/.netrc.
+wandb: Currently logged in as: kk837 to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.28.2
+wandb: Run data is saved locally in outputs/distill_play/play_pc_dagger_902331/wandb/run-20261122_232905-6h5zeeyi
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run play_pc_dagger_902331
+wandb: ⭐️ View project at https://wandb.ai/kk837/play_pc
+wandb: 🚀 View run at https://wandb.ai/kk837/play_pc/runs/6h5zeeyi
+
+[36m===================================================================================================[0m
+[36m[1m[INFO][IsaacLab]: Logging to file: /tmp/kk837_902331/isaaclab/logs/isaaclab_2026-11-22_23-29-07.log[0m
+[36m===================================================================================================[0m
+
+[33m23:29:07 [simulation_context.py] WARNING: The `enable_external_forces_every_iteration` parameter in the PhysxCfg is set to False. If you are experiencing noisy velocities, consider enabling this flag. You may need to slightly increase the number of velocity iterations (setting it to 1 or 2 rather than 0), together with this flag, to improve the accuracy of velocity updates.[0m
+[INFO]: Base environment:
+	Environment device    : cuda:0
+	Environment seed      : 1
+	Physics step-size     : 0.00833333333
+	Rendering step-size   : 0.01666666666
+	Environment step-size : 0.01666666666
+[scene_utils][+0.00s] setup start num_envs=24576 num_assets_per_type=100
+[scene_utils][+0.11s] generated 1200 object URDFs
+2026-11-23T04:29:10Z [43,827ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-23T04:29:10Z [43,828ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+
+|---------------------------------------------------------------------------------------------|
+| Driver Version: 570.124.06    | Graphics API: Vulkan
+|=============================================================================================|
+| GPU | Name                             | Active | LDA | GPU Memory | Vendor-ID | LUID       |
+|     |                                  |        |     |            | Device-ID | UUID       |
+|     |                                  |        |     |            | Bus-ID    |            |
+|---------------------------------------------------------------------------------------------|
+| 0   | NVIDIA RTX 6000 Ada Generation   | Yes: 0 |     | 49386   MB | 10de      | 0          |
+|     |                                  |        |     |            | 26b1      | 1fb41f52.. |
+|     |                                  |        |     |            | 41        |            |
+|=============================================================================================|
+| OS: 24.04.4 LTS (Noble Numbat) ubuntu, Version: 24.04.4, Kernel: 6.8.0-138-generic
+| Processor: AMD EPYC 9654 96-Core Processor
+| Cores: 192 | Logical Cores: 384
+|---------------------------------------------------------------------------------------------|
+| Total Memory (MB): 1547671 | Free Memory: 1391074
+| Total Page/Swap (MB): 4095 | Free Page/Swap: 3605
+|---------------------------------------------------------------------------------------------|
+2026-11-23T04:29:11Z [44,408ms] [Warning] [gpu.foundation.plugin] CPU performance profile is set to conservative. This profile gradually sets the CPU frequency based on the current load and may not deliver best performance.
+2026-11-23T04:29:11Z [44,409ms] [Warning] [gpu.foundation.plugin] IOMMU is enabled.
+2026-11-23T04:29:12Z [45,795ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-23T04:29:12Z [45,795ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-23T04:29:12Z [46,049ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-23T04:29:12Z [46,049ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-23T04:29:12Z [46,064ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-23T04:29:12Z [46,064ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-23T04:29:13Z [46,647ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-23T04:29:13Z [46,647ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-23T04:29:13Z [46,651ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-23T04:29:13Z [46,652ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-23T04:29:13Z [46,656ms] [Warning] [carb.windowing-glfw.plugin] GLFW initialization failed.
+2026-11-23T04:29:13Z [46,656ms] [Warning] [carb] Failed to startup plugin carb.windowing-glfw.plugin (interfaces: [carb::windowing::IGLContext v1.0],[carb::windowing::IWindowing v1.5]) (impl: carb.windowing-glfw.plugin)
+2026-11-23T04:29:20Z [53,786ms] [Warning] [omni.graph.visualization.nodes._impl.extension] No Viewport Window to add omni.graph.visualization.nodes-2.1.3 scene to
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_index_finger_tip has body properties (mass, inertia, or collisions) and is being merged into r_index_finger_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_index_finger_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_index_finger_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_middle_finger_tip has body properties (mass, inertia, or collisions) and is being merged into r_middle_finger_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_middle_finger_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_middle_finger_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_pinky_tip has body properties (mass, inertia, or collisions) and is being merged into r_pinky_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_pinky_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_pinky_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_ring_finger_tip has body properties (mass, inertia, or collisions) and is being merged into r_ring_finger_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_ring_finger_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_ring_finger_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_thumb_tip has body properties (mass, inertia, or collisions) and is being merged into r_thumb_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_thumb_tip_sensor_frame has body properties (mass, inertia, or collisions) and is being merged into r_thumb_distal
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_wrist has body properties (mass, inertia, or collisions) and is being merged into r_mount
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link r_mount has body properties (mass, inertia, or collisions) and is being merged into flange
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] DEPRECATION WARNING: Merging bodies with inertia is deprecated. This will be removed in a future release.
+2026-11-23T04:30:15Z [108,423ms] [Warning] [isaacsim.asset.importer.urdf] link flange has body properties (mass, inertia, or collisions) and is being merged into link7
+[robot_usd] self-collision: filtered 64 link pairs across 28 robot bodies in rizon4s_right_wuji_human_like_joint_limits_physics.usd
+[scene_utils][+67.32s] resolved baked USDs
+2026-11-23T04:32:08Z [221,686ms] [Warning] [omni.fabric.plugin] removePath called on non-existent path /World/Template/Asset_0000/box 
+
+[scene_utils][+592.94s] spawned robot/table/object/goalviz
+[scene_utils][+594.87s] registered assets with scene
+[INFO]: Time taken for scene creation : 597.358948 seconds
+[INFO]: Scene manager:  <class InteractiveScene>
+	Number of environments: 24576
+	Environment spacing   : 1.2
+	Source prim name      : /World/envs/env_0
+	Global prim paths     : []
+	Replicate physics     : False
+[INFO]: Starting the simulation. This may take a few seconds. Please wait...
+[INFO]: Time taken for simulation start : 520.332061 seconds
+[INFO]: Completed setting up the environment...
+[scene_utils][+2.36s] applied PhysX material properties
+[dr] obs delay off, action delay 0-2, object state off | delay_mode per_episode | joint vel noise 0.1, joint pos noise 0.005 rad, action noise 0.05 | object bias +-(0.0, 0.0, 0.0) m / 0.0 deg | robot gains k x(1.0, 1.0) d x(1.0, 1.0)
+[play_pc] 1024 live points (768 tool + 16387 robot candidates, crop box [-0.2793999910354614, 0.10900001227855682, 0.25999999046325684] .. [0.2793999910354614, 0.49000000953674316, inf]), 256 goal points, critic 256+256 clean points, 1200 tools, policy 5223 / critic 1661 / teacher 134
+[pose_viewer] enabled: env_id=0 len=300 interval=3200 output_dir=outputs/distill_play/play_pc_dagger_902331/interactive_viewer
+[33m23:48:33 [rigid_object.py] WARNING: The function 'set_external_force_and_torque' will be deprecated in a future release. Please use 'permanent_wrench_composer.set_forces_and_torques' instead.[0m
+[pose_viewer] get_student_obs failed: cfg.student_obs.enabled is false; student observations are disabled.
+[distill_play] 24576 envs x 16 steps/iter, 2000 iters, minibatch 1024, beta 1->0 over 200, amp True, student 8.4M
+[pose_viewer] get_student_obs failed: cfg.student_obs.enabled is false; student observations are disabled.
+Error executing job with overrides: []
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/distill_play_pc.py", line 279, in <module>
+    main()
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/distill_play_pc.py", line 270, in main
+    run()
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/loader.py", line 105, in wrapper
+    hydra_main()
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 223, in run_and_report
+    raise ex
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/hydra.py", line 132, in run
+    _ = ret.return_value
+        ^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/core/utils.py", line 260, in return_value
+    raise self._return_value
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/loader.py", line 103, in hydra_main
+    func(env_cfg_restored, merged_agent, *args, **kwargs)
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/distill_play_pc.py", line 188, in run
+    mu, _aux, s_state = student.step(proprio, points, mask, s_state, start)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/student.py", line 227, in step
+    mu, h, state = self.core_step(self.encode(proprio, points, mask), state, start)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/student.py", line 266, in encode
+    f_live = self.pointnet(points[:, :k], mask[:, :k]).to(p.dtype)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/student.py", line 183, in forward
+    f = self.point_mlp(torch.where(mask.unsqueeze(-1), points, fill)).amax(dim=1)          # (B, W)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/container.py", line 240, in forward
+    input = module(input)
+            ^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/linear.py", line 125, in forward
+    return F.linear(input, self.weight, self.bias)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 12.00 GiB. GPU 0 has a total capacity of 47.38 GiB of which 1.80 GiB is free. Including non-PyTorch memory, this process has 45.51 GiB memory in use. Of the allocated memory 14.07 GiB is allocated by PyTorch, and 19.90 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/distill_play_pc.py", line 279, in <module>
+    main()
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/distill_play_pc.py", line 270, in main
+    run()
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/loader.py", line 105, in wrapper
+    hydra_main()
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 223, in run_and_report
+    raise ex
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/_internal/hydra.py", line 132, in run
+    _ = ret.return_value
+        ^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/core/utils.py", line 260, in return_value
+    raise self._return_value
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/tasks/loader.py", line 103, in hydra_main
+    func(env_cfg_restored, merged_agent, *args, **kwargs)
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/distill_play_pc.py", line 188, in run
+    mu, _aux, s_state = student.step(proprio, points, mask, s_state, start)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/student.py", line 227, in step
+    mu, h, state = self.core_step(self.encode(proprio, points, mask), state, start)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/student.py", line 266, in encode
+    f_live = self.pointnet(points[:, :k], mask[:, :k]).to(p.dtype)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/isaacsimenvs/scripts/distillation/student.py", line 183, in forward
+    f = self.point_mlp(torch.where(mask.unsqueeze(-1), points, fill)).amax(dim=1)          # (B, W)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/container.py", line 240, in forward
+    input = module(input)
+            ^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/share/portal/kk837/task_curriculum/.venv/isaacsim/lib/python3.11/site-packages/torch/nn/modules/linear.py", line 125, in forward
+    return F.linear(input, self.weight, self.bias)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 12.00 GiB. GPU 0 has a total capacity of 47.38 GiB of which 1.80 GiB is free. Including non-PyTorch memory, this process has 45.51 GiB memory in use. Of the allocated memory 14.07 GiB is allocated by PyTorch, and 19.90 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mplay_pc_dagger_902331[0m at: [34mhttps://wandb.ai/kk837/play_pc/runs/6h5zeeyi[0m
+2026-11-23T04:48:40Z [1,213,291ms] [Warning] [omni.physx.plugin] USD stage detach not called, holding a loose ptr to a stage!
+2026-11-23T04:48:54Z [1,227,194ms] [Warning] [carb] Recursive unloadAllPlugins() detected!
+[2026-11-22T23:48:57.188] error: *** JOB 902331 ON portal-compute-04 CANCELLED AT 2026-11-22T23:48:57 DUE to SIGNAL Terminated ***

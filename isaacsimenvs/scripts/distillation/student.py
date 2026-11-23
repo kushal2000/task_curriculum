@@ -175,12 +175,29 @@ class PointNet(nn.Module):
         self.point_mlp = _mlp((point_dim, *widths))
         self.out = nn.Sequential(nn.Linear(widths[-1], out_dim), nn.LayerNorm(out_dim))
 
+    #: Envs per chunk of the per-point MLP. Its (B, M, W) activations are the network's whole memory
+    #: cost: 24576 envs x 1024 points x 256 channels is 12 GB in half precision for ONE layer. So the
+    #: batch runs in chunks, and with gradients each chunk is checkpointed -- only its pooled (C, W)
+    #: output is kept and the chunk is recomputed in the backward pass.
+    chunk: int = 2048
+
+    def _pooled(self, x: torch.Tensor) -> torch.Tensor:
+        return self.point_mlp(x).amax(dim=1)
+
     def forward(self, points: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         # An invalid slot is given a valid point of the same cloud: a duplicate does not change the
         # max-pool, and the (B, M, 3..7) input is far cheaper to mask than the (B, M, W) features.
         first = mask.to(torch.uint8).argmax(dim=1)
         fill = points[torch.arange(points.shape[0], device=points.device), first].unsqueeze(1)
-        f = self.point_mlp(torch.where(mask.unsqueeze(-1), points, fill)).amax(dim=1)          # (B, W)
+        x = torch.where(mask.unsqueeze(-1), points, fill)
+        if x.shape[0] <= self.chunk:
+            f = self._pooled(x)                                                                  # (B, W)
+        elif torch.is_grad_enabled():
+            from torch.utils.checkpoint import checkpoint
+
+            f = torch.cat([checkpoint(self._pooled, c, use_reentrant=False) for c in x.split(self.chunk)])
+        else:
+            f = torch.cat([self._pooled(c) for c in x.split(self.chunk)])
         f = torch.where(mask.any(dim=1, keepdim=True), f, torch.zeros_like(f))
         return self.out(f)
 
