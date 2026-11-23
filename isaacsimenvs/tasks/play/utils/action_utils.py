@@ -130,6 +130,8 @@ def apply_wrench_dr(env) -> None:
             env._object_forces *= active_f
             env._object_torques *= active_f
 
+    if getattr(env, "_direct_writes", False):
+        return                      # PlayEnv._apply_action writes the wrench to PhysX every substep
     env.object.set_external_force_and_torque(
         forces=env._object_forces,
         torques=env._object_torques,

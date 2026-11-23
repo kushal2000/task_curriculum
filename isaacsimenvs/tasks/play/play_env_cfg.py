@@ -627,6 +627,13 @@ class PlayEnvCfg(DirectRLEnvCfg):
 
     # --- DirectRLEnvCfg required fields ---
     decimation: int = 2  # 2 physics substeps per policy step
+    # Write the joint targets, the hand spring's efforts and the object's random wrench straight to
+    # the PhysX views each substep (PlayEnv._apply_action), instead of through Isaac Lab's per-asset
+    # write_data_to_sim (an actuator-group loop and three setters for the robot; a wrench composer
+    # that re-reads the body pose for the object): the same commands, ~2.5 ms less per step at a handful
+    # of envs. Needs implicit actuators only (checked at start). The wrench is applied in the world
+    # frame at every substep (the composer turned it into the body frame once per policy step).
+    direct_sim_writes: bool = True
     episode_length_s: float = 10.0  # 600 policy steps * 2 * (1/120) = 10s
     action_space: int = 27  # 7-DOF Rizon 4s + 20-DOF Wuji hand
     # Obs/state sizes are derived from obs.obs_list / obs.state_list at env init.

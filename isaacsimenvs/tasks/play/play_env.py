@@ -46,6 +46,27 @@ class PlayEnv(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)  # runs _setup_scene
         apply_physx_material_properties(self)
         allocate_state_buffers(self)
+        self._setup_direct_writes()
+
+    def _setup_direct_writes(self) -> None:
+        """``cfg.direct_sim_writes``: this env writes the robot's commands and the object's wrench to
+        PhysX itself (``_apply_action``); Isaac Lab's per-asset writes are turned off."""
+        from isaaclab.actuators import ImplicitActuator
+
+        self._direct_writes = bool(getattr(self.cfg, "direct_sim_writes", False))
+        if not self._direct_writes:
+            return
+        if not all(isinstance(a, ImplicitActuator) for a in self.robot.actuators.values()):
+            raise ValueError("direct_sim_writes needs implicit actuators only (an explicit model computes "
+                             "the commands in write_data_to_sim)")
+        self._robot_idx = self.robot._ALL_INDICES
+        self._object_idx = self.object._ALL_INDICES
+        view = self.robot.root_physx_view
+        view.set_dof_velocity_targets(torch.zeros_like(self.robot.data.joint_vel_target), self._robot_idx)
+        self._zero_effort = torch.zeros_like(self.robot.data.joint_effort_target)
+        view.set_dof_actuation_forces(self._zero_effort, self._robot_idx)
+        self.robot.write_data_to_sim = lambda: None        # the commands go out in _apply_action
+        self.object.write_data_to_sim = lambda: None       # its wrench too (it has nothing else to write)
 
     def _setup_scene(self) -> None:
         setup_scene(self)
@@ -70,6 +91,16 @@ class PlayEnv(DirectRLEnv):
         spring = hand_spring_effort(self)
         if spring is not None:
             self.robot.set_joint_effort_target(spring)
+        if getattr(self, "_direct_writes", False):
+            # What Articulation / RigidObject.write_data_to_sim would send, without their per-group
+            # loop and wrench composer (implicit actuators pass the targets through unchanged).
+            view = self.robot.root_physx_view
+            view.set_dof_position_targets(self._cur_targets, self._robot_idx)
+            if spring is not None:
+                view.set_dof_actuation_forces(spring, self._robot_idx)
+            self.object.root_physx_view.apply_forces_and_torques_at_position(
+                force_data=self._object_forces.view(-1, 3), torque_data=self._object_torques.view(-1, 3),
+                position_data=None, indices=self._object_idx, is_global=True)
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         update_tolerance_curriculum(self)
