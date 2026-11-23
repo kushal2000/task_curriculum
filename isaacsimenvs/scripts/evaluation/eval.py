@@ -169,8 +169,9 @@ def main() -> None:
         "--experiment",
         default=None,
         help="Build the env from this run recipe (the policy's training recipe) before the overrides. "
-        "'auto': the recipe and env overrides recorded next to the checkpoint (run.json / args.json, "
-        "training_run.py). Default: the task's own config.",
+        "'auto': what is recorded next to the checkpoint (training_run.py): run.json's resolved env "
+        "config if it has one (since 2026-11-23), else its recipe and env overrides (run.json / "
+        "args.json). Default: the task's own config.",
     )
     parser.add_argument("--policy_config", default=DEFAULT_POLICY_CFG)
     parser.add_argument(
@@ -227,14 +228,20 @@ def main() -> None:
     )
     args_cli, hydra_args = parser.parse_known_args()
     train_overrides: list[str] = []
+    # The env layer between task.yaml and the command line: a recipe name / path, or a composed recipe.
+    env_layer = args_cli.experiment
     if args_cli.experiment == "auto":
-        from isaacsimenvs.scripts.evaluation.training_run import training_run, without_keys
+        from isaacsimenvs.scripts.evaluation.training_run import resolved_recipe, training_run, without_keys
 
         run_info = training_run(args_cli.checkpoint)
         if run_info is None:
             raise SystemExit(f"--experiment auto: no run.json / args.json near {args_cli.checkpoint}; name its recipe")
-        args_cli.experiment = run_info["experiment"]
-        train_overrides = without_keys(run_info["overrides"], hydra_args)
+        env_layer = resolved_recipe(run_info)
+        if env_layer is not None:  # the world as trained; the overrides are in it already
+            args_cli.experiment = env_layer["files"][0]
+        else:
+            env_layer = args_cli.experiment = run_info["experiment"]
+            train_overrides = without_keys(run_info["overrides"], hydra_args)
     sys.argv = [sys.argv[0]] + train_overrides + hydra_args
 
     # Kit is required by the PhysX backend and impossible for the Newton one, which runs kit-less
@@ -259,7 +266,7 @@ def main() -> None:
 
     student = _student_checkpoint(args_cli.checkpoint)
 
-    @hydra_task_config_with_yaml(args_cli.task, "", experiment=args_cli.experiment)
+    @hydra_task_config_with_yaml(args_cli.task, "", experiment=env_layer)
     def run(env_cfg, agent_cfg) -> None:
         env_cfg.scene.num_envs = args_cli.num_envs
         env_cfg.sim.device = args_cli.sim_device

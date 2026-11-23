@@ -38,7 +38,7 @@ from isaacsimenvs.tasks.recipes import deep_merge, load_recipe
 def hydra_task_config_with_yaml(
     task_name: str,
     agent_cfg_entry_point: str,
-    experiment: str | None = None,
+    experiment: str | dict | None = None,
 ) -> Callable:
     """Like `isaaclab_tasks.utils.hydra.hydra_task_config`, but layers the run recipe onto the
     configclass defaults before Hydra CLI merging.
@@ -49,7 +49,9 @@ def hydra_task_config_with_yaml(
         agent_cfg_entry_point: Key in ``gym.register(..., kwargs=...)`` whose value
             is the agent (rl_games) config entry point. Typically
             ``"rl_games_cfg_entry_point"`` or ``"rl_games_sapg_cfg_entry_point"``.
-        experiment: A run recipe (a name in ``tasks/cloth/config/runs/`` or a path; see recipes.py), or ``None``.
+        experiment: A run recipe (a name in ``tasks/cloth/config/runs/`` or a path; see recipes.py), an
+            already composed one (``load_recipe``'s format, e.g. a training's resolved env from its
+            run.json, ``training_run.resolved_recipe``), or ``None``.
     """
 
     def decorator(func):
@@ -63,7 +65,7 @@ def hydra_task_config_with_yaml(
                 if agent_cfg_entry_point
                 else None
             )
-            exp = load_recipe(experiment) if experiment else {}
+            exp = (experiment if isinstance(experiment, dict) else load_recipe(experiment)) if experiment else {}
             if exp:
                 if exp.get("task", short_name) != short_name:
                     raise ValueError(f"experiment {experiment!r} is for {exp['task']}, not {short_name}")

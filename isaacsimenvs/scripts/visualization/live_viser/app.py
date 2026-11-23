@@ -34,9 +34,10 @@ def _parser() -> argparse.ArgumentParser:
     return p
 
 
-def _recipe(args, checkpoint: str, menu_recipe: str | None) -> tuple[str | None, list[str]]:
-    """``(recipe, the training's env overrides)`` of the env, as eval.sh picks them."""
-    from isaacsimenvs.scripts.evaluation.training_run import training_run
+def _recipe(args, checkpoint: str, menu_recipe: str | None) -> tuple[str | dict | None, list[str]]:
+    """``(recipe, the training's env overrides)`` of the env, as eval.sh picks them: the recipe is the
+    training's resolved env (a composed recipe) when its run.json has one."""
+    from isaacsimenvs.scripts.evaluation.training_run import resolved_recipe, training_run
 
     if args.experiment is not None:
         return args.experiment, []
@@ -48,6 +49,9 @@ def _recipe(args, checkpoint: str, menu_recipe: str | None) -> tuple[str | None,
     if run is None:
         sys.exit(f"[live] no run.json / args.json beside {checkpoint}: name its recipe (--experiment, or "
                  "`recipe:` in its menu entry)")
+    resolved = resolved_recipe(run)
+    if resolved is not None:
+        return resolved, []
     return run["experiment"], run["overrides"]
 
 
@@ -123,7 +127,8 @@ def main() -> None:
     from .policies import Players
     from .viewer import LiveViewer
 
-    print(f"[live] {args.target} ({start}), recipe {recipe}: {task} {' '.join(overrides)}", flush=True)
+    label = recipe["files"][0] if isinstance(recipe, dict) else recipe
+    print(f"[live] {args.target} ({start}), recipe {label}: {task} {' '.join(overrides)}", flush=True)
     server = viser.ViserServer(host="0.0.0.0", port=args.port)
     server.scene.set_up_direction("+z")
     status = server.gui.add_markdown(f"**Building {args.target} with {args.num_envs} envs...** (~2-3 min)")

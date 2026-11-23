@@ -246,12 +246,23 @@ def main() -> None:
         # of every capture race over the same files.
         is_main_rank = int(os.getenv("RANK", "0")) == 0
         if is_main_rank:
-            # What the policy was trained in, for its evaluations (scripts/evaluation/training_run.py).
+            # What the policy was trained in, for its evaluations (scripts/evaluation/training_run.py):
+            # the recipe and overrides, and the env config they resolved to (task.yaml <- recipe <-
+            # command line), so an evaluation rebuilds this world even after task.yaml has changed.
             import json
 
+            from isaaclab.utils import replace_slices_with_strings
+
             os.makedirs(hydra_run_dir, exist_ok=True)
+            run_info = {"task": args_cli.task, "experiment": args_cli.experiment, "overrides": hydra_args}
+            try:
+                run_info["env"] = replace_slices_with_strings(env_cfg.to_dict())
+                json.dumps(run_info["env"])
+            except (TypeError, ValueError) as exc:  # an evaluation then composes the recipe again
+                run_info.pop("env", None)
+                print(f"[train] run.json without the resolved env config: {exc}", flush=True)
             with open(os.path.join(hydra_run_dir, "run.json"), "w") as f:
-                json.dump({"task": args_cli.task, "experiment": args_cli.experiment, "overrides": hydra_args}, f, indent=1)
+                json.dump(run_info, f, indent=1)
 
         rl_device = args_cli.rl_device
         if args_cli.distributed:
