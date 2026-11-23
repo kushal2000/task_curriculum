@@ -48,8 +48,6 @@ class PointCloudCfg:
     pointnet_widths: tuple[int, ...] = (32, 64, 128)
     """The per-point MLP of each PointNet (actor: live and goal). At 24576 envs x 128 points the
     training update is dominated by it: (64, 128, 256) costs ~1.7x as much."""
-    compile_pointnet: bool = True
-    """torch.compile the PointNets' per-point MLP (student.PointNet): 2.8x faster training update."""
     scale: float = 10.0
     """Every point is ``(xyz - crop box centre) * scale``."""
     # Camera errors, per episode (cloth dr/pointcloud.yaml, version C), and the cloud's delay.

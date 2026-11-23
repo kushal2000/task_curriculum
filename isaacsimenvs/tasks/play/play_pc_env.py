@@ -61,7 +61,7 @@ def pc_layout(cfg, num_joints: int) -> dict:
         "n_critic_state": compute_obs_dim(critic, num_joints), "n_critic_points": int(pc.n_critic),
         "critic_dim": compute_obs_dim(critic, num_joints) + 6 * int(pc.n_critic),
         "teacher_dim": compute_obs_dim(cfg.obs.obs_list, num_joints),
-        "widths": [int(w) for w in pc.pointnet_widths], "compile": bool(pc.compile_pointnet),
+        "widths": [int(w) for w in pc.pointnet_widths],
     }
 
 

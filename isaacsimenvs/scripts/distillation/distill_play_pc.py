@@ -122,7 +122,7 @@ def main() -> None:
         teacher = TeacherNet(ckpt["model"]).to(device).eval()
         if teacher.obs_dim != lay["teacher_dim"]:
             raise ValueError(f"teacher reads {teacher.obs_dim} columns, the env's teacher vector has {lay['teacher_dim']}")
-        net_args = {"n_live": lay["n_live"], "widths": list(lay["widths"]), "compile": bool(lay["compile"])}
+        net_args = {"n_live": lay["n_live"], "widths": list(lay["widths"])}
         student = SplitStudentNet(n_p, num_actions, 3, int(aux_cols.numel()), **net_args).to(device)
         first_iter = 0
         if args.student:
