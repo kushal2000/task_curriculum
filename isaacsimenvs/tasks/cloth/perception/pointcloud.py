@@ -364,9 +364,10 @@ class PointCloud:
         pick = use_b.unsqueeze(-1)
         ray = torch.nn.functional.normalize(pts - torch.where(pick, cams[:, 1:2], cams[:, 0:1]), dim=-1)
         pts = pts + ray * (torch.randn(seen.shape, device=dev) * self.depth_std[sl].unsqueeze(1)).unsqueeze(-1)
-        rel, cr, ct = pts - self.centre, self.calib_r[sl], self.calib_t[sl]
-        pts = torch.where(pick, torch.matmul(rel, cr[:, 1].transpose(1, 2)) + ct[:, 1:2],
-                          torch.matmul(rel, cr[:, 0].transpose(1, 2)) + ct[:, 0:1]) + self.centre
+        if float(c.calib_rot_deg) != 0.0 or any(float(v) != 0.0 for v in c.calib_xyz):   # else identity: skipped
+            rel, cr, ct = pts - self.centre, self.calib_r[sl], self.calib_t[sl]
+            pts = torch.where(pick, torch.matmul(rel, cr[:, 1].transpose(1, 2)) + ct[:, 1:2],
+                              torch.matmul(rel, cr[:, 0].transpose(1, 2)) + ct[:, 0:1]) + self.centre
         ok = seen & (torch.rand(seen.shape, device=dev) >= self.drop_p[sl].unsqueeze(1))
         ok = ok & ((pts >= self.box_lo) & (pts <= self.box_hi)).all(dim=-1) & torch.isfinite(pts).all(dim=-1)
         if self.manipuland_only:            # the robot still occludes, but its own points are not kept

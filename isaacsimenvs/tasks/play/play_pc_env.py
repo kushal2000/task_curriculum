@@ -139,6 +139,11 @@ class PlayPCEnv(PlayEnv):
     # ------------------------------------------------------------------ observations
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
+        if getattr(self, "_pc_ready", False):
+            # Play's builder fills only the fields this task reads (no stacked tensors of its own); the
+            # object / keypoint fields only for the critic or the teacher.
+            self._obs_fields_only = True
+            self._obs_need_object = bool(tuple(self.cfg.pointcloud.extra_obs))
         base = super()._get_observations()                       # fills self._obs_fields
         if not getattr(self, "_pc_ready", False):
             return base

@@ -408,6 +408,12 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         (env.num_envs, NUM_FINGERTIPS),
     )
 
+    # A task that assembles its own observation from env._obs_fields (play_pc_env) may need only the
+    # proprioceptive fields (no critic / teacher): then the object, goal and keypoint fields are skipped.
+    if not getattr(env, "_obs_need_object", True):
+        return _proprio_fields_only(env, joint_pos, joint_vel, prev_targets_canon, palm_pos, palm_pos_obs,
+                                    palm_rot, palm_vel, ft_pos_w, env_origins)
+
     obj_pos = env.object.data.root_pos_w - env_origins
     obj_rot = env.object.data.root_quat_w  # wxyz
     obj_linvel = env.object.data.root_lin_vel_w
@@ -500,6 +506,12 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     if point_mode and dr.use_obs_delay:
         _delay_proprio_fields(env, obs_noisy, noisy_obj_kp, palm_pos - palm_pos_obs)
 
+    # Kept for a task that assembles its own observation from these fields (play_pc_env); such a task
+    # sets env._obs_fields_only and Play's own stacked tensors are not built.
+    env._obs_fields = (obs_clean, obs_noisy)
+    if getattr(env, "_obs_fields_only", False):
+        return {}
+
     state_tensor = _stack_obs_dict(obs_clean, env.cfg.obs.state_list)
     policy_tensor = _stack_obs_dict(obs_noisy, env.cfg.obs.obs_list)
 
@@ -509,10 +521,31 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     clip = env.cfg.obs.clamp_abs_observations
     policy_tensor = policy_tensor.clamp(-clip, clip)
     state_tensor = state_tensor.clamp(-clip, clip)
-
-    # Kept for a task that assembles its own observation from these fields (play_pc_env).
-    env._obs_fields = (obs_clean, obs_noisy)
     return {"policy": policy_tensor, "critic": state_tensor}
+
+
+def _proprio_fields_only(env, joint_pos, joint_vel, prev_targets_canon, palm_pos, palm_pos_obs, palm_rot,
+                         palm_vel, ft_pos_w, env_origins) -> dict:
+    """``build_observations`` for a task that reads only the proprioceptive fields (``env._obs_fields``,
+    clean and noisy, with the same joint noise); the stacked tensors are not built."""
+    dr = env.cfg.domain_randomization
+    obs_clean = {
+        "joint_pos": joint_pos,
+        "joint_vel": joint_vel,
+        "prev_action_targets": prev_targets_canon,
+        "palm_pos": palm_pos_obs,
+        "palm_rot": convert_quat(palm_rot, to="xyzw"),
+        "palm_vel": palm_vel,
+        "fingertip_pos_rel_palm": (ft_pos_w - env_origins.unsqueeze(1)) - palm_pos.unsqueeze(1),
+    }
+    obs_noisy = dict(obs_clean)
+    if dr.joint_velocity_obs_noise_std > 0:
+        obs_noisy["joint_vel"] = joint_vel + torch.randn_like(joint_vel) * dr.joint_velocity_obs_noise_std
+    if dr.joint_pos_obs_noise_std > 0:
+        span = env._joint_upper_canon - env._joint_lower_canon
+        obs_noisy["joint_pos"] = joint_pos + torch.randn_like(joint_pos) * dr.joint_pos_obs_noise_std * 2.0 / span
+    env._obs_fields = (obs_clean, obs_noisy)
+    return {}
 
 
 def _student_proprio_dict(env) -> dict[str, torch.Tensor]:
