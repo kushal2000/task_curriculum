@@ -143,6 +143,8 @@ def main() -> None:
     parser.add_argument("--pc_init_student", default=None, help="Start the actor from this distilled student (.pth)")
     parser.add_argument("--pc_init_sigma", default=None, help="Take the exploration sigma of this state-policy checkpoint")
     parser.add_argument("--pc_freeze_norm", action="store_true", help="Keep the proprio normaliser fixed")
+    parser.add_argument("--pc_actor_freeze_epochs", type=int, default=0,
+                        help="Critic warm-up: the actor is not updated for this many epochs (a finetune from a student)")
     parser.add_argument("--critic_checkpoint", default=None, help="Start the central value network from this full checkpoint")
     # --- Video ---
     parser.add_argument("--capture_video", action="store_true", help="Attach recording camera; implies --enable_cameras")
@@ -418,6 +420,7 @@ def main() -> None:
 
         if pointcloud_actor:
             pc_rl.patch_gradient_step()
+            pc_rl.patch_actor_freeze(args_cli.pc_actor_freeze_epochs)
 
         runner = Runner(MultiObserver(observers))
         # Co-locate rl_games artifacts (checkpoints, summaries) with the Hydra

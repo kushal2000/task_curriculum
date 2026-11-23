@@ -25,7 +25,8 @@ from torch import nn
 
 from isaacsimenvs.scripts.distillation.student import legacy_env_overrides
 
-__all__ = ["register_network", "student_from_rl", "load_student_any", "write_student_env", "patch_gradient_step"]
+__all__ = ["register_network", "student_from_rl", "load_student_any", "write_student_env", "patch_gradient_step",
+           "patch_actor_freeze"]
 
 FEAT_DIM = 64
 
@@ -65,6 +66,44 @@ def patch_gradient_step() -> None:
 
     step._pc_patched = True
     A2CBase.trancate_gradients_and_step = step
+
+
+def patch_actor_freeze(epochs: int) -> None:
+    """Critic warm-up for a finetune from a distilled actor: for the first ``epochs`` epochs the actor's
+    optimizer step is skipped (its gradients computed and dropped: the policy stays the student) while
+    the central value network trains as usual; its learning rate is held at the configured one (the
+    adaptive schedule would raise it every minibatch on the zero KL). Without it the first PPO update,
+    with a fresh critic's advantages, moved a DAgger student by KL 67 at lr 1e-4 (2026-11-23).
+    Call after ``patch_gradient_step``."""
+    from rl_games.common.a2c_common import A2CBase
+
+    n = int(epochs)
+    if n <= 0 or getattr(A2CBase.trancate_gradients_and_step, "_freeze_patched", False):
+        return
+    step0, update_lr0 = A2CBase.trancate_gradients_and_step, A2CBase.update_lr
+
+    def frozen(self) -> bool:
+        if not hasattr(self, "_freeze_lr0"):
+            self._freeze_lr0 = float(self.last_lr)
+            print(f"[pc_rl] actor frozen for {n} epochs (critic warm-up), lr held at {self._freeze_lr0:g}", flush=True)
+        return int(self.epoch_num) <= n
+
+    def step(self):
+        if frozen(self):
+            self.optimizer.zero_grad(set_to_none=True)
+            return torch.ones(1, device=self.ppo_device)
+        return step0(self)
+
+    def update_lr(self, lr):
+        if frozen(self):
+            self.last_lr = self._freeze_lr0
+            lr = self._freeze_lr0
+        return update_lr0(self, lr)
+
+    step._pc_patched = getattr(step0, "_pc_patched", False)
+    step._freeze_patched = True
+    A2CBase.trancate_gradients_and_step = step
+    A2CBase.update_lr = update_lr
 
 
 def register_network() -> None:
