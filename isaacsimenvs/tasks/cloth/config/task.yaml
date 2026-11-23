@@ -182,7 +182,11 @@ vbd:
     edge_kd: 1.0e-3
     soft_contact_ke: 5.0e+2
     soft_contact_kd: 5.0e-3
-    soft_contact_mu: 0.25
+    soft_contact_mu: 0.25                # the cloth's own mu: cloth-rigid sqrt(0.25 x shape mu), cloth-cloth 0.25
+    cloth_cloth_friction: null           # set: cloth on cloth is this (null: soft_contact_mu, 0.25)
+    cloth_table_friction: null           # set: cloth on table is this (null: sqrt(0.25 x table_friction), 0.35)
+    cloth_fingertip_friction: null       # set: cloth on fingertips is this (null: sqrt(0.25 x finger_tip_friction), 0.61)
+    cloth_robot_friction: null           # set: cloth on palm / phalanges is this (null: sqrt(0.25 x robot_friction), 0.35)
     rigid_contact_k_start: 1.0e+2
     rigid_avbd_beta: 5.0e+5
     enable_self_contact: true

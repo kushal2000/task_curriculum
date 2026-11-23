@@ -1327,8 +1327,11 @@ def restore_placeholder_inertia(env, *, inertia: float = NEGLIGIBLE_INERTIA) -> 
 #
 
 def apply_newton_materials(env) -> None:
-    """Robot, table and goal-marker shape friction on the Newton model: ``assets.robot_friction``,
-    ``assets.finger_tip_friction`` on the fingertip links. Before ``notify_solver``."""
+    """Shape friction on the Newton model: ``assets.robot_friction`` on every shape,
+    ``assets.finger_tip_friction`` on the fingertip links, ``assets.table_friction`` on the table.
+    Before ``notify_solver``."""
+    import re
+
     import warp as wp
 
     fingertip_link_names = set(env.robot_spec.fingertip_link_names)
@@ -1336,6 +1339,8 @@ def apply_newton_materials(env) -> None:
 
     robot_friction = float(assets_cfg.robot_friction)
     fingertip_friction = float(assets_cfg.finger_tip_friction)
+    table_friction = float(assets_cfg.table_friction)
+    table_path = re.compile(r"/World/envs/env_[^/]+/Table(?:/|$)")
 
     # `sim.physics_manager` is the manager *class*, not an instance, so the `model`
     # property is not usable here; the class-level accessor is get_model().
@@ -1356,7 +1361,7 @@ def apply_newton_materials(env) -> None:
     mu[:] = robot_friction
     restitution[:] = 0.0
 
-    n_fingertip = 0
+    n_fingertip = n_table = 0
     for shape_idx in range(len(mu)):
         body_idx = int(shape_body[shape_idx])
         if body_idx < 0:
@@ -1365,7 +1370,17 @@ def apply_newton_materials(env) -> None:
         if any(name in body_name for name in fingertip_link_names):
             mu[shape_idx] = fingertip_friction
             n_fingertip += 1
+        elif table_path.search(str(model.body_label[body_idx])):
+            # Until 2026-11-23 the table kept robot_friction here and table_friction was read by the
+            # PhysX backend only (both 0.5 in every VBD config, so no result moved).
+            mu[shape_idx] = table_friction
+            n_table += 1
 
+    if n_table == 0:
+        raise RuntimeError(
+            "No table shapes matched /World/envs/env_*/Table; assets.table_friction would silently not "
+            f"apply. Body labels look like {[str(x) for x in model.body_label[:3]]}."
+        )
     if n_fingertip == 0:
         raise RuntimeError(
             "No fingertip shapes matched the robot's fingertip_link_names in Model.shape_label; "
@@ -1380,7 +1395,7 @@ def apply_newton_materials(env) -> None:
 
     print(
         f"[material_patch] friction set: {len(mu)} shapes at mu={robot_friction}, "
-        f"{n_fingertip} fingertip shapes at mu={fingertip_friction}",
+        f"{n_fingertip} fingertip shapes at mu={fingertip_friction}, {n_table} table shapes at mu={table_friction}",
         flush=True,
     )
 

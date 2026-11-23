@@ -53,6 +53,12 @@ class ClothBackend:
 
     # ------------------------------------------------------------------ construction
 
+    def construction_context(self):
+        """Hooks the backend needs active while ``DirectRLEnv.__init__`` builds the simulation."""
+        from contextlib import nullcontext
+
+        return nullcontext()
+
     def build_scene(self, scene, sim) -> None:
         """Spawn every asset; the scene builder ends with :meth:`install_sheet`."""
         self.scene, self.sim = scene, sim

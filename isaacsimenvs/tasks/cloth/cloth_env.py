@@ -58,7 +58,8 @@ class ClothEnv(DirectRLEnv):
             cfg.observation_space = obs_dim([f for f in cfg.obs.obs_list if f not in OBJECT_FIELDS], n_joints) + m * d + m
         cfg.state_space = obs_dim(cfg.obs.state_list, n_joints)
         self.backend = backend(cfg, self.robot_spec)
-        super().__init__(cfg, render_mode, **kwargs)  # builds the scene (_setup_scene)
+        with self.backend.construction_context():
+            super().__init__(cfg, render_mode, **kwargs)  # builds the scene (_setup_scene)
         self._check_env_order()
         dev, n = self.device, self.num_envs
         self.robot_layout = RobotLayout(

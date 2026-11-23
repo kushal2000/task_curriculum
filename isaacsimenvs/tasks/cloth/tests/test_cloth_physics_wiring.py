@@ -140,3 +140,20 @@ def test_yaml_numbers_are_numbers():
             default = getattr(defaults, key, None)
             if isinstance(default, (int, float)) and not isinstance(default, bool):
                 assert not isinstance(value, str), f"{path.name}: cloth.{key} = {value!r} parsed as str, not a number"
+
+
+def test_cloth_friction_defaults_and_cloth_cloth_override():
+    """null leaves every cloth contact to sqrt(soft_contact_mu x shape mu); cloth_cloth_friction
+    becomes the cloth's mu in the model (`backends/vbd/friction.py` keeps cloth-hand where it was)."""
+    from isaacsimenvs.tasks.cloth.backends.vbd import friction
+    from isaacsimenvs.tasks.cloth.backends.vbd.physics import build_physics
+    from isaacsimenvs.tasks.cloth.config import vbd_cloth_env_cfg
+
+    cfg = vbd_cloth_env_cfg()
+    for field in ("cloth_cloth_friction", *(f for f, _ in friction.CONTACTS)):
+        assert getattr(cfg.cloth, field) is None, field
+    assert not friction.used(cfg.cloth) and friction.cloth_mu(cfg.cloth) == 0.25
+
+    cfg.cloth.cloth_cloth_friction = 0.4
+    assert friction.used(cfg.cloth)
+    assert build_physics(cfg.cloth, cfg.newton, num_envs=4).solver_cfg.model_cfg.soft_contact_mu == 0.4

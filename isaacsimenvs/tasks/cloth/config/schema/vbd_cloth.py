@@ -213,7 +213,35 @@ class VbdClothCfg(ClothCfg):
     Table 2's `robot_friction` 1.5 / `table_friction` 0.0 are NOT copied: their env overwrites
     every shape's mu to 1.0 immediately after building the table, so those two rows describe a
     configuration that does not run. Our per-shape frictions stay as the rigid-tool task sets
-    them."""
+    them.
+
+    The cloth's own mu, in every contact the cloth makes: cloth-rigid friction is
+    ``sqrt(soft_contact_mu * shape mu)`` and cloth-cloth is ``soft_contact_mu``. One number, so it moves
+    all of them together; the ``cloth_*_friction`` below set one contact directly."""
+
+    cloth_cloth_friction: float | None = MISSING
+    """The friction of cloth on cloth (a folded flap on the lower half). ``null``: ``soft_contact_mu``.
+
+    Set, it becomes the cloth's mu, and the cloth solver's copy of the shapes' mu is scaled by
+    ``soft_contact_mu / cloth_cloth_friction`` so cloth-hand and cloth-table stay as they were
+    (``backends/vbd/friction.py``)."""
+
+    cloth_table_friction: float | None = MISSING
+    """The friction of cloth on the table. ``null``: ``sqrt(soft_contact_mu * assets.table_friction)``
+    (0.35 at the task values). A slide-onset measurement gives tan(angle).
+
+    Set, the table's mu in the cloth solver's copy is solved so the cloth-table contact comes out at
+    exactly this value. The hand against the table (MJWarp) keeps ``assets.table_friction``."""
+
+    cloth_fingertip_friction: float | None = MISSING
+    """The friction of cloth on the five fingertips. ``null``: ``sqrt(soft_contact_mu *
+    assets.finger_tip_friction)`` (0.61 at the task values). Set, as ``cloth_table_friction``; the
+    fingertips against the table (MJWarp) keep ``assets.finger_tip_friction``."""
+
+    cloth_robot_friction: float | None = MISSING
+    """The friction of cloth on every other robot shape the cloth feels (palm and phalanges,
+    ``proxy_links``). ``null``: ``sqrt(soft_contact_mu * assets.robot_friction)`` (0.35 at the task
+    values). Set, as ``cloth_table_friction``; MJWarp keeps ``assets.robot_friction``."""
 
     rigid_contact_k_start: float = MISSING
     """Body-particle contact penalty SEED for AVBD ramping [N/m].

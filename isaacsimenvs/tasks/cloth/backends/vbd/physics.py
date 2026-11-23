@@ -42,6 +42,7 @@ def build_physics(cloth, newton_cfg, num_envs: int, robot_spec=None):
     )
 
     from isaacsimenvs.robots import FLEXIV_WUJI_RIGHT
+    from isaacsimenvs.tasks.cloth.backends.vbd.friction import cloth_mu
 
     robot_spec = robot_spec or FLEXIV_WUJI_RIGHT
     rigid_bodies = [r"/World/envs/env_.*/Robot"]
@@ -148,7 +149,8 @@ def build_physics(cloth, newton_cfg, num_envs: int, robot_spec=None):
             # `soft_contact_kd` was previously left at the `NewtonModelCfg` default (1.0e-2)
             # because this call only passed `ke` and `mu`.
             soft_contact_kd=cloth.soft_contact_kd,
-            soft_contact_mu=cloth.soft_contact_mu,
+            # The cloth's mu in every VBD contact: cloth_cloth_friction when set (`friction.py`).
+            soft_contact_mu=cloth_mu(cloth),
         ),
     )
 

@@ -39,13 +39,29 @@ __all__ = [
 
 @configclass
 class AssetsCfg:
-    """The robot and table URDFs, and their contact frictions."""
+    """The robot and table URDFs, and their contact frictions.
+
+    The three frictions are per-SHAPE coefficients (``shape_mu``), not the friction of a contact.
+    A contact mixes the two sides' coefficients, by a rule that depends on who solves it:
+
+    * VBD (cloth-rigid): ``sqrt(cloth.soft_contact_mu * shape_mu)`` (geometric mean), unless
+      ``cloth.cloth_*_friction`` (cloth, table, fingertip, robot) set that contact directly.
+    * MJWarp (rigid-rigid, e.g. hand-table): ``max(shape_mu_1, shape_mu_2)`` (MuJoCo, equal priority).
+    * PhysX (the rigid sheet): ``physx_chain.friction_model`` decides which of the three are used
+      and with which combine mode (``schema/rigid_cloth.py``).
+    """
 
     robot_urdf: str = MISSING
     table_urdf: str = MISSING
     robot_friction: float = MISSING
+    """Every robot link that is not a fingertip (arm, palm, proximal / middle phalanges). VBD: the
+    cloth feels the palm and phalanges through it (``cloth.proxy_links``)."""
     finger_tip_friction: float = MISSING
+    """The five distal links (``RobotSpec.fingertip_link_names``). VBD: cloth-fingertip friction
+    ``sqrt(0.25 x 1.5)`` = 0.61 at the task values."""
     table_friction: float = MISSING
+    """The table's shapes. VBD: cloth-table ``sqrt(0.25 x 0.5)`` = 0.35 at the task values, unless
+    ``cloth.cloth_table_friction`` sets it directly; the hand against the table (MJWarp) always uses it."""
 
 
 @configclass

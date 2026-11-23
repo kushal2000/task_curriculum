@@ -17,6 +17,7 @@ import torch
 from isaaclab.utils.math import quat_from_matrix
 
 from isaacsimenvs.tasks.cloth.backends.base import ClothBackend, reset_yaw
+from isaacsimenvs.tasks.cloth.backends.vbd import friction
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
     install_post_construction_patches,
     install_pre_construction_patches,
@@ -53,8 +54,20 @@ class VbdBackend(ClothBackend):
             physics_cfg=build_physics(cfg.cloth, cfg.newton, int(cfg.scene.num_envs), robot_spec),
         )
 
+    def construction_context(self):
+        # The cloth solver's own copy of the shapes' mu, when a cloth.cloth_*_friction is set.
+        return friction.construction_hooks(self.cfg.cloth)
+
     def finish_setup(self) -> None:
+        from isaaclab_newton.physics import NewtonManager
+
+        c = self.cfg.cloth
+        # Before install_post_construction_patches: its notify_solver refreshes the model views,
+        # which is when the cloth's copy is re-written from the final shape frictions.
+        tips = self.robot_spec.fingertip_link_names
+        friction.install(NewtonManager._solver, c, tips)
         install_post_construction_patches(self)
+        print(f"[cloth] friction: {friction.report(NewtonManager._solver, tips)}", flush=True)
 
     # ------------------------------------------------------------------ the sheet, for the task
 
