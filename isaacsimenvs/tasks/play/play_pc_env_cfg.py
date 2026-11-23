@@ -30,11 +30,14 @@ __all__ = ["PlayPCEnvCfg", "PointCloudCfg"]
 class PointCloudCfg:
     """What the actor, the critic and the teacher read (``play_pc_env``)."""
 
-    n_points: int = 1024
+    n_points: int = 64
     """Live (camera) points per step."""
+    tool_only: bool = True
+    """The live cloud keeps only the tool's points (as after segmentation on the real setup); the robot
+    still occludes the tool in the camera model, but its points are dropped. Its pose is in proprio."""
     n_object_cand: int = 768
     """Tool surface candidates drawn per step before the camera model (with the robot's)."""
-    n_goal: int = 256
+    n_goal: int = 64
     """Goal points: the tool's whole surface at the goal pose, clean, redrawn every step."""
     n_critic: int = 256
     """Points per cloud of the critic's clean current and goal clouds (the scored sample set)."""

@@ -228,6 +228,9 @@ class PointCloud:
         self.last_cloth_share = torch.zeros(n, device=dev)
         self.last_visible_frac = torch.ones(n, device=dev)
         self.last_count = torch.zeros(n, device=dev)
+        self.manipuland_only = False
+        """Keep only the sheet's (manipuland's) points in the live cloud, as after segmentation; the
+        robot is still drawn into the depth images, so it still hides what is behind it."""
 
     def _rotations(self, cams: torch.Tensor) -> torch.Tensor:
         if self.rots0 is not None:
@@ -323,6 +326,8 @@ class PointCloud:
                           torch.matmul(rel, cr[:, 0].transpose(1, 2)) + ct[:, 0:1]) + self.centre
         ok = seen & (torch.rand(seen.shape, device=dev) >= self.drop_p[sl].unsqueeze(1))
         ok = ok & ((pts >= self.box_lo) & (pts <= self.box_hi)).all(dim=-1) & torch.isfinite(pts).all(dim=-1)
+        if self.manipuland_only:            # the robot still occludes, but its own points are not kept
+            ok[:, k:] = False
         # n_points candidates, probability proportional to area (Gumbel top-k = weighted, no repeats).
         gumbel = -torch.log(-torch.log(torch.rand(seen.shape, device=dev).clamp(1e-9, 1.0 - 1e-9)))
         key = torch.where(ok, torch.log(weight.clamp(min=1e-12)) + gumbel, torch.full_like(gumbel, float("-inf")))

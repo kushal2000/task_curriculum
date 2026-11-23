@@ -7,9 +7,10 @@ Three observations per step:
   - proprio: the teacher's proprioceptive fields (every ``obs_list`` field but the tool's), with
     joint noise, one lag per episode (0..``proprio_delay_max``);
   - points ``(n_points + n_goal, 3)``: first the LIVE cloud -- what the two D415s see of the tool's
-    whole surface and of the robot (``tasks/cloth/perception/pointcloud.PointCloud``: occlusion,
-    per-episode camera errors, depth noise, drops, a per-episode delay, the crop box over the
-    table), no labels; then the GOAL cloud -- the tool's whole surface at the goal pose, clean,
+    whole surface (``tasks/cloth/perception/pointcloud.PointCloud``: occlusion by the robot and the
+    tool itself, per-episode camera errors, depth noise, drops, a per-episode delay, the crop box over
+    the table; ``tool_only``: the robot's own points dropped, as after segmentation), no labels;
+    then the GOAL cloud -- the tool's whole surface at the goal pose, clean,
     redrawn every step (no correspondence with the live points);
   - mask: the valid slots.
 
@@ -103,12 +104,13 @@ class PlayPCEnv(PlayEnv):
         surf = robot_surface.load(self.cfg.assets.robot_urdf, list(self.robot.body_names))
         table_z = float(self.cfg.reset.table_reset_z) + float(self._table_half_height)
         self.cloud = _ToolCloud(setup, n, 2, cams, table_z, surf["body"], surf["offset"], surf["weight"], dev, cam_rots=rots)
+        self.cloud.manipuland_only = bool(pc.tool_only)
         self.proprio_delay = DelayLine(n, int(pc.proprio_delay_max), self.layout["n_proprio"], dev)
         self._proprio_lag = torch.zeros(n, dtype=torch.long, device=dev)
         self._goal_dist_mean = torch.zeros(n, device=dev)
         self._pc_ready = True
         print(
-            f"[play_pc] {setup.n_points} live points ({setup.n_cloth_cand} tool + {self.cloud.n_robot} robot candidates, "
+            f"[play_pc] {setup.n_points} live points ({'tool only' if pc.tool_only else 'tool + robot'}; {setup.n_cloth_cand} tool + {self.cloud.n_robot} robot candidates, "
             f"crop box {self.cloud.box_lo.tolist()} .. {self.cloud.box_hi.tolist()}), {pc.n_goal} goal points, "
             f"critic {pc.n_critic}+{pc.n_critic} clean points, {len(self._object_urdf_paths)} tools, "
             f"policy {self.layout['policy_dim']} / critic {self.layout['critic_dim']} / teacher {self.layout['teacher_dim']}",

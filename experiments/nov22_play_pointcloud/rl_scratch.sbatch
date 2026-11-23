@@ -9,7 +9,8 @@
 #SBATCH --time=72:00:00
 # SAPG from scratch on the point-cloud Play task: actor = proprio + live/goal clouds (one PointNet each,
 # pc_rl.py), critic = state + clean current/goal clouds (MLP), Play's tolerance curriculum on the surface
-# distance. 24576 envs = 6 SAPG blocks of 4096; minibatch 16384 (the per-point MLP runs on every point).
+# distance. 24576 envs = 6 SAPG blocks of 4096; Play's SAPG settings otherwise (minibatch 98304). The actor
+# reads 64 camera points of the tool (robot points dropped) + 64 goal points.
 #   sbatch --output=experiments/nov22_play_pointcloud/slurm_%j.out experiments/nov22_play_pointcloud/rl_scratch.sbatch [overrides]
 set -uo pipefail
 cd /share/portal/kk837/task_curriculum
@@ -21,5 +22,4 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 exec .venv/isaacsim/bin/python -m isaacsimenvs.scripts.training.train \
     --task Isaacsimenvs-PlayFlexivWujiRightHumanLikePC-Direct-v0 --agent rl_games_sapg_cfg_entry_point --headless \
     --capture_viewer --wandb_activate --wandb_project "${WANDB_PROJECT:-play_pc}" --wandb_name "$NAME" \
-    env.scene.num_envs="${ENVS:-24576}" agent.params.seed="${SEED:-1}" agent.params.config.name="$NAME" \
-    agent.params.config.minibatch_size=16384 agent.params.config.central_value_config.minibatch_size=16384 "$@"
+    env.scene.num_envs="${ENVS:-24576}" agent.params.seed="${SEED:-1}" agent.params.config.name="$NAME" "$@"
