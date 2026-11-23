@@ -1,7 +1,7 @@
 """Distil the keypoint Play prior into a point-cloud student on the point-cloud Play task (online DAgger).
 
     python -m isaacsimenvs.scripts.distillation.distill_play_pc --headless \
-        --teacher pretrained_policy/flexiv_wuji/model.pth --out outputs/distill_play/<name> \
+        --teacher pretrained_policy/flexiv_wuji/model.pth --out debug_outputs/train_logs/nov/<date>_<name>_<job> \
         --num_envs 24576 --wandb_project play_pc --wandb_name <name>
 
 The env (``Isaacsimenvs-PlayFlexivWujiRightHumanLikePC-Direct-v0``, ``tasks/play/play_pc_env.py``) gives

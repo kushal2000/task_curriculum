@@ -1,7 +1,7 @@
 """Render a point-cloud Play student in Isaac Sim (RTX camera) to an mp4: one env, one tool.
 
     python -m isaacsimenvs.scripts.visualization.policies.render_play_pc --headless --enable_cameras \
-        --student outputs/distill_play/<run>/student_last.pth --out <video>.mp4 [--tool 0] [--steps 900]
+        --student debug_outputs/train_logs/nov/<run>/student_last.pth --out <video>.mp4 [--tool 0] [--steps 900]
 
 The student (``student.SplitStudentNet``, settings from its checkpoint) drives alone, deterministic, with
 the env's DR as trained (camera errors, delays, noise). The robot keeps its visual meshes
