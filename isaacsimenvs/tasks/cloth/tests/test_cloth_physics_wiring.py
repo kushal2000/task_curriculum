@@ -164,12 +164,11 @@ def test_eval_vbd_yaml_sets_the_null_frictions():
     alone refuses a float for a None field, so the loader sets those first (tasks/loader.py)."""
     from pathlib import Path
 
-    import yaml
-
     from isaacsimenvs.tasks.cloth.config import vbd_cloth_env_cfg
     from isaacsimenvs.tasks.loader import _set_null_fields
+    from isaacsimenvs.tasks.recipes import load_recipe
 
-    env = yaml.safe_load((Path(__file__).resolve().parents[1] / "config/eval/vbd.yaml").read_text())["env"]
+    env = load_recipe(str(Path(__file__).resolve().parents[1] / "config/eval/vbd.yaml"))["env"]
     cfg = vbd_cloth_env_cfg()
     _set_null_fields(cfg, env)
     cfg.from_dict(env)
