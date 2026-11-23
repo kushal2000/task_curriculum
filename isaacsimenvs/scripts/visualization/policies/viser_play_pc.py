@@ -374,8 +374,10 @@ def main() -> None:
             s["goals"] += int(ep_goals[e])
             ep_goals[e] = 0
         state["t"] += 1
+        # The scene at 30 Hz (every other 60 Hz policy step): drawing costs ~16 ms, the env ~25 ms.
+        if state["t"] % 2 == 0 or state["step_once"]:
+            draw()
         state["step_once"] = False
-        draw()
         t3 = time.time()
         for k, v in (("policy", t1 - t0), ("env", t2 - t1), ("draw", t3 - t2)):
             timing[k] = 0.95 * timing.get(k, v) + 0.05 * v

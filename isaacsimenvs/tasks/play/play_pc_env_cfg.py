@@ -52,10 +52,13 @@ class PointCloudCfg:
     """torch.compile the PointNets' per-point MLP + pool (student.PointNet): 1.5x faster update."""
     scale: float = 10.0
     """Every point is ``(xyz - crop box centre) * scale``."""
-    # Camera errors, per episode (cloth dr/pointcloud.yaml, version C), and the cloud's delay.
-    cam_pos_noise: tuple[float, float, float] = (0.05, 0.05, 0.05)
-    calib_xyz: tuple[float, float, float] = (0.015, 0.015, 0.01)
-    calib_rot_deg: float = 2.0
+    # Camera errors, per episode, and the cloud's delay. The extrinsics are known (calibrated), so the
+    # cameras sit where they are and each camera's cloud is not shifted or turned: no cam_pos_noise /
+    # calib_* (the cloth students' version C has +-5 cm / +-1.5 cm / 2 deg, a cloud bias as large as
+    # this task's 1.5 cm success threshold against a clean goal cloud). Depth noise, drops, delay stay.
+    cam_pos_noise: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    calib_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    calib_rot_deg: float = 0.0
     depth_noise_std_range: tuple[float, float] = (0.001, 0.004)
     drop_prob_range: tuple[float, float] = (0.0, 0.3)
     delay_max: int = 6
