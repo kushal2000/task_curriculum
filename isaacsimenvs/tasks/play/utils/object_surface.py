@@ -35,7 +35,7 @@ import torch
 
 __all__ = [
     "Primitive", "parse_primitives", "sample_surface", "surface_area", "symmetry_rotations",
-    "ShapeBank", "quat_from_matrix", "matrix_from_quat",
+    "ShapeBank", "EnvShapes", "quat_from_matrix", "matrix_from_quat",
 ]
 
 BOX, CAPSULE = 0, 1
@@ -236,13 +236,20 @@ def symmetry_rotations(prims: list[Primitive], samples: np.ndarray, centre: np.n
 # ----------------------------------------------------------------------------
 
 
+_EYE: dict = {}
+
+
 def matrix_from_quat(q: torch.Tensor) -> torch.Tensor:
-    w, x, y, z = q.unbind(-1)
-    return torch.stack((
-        1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y),
-        2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x),
-        2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y),
-    ), dim=-1).view(*q.shape[:-1], 3, 3)
+    """Rotation matrix of unit wxyz quaternions ``(..., 4)`` -> ``(..., 3, 3)``: each basis vector
+    rotated as ``e + w t + v x t``, ``t = 2 v x e`` -- six kernels (the nine scalar entries spelled
+    out cost ~25)."""
+    key = (q.device, q.dtype)
+    if key not in _EYE:
+        _EYE[key] = torch.eye(3, device=q.device, dtype=q.dtype)
+    e = _EYE[key]
+    v = q[..., None, 1:].expand(*q.shape[:-1], 3, 3)                   # (..., 3 basis vectors, xyz)
+    t = 2.0 * torch.linalg.cross(v, e.expand_as(v))
+    return (e + q[..., :1, None] * t + torch.linalg.cross(v, t)).transpose(-1, -2)
 
 
 def quat_from_matrix(m: torch.Tensor) -> torch.Tensor:
@@ -376,6 +383,80 @@ class ShapeBank:
         err = torch.where(self.sym_ok[asset], err, torch.full_like(err, float("inf")))
         best = err.argmin(dim=1)
         ar = torch.arange(n, device=asset.device)
+        q = quat_from_matrix(rg[ar, best])
+        q = torch.where((q * goal_quat).sum(dim=-1, keepdim=True) < 0.0, -q, q)
+        return tg[ar, best], q
+
+
+class EnvShapes:
+    """``ShapeBank`` bound to the envs' tools: every env keeps its tool for the whole run, so its
+    primitives, scored samples, symmetries and area are gathered ONCE here instead of by ``asset`` on
+    every call, and the SDF covers both primitives in one batched pass (``ShapeBank.sdf`` loops over
+    them in Python). Same results as the ``ShapeBank`` methods with ``asset`` (tests/test_object_surface.py).
+    The per-tool pool (4096 samples) is not copied per env: ``points_w("pool")`` indexes the bank's."""
+
+    def __init__(self, bank: ShapeBank, asset: torch.Tensor) -> None:
+        self.bank, self.asset = bank, asset
+        self.rot, self.pos, self.half = bank.rot[asset], bank.pos[asset], bank.half[asset]   # (N,P,3,3) (N,P,3) (N,P,3)
+        self.is_box = (bank.kind[asset] == BOX).unsqueeze(-1)                                  # (N,P,1)
+        # An unused primitive slot never wins the min: +inf added to its distance.
+        self.pad = torch.where(bank.valid[asset], 0.0, float("inf")).unsqueeze(-1)             # (N,P,1)
+        self.fixed = bank.fixed[asset]                                                         # (N,K,3)
+        self.area = bank.area[asset]
+        self.centre = bank.centre[asset]
+        if hasattr(bank, "sym"):
+            self.sym, self.sym_ok = bank.sym[asset], bank.sym_ok[asset]
+
+    def sdf(self, x: torch.Tensor) -> torch.Tensor:
+        """``x`` (N, K, 3) in each env's tool frame -> signed distance (N, K)."""
+        local = torch.matmul(x.unsqueeze(1) - self.pos.unsqueeze(2), self.rot)                # (N,P,K,3): R^T (x - t)
+        h = self.half.unsqueeze(2)                                                             # (N,P,1,3)
+        q = local.abs() - h
+        box = torch.linalg.norm(q.clamp(min=0.0), dim=-1) + q.max(dim=-1).values.clamp(max=0.0)
+        hl = h[..., 2]
+        dz = local[..., 2] - torch.maximum(torch.minimum(local[..., 2], hl), -hl)
+        cap = torch.sqrt(local[..., 0] ** 2 + local[..., 1] ** 2 + dz ** 2) - h[..., 0]
+        return (torch.where(self.is_box, box, cap) + self.pad).min(dim=1).values
+
+    def points_w(self, pos, quat, which: str = "fixed", k: int | None = None) -> torch.Tensor:
+        """As ``ShapeBank.points_w`` for these envs."""
+        if which == "fixed":
+            local = self.fixed
+        else:
+            idx = torch.randint(0, self.bank.pool.shape[1], (self.asset.shape[0], int(k)), device=self.asset.device)
+            local = self.bank.pool[self.asset.unsqueeze(1), idx]                               # (N,k,3), one gather
+        return torch.matmul(local, matrix_from_quat(quat).transpose(1, 2)) + pos.unsqueeze(1)
+
+    def fixed_w_first(self, pos, quat, k: int) -> torch.Tensor:
+        """The first ``k`` scored samples at a pose (a uniform subset: they are in random order)."""
+        return torch.matmul(self.fixed[:, :k], matrix_from_quat(quat).transpose(1, 2)) + pos.unsqueeze(1)
+
+    def surface_distance(self, pos_a, quat_a, pos_b, quat_b) -> tuple[torch.Tensor, torch.Tensor]:
+        """As ``ShapeBank.surface_distance``; both sides in one SDF pass."""
+        ra, rb = matrix_from_quat(quat_a), matrix_from_quat(quat_b)
+        s, k = self.fixed, self.fixed.shape[1]
+        rel = torch.matmul(ra.transpose(1, 2), rb)
+        dt_ab = torch.matmul((pos_b - pos_a).unsqueeze(1), ra)                                 # (N,1,3)
+        dt_ba = torch.matmul((pos_a - pos_b).unsqueeze(1), rb)
+        x = torch.cat((torch.matmul(s, rel.transpose(1, 2)) + dt_ab, torch.matmul(s, rel) + dt_ba), dim=1)
+        d = self.sdf(x).abs()
+        da, db = d[:, :k], d[:, k:]
+        return torch.maximum(da.max(dim=1).values, db.max(dim=1).values), 0.5 * (da.mean(dim=1) + db.mean(dim=1))
+
+    def canonical_goal_pose(self, obj_pos, obj_quat, goal_pos, goal_quat, kp_offsets):
+        """As ``ShapeBank.canonical_goal_pose`` for these envs."""
+        n = obj_pos.shape[0]
+        g, c = self.sym, self.centre
+        r = matrix_from_quat(goal_quat)
+        rg = torch.matmul(r.unsqueeze(1), g)
+        shift = c.unsqueeze(1) - torch.matmul(g, c.view(n, 1, 3, 1)).squeeze(-1)
+        tg = goal_pos.unsqueeze(1) + torch.matmul(shift, r.transpose(1, 2))
+        kp_goal = torch.matmul(kp_offsets.unsqueeze(1), rg.transpose(-1, -2)) + tg.unsqueeze(2)
+        kp_obj = (torch.matmul(kp_offsets, matrix_from_quat(obj_quat).transpose(1, 2)) + obj_pos.unsqueeze(1)).unsqueeze(1)
+        err = torch.linalg.norm(kp_goal - kp_obj, dim=-1).max(dim=-1).values
+        err = torch.where(self.sym_ok, err, torch.full_like(err, float("inf")))
+        best = err.argmin(dim=1)
+        ar = torch.arange(n, device=obj_pos.device)
         q = quat_from_matrix(rg[ar, best])
         q = torch.where((q * goal_quat).sum(dim=-1, keepdim=True) < 0.0, -q, q)
         return tg[ar, best], q

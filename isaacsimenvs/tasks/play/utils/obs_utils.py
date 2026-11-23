@@ -86,6 +86,8 @@ def _perturb_quat(q_wxyz: torch.Tensor, max_deg: float) -> torch.Tensor:
     return quat_mul(dq, q_wxyz)
 
 
+from .object_surface import matrix_from_quat as _matrix_from_quat  # noqa: E402
+
 _CONSTS: dict = {}
 
 
@@ -106,12 +108,9 @@ def _apply_local_offset(
     batch_shape: tuple[int, ...],
 ) -> torch.Tensor:
     """Apply one local-frame offset to batched world poses."""
-    offset_t = _const(offset, pos_w)
-    offset_t = offset_t.expand(*batch_shape, 3)
-    shifted = quat_apply(
-        rot_wxyz.reshape(-1, 4), offset_t.reshape(-1, 3)
-    ).reshape(*batch_shape, 3)
-    return pos_w + shifted
+    # R @ offset with R from the quaternion (object_surface.matrix_from_quat: a few kernels, no
+    # expanded copies of the quaternions and the offset).
+    return pos_w + torch.matmul(_matrix_from_quat(rot_wxyz), _const(offset, pos_w).unsqueeze(-1)).squeeze(-1)
 
 
 def _keypoints_world(
@@ -120,10 +119,7 @@ def _keypoints_world(
     kp_offsets: torch.Tensor,    # (N, K, 3)
 ) -> torch.Tensor:
     """Rotate + translate object-frame keypoints."""
-    n_envs, k, _ = kp_offsets.shape
-    rot_r = center_rot.unsqueeze(1).expand(-1, k, -1).reshape(-1, 4)
-    offsets_r = kp_offsets.reshape(-1, 3)
-    return center_pos.unsqueeze(1) + quat_apply(rot_r, offsets_r).reshape(n_envs, k, 3)
+    return center_pos.unsqueeze(1) + torch.matmul(kp_offsets, _matrix_from_quat(center_rot).transpose(1, 2))
 
 
 def _episode_start(env) -> torch.Tensor:

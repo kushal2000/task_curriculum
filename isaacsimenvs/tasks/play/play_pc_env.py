@@ -35,7 +35,7 @@ from isaacsimenvs.tasks.cloth.perception.pointcloud import PointCloud, PointClou
 
 from .play_env import PlayEnv
 from .play_pc_env_cfg import PlayPCEnvCfg
-from .utils.object_surface import ShapeBank
+from .utils.object_surface import EnvShapes, ShapeBank
 from .utils.obs_utils import _episode_start, _keypoints_world, _stack_obs_dict, compute_obs_dim
 
 __all__ = ["PlayPCEnv", "OBJECT_FIELDS", "AUX_FIELDS", "pc_layout"]
@@ -90,6 +90,8 @@ class PlayPCEnv(PlayEnv):
         self.shapes = ShapeBank(self._object_urdf_paths, dev, k_fixed=int(pc.n_score),
                                 with_symmetries=bool(pc.teacher_canonical_goal))
         self._asset = self._object_asset_index_per_env
+        # Each env keeps its tool for the run: its shape tensors gathered once (object_surface.EnvShapes).
+        self.env_shapes = EnvShapes(self.shapes, self._asset)
 
         # The cameras and the crop box, from the robot base as on the real setup.
         root = torch.as_tensor(self.cfg.robot_root_pos, dtype=torch.float32)
@@ -130,7 +132,7 @@ class PlayPCEnv(PlayEnv):
         """Two-sided surface distance tool <-> goal [m] (max over points; the mean kept for logging)."""
         if not getattr(self, "_pc_ready", False):        # the base class's first reset
             return torch.full((self.num_envs,), 1.0, device=self.device)
-        d_max, d_mean = self.shapes.surface_distance(self._asset, *self._poses())
+        d_max, d_mean = self.env_shapes.surface_distance(*self._poses())
         self._goal_dist_mean = d_mean
         return d_max
 
@@ -157,14 +159,14 @@ class PlayPCEnv(PlayEnv):
         # actor: the camera cloud of the tool and the robot
         self.cloud.reset_mask(start)
         k = int(pc.n_object_cand)
-        cand = self.shapes.points_w(self._asset, obj_pos, obj_quat, "pool", k)
-        area = (self.shapes.area[self._asset] / k).view(n, 1, 1).expand(-1, k, 1)
+        cand = self.env_shapes.points_w(obj_pos, obj_quat, "pool", k)
+        area = (self.env_shapes.area / k).view(n, 1, 1).expand(-1, k, 1)
         body_pos = self.robot.data.body_pos_w - org
         body_quat = self.robot.data.body_quat_w
         live, live_mask = self.cloud.observe(self.episode_length_buf, torch.cat((cand, area), dim=-1), body_pos, body_quat)
         # actor: the goal cloud, clean and whole
         centre, scale = self.cloud.centre, float(pc.scale)
-        goal_pts = self.shapes.points_w(self._asset, goal_pos, goal_quat, "pool", int(pc.n_goal))
+        goal_pts = self.env_shapes.points_w(goal_pos, goal_quat, "pool", int(pc.n_goal))
         self._last_goal_cloud = goal_pts
         goal = (goal_pts - centre) * scale
         points = torch.cat((live, goal), dim=1)
@@ -177,8 +179,8 @@ class PlayPCEnv(PlayEnv):
         if "critic" in extra:
             crit_state = _stack_obs_dict(clean, lay["critic_fields"]).clamp(-clip, clip)
             kc = int(pc.n_critic)           # the scored samples are in random order: the first kc are a uniform subset
-            cur_c = (self.shapes.points_w(self._asset, obj_pos, obj_quat, "fixed")[:, :kc] - centre) * scale
-            goal_c = (self.shapes.points_w(self._asset, goal_pos, goal_quat, "fixed")[:, :kc] - centre) * scale
+            cur_c = (self.env_shapes.fixed_w_first(obj_pos, obj_quat, kc) - centre) * scale
+            goal_c = (self.env_shapes.fixed_w_first(goal_pos, goal_quat, kc) - centre) * scale
             critic = torch.cat((crit_state, cur_c.flatten(1), goal_c.flatten(1)), dim=1)
             out["critic"] = torch.nan_to_num(critic)
 
@@ -187,7 +189,7 @@ class PlayPCEnv(PlayEnv):
             teacher_fields = dict(clean)
             if bool(pc.teacher_canonical_goal):
                 kp_offsets = self._keypoint_offsets * self._object_scale_multiplier.unsqueeze(1)
-                c_pos, c_quat = self.shapes.canonical_goal_pose(self._asset, obj_pos, obj_quat, goal_pos, goal_quat, kp_offsets)
+                c_pos, c_quat = self.env_shapes.canonical_goal_pose(obj_pos, obj_quat, goal_pos, goal_quat, kp_offsets)
                 obj_kp = _keypoints_world(obj_pos, obj_quat, kp_offsets)
                 teacher_fields["keypoints_rel_goal"] = obj_kp - _keypoints_world(c_pos, c_quat, kp_offsets)
             teacher = _stack_obs_dict(teacher_fields, self.cfg.obs.obs_list).clamp(-clip, clip)
