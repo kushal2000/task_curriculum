@@ -1319,7 +1319,7 @@ def main() -> None:
                         fired = [k for k in OUTCOMES if k in reasons and bool(reasons[k][e])]
                         out = fired[0] if fired else ("timeout" if bool(truncated[e]) else "?")
                         S.stats[e]["episodes"] += 1
-                        S.stats[e]["folds"] += int(out == "fold_held")
+                        S.stats[e]["folds"] += int(out in ("fold", "fold_held"))
                         S.stats[e]["last"] = out
                     S.player.reset_rnn(ended.nonzero(as_tuple=True)[0])
                 n_steps += 1
