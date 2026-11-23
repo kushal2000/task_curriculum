@@ -448,7 +448,17 @@ def main() -> None:
                 _prof.dump_stats(os.getenv("PC_PROFILE"))
                 pstats.Stats(os.getenv("PC_PROFILE")).sort_stats("cumulative").print_stats(70)
         else:
-            runner.run(_run_args)
+            try:
+                runner.run(_run_args)
+            except BaseException:
+                # Kit's / wandb's excepthooks can fail while printing ("Error in sys.excepthook"),
+                # losing the error: print it here first, to stdout.
+                import traceback
+
+                print("[train] training raised:", flush=True)
+                traceback.print_exc(file=sys.stdout)
+                sys.stdout.flush()
+                raise
 
     run()
 
