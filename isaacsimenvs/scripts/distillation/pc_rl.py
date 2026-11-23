@@ -94,8 +94,9 @@ def register_network() -> None:
                 self.n_proprio, self.n_pts, self.point_dim, self.feat_dim = self_np, self_m, self_d, feat
                 self.n_live = n_live
                 widths = tuple(int(w) for w in pc.get("widths", (64, 128, 256)))
-                self.pointnet = PointNet(self_d, widths=widths, out_dim=feat_one)
-                self.goal_pointnet = PointNet(self_d, widths=widths, out_dim=feat_one) if n_live else None
+                comp = bool(pc.get("compile", False))
+                self.pointnet = PointNet(self_d, widths=widths, out_dim=feat_one, compile=comp)
+                self.goal_pointnet = PointNet(self_d, widths=widths, out_dim=feat_one, compile=comp) if n_live else None
                 self.proprio_rms = RunningMeanStd((self_np,))
                 self.freeze_norm = bool(pc.get("freeze_norm", False))
                 if pc.get("init_student"):
