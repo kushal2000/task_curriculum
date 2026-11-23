@@ -280,7 +280,9 @@ def main() -> None:
         # (~400 GB at 24576 envs) and OOM'd the slurm cgroup. The Lab-
         # canonical pattern is render_mode + gym.wrappers.RecordVideo (see
         # IsaacLab tests/test_record_video.py).
-        pointcloud_actor = getattr(getattr(env_cfg, "obs", None), "object", None) == "pointcloud"
+        # The cloth recipes' obs.object: pointcloud, or the point-cloud Play task (its own config section).
+        play_pc = hasattr(env_cfg, "pointcloud") and not hasattr(getattr(env_cfg, "obs", None), "object")
+        pointcloud_actor = play_pc or getattr(getattr(env_cfg, "obs", None), "object", None) == "pointcloud"
         env = gym.make(
             args_cli.task,
             cfg=env_cfg,
@@ -292,7 +294,11 @@ def main() -> None:
             from isaacsimenvs.scripts.distillation.student import student_env
 
             inner = env.unwrapped
-            layout = inner.observations.pointcloud_layout
+            if play_pc:     # live | goal clouds, one PointNet each (tasks/play/play_pc_env.py)
+                layout = {k: v for k, v in inner.layout.items() if not k.endswith("_fields")}
+                layout["split_goal"] = True
+            else:
+                layout = inner.observations.pointcloud_layout
             pc_rl.register_network()
             net = agent_cfg["params"]["network"]
             net["name"] = "pc_actor_critic"
@@ -300,7 +306,8 @@ def main() -> None:
                          "freeze_norm": bool(args_cli.pc_freeze_norm)}
             agent_cfg["params"]["config"]["normalize_input"] = False     # the network normalises the proprio part
             if is_main_rank:
-                pc_rl.write_student_env(hydra_run_dir, student_env(env_cfg), layout, args_cli.pc_init_sigma)
+                env_settings = {"task": args_cli.task, "pointcloud": env_cfg.pointcloud.to_dict()} if play_pc else student_env(env_cfg)
+                pc_rl.write_student_env(hydra_run_dir, env_settings, layout, args_cli.pc_init_sigma)
             print(f"[train] point-cloud actor: {layout}, obs {inner.cfg.observation_space} columns", flush=True)
 
         if args_cli.capture_video:

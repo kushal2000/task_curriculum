@@ -12,15 +12,16 @@ Defaults are the run: Play's ``PlayEnvCfg`` with
 * the action delay and every delay drawn once per episode (as on hardware), action noise 0.05, joint
   noise as the cloth students (0.005 rad, 0.1 rad/s), the prior's pushes (force 5, torque 1),
   object friction x0.7-1.5;
-* success scored on the tool's surfaces (``object_surface``), not its keypoints, at the curriculum's
-  final tolerance.
+* success scored on the tool's surfaces (``object_surface``), not its keypoints. The tolerance
+  curriculum is Play's (RL from scratch); a DAgger run holds it at the prior's final 1 cm
+  (``distill_play_pc --success_tolerance``).
 """
 
 from __future__ import annotations
 
 from isaaclab.utils import configclass
 
-from .play_env_cfg import DomainRandomizationCfg, PlayEnvCfg, ResetCfg, TerminationCfg
+from .play_env_cfg import DomainRandomizationCfg, PlayEnvCfg, ResetCfg
 
 __all__ = ["PlayPCEnvCfg", "PointCloudCfg"]
 
@@ -61,12 +62,6 @@ class PCResetCfg(ResetCfg):
 
 
 @configclass
-class PCTerminationCfg(TerminationCfg):
-    # The prior reached the curriculum's floor; the student is held to the same, on the surfaces.
-    eval_success_tolerance: float | None = 0.01
-
-
-@configclass
 class PCDomainRandomizationCfg(DomainRandomizationCfg):
     use_obs_delay: bool = False
     use_object_state_delay_noise: bool = False
@@ -83,6 +78,5 @@ class PCDomainRandomizationCfg(DomainRandomizationCfg):
 @configclass
 class PlayPCEnvCfg(PlayEnvCfg):
     reset: PCResetCfg = PCResetCfg()
-    termination: PCTerminationCfg = PCTerminationCfg()
     domain_randomization: PCDomainRandomizationCfg = PCDomainRandomizationCfg()
     pointcloud: PointCloudCfg = PointCloudCfg()

@@ -40,6 +40,8 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--num_envs", type=int, default=24576)
     p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--success_tolerance", type=float, default=0.01,
+                   help="fixed success tolerance [m] (the prior finished its curriculum here); <= 0: Play's curriculum")
     p.add_argument("--iters", type=int, default=2000)
     p.add_argument("--horizon", type=int, default=16)
     p.add_argument("--mb_envs", type=int, default=1024)
@@ -76,6 +78,8 @@ def main() -> None:
     def run(env_cfg, _agent_cfg) -> None:
         env_cfg.scene.num_envs = int(args.num_envs)
         env_cfg.seed = int(args.seed)
+        if args.success_tolerance > 0:
+            env_cfg.termination.eval_success_tolerance = float(args.success_tolerance)
         torch.manual_seed(args.seed)
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=True)

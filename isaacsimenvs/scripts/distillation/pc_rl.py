@@ -79,7 +79,11 @@ def register_network() -> None:
             def __init__(self, params, **kwargs):
                 pc = dict(params["pc"])
                 self_np, self_m, self_d = int(pc["n_proprio"]), int(pc["num_points"]), int(pc["point_dim"])
-                feat = int(pc.get("feat_dim", FEAT_DIM))
+                feat_one = int(pc.get("feat_dim", FEAT_DIM))
+                # ``n_live``: the cloud is two clouds (live | goal), each with its own PointNet
+                # (student.SplitStudentNet); the encoded feature is then [f_live | f_goal].
+                n_live = int(pc["n_live"]) if pc.get("split_goal") else 0
+                feat = 2 * feat_one if n_live else feat_one
                 full = flat_dim(self_np, self_m, self_d)
                 if int(kwargs["coef_id_idx"]) != full:
                     raise ValueError(f"obs has {kwargs['coef_id_idx']} columns, the point-cloud layout needs {full}")
@@ -88,7 +92,9 @@ def register_network() -> None:
                 kwargs["input_shape"] = (self_np + feat + 1,)
                 super().__init__(params, **kwargs)
                 self.n_proprio, self.n_pts, self.point_dim, self.feat_dim = self_np, self_m, self_d, feat
-                self.pointnet = PointNet(self_d, out_dim=feat)
+                self.n_live = n_live
+                self.pointnet = PointNet(self_d, out_dim=feat_one)
+                self.goal_pointnet = PointNet(self_d, out_dim=feat_one) if n_live else None
                 self.proprio_rms = RunningMeanStd((self_np,))
                 self.freeze_norm = bool(pc.get("freeze_norm", False))
                 if pc.get("init_student"):
@@ -117,6 +123,9 @@ def register_network() -> None:
                     self.actor_mlp.load_state_dict({k2[len("actor_mlp."):]: v for k2, v in state.items() if k2.startswith("actor_mlp.")})
                     self.mu.load_state_dict({k2[len("mu."):]: v for k2, v in state.items() if k2.startswith("mu.")})
                     self.pointnet.load_state_dict({k2[len("pointnet."):]: v for k2, v in state.items() if k2.startswith("pointnet.")})
+                    if self.goal_pointnet is not None:
+                        self.goal_pointnet.load_state_dict(
+                            {k2[len("goal_pointnet."):]: v for k2, v in state.items() if k2.startswith("goal_pointnet.")})
                 print(f"[pc_rl] actor <- student {path}", flush=True)
 
             def forward(self, obs_dict):
@@ -131,7 +140,12 @@ def register_network() -> None:
                 # Half precision for the per-point MLP in the rollout too (training already runs
                 # under autocast, and so do the distill_pc evaluations).
                 with torch.autocast("cuda", dtype=torch.float16, enabled=obs.is_cuda):
-                    feat = self.pointnet(points, mask)
+                    if self.n_live:
+                        k = self.n_live
+                        feat = torch.cat((self.pointnet(points[:, :k], mask[:, :k]),
+                                          self.goal_pointnet(points[:, k:], mask[:, k:])), dim=1)
+                    else:
+                        feat = self.pointnet(points, mask)
                 feat = feat.to(proprio.dtype)
                 encoded = dict(obs_dict)
                 encoded["obs"] = torch.cat((proprio, feat, obs[:, n_p + m * d + m:]), dim=1)
