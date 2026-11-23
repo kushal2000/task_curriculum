@@ -105,3 +105,33 @@ class PlayPCEnvCfg(PlayEnvCfg):
     reset: PCResetCfg = PCResetCfg()
     domain_randomization: PCDomainRandomizationCfg = PCDomainRandomizationCfg()
     pointcloud: PointCloudCfg = PointCloudCfg()
+
+
+
+@configclass
+class PCRealAssetsCfg(PCAssetsCfg):
+    robot_urdf: str = "assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf"
+    """The real robot's joint limits (arm 5 deg inside the spec, finger PIP <= 100 deg), as the cloth tasks."""
+    table_urdf: str = "assets/urdf/table_fold_pool.urdf"
+    """The cloth tasks' table: a 0.6 x 0.4 x 0.3 m block."""
+
+
+@configclass
+class PCRealResetCfg(PCResetCfg):
+    # The block's root 0.15 m below its top, so the top stays at Play's 0.28 (spawns, goal volume and the
+    # fall check are unchanged); objects still start 0.10 m above it.
+    table_reset_z: float = 0.13
+    table_object_z_offset: float = 0.25
+
+
+@configclass
+class PlayPCRealEnvCfg(PlayPCEnvCfg):
+    """``PlayPCEnvCfg`` on the cloth tasks' robot and table (Yibo's fold policies), exactly: the real joint
+    limits, ``table_fold_pool.urdf`` and the robot placed relative to it as in cloth/config/task.yaml --
+    base at (0, 0.51, 0.20) with the table root at (0, 0, 0.38): 0.51 m behind the table centre, 0.18 m
+    below its root (top 0.33 m above the base, near edge 0.31 m in front). Here the table keeps Play's
+    centre (0, 0.29) and top height (0.28), so the base goes to (0, 0.80, -0.05), the cameras with it."""
+
+    assets: PCRealAssetsCfg = PCRealAssetsCfg()
+    reset: PCRealResetCfg = PCRealResetCfg()
+    robot_root_pos: tuple[float, float, float] = (0.0, 0.8, -0.05)

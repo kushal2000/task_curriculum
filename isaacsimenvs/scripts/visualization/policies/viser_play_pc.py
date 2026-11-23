@@ -101,14 +101,15 @@ def main() -> None:
     import isaacsimenvs  # noqa: F401  gym.register side effects
     from isaacsimenvs.scripts.distillation.student import SplitStudentNet, split_columns
     from isaacsimenvs.tasks.play.play_pc_env import AUX_FIELDS, OBJECT_FIELDS
-    from isaacsimenvs.tasks.play.play_pc_env_cfg import PlayPCEnvCfg
     from isaacsimenvs.tasks.play.utils.object_size_distributions import OBJECT_SIZE_DISTRIBUTIONS
     from isaacsimenvs.tasks.play.utils.obs_utils import compute_obs_dim
 
     ckpt = resolve(args.student)
     ck = torch.load(ckpt, map_location="cpu", weights_only=False)
 
-    cfg = PlayPCEnvCfg()
+    # The env config of the student's own task (its gym registration), e.g. the real-limits variant.
+    mod, cls = gym.spec(ck["env"]["task"]).kwargs["env_cfg_entry_point"].split(":")
+    cfg = getattr(__import__(mod, fromlist=[cls]), cls)()
     cfg.assets.num_assets_per_type = int(args.num_assets_per_type)
     types_cfg = set(cfg.assets.handle_head_types)
     cfg.scene.num_envs = int(args.num_assets_per_type) * sum(d.type in types_cfg for d in OBJECT_SIZE_DISTRIBUTIONS)

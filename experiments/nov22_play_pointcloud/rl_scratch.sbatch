@@ -13,7 +13,7 @@
 # pc_rl.py), critic = state + clean current/goal clouds (MLP), Play's tolerance curriculum on the surface
 # distance. 24576 envs = 6 SAPG blocks of 4096; Play's SAPG settings otherwise (minibatch 98304). The actor
 # reads 64 camera points of the tool (robot points dropped) + 64 goal points.
-#   NAME=<name> sbatch experiments/nov22_play_pointcloud/rl_scratch.sbatch [overrides]
+#   NAME=<name> [TASK=<task id>] [WANDB_PROJECT=<project>] sbatch experiments/nov22_play_pointcloud/rl_scratch.sbatch [overrides]
 # Writes debug_outputs/train_logs/nov/<date>_<NAME>_<job>/ (slurm log, nn/ checkpoints, wandb).
 set -uo pipefail
 NAME="${NAME:-0_play_pc_scratch_${SLURM_JOB_ID:-local}}"; RUN_NAME="${NAME#0_}"
@@ -28,6 +28,6 @@ export TMPDIR="/tmp/${USER}_${SLURM_JOB_ID:-local}"; mkdir -p "$TMPDIR"
 echo "[play_pc] host=$(hostname -s) job=${SLURM_JOB_ID:-local} commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain --untracked-files=no)" && echo YES || echo no)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 exec .venv/isaacsim/bin/python -m isaacsimenvs.scripts.training.train \
-    --task Isaacsimenvs-PlayFlexivWujiRightHumanLikePC-Direct-v0 --agent rl_games_sapg_cfg_entry_point --headless \
+    --task "${TASK:-Isaacsimenvs-PlayFlexivWujiRightHumanLikePC-Direct-v0}" --agent rl_games_sapg_cfg_entry_point --headless \
     --capture_viewer --wandb_activate --wandb_project "${WANDB_PROJECT:-play_pc}" --wandb_name "$NAME" \
     env.scene.num_envs="${ENVS:-24576}" agent.params.seed="${SEED:-1}" agent.params.config.name="$NAME" hydra.run.dir="$RUN_DIR" "$@"

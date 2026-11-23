@@ -53,6 +53,7 @@ import sys
 _POSE_VIEWERS = {
     # First match wins: the point-cloud Play task before plain Play.
     "PlayFlexivWujiRightHumanLikePC": "isaacsimenvs.scripts.visualization.interactive_viewer.play_pc_viewer:PlayPCViewerWrapper",
+    "PlayFlexivWujiRightRealLimitsPC": "isaacsimenvs.scripts.visualization.interactive_viewer.play_pc_viewer:PlayPCViewerWrapper",
     "Cloth": "isaacsimenvs.scripts.visualization.interactive_viewer.cloth_viewer:ClothPoseViewerWrapper",
     "Play": "isaacsimenvs.scripts.visualization.interactive_viewer.pose_viewer:PlayPoseViewerWrapper",
 }

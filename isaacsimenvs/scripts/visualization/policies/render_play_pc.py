@@ -39,10 +39,11 @@ def main() -> None:
 
     import isaacsimenvs  # noqa: F401
     from isaacsimenvs.scripts.distillation.student import SplitStudentNet
-    from isaacsimenvs.tasks.play.play_pc_env_cfg import PlayPCEnvCfg
 
     ck = torch.load(args.student, map_location="cpu", weights_only=False)
-    cfg = PlayPCEnvCfg()
+    # The env config of the student's own task (its gym registration), e.g. the real-limits variant.
+    mod, cls = gym.spec(ck["env"]["task"]).kwargs["env_cfg_entry_point"].split(":")
+    cfg = getattr(__import__(mod, fromlist=[cls]), cls)()
     cfg.scene.num_envs = int(args.tool) + 1
     cfg.scene.env_spacing = 3.0
     cfg.seed = int(args.seed)

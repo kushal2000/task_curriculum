@@ -65,3 +65,6 @@ _register("Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0", "PlayEnvCfg")
 # The same task observed as point clouds: camera cloud + goal cloud for the actor (play_pc_env).
 _register("Isaacsimenvs-PlayFlexivWujiRightHumanLikePC-Direct-v0", "PlayPCEnvCfg",
           cfg_module="play_pc_env_cfg", env="play_pc_env:PlayPCEnv")
+# ... on the cloth tasks' robot and table: real joint limits, 0.6 x 0.4 m table 0.33 m above the base.
+_register("Isaacsimenvs-PlayFlexivWujiRightRealLimitsPC-Direct-v0", "PlayPCRealEnvCfg",
+          cfg_module="play_pc_env_cfg", env="play_pc_env:PlayPCEnv")
