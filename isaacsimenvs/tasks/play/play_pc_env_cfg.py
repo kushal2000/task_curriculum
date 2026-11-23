@@ -66,6 +66,10 @@ class PointCloudCfg:
     """The proprioception's lag, 0..max policy steps, one draw per episode."""
     table_near_offset: float = 0.31
     """The real table's near edge, this far in front of the robot base [m] (the crop box's near face)."""
+    extra_obs: tuple[str, ...] = ("critic", "teacher")
+    """Observation groups beyond ``policy`` (training needs both; a viewer or an eval can drop them:
+    the critic's clean clouds and the teacher's canonical-goal keypoint vector cost ~a third of the
+    observation step at a handful of envs)."""
     teacher_canonical_goal: bool = True
     """Give the keypoint teacher the symmetric equivalent of the goal nearest the tool (object_surface)."""
 

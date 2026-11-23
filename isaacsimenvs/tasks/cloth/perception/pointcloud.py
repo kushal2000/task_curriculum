@@ -249,6 +249,29 @@ class PointCloud:
 
     # ------------------------------------------------------------------ per-episode draws
 
+    def reset_mask(self, mask: torch.Tensor) -> None:
+        """``reset`` for the envs where ``mask`` is set, without a host sync: every env's draws are
+        made and kept where ``mask`` is set (``reset(mask.nonzero())`` reads the count back)."""
+        c, dev, n = self.cfg, self.device, int(mask.shape[0])
+        m3 = mask.view(n, 1, 1)
+        if not hasattr(self, "_noise_t"):        # built once: torch.as_tensor of a tuple is a synchronous copy
+            self._noise_t = torch.as_tensor(c.cam_pos_noise, dtype=torch.float32, device=dev)
+            self._calib_xyz_t = torch.as_tensor(c.calib_xyz, dtype=torch.float32, device=dev)
+        noise = self._noise_t
+        cams = self.cams0 + (2.0 * torch.rand(n, 2, 3, device=dev) - 1.0) * noise
+        self.cams = torch.where(m3, cams, self.cams)
+        self.rots = torch.where(mask.view(n, 1, 1, 1), self._rotations(self.cams), self.rots)
+        ang = (2.0 * torch.rand(n, 2, 3, device=dev) - 1.0) * math.radians(float(c.calib_rot_deg))
+        self.calib_r = torch.where(mask.view(n, 1, 1, 1), _small_rotation(ang.view(-1, 3)).view(n, 2, 3, 3), self.calib_r)
+        xyz = self._calib_xyz_t
+        self.calib_t = torch.where(m3, (2.0 * torch.rand(n, 2, 3, device=dev) - 1.0) * xyz, self.calib_t)
+        self.depth_std = torch.where(mask, _uniform(c.depth_noise_std_range, (n,), dev), self.depth_std)
+        self.drop_p = torch.where(mask, _uniform(c.drop_prob_range, (n,), dev), self.drop_p)
+        self.lag = torch.where(mask, torch.randint(0, int(c.delay_max) + 1, (n,), device=dev), self.lag)
+        self.fresh = self.fresh | mask
+        self.ref_valid = self.ref_valid & ~mask
+        self.ref_mask = self.ref_mask & ~mask.view(n, 1)
+
     def reset(self, ids: torch.Tensor) -> None:
         """New episode for envs ``ids``."""
         c, dev, m = self.cfg, self.device, int(ids.numel())

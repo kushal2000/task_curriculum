@@ -99,10 +99,9 @@ def main() -> None:
     from viser.extras import ViserUrdf
 
     import isaacsimenvs  # noqa: F401  gym.register side effects
-    from isaacsimenvs.scripts.distillation.student import SplitStudentNet, split_columns
-    from isaacsimenvs.tasks.play.play_pc_env import AUX_FIELDS, OBJECT_FIELDS
+    from isaacsimenvs.scripts.distillation.student import SplitStudentNet
     from isaacsimenvs.tasks.play.utils.object_size_distributions import OBJECT_SIZE_DISTRIBUTIONS
-    from isaacsimenvs.tasks.play.utils.obs_utils import compute_obs_dim
+    from isaacsimenvs.tasks.play.utils.obs_utils import _keypoints_world
 
     ckpt = resolve(args.student)
     ck = torch.load(ckpt, map_location="cpu", weights_only=False)
@@ -115,6 +114,9 @@ def main() -> None:
     cfg.scene.num_envs = int(args.num_assets_per_type) * sum(d.type in types_cfg for d in OBJECT_SIZE_DISTRIBUTIONS)
     cfg.seed = int(args.seed)
     cfg.termination.eval_success_tolerance = float(args.tolerance)
+    # The policy's observation only: no critic clouds, no teacher vector (the keypoint truth the
+    # auxiliary estimates are drawn against is computed for the watched env alone, in draw()).
+    cfg.pointcloud.extra_obs = ()
     env = gym.make(ck["env"]["task"], cfg=cfg)
     inner = env.unwrapped
     num_envs, device = inner.num_envs, inner.device
@@ -122,18 +124,6 @@ def main() -> None:
     n_p, m, n_live = int(lay["n_proprio"]), int(lay["num_points"]), int(lay["n_live"])
     n_act = int(inner.cfg.action_space)
     scale = float(inner.cfg.pointcloud.scale)
-
-    # Teacher-vector columns: the aux head's targets (keypoints rel palm, rel goal) and the palm.
-    obs_list = list(inner.cfg.obs.obs_list)
-    sizes = {f: compute_obs_dim([f], n_act) for f in obs_list}
-    _, aux_cols = split_columns(obs_list, sizes, OBJECT_FIELDS, AUX_FIELDS)
-    at = 0
-    for f in obs_list:
-        if f == "palm_pos":
-            palm_cols = list(range(at, at + 3))
-        at += int(sizes[f])
-    aux_cols = torch.tensor(aux_cols, device=device)
-    palm_cols = torch.tensor(palm_cols, device=device)
 
     urdf_paths = list(inner._object_urdf_paths)
     asset_of_env = inner._object_asset_index_per_env.cpu().numpy()
@@ -272,7 +262,7 @@ def main() -> None:
             h.points = pts.astype(np.float32)
             h.colors = np.tile(np.asarray(h.colors).reshape(-1, 3)[:1], (len(pts), 1))
 
-    last = {"aux": None, "teacher": None}
+    last = {"aux": None}
     timing: dict = {}
 
     def draw() -> None:
@@ -294,12 +284,19 @@ def main() -> None:
         for k in ("kp_true", "kp_est", "gkp_true", "gkp_est"):
             clouds[k].visible = False
         if last["aux"] is not None and pol["aux"]:
-            tob = last["teacher"][e]
-            palm = tob[palm_cols]
-            true_aux = tob[aux_cols].view(2, -1, 3)
+            # The truth, for the watched env only: the tool's keypoints, the palm (env frame, from the
+            # clean keypoints_rel_palm) and the goal's keypoints at the symmetric goal nearest the tool,
+            # as the teacher reads them (the auxiliary head's targets).
+            sl = slice(e, e + 1)
+            o_pos, o_quat, g_pos, g_quat = (x[sl] for x in inner._poses())
+            kp_off = (inner._keypoint_offsets * inner._object_scale_multiplier.unsqueeze(1))[sl]
+            kp_true = _keypoints_world(o_pos, o_quat, kp_off)[0]
+            c_pos, c_quat = inner.shapes.canonical_goal_pose(inner._asset[sl], o_pos, o_quat, g_pos, g_quat, kp_off)
+            gkp_true = _keypoints_world(c_pos, c_quat, kp_off)[0]
+            palm = kp_true - inner._obs_fields[0]["keypoints_rel_palm"][e].reshape(-1, 3)
             est_aux = last["aux"][e].float().view(2, -1, 3) / scale
-            kp_true, kp_est = palm + true_aux[0], palm + est_aux[0]
-            gkp_true, gkp_est = kp_true - true_aux[1], kp_est - est_aux[1]
+            kp_est = palm + est_aux[0]
+            gkp_est = kp_est - est_aux[1]
             err_kp = float((kp_est - kp_true).norm(dim=-1).mean()) * 100
             err_gkp = float((gkp_est - gkp_true).norm(dim=-1).mean()) * 100
             set_points("kp_true", kp_true.cpu().numpy(), g_show["kp"].value)
@@ -361,7 +358,7 @@ def main() -> None:
         with torch.no_grad():
             mu, aux, rnn = pol["net"].step(x[:, :n_p], x[:, n_p:n_p + 3 * m].reshape(-1, m, 3),
                                            x[:, n_p + 3 * m:n_p + 4 * m] > 0.5, rnn, start)
-        last["aux"], last["teacher"] = aux, obs["teacher"]
+        last["aux"] = aux
         torch.cuda.synchronize()
         t1 = time.time()
         obs, _r, term, trunc, _ = env.step(mu.float().clamp(-1.0, 1.0))

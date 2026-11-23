@@ -148,14 +148,14 @@ class PlayPCEnv(PlayEnv):
         org = self.scene.env_origins.unsqueeze(1)
 
         # actor: proprio, one lag per episode
-        ids = start.nonzero(as_tuple=True)[0]
-        if ids.numel() > 0:
-            self._proprio_lag[ids] = torch.randint(0, int(pc.proprio_delay_max) + 1, (ids.numel(),), device=self.device)
+        # Per-episode draws, masked (no ``nonzero`` host sync per step).
+        self._proprio_lag = torch.where(start, torch.randint(0, int(pc.proprio_delay_max) + 1, (n,), device=self.device),
+                                        self._proprio_lag)
         proprio = _stack_obs_dict(noisy, lay["proprio_fields"])
         proprio = self.proprio_delay.push_and_read(proprio, start, self._proprio_lag).clamp(-clip, clip)
 
         # actor: the camera cloud of the tool and the robot
-        self.cloud.reset(ids)
+        self.cloud.reset_mask(start)
         k = int(pc.n_object_cand)
         cand = self.shapes.points_w(self._asset, obj_pos, obj_quat, "pool", k)
         area = (self.shapes.area[self._asset] / k).view(n, 1, 1).expand(-1, k, 1)
@@ -171,20 +171,25 @@ class PlayPCEnv(PlayEnv):
         mask = torch.cat((live_mask, torch.ones(n, int(pc.n_goal), dtype=torch.bool, device=self.device)), dim=1)
         policy = torch.cat((proprio, points.flatten(1), mask.to(points.dtype)), dim=1)
 
+        out = {"policy": torch.nan_to_num(policy)}
+        extra = tuple(pc.extra_obs)
         # critic: state without the keypoint view + the clean scored clouds
-        crit_state = _stack_obs_dict(clean, lay["critic_fields"]).clamp(-clip, clip)
-        kc = int(pc.n_critic)           # the scored samples are in random order: the first kc are a uniform subset
-        cur_c = (self.shapes.points_w(self._asset, obj_pos, obj_quat, "fixed")[:, :kc] - centre) * scale
-        goal_c = (self.shapes.points_w(self._asset, goal_pos, goal_quat, "fixed")[:, :kc] - centre) * scale
-        critic = torch.cat((crit_state, cur_c.flatten(1), goal_c.flatten(1)), dim=1)
+        if "critic" in extra:
+            crit_state = _stack_obs_dict(clean, lay["critic_fields"]).clamp(-clip, clip)
+            kc = int(pc.n_critic)           # the scored samples are in random order: the first kc are a uniform subset
+            cur_c = (self.shapes.points_w(self._asset, obj_pos, obj_quat, "fixed")[:, :kc] - centre) * scale
+            goal_c = (self.shapes.points_w(self._asset, goal_pos, goal_quat, "fixed")[:, :kc] - centre) * scale
+            critic = torch.cat((crit_state, cur_c.flatten(1), goal_c.flatten(1)), dim=1)
+            out["critic"] = torch.nan_to_num(critic)
 
         # teacher: the clean keypoint vector, goal canonicalised over the tool's symmetries
-        teacher_fields = dict(clean)
-        if bool(pc.teacher_canonical_goal):
-            kp_offsets = self._keypoint_offsets * self._object_scale_multiplier.unsqueeze(1)
-            c_pos, c_quat = self.shapes.canonical_goal_pose(self._asset, obj_pos, obj_quat, goal_pos, goal_quat, kp_offsets)
-            obj_kp = _keypoints_world(obj_pos, obj_quat, kp_offsets)
-            teacher_fields["keypoints_rel_goal"] = obj_kp - _keypoints_world(c_pos, c_quat, kp_offsets)
-        teacher = _stack_obs_dict(teacher_fields, self.cfg.obs.obs_list).clamp(-clip, clip)
-
-        return {"policy": torch.nan_to_num(policy), "critic": torch.nan_to_num(critic), "teacher": teacher}
+        if "teacher" in extra:
+            teacher_fields = dict(clean)
+            if bool(pc.teacher_canonical_goal):
+                kp_offsets = self._keypoint_offsets * self._object_scale_multiplier.unsqueeze(1)
+                c_pos, c_quat = self.shapes.canonical_goal_pose(self._asset, obj_pos, obj_quat, goal_pos, goal_quat, kp_offsets)
+                obj_kp = _keypoints_world(obj_pos, obj_quat, kp_offsets)
+                teacher_fields["keypoints_rel_goal"] = obj_kp - _keypoints_world(c_pos, c_quat, kp_offsets)
+            teacher = _stack_obs_dict(teacher_fields, self.cfg.obs.obs_list).clamp(-clip, clip)
+            out["teacher"] = teacher
+        return out

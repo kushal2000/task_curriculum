@@ -31,6 +31,7 @@ class DelayLine:
             return values
         self.ptr = (self.ptr + 1) % self.size
         self.buffer[self.ptr] = values
-        if flush is not None and bool(flush.any()):
-            self.buffer[:, flush] = values[flush].unsqueeze(0)
+        if flush is not None:              # masked, not ``if flush.any()``: no host sync per step
+            mask = flush.view(1, -1, *([1] * (values.dim() - 1)))
+            self.buffer = torch.where(mask, values.unsqueeze(0), self.buffer)
         return self.buffer[(self.ptr - lag.clamp(0, self.size - 1)) % self.size, self.env]

@@ -44,6 +44,10 @@ def allocate_state_buffers(env) -> None:
     n_arm = len(spec.arm_joint_names)
     assert list(env._arm_joint_ids) == list(range(n_arm)), env._arm_joint_ids
     assert list(env._hand_joint_ids) == list(range(n_arm, len(lab_names))), env._hand_joint_ids
+    # Per-step indexing without a host-to-device copy (a Python list index is one, and syncs): the
+    # contiguous arm / hand ranges as slices, the fingertips as a cached device tensor.
+    env._arm_sl, env._hand_sl = slice(0, n_arm), slice(n_arm, len(lab_names))
+    env._fingertip_body_ids_t = torch.as_tensor(list(env._fingertip_body_ids), dtype=torch.long, device=env.device)
     env._perm_canon_to_lab = torch.tensor(
         [canonical.index(n) for n in lab_names],
         device=env.device, dtype=torch.long,

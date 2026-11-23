@@ -36,8 +36,8 @@ def apply_action_pipeline(env, actions: torch.Tensor) -> None:
     # Action delay.
     if dr.use_action_delay and dr.action_delay_max > 0:
         episode_start = (env.episode_length_buf == 0) & (env._successes == 0)
-        if episode_start.any():
-            env._action_queue[episode_start] = actions[episode_start].unsqueeze(1)
+        # A new episode's queue starts full of its first action (masked: no host sync).
+        env._action_queue = torch.where(episode_start.view(-1, 1, 1), actions.unsqueeze(1), env._action_queue)
         env._action_queue = torch.roll(env._action_queue, shifts=1, dims=1)
         env._action_queue[:, 0, :] = actions
         if dr.delay_mode == "per_episode":
@@ -76,8 +76,8 @@ def apply_action_pipeline(env, actions: torch.Tensor) -> None:
     hand_smoothed = torch.clamp(hand_smoothed, env._hand_lower, env._hand_upper)
 
     # Write Lab-order targets and cache them for the next step.
-    env._cur_targets[:, env._arm_joint_ids] = arm_smoothed
-    env._cur_targets[:, env._hand_joint_ids] = hand_smoothed
+    env._cur_targets[:, env._arm_sl] = arm_smoothed
+    env._cur_targets[:, env._hand_sl] = hand_smoothed
     env._prev_targets = env._cur_targets.clone()
 
 

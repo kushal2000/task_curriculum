@@ -86,6 +86,19 @@ def _perturb_quat(q_wxyz: torch.Tensor, max_deg: float) -> torch.Tensor:
     return quat_mul(dq, q_wxyz)
 
 
+_CONSTS: dict = {}
+
+
+def _const(value, like: torch.Tensor) -> torch.Tensor:
+    """``value`` (nested floats) as a tensor on ``like``'s device and dtype, built once: a fresh
+    ``torch.as_tensor`` of a Python sequence is a host-to-device copy, i.e. a sync, every step."""
+    key = (repr(value), like.device, like.dtype)
+    t = _CONSTS.get(key)
+    if t is None:
+        t = _CONSTS[key] = torch.as_tensor(value, device=like.device, dtype=like.dtype)
+    return t
+
+
 def _apply_local_offset(
     pos_w: torch.Tensor,
     rot_wxyz: torch.Tensor,
@@ -93,7 +106,7 @@ def _apply_local_offset(
     batch_shape: tuple[int, ...],
 ) -> torch.Tensor:
     """Apply one local-frame offset to batched world poses."""
-    offset_t = torch.as_tensor(offset, device=pos_w.device, dtype=pos_w.dtype)
+    offset_t = _const(offset, pos_w)
     offset_t = offset_t.expand(*batch_shape, 3)
     shifted = quat_apply(
         rot_wxyz.reshape(-1, 4), offset_t.reshape(-1, 3)
@@ -171,7 +184,7 @@ def compute_intermediate_values(env) -> None:
     goal_pos = env.goal_viz.data.root_pos_w - env_origins
     goal_rot = env.goal_viz.data.root_quat_w
 
-    ft_state = env.robot.data.body_state_w[:, env._fingertip_body_ids, :]
+    ft_state = env.robot.data.body_state_w[:, env._fingertip_body_ids_t, :]
     ft_pos_w = ft_state[:, :, 0:3]
     if rew_cfg.fingertip_distance_from_pad:
         ft_pos_w = _apply_local_offset(
@@ -386,12 +399,9 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     palm_pos = palm_center_pos_w - env_origins
     # Observed as if the robot base were at Play's position: the robot's own frame, plus that
     # offset. Zero unless cfg.robot_root_pos moves the base.
-    palm_pos_obs = palm_pos - (
-        torch.as_tensor(env.cfg.robot_root_pos, device=palm_pos.device, dtype=palm_pos.dtype)
-        - torch.as_tensor(PLAY_ROBOT_ROOT_POS, device=palm_pos.device, dtype=palm_pos.dtype)
-    )
+    palm_pos_obs = palm_pos - (_const(env.cfg.robot_root_pos, palm_pos) - _const(PLAY_ROBOT_ROOT_POS, palm_pos))
 
-    ft_state = env.robot.data.body_state_w[:, env._fingertip_body_ids, :]  # (N, 5, 13)
+    ft_state = env.robot.data.body_state_w[:, env._fingertip_body_ids_t, :]  # (N, 5, 13)
     ft_body_pos_w = ft_state[:, :, 0:3]
     ft_body_rot_w = ft_state[:, :, 3:7]  # wxyz
 

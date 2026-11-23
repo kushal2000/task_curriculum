@@ -198,3 +198,33 @@ def test_robot_surface_resolves_fixed_links():
     fk = rs.fk_subset(surf, 128)
     assert len(set(fk.tolist())) == 128
     assert not any(links[i].startswith(("link3", "link4")) for i in surf["link"][fk])
+
+
+def test_reset_mask_matches_reset():
+    """``reset_mask`` (no host sync) leaves unmasked envs untouched and redraws the masked ones
+    within ``reset``'s ranges, as ``reset(mask.nonzero())`` would."""
+    import math
+
+    setup = sp.PointCloudSetup(n_points=16, cam_pos_noise=(0.05, 0.05, 0.05), calib_xyz=(0.015, 0.015, 0.01),
+                            calib_rot_deg=2.0, depth_noise_std_range=(0.001, 0.004), drop_prob_range=(0.0, 0.3),
+                            delay_max=6)
+    n = 64
+    cams = torch.tensor([[0.6, -0.9, 0.85], [-0.5, -0.9, 0.86]])
+    pc = sp.PointCloud(setup, n, 2, cams, 0.28, torch.zeros(4, dtype=torch.long), torch.zeros(4, 3),
+                    torch.ones(4), "cpu")
+    pc.reset(torch.arange(n))
+    before = {k: getattr(pc, k).clone() for k in ("cams", "rots", "calib_r", "calib_t", "depth_std", "drop_p", "lag")}
+    pc.fresh[:] = False
+    pc.ref_valid[:] = True
+    mask = torch.zeros(n, dtype=torch.bool)
+    mask[::3] = True
+    pc.reset_mask(mask)
+    for k, v in before.items():
+        new = getattr(pc, k)
+        assert torch.equal(new[~mask], v[~mask]), k
+        assert not torch.equal(new[mask], v[mask]), k
+    assert torch.equal(pc.fresh, mask) and torch.equal(pc.ref_valid, ~mask)
+    assert ((pc.cams[mask] - pc.cams0).abs() <= 0.05 + 1e-6).all()
+    assert ((pc.calib_t[mask].abs() <= torch.tensor([0.015, 0.015, 0.01]) + 1e-6)).all()
+    assert ((pc.depth_std[mask] >= 0.001) & (pc.depth_std[mask] <= 0.004)).all()
+    assert ((pc.lag[mask] >= 0) & (pc.lag[mask] <= 6)).all()
