@@ -8,6 +8,8 @@ evenly instead of drawn (``fold_pool.even_env_sizes``).
 
 from __future__ import annotations
 
+from isaacsimenvs import CLOTH_CONFIG_DIR
+
 RIGID_TASK = "Isaacsimenvs-RigidCloth-Direct-v0"
 VBD_TASK = "Isaacsimenvs-Cloth-Direct-v0"
 
@@ -21,15 +23,19 @@ TARGETS = {
     "rigidbody_flat": (RIGID_TASK, [*_RIGID, "env.fold_pool.goal_task.mode=half_fold"]),
     # From a random reachable folded state, with one more fold as the goal.
     "rigidbody_folded": (RIGID_TASK, [*_RIGID, "env.fold_pool.goal_task.mode=any_fold"]),
-    # The VBD task's own physics; without robot self-collision (with it, ~4x slower).
-    "vbd": (VBD_TASK, ["env.robot_self_collision=false", "env.newton.njmax=32768", "env.cloth.start_height=0.20"]),
+    # The VBD evaluation world: every setting in PROTOCOL["vbd"].
+    "vbd": (VBD_TASK, []),
 }
+
+#: target -> the evaluation world it is built from (eval.py --protocol) instead of a policy's recipe.
+PROTOCOL = {"vbd": str(CLOTH_CONFIG_DIR / "eval" / "vbd.yaml")}
 
 #: The start each target is evaluated from (rand: all domain randomisation on; pinned: off). The
 #: evaluation has the rigid sheet at rand only; the viewer also allows pinned there.
 START = {"rigidbody_flat": "rand", "rigidbody_folded": "rand", "vbd": "pinned"}
 
-#: Every target, as the evaluation runs it: a fold HELD 10 steps within 1.5 cm, NaN -> reset.
+#: The rigid targets, as the evaluation runs them: a fold HELD 10 steps within 1.5 cm, NaN -> reset
+#: (the vbd target: in its PROTOCOL file).
 COMMON = ("env.cloth.keypoint_tolerance=0.015", "env.cloth.nan_policy=reset", "env.termination.success_steps=10")
 
 
@@ -38,7 +44,7 @@ def overrides(target: str, extra: list[str]) -> tuple[str, list[str]]:
     ``extra`` (the command line's) overrides the target's."""
     task, own = TARGETS[target]
     by_key: dict[str, str] = {}
-    for o in (*COMMON, *own, *extra):
+    for o in (*([] if target in PROTOCOL else COMMON), *own, *extra):
         by_key.pop(o.split("=", 1)[0], None)  # re-insert: the later value, in the later place
         by_key[o.split("=", 1)[0]] = o
     return task, list(by_key.values())

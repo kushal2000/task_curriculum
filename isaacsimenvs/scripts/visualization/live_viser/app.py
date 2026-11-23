@@ -24,7 +24,8 @@ def _parser() -> argparse.ArgumentParser:
                    help="the policy at start: a menu name, or a checkpoint (added to the menu); default the menu's first")
     p.add_argument("--experiment", default=None,
                    help="the env's run recipe; default for the rigid targets: the starting policy's training "
-                        "recipe (its menu entry's, else run.json / args.json beside it), none for vbd")
+                        "recipe (its menu entry's, else run.json / args.json beside it), none for vbd (built "
+                        "from its evaluation world, targets.PROTOCOL)")
     p.add_argument("--start", choices=("pinned", "rand"), default=None,
                    help="rand: all domain randomisation on; pinned: off and the start pinned (default targets.START)")
     p.add_argument("--num_envs", type=int, default=6, help="rigid sheet: the sizes run evenly over the envs")
@@ -127,14 +128,16 @@ def main() -> None:
     from .policies import Players
     from .viewer import LiveViewer
 
+    protocol = targets.PROTOCOL.get(args.target) if recipe is None else None
     label = recipe["files"][0] if isinstance(recipe, dict) else recipe
-    print(f"[live] {args.target} ({start}), recipe {label}: {task} {' '.join(overrides)}", flush=True)
+    print(f"[live] {args.target} ({start}), recipe {label}, protocol {protocol}: {task} {' '.join(overrides)}",
+          flush=True)
     server = viser.ViserServer(host="0.0.0.0", port=args.port)
     server.scene.set_up_direction("+z")
     status = server.gui.add_markdown(f"**Building {args.target} with {args.num_envs} envs...** (~2-3 min)")
 
     # A recipe carries an agent block too, so it needs the agent cfg loaded (unused here).
-    @hydra_task_config_with_yaml(task, "rl_games_sapg_cfg_entry_point" if recipe else "", experiment=recipe)
+    @hydra_task_config_with_yaml(task, "rl_games_sapg_cfg_entry_point" if recipe else "", experiment=recipe or protocol)
     def run(env_cfg, agent_cfg) -> None:
         env_cfg.scene.num_envs = args.num_envs
         env_cfg.sim.device = args.device

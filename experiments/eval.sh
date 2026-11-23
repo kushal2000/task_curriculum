@@ -19,17 +19,23 @@
 #   rigidbody_folded   (opt-in) the same, every episode from a random reachable folded state (each hinge
 #                      flat or fully folded, flat included) with ONE more fold as the goal: goal_task
 #                      any_fold, the goal point-cloud students' hard mode
-#   vbd                the VBD cloth on Newton, 32 envs, the VBD task's own physics for every policy (the
-#                      ns6 protocol: num_substeps 6 / cloth substeps 2); a student brings its cloud
+#   vbd                the VBD cloth on Newton, the same world for every policy: every setting is in
+#                      isaacsimenvs/tasks/cloth/config/eval/vbd.yaml (eval.py --protocol; the policy's
+#                      recipe is not applied); a student brings its cloud
 #   start: rand = the env's randomisation on; pinned = DR off (one start state). Rigid body is rand only.
+# FABRIC (default none: vbd.yaml's SIM1 sheet): a fabric of isaacsimenvs/tasks/cloth/config/eval/fabric/
+#   (chiffon silk cotton napkin big_napkin towel denim) for the vbd cells: --protocol fabric/<name>.yaml,
+#   vbd.yaml with that fabric's material and cloth-table friction. The target is named vbd-<name> in
+#   the output (matrix_summary.py reads only plain vbd).
 #   A goal point-cloud student has no VBD cell: eval.py exits 3 and the cell is skipped.
 # RECIPE (default auto): the policy's training recipe, for the rigid cells. auto = run.json (train.py,
 #   since 2026-11-22) / args.json (distill_pc) next to the checkpoint, with the training's env overrides.
 #   Older checkpoints: name it (a list line's third column, or RECIPE=).
 # CKPT_SEL (default best): best | last | ep:<N> (isaacsimenvs/scripts/evaluation/checkpoints.py).
-# START_HEIGHT: the sheet spawn height on VBD (default 0.20; rigid: the recipe's unless set).
+# START_HEIGHT: the sheet spawn height (default: vbd.yaml's on VBD, the recipe's on the rigid sheet).
 # EVAL_SEEDS (default "1 2"); EXTRA_ARGS: more hydra overrides for every run. Protocol: eval.py, 900
-# steps, a fold counts once HELD 10 steps within 1.5 cm, SAPG block 0 with coefficient 0.
+# steps, a fold counts once HELD 10 steps within 1.5 cm (on VBD: vbd.yaml), SAPG block 0 with
+# coefficient 0.
 # Output: $OUTDIR/<tag>_s<seed>__on_<target>__<start>__1p5cm_s<es>.json (the cutoff stays in the name:
 # docs/reports' run_record_sync.py reads it; default OUTDIR docs/results/px_matrix); existing files
 # are skipped. Summaries:
@@ -38,7 +44,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 read -r -a CELL_LIST <<<"${CELLS:-rigidbody_flat:rand vbd:pinned vbd:rand}"
 NC=${#CELL_LIST[@]}
 ITEM=$(( INDEX / NC )); CELL=${CELL_LIST[$(( INDEX % NC ))]}
-T=${CELL%%:*}; START=${CELL#*:}
+T=${CELL%%:*}; START=${CELL#*:}; T_NAME=$T   # T_NAME: the target in the output name (vbd-<fabric>)
 
 checkpoint() {  # <run name> <select>
     .venv_isaacsim/bin/python -m isaacsimenvs.scripts.evaluation.checkpoints "$1" "$2" 2>/dev/null
@@ -61,8 +67,7 @@ RIGID=(Isaacsimenvs-RigidCloth-Direct-v0 448
 case "$T" in
     rigidbody_flat)   TASK=${RIGID[0]}; ENVS=${RIGID[1]}; TARGS=("${RIGID[@]:2}" env.fold_pool.goal_task.mode=half_fold) ;;
     rigidbody_folded) TASK=${RIGID[0]}; ENVS=${RIGID[1]}; TARGS=("${RIGID[@]:2}" env.fold_pool.goal_task.mode=any_fold) ;;
-    vbd)              TASK=Isaacsimenvs-Cloth-Direct-v0; ENVS=32
-                      TARGS=(env.robot_self_collision=false env.newton.njmax=32768) ;;
+    vbd)              TASK=Isaacsimenvs-Cloth-Direct-v0; TARGS=() ;;  # everything else: VBD_PROTOCOL
     *) echo "[eval] unknown target $T (rigidbody_flat, rigidbody_folded, vbd)" >&2; exit 2 ;;
 esac
 case "$START" in
@@ -70,32 +75,38 @@ case "$START" in
     pinned) [ "$T" = vbd ] || { echo "[eval] $T is rand only" >&2; exit 2; }; SARGS=() ;;
     *) echo "[eval] unknown start $START (pinned, rand)" >&2; exit 2 ;;
 esac
-if [ "$T" = vbd ]; then
-    TARGS+=("env.cloth.start_height=${START_HEIGHT:-0.20}")
-else
-    SARGS+=(--experiment "$RECIPE")
-    [ -n "${START_HEIGHT:-}" ] && TARGS+=("env.cloth.start_height=$START_HEIGHT")
+VBD_PROTOCOL=isaacsimenvs/tasks/cloth/config/eval/vbd.yaml
+if [ "$T" = vbd ] && [ -n "${FABRIC:-}" ]; then
+    VBD_PROTOCOL=isaacsimenvs/tasks/cloth/config/eval/fabric/$FABRIC.yaml
+    [ -f "$VBD_PROTOCOL" ] || { echo "[eval] unknown FABRIC $FABRIC (isaacsimenvs/tasks/cloth/config/eval/fabric/)" >&2; exit 2; }
+    T_NAME="vbd-$FABRIC"
 fi
+if [ "$T" = vbd ]; then
+    SARGS+=(--protocol "$VBD_PROTOCOL")
+else
+    SARGS+=(--experiment "$RECIPE" --num_envs "$ENVS"
+            env.cloth.keypoint_tolerance=0.015 env.cloth.nan_policy=reset env.termination.success_steps=10)
+fi
+[ -n "${START_HEIGHT:-}" ] && TARGS+=("env.cloth.start_height=$START_HEIGHT")
 # _common.sh picked the interpreter from the (absent) --task; pick it for this target.
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh" --task "$TASK"
 read -r -a EXTRA <<<"${EXTRA_ARGS:-}"
 OUTDIR="${OUTDIR:-docs/results/px_matrix}"
 mkdir -p "$OUTDIR"
-echo "[eval] tag=$TAG seed=$SEED target=$T start=$START recipe=$([ "$T" = vbd ] && echo - || echo "$RECIPE") ckpt=$CKPT"
+echo "[eval] tag=$TAG seed=$SEED target=$T_NAME start=$START $([ "$T" = vbd ] && echo "protocol=$VBD_PROTOCOL" || echo "recipe=$RECIPE") ckpt=$CKPT"
 provenance eval
 
 RC=0
 for ES in ${EVAL_SEEDS:-1 2}; do
-    OUT="$OUTDIR/${TAG}_s${SEED}__on_${T}__${START}__1p5cm_s${ES}.json"
+    OUT="$OUTDIR/${TAG}_s${SEED}__on_${T_NAME}__${START}__1p5cm_s${ES}.json"
     [ -s "$OUT" ] && { echo "[eval] exists: $OUT"; continue; }
     run_watched "eval_$(basename "$OUT" .json)" "${PY[@]}" -m isaacsimenvs.scripts.evaluation.eval "${HEADLESS[@]}" \
         --task "$TASK" --checkpoint "$CKPT" --policy_config "${POLICY_CONFIG:-pretrained_policy/config.yaml}" \
-        --sapg_expl_coef 0 --num_envs "$ENVS" --max_steps 900 --success_tolerance 0.01 \
+        --sapg_expl_coef 0 --max_steps 900 --success_tolerance 0.01 \
         --num_assets_per_type 1 --single_variant "${SARGS[@]}" --seed "$ES" --out "$OUT" \
-        "${TARGS[@]}" env.cloth.keypoint_tolerance=0.015 env.cloth.nan_policy=reset \
-        env.termination.success_steps=10 "${EXTRA[@]}"
+        "${TARGS[@]}" "${EXTRA[@]}"
     rc=$?
-    if [ "$rc" -eq 3 ]; then echo "[eval] $T not applicable to this policy: skipped"; break; fi
+    if [ "$rc" -eq 3 ]; then echo "[eval] $T_NAME not applicable to this policy: skipped"; break; fi
     # eval.py's exit code can be 0 after an exception inside the Hydra-wrapped run: the file decides.
     [ "$rc" -eq 0 ] && [ ! -s "$OUT" ] && rc=1
     [ "$rc" -ne 0 ] && { echo "[eval] $OUT FAILED"; RC=1; }

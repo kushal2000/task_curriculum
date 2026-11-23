@@ -1,0 +1,19 @@
+# Denim: measured on a 15 x 15 cm swatch, 2026-11-07. The VBD evaluation (../vbd.yaml) with
+# this fabric's material and cloth-table friction; everything else -- task, simulation, the other
+# three frictions, tri_kd -- is vbd.yaml's. Values: origin/cloth-physics cfg/fabric/denim_measured.yaml.
+#
+# measured  mass 4.1 g; cantilever 80 deg (tip line below horizontal, 5.25 cm overhang);
+#           slides at 20 deg; bending length 0.01162 m, B = 2.802e-06 N m
+#           fold test: folded over and let go -> stays folded
+# plasticity: refit by origin/cloth-physics on the checkerboard grid (vbd.yaml mesh_diagonals: alternate).
+base: ../vbd
+
+env:
+  cloth:
+    density: 0.1822                     # kg/m^2 = 4.1 g / 0.0225 m^2
+    tri_ke: 200.0                       # stretch: literature, not measured
+    tri_ka: 200.0                       # = tri_ke
+    edge_ke: 0.0006594                  # bending: cantilever fit on the 10 cm 7x7 sheet (235 x B)
+    edge_kd: 9.11e-5                    # 1e-3 x density / 2.0 (1e-3 under-converges on light sheets)
+    plastic_yield_curvature: 100.0      # [1/m] checkerboard refit, job 28503469: released fold 3.4 mm high at the crease, no skew. Uniform grid: 150
+    cloth_table_friction: 0.36397023    # tan(20 deg), slide onset

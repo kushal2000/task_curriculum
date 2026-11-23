@@ -1,0 +1,22 @@
+# Towel: measured on a 15 x 15 cm swatch, 2026-11-07. The VBD evaluation (../vbd.yaml) with
+# this fabric's material and cloth-table friction; everything else -- task, simulation, the other
+# three frictions, tri_kd -- is vbd.yaml's. Values: origin/cloth-physics cfg/fabric/towel_measured.yaml.
+#
+# measured  mass 7.3 g; cantilever 75 deg (tip line below horizontal, 5.25 cm overhang);
+#           slides at 30 deg; bending length 0.01428 m, B = 9.26e-06 N m
+#           fold test: folded over and let go -> stays folded
+# plasticity: refit by origin/cloth-physics on the checkerboard grid (vbd.yaml mesh_diagonals: alternate).
+base: ../vbd
+
+env:
+  cloth:
+    density: 0.3244                     # kg/m^2 = 7.3 g / 0.0225 m^2
+    tri_ke: 100.0                       # stretch: literature, not measured
+    tri_ka: 100.0                       # = tri_ke
+    edge_ke: 0.001394                   # bending: cantilever fit on the 10 cm 7x7 sheet (151 x B)
+    edge_kd: 0.000162                   # 1e-3 x density / 2.0 (1e-3 under-converges on light sheets)
+    plastic_yield_curvature: 60.0       # [1/m] checkerboard refit, job 28503469: released fold 4.0 mm high at the crease, no skew. Uniform grid: 100
+    cloth_table_friction: 0.57735027    # tan(30 deg), slide onset
+    # thick pile: self-contact at the literature towel preset's 3.7 mm (vbd.yaml: 2 mm)
+    self_contact_radius: 0.0037
+    self_contact_margin: 0.0055

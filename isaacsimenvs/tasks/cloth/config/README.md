@@ -9,6 +9,7 @@ what they are set to (YAML).
 | `task.yaml` | The values: `common` (both tasks), `rigid`, `vbd`. Every value either task starts from is here |
 | `runs/` | Run recipes: `rigid_cloth_right_wuji.yaml`, the training setup of every PhysX run |
 | `dr/` | DR blocks: named env overlays a recipe switches on with `dr: [...]` |
+| `eval/` | Evaluation worlds (recipe format, `eval.py --protocol`): `vbd.yaml`, every setting of the VBD evaluation, the same for every policy; `fabric/<name>.yaml`, vbd.yaml with a measured fabric's material and cloth-table friction (`eval.sh FABRIC=`) |
 | `designs/` | The fold-pool shapes (plates, hinges, seams, folds) with PNG diagrams |
 | `ClothSAPG.yaml` | Learner settings (SAPG); PPO is Play's (`tasks/play/config/`) |
 | `experiments/<date>_<study>/` | The recipes of one study, beside its launchers |

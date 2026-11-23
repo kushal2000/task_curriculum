@@ -1,0 +1,19 @@
+# Cotton: measured on a 15 x 15 cm swatch, 2026-11-07. The VBD evaluation (../vbd.yaml) with
+# this fabric's material and cloth-table friction; everything else -- task, simulation, the other
+# three frictions, tri_kd -- is vbd.yaml's. Values: origin/cloth-physics cfg/fabric/cotton_measured.yaml.
+#
+# measured  mass 2.6 g; cantilever 30 deg (tip line below horizontal, 5.25 cm overhang);
+#           slides at 20 deg; bending length 0.03094 m, B = 3.358e-05 N m
+#           fold test: folded over and let go -> stays folded, slight gap, teardrop
+# plasticity: refit by origin/cloth-physics on the checkerboard grid (vbd.yaml mesh_diagonals: alternate).
+base: ../vbd
+
+env:
+  cloth:
+    density: 0.1156                     # kg/m^2 = 2.6 g / 0.0225 m^2
+    tri_ke: 56.0                        # stretch: literature, not measured
+    tri_ka: 56.0                        # = tri_ke
+    edge_ke: 0.004249                   # bending: cantilever fit on the 10 cm 7x7 sheet (127 x B)
+    edge_kd: 5.78e-5                    # 1e-3 x density / 2.0 (1e-3 under-converges on light sheets)
+    plastic_yield_curvature: 20.0       # [1/m] checkerboard refit, job 28575191: let go -> 0.30 cm / 2.8 deg (real: stays, slight gap). Uniform grid: 30
+    cloth_table_friction: 0.36397023    # tan(20 deg), slide onset

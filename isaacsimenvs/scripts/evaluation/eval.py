@@ -25,7 +25,10 @@ import json
 import os
 import statistics
 import sys
+import time
 from pathlib import Path
+
+_T_START = time.perf_counter()  # build_s in the result: imports + env construction + warm-up
 
 from isaacsimenvs.scripts.evaluation.contact_guard import (
     assert_no_buffer_overflow,
@@ -140,7 +143,9 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Mean goals per episode, one episode per env.")
     parser.add_argument("--task", default="Isaacsimenvs-PlayFlexivWujiRightHumanLike-Direct-v0")
-    parser.add_argument("--num_envs", type=int, default=64)
+    parser.add_argument(
+        "--num_envs", type=int, default=None, help="Default: the --protocol's, else 64."
+    )
     parser.add_argument(
         "--max_steps",
         type=int,
@@ -172,6 +177,13 @@ def main() -> None:
         "'auto': what is recorded next to the checkpoint (training_run.py): run.json's resolved env "
         "config if it has one (since 2026-11-23), else its recipe and env overrides (run.json / "
         "args.json). Default: the task's own config.",
+    )
+    parser.add_argument(
+        "--protocol",
+        default=None,
+        help="Build the env from this evaluation world instead of the policy's recipe (recipe format, "
+        "e.g. isaacsimenvs/tasks/cloth/config/eval/vbd.yaml): the same world for every policy; a "
+        "point-cloud student brings its own cloud. Not with --experiment.",
     )
     parser.add_argument("--policy_config", default=DEFAULT_POLICY_CFG)
     parser.add_argument(
@@ -227,9 +239,13 @@ def main() -> None:
         help="skip the contact-buffer overflow check (results will be measured on dropped contacts)",
     )
     args_cli, hydra_args = parser.parse_known_args()
+    if args_cli.protocol and args_cli.experiment:
+        parser.error("--protocol is the evaluation's world, --experiment the policy's: give one")
+    if args_cli.num_envs is None and not args_cli.protocol:
+        args_cli.num_envs = 64
     train_overrides: list[str] = []
     # The env layer between task.yaml and the command line: a recipe name / path, or a composed recipe.
-    env_layer = args_cli.experiment
+    env_layer = args_cli.experiment or args_cli.protocol
     if args_cli.experiment == "auto":
         from isaacsimenvs.scripts.evaluation.training_run import resolved_recipe, training_run, without_keys
 
@@ -268,7 +284,8 @@ def main() -> None:
 
     @hydra_task_config_with_yaml(args_cli.task, "", experiment=env_layer)
     def run(env_cfg, agent_cfg) -> None:
-        env_cfg.scene.num_envs = args_cli.num_envs
+        if args_cli.num_envs is not None:
+            env_cfg.scene.num_envs = args_cli.num_envs
         env_cfg.sim.device = args_cli.sim_device
         env_cfg.seed = args_cli.seed
         # Play task only (the cloth task has no tool pool and no goal tolerance).
@@ -282,7 +299,8 @@ def main() -> None:
             from isaacsimenvs.scripts.distillation.student import apply_student_env
 
             if args_cli.experiment is None:
-                # No recipe (the VBD target): the student's cloud from its checkpoint; its DR only with --randomize.
+                # No policy recipe (an evaluation world, --protocol): the student's cloud from its
+                # checkpoint; its DR only with --randomize.
                 apply_student_env(env_cfg, student["env"], with_dr=args_cli.randomize)
             else:
                 _check_student_cloud(env_cfg, student["env"])
@@ -355,6 +373,8 @@ def main() -> None:
             capture = capture_cm.__enter__()
 
         step = 0
+        t_rollout = time.perf_counter()
+        build_s = t_rollout - _T_START
         try:
           while step < args_cli.max_steps and not bool(contributed.all()):
               action = player.get_action(obs["policy"], deterministic=not args_cli.stochastic)
@@ -432,6 +452,7 @@ def main() -> None:
                   )
 
           ejected = max_obj_z > REACH_M
+          rollout_s = time.perf_counter() - t_rollout  # every step syncs (contributed.all()), so wall time
         finally:
             if capture is not None:
                 pending = capture()
@@ -463,9 +484,12 @@ def main() -> None:
             "num_envs": num_envs,
             "max_steps": args_cli.max_steps,
             "steps_run": step,
+            "build_s": round(build_s, 1),
+            "rollout_s": round(rollout_s, 1),
             "checkpoint": args_cli.checkpoint,
             "policy": "pointcloud_student" if student is not None else "keypoint",
             "experiment": args_cli.experiment,
+            "protocol": args_cli.protocol,
             "training_overrides": train_overrides,
             "sapg_expl_coef": args_cli.sapg_expl_coef if student is None else None,
             "success_tolerance": args_cli.success_tolerance,

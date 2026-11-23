@@ -174,3 +174,31 @@ def test_eval_vbd_yaml_sets_the_null_frictions():
     cfg.from_dict(env)
     for field in ("cloth_cloth_friction", "cloth_table_friction", "cloth_fingertip_friction", "cloth_robot_friction"):
         assert getattr(cfg.cloth, field) == env["cloth"][field], field
+
+
+def test_full_surface_contact_reaches_the_proxy_pipeline():
+    """The flag lives on the PROXY's collision pipeline (the cloth's view of the hand and table), not
+    on the outer one; off in task.yaml, on in the VBD eval file."""
+    from pathlib import Path
+
+    from isaacsimenvs.tasks.cloth.backends.vbd.physics import build_physics
+    from isaacsimenvs.tasks.cloth.config import vbd_cloth_env_cfg
+    from isaacsimenvs.tasks.loader import _set_null_fields
+    from isaacsimenvs.tasks.recipes import load_recipe
+
+    def proxy_flag(cfg):
+        physics = build_physics(cfg.cloth, cfg.newton, num_envs=4)
+        return [p.collision_pipeline.enable_rigid_soft_full_surface_contact for p in physics.solver_cfg.proxies]
+
+    cfg = vbd_cloth_env_cfg()
+    assert proxy_flag(cfg) == [False]
+
+    env = load_recipe(str(Path(__file__).resolve().parents[1] / "config/eval/vbd.yaml"))["env"]
+    cfg = vbd_cloth_env_cfg()
+    _set_null_fields(cfg, env)
+    cfg.from_dict(env)
+    assert proxy_flag(cfg) == [True]
+    # origin/cloth-physics' contact and time: 8 mm particles, 12 robot x 1 cloth substeps (1/1440 s each).
+    assert (cfg.cloth.thickness, cfg.newton.num_substeps, cfg.cloth.substeps) == (0.008, 12, 1)
+    assert cfg.cloth.mesh_diagonals == "alternate" and vbd_cloth_env_cfg().cloth.mesh_diagonals == "uniform"
+    assert cfg.cloth.thickness <= cfg.cloth.spacing() + 1e-9

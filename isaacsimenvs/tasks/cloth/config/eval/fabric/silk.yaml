@@ -1,0 +1,21 @@
+# Silk: measured on a 15 x 15 cm swatch, 2026-11-07. The VBD evaluation (../vbd.yaml) with
+# this fabric's material and cloth-table friction; everything else -- task, simulation, the other
+# three frictions, tri_kd -- is vbd.yaml's. Values: origin/cloth-physics cfg/fabric/silk_measured.yaml.
+#
+# measured  mass 2.6 g; cantilever 30 deg (tip line below horizontal, 5.25 cm overhang);
+#           slides at 10 deg; bending length 0.03094 m, B = 3.358e-05 N m
+#           fold test: folded over and let go -> springs back completely flat
+# plasticity: origin/cloth-physics' fit, not refit on the checkerboard (vbd.yaml mesh_diagonals: alternate);
+#   only cotton / towel / denim were. Its job ran before the checkerboard tests (28503469), so most likely
+#   on the uniform-cut grid; 28268743 (big napkin) is the uniform job by name.
+base: ../vbd
+
+env:
+  cloth:
+    density: 0.1156                     # kg/m^2 = 2.6 g / 0.0225 m^2
+    tri_ke: 34.0                        # stretch: literature, not measured
+    tri_ka: 34.0                        # = tri_ke
+    edge_ke: 0.004038                   # bending: cantilever fit on the 10 cm 7x7 sheet (120 x B)
+    edge_kd: 5.78e-5                    # 1e-3 x density / 2.0 (1e-3 under-converges on light sheets)
+    plastic_yield_curvature: 32.0       # [1/m] fold-press-release on the 7x7 grid, job 28369790: let go -> springs open to 39 deg, pressed -> 6.5 deg
+    cloth_table_friction: 0.17632698    # tan(10 deg), slide onset

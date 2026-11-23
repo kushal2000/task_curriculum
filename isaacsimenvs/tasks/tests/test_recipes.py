@@ -81,3 +81,18 @@ def test_errors(tree):
         recipes.load_recipe("badblock")
     with pytest.raises(FileNotFoundError, match="not found"):
         recipes.load_recipe("missing")
+
+
+def test_sim_aliases_move_to_their_fields(tree):
+    tree("experiments/x/run.yaml", {"env": {"sim": {"dt": 0.01, "decimation": 2, "robot_substeps": 6,
+                                                    "cloth_substeps": 2, "vbd_iterations": 12},
+                                            "cloth": {"size": 0.1}}})
+    env = recipes.load_recipe("experiments/x/run.yaml")["env"]
+    assert env == {"sim": {"dt": 0.01}, "decimation": 2, "newton": {"num_substeps": 6},
+                   "cloth": {"size": 0.1, "substeps": 2, "vbd_iterations": 12}}
+
+
+def test_sim_alias_and_real_field_together_is_an_error(tree):
+    tree("experiments/x/run.yaml", {"env": {"sim": {"robot_substeps": 6}, "newton": {"num_substeps": 12}}})
+    with pytest.raises(ValueError, match="robot_substeps"):
+        recipes.load_recipe("experiments/x/run.yaml")

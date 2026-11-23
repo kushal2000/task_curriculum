@@ -11,6 +11,11 @@ A recipe has up to five keys:
 `load_recipe` composes them as base -> each DR block -> this recipe's own `env` / `agent`, so a
 recipe's own values win. A DR block is a plain env overlay (the same keys as a recipe's `env:`).
 
+A recipe's `env.sim` may also hold the step sizes that live elsewhere in the env config
+(`SIM_ALIASES`: decimation, the robot / cloth substeps, VBD iterations), so a file can write the
+time loop in one block; `load_recipe` moves each to its real place. Only in recipe files: the
+command line uses the real names (`env.newton.num_substeps=...`).
+
 A recipe is named by a file stem in `tasks/cloth/config/runs/` or by a path, absolute or relative to the
 repo root (e.g. `experiments/nov15_dr_delay/flat7RW_DR_delay.yaml`). A `base:` is looked up next to
 the recipe first, then in `tasks/cloth/config/runs/`.
@@ -30,6 +35,38 @@ RUNS_DIR = CLOTH_CONFIG_DIR / "runs"
 DR_DIR = CLOTH_CONFIG_DIR / "dr"
 
 RECIPE_KEYS = {"task", "base", "dr", "env", "agent"}
+
+#: ``env.sim.<alias>`` in a recipe file -> the env config path it sets: policy step = ``decimation`` x
+#: ``sim.dt``; robot step = ``sim.dt / robot_substeps``; cloth step = robot step / ``cloth_substeps``,
+#: solved with ``vbd_iterations``. None of these names is a field of Isaac Lab's ``SimulationCfg``.
+SIM_ALIASES = {
+    "decimation": ("decimation",),
+    "robot_substeps": ("newton", "num_substeps"),
+    "cloth_substeps": ("cloth", "substeps"),
+    "vbd_iterations": ("cloth", "vbd_iterations"),
+}
+
+
+def expand_sim_aliases(env: dict, where: str = "recipe") -> dict:
+    """``env`` with every ``sim.<alias>`` (``SIM_ALIASES``) moved to its real path. A value given both
+    ways in the same overlay is an error, not a silent pick."""
+    sim = env.get("sim")
+    if not isinstance(sim, dict) or not set(sim) & set(SIM_ALIASES):
+        return env
+    out = {**env, "sim": {k: v for k, v in sim.items() if k not in SIM_ALIASES}}
+    if not out["sim"]:
+        del out["sim"]
+    for alias, path in SIM_ALIASES.items():
+        if alias not in sim:
+            continue
+        node = out
+        for key in path[:-1]:
+            node[key] = dict(node.get(key) or {})
+            node = node[key]
+        if path[-1] in node:
+            raise ValueError(f"{where}: env.sim.{alias} and env.{'.'.join(path)} both set; keep one")
+        node[path[-1]] = sim[alias]
+    return out
 
 
 def deep_merge(base: dict, over: dict) -> dict:
@@ -89,7 +126,7 @@ def load_recipe(name: str, _near: Path | None = None, _seen: frozenset = frozens
     for block in raw.get("dr") or []:
         out["env"] = deep_merge(out["env"], dr_block(block))
         out["dr"] = [*out["dr"], block]
-    out["env"] = deep_merge(out["env"], raw.get("env") or {})
+    out["env"] = deep_merge(out["env"], expand_sim_aliases(raw.get("env") or {}, str(path)))
     out["agent"] = deep_merge(out["agent"], raw.get("agent") or {})
     if raw.get("task"):
         out["task"] = raw["task"]
