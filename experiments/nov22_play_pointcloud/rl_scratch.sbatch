@@ -23,6 +23,7 @@ JOB="${SLURM_JOB_ID:-local}"
 RUN_DIR="debug_outputs/train_logs/nov/$(date +%F)_${RUN_NAME}_${JOB}"
 mkdir -p "$RUN_DIR"
 [ -f "debug_outputs/train_logs/nov/slurm_${JOB}.out" ] && mv "debug_outputs/train_logs/nov/slurm_${JOB}.out" "$RUN_DIR/"
+export WANDB_DIR="$PWD/$RUN_DIR"       # wandb files with the run, not ./wandb
 export PYTHONUNBUFFERED=1 OMNI_KIT_ACCEPT_EULA=YES PYTHONPATH="$PWD" PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export TMPDIR="/tmp/${USER}_${SLURM_JOB_ID:-local}"; mkdir -p "$TMPDIR"
 echo "[play_pc] host=$(hostname -s) job=${SLURM_JOB_ID:-local} commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain --untracked-files=no)" && echo YES || echo no)"
