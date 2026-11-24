@@ -107,6 +107,7 @@ common:
       fine_side: 13                      # particle grid interpolated to 13 x 13
       uniform_start_yaws: 4              # alignment start yaws besides the two major-axis ones
       icp_iters: 3
+      layered: true                      # each ply vs the goal's same ply (mdp/surface_layered.py); half folds only
     max_in_place_dist: .inf              # surface only: in-place gate, m to the frozen goal, not aligned
     drift_settle_steps: 30               # 0.5 s: the stationary half's anchor (drift logs, slide penalty)
     gate_curriculum:                     # empty lists: off

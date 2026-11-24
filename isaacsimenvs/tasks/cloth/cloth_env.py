@@ -219,6 +219,8 @@ class ClothEnv(DirectRLEnv):
         final["stationary_yaw"] = task.yaw.clone()
         if task.surface:
             final["aligned_dist"] = task.aligned_dist.clamp(max=1.0)          # inf: no frozen goal yet
+            if task.surface_layered:
+                final["layered_dist"] = task.layered_dist.clamp(max=1.0)
             final["in_place_dist"] = task.in_place_dist.clamp(max=1.0)
         self.extras["episode_cumulative"] = task.reward_terms
         self.extras["episode_final"] = final

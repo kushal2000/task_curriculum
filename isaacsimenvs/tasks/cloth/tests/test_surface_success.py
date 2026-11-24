@@ -48,10 +48,10 @@ def _rotz(p, deg):
     return torch.stack((c * p[..., 0] - s * p[..., 1], s * p[..., 0] + c * p[..., 1], p[..., 2]), dim=-1)
 
 
-def _task(cfg, goal) -> ClothTask:
+def _task(cfg, goal, fold_axis: str = "x") -> ClothTask:
     verts, _ = grid_mesh(SIZE, RES)
     layout = SheetLayout(
-        rest_local=verts, keypoint_idx=keypoint_indices(RES, "x", 4), resolution=RES, fold_axis="x",
+        rest_local=verts, keypoint_idx=keypoint_indices(RES, fold_axis, 4), resolution=RES, fold_axis=fold_axis,
         size=SIZE, fold_lift=0.002, object_scale=torch.ones(N, 3),
     )
     task = ClothTask(
@@ -172,3 +172,60 @@ def test_drift_translation_and_yaw(cfg):
     assert torch.allclose(task.yaw, torch.full((N,), math.radians(20.0)), atol=1e-5)
     task.reset(torch.tensor([1]))
     assert not bool(task.drift_anchored[1]) and float(task.drift_max[1]) == 0.0
+
+
+def _top_ply_bunched(goal):
+    """The goal with its top ply (the +x rows it folded over, ``fold_axis`` x) shrunk to half its size
+    about its own centre, in place: still inside the bottom ply's outline."""
+    sheet = goal.clone()
+    top = (torch.arange(RES) > RES // 2).view(RES, 1).expand(RES, RES).reshape(-1)
+    centre = sheet[:, top, :2].mean(dim=1, keepdim=True)
+    sheet[:, top, :2] = centre + 0.5 * (sheet[:, top, :2] - centre)
+    return sheet
+
+
+def _lifted_fold(flat, gap=0.003):
+    """The +x half over onto -x, ``gap`` above the -x half (``_fold`` has no ply gap)."""
+    folded = _fold(flat, -1)
+    moved = flat[..., 0] > 1e-6
+    folded[..., 2] = torch.where(moved, folded[..., 2] + gap, folded[..., 2])
+    return folded
+
+
+def test_layered_is_the_default_and_fails_a_misaligned_top_ply(cfg):
+    assert cfg.termination.surface.layered
+    goal = _lifted_fold(_flat())
+    task = _task(cfg, goal)
+    ref = int(cfg.termination.surface.ref_step)
+    task._update_surface(_view(goal), _steps(ref))
+    assert bool(task.is_folded(_view(goal)).all()) and torch.all(task.layered_dist < 1e-3)
+    bunched = _top_ply_bunched(goal)
+    task._update_surface(_view(bunched), _steps(ref + 1))
+    tolerance = task.surface_tolerance()
+    assert torch.all(task.aligned_dist < tolerance)               # unlabelled: within the tolerance
+    assert torch.all(task.layered_dist > tolerance)               # layered: the top ply is 1.25 cm short
+    assert not bool(task.is_folded(_view(bunched)).any())
+
+
+def test_unlabelled_when_layered_is_off(cfg):
+    c = copy.deepcopy(cfg)
+    c.termination.surface.layered = False
+    goal = _lifted_fold(_flat())
+    task = _task(c, goal)
+    ref = int(c.termination.surface.ref_step)
+    task._update_surface(_view(goal), _steps(ref))
+    bunched = _top_ply_bunched(goal)
+    task._update_surface(_view(bunched), _steps(ref + 1))
+    assert bool(task.is_folded(_view(bunched)).all())
+    assert torch.all(torch.isinf(task.layered_dist))
+
+
+def test_layered_fold_axis_y(cfg):
+    """A sheet folding along y: the goal's top ply is the columns right of the middle one."""
+    flat = _flat()
+    goal = _rotz(_lifted_fold(_rotz(flat, -90.0)), 90.0)          # the +y half over onto -y
+    task = _task(cfg, goal, fold_axis="y")
+    ref = int(cfg.termination.surface.ref_step)
+    task._update_surface(_view(goal), _steps(ref))
+    assert torch.all(task.layered_dist < 1e-3)
+

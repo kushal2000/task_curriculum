@@ -374,3 +374,6 @@ class RigidClothEnvCfg(ClothEnvCfg):
         super().check()
         self.rigid_cloth.check()
         self.fold_pool.check()
+        term = self.termination
+        if term.success == "surface" and term.surface.layered and self.fold_pool.goal_task.mode == "any_fold":
+            raise ValueError("termination.surface.layered scores half folds only; any_fold goal tasks need layered: false")

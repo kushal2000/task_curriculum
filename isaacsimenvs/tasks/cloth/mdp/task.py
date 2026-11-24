@@ -19,7 +19,9 @@ Reward::
 ``accept_lookalike``). ``surface``: the goal sheet is frozen where it is at ``surface.ref_step``;
 the sheet is folded when its surface is within ``surface.tolerance_frac`` x its side of the frozen goal's,
 both ways, after the best placement in the table plane (``mdp/surface_match.py``): any fold that
-looks like the goal counts, wherever it was made. ``termination.max_in_place_dist`` (``.inf`` by default)
+looks like the goal counts, wherever it was made. With ``surface.layered`` (the default) each ply is
+compared only with the goal's same ply under that placement (``mdp/surface_layered.py``), so a top ply
+misaligned over the bottom one fails. ``termination.max_in_place_dist`` (``.inf`` by default)
 also requires the two-sided max distance to the frozen goal WITHOUT alignment below it: the in-place
 gate. With ``surface`` the old criterion is still reported (``fold_designated``), not acted on; the
 fold progress reward stays the designated fold error.
@@ -51,7 +53,7 @@ from __future__ import annotations
 
 import torch
 
-from . import surface_match
+from . import surface_layered, surface_match
 from .fold import FoldGeometry
 from .geometry import quat
 from .robot import NUM_FINGERTIPS, RobotLayout
@@ -141,12 +143,15 @@ class ClothTask:
         self.yaw = torch.zeros(n, device=dev)
         self.yaw_max = torch.zeros(n, device=dev)
         # The surface criterion (module doc): the frozen goal sheet (world frame, particle grid) and
-        # this step's distances to it [m] -- after the best in-plane placement, and as it is.
+        # this step's distances to it [m] -- after the best in-plane placement (the unlabelled one and,
+        # with ``surface.layered``, the layered one), and as it is.
         self.surface = self.cfg.termination.success == "surface"
+        self.surface_layered = self.surface and bool(self.cfg.termination.surface.layered)
         n_particles = int(self.geometry.layout.resolution) ** 2
         self.frozen_goal_w = torch.zeros(n, n_particles, 3, device=dev)
         self.goal_is_frozen = torch.zeros(n, dtype=torch.bool, device=dev)
         self.aligned_dist = torch.full((n,), float("inf"), device=dev)
+        self.layered_dist = torch.full((n,), float("inf"), device=dev)
         self.in_place_dist = torch.full((n,), float("inf"), device=dev)
         self.aligned_yaw = torch.zeros(n, device=dev)
         #: The old criterion (``fold_error``), reported for comparison when ``surface`` decides.
@@ -201,12 +206,21 @@ class ClothTask:
             return layout.env_size.to(self.device).float()
         return torch.full((self.num_envs,), float(layout.size), device=self.device)
 
+    @property
+    def surface_dist(self) -> torch.Tensor:
+        """``(N,)`` the distance the surface criterion holds below its tolerance: the layered one with
+        ``surface.layered``, else the unlabelled aligned one."""
+        return self.layered_dist if self.surface_layered else self.aligned_dist
+
+    def surface_tolerance(self) -> torch.Tensor:
+        """``(N,)`` the surface criterion's tolerance [m]: ``surface.tolerance_frac`` x each sheet's side."""
+        return float(self.cfg.termination.surface.tolerance_frac) * self.sheet_size()
+
     def is_folded(self, view: FoldView) -> torch.Tensor:
         """The fold criterion (``termination.success``, module doc); the surface one reads the
         distances ``_update_surface`` measured this step."""
         if self.surface:
-            tolerance = float(self.cfg.termination.surface.tolerance_frac) * self.sheet_size()
-            folded = self.goal_is_frozen & (self.aligned_dist < tolerance)
+            folded = self.goal_is_frozen & (self.surface_dist < self.surface_tolerance())
             max_in_place, _ = self.gate()
             if max_in_place < float("inf"):
                 folded = folded & (self.in_place_dist < max_in_place)
@@ -367,7 +381,8 @@ class ClothTask:
         return torch.where(self.goal_is_frozen.view(-1, 1, 1), self.frozen_goal_w, self.goal_now_w(view))
 
     def _update_surface(self, view: FoldView, episode_length_buf: torch.Tensor) -> None:
-        """Freeze the goal sheet at ``surface.ref_step``; this step's aligned and in-place distances."""
+        """Freeze the goal sheet at ``surface.ref_step``; this step's aligned (and layered) and in-place
+        distances."""
         surface_cfg = self.cfg.termination.surface
         freeze_now = ~self.goal_is_frozen & (episode_length_buf >= int(surface_cfg.ref_step))
         self.frozen_goal_w = torch.where(freeze_now.view(-1, 1, 1), self.goal_now_w(view), self.frozen_goal_w)
@@ -375,15 +390,28 @@ class ClothTask:
 
         resolution = int(self.geometry.layout.resolution)
         sheet = torch.nan_to_num(view.points_w, nan=0.0, posinf=0.0, neginf=0.0)
-        aligned = surface_match.aligned_distance(
-            sheet, self.frozen_goal_w, resolution, fine_side=int(surface_cfg.fine_side),
-            n_uniform_starts=int(surface_cfg.uniform_start_yaws), icp_iters=int(surface_cfg.icp_iters),
+        match_args = dict(
+            fine_side=int(surface_cfg.fine_side), n_uniform_starts=int(surface_cfg.uniform_start_yaws),
+            icp_iters=int(surface_cfg.icp_iters),
         )
+        if self.surface_layered:
+            # The goal's top ply is the half the stage-1 / half_fold goal folds over, the sheet's moving
+            # half (``FoldGeometry.goal_sheet``): the rows above the middle one for ``fold_axis`` x (row
+            # i is x_i), the columns right of it for y.
+            goal_top = ("row" if self.geometry.layout.fold_axis == "x" else "col", "upper")
+            layered = surface_layered.layered_aligned_distance(
+                sheet, self.frozen_goal_w, resolution, goal_top=goal_top, **match_args,
+            )
+            aligned = {"max": layered["aligned_max"], "yaw": layered["yaw"]}
+        else:
+            aligned = surface_match.aligned_distance(sheet, self.frozen_goal_w, resolution, **match_args)
         in_place = surface_match.in_place_distance(sheet, self.frozen_goal_w, resolution, fine_side=int(surface_cfg.fine_side))
         # No distance before the goal is frozen, nor for a diverged sheet (reset this step anyway).
         no_distance = ~torch.isfinite(view.points_w).all(dim=-1).all(dim=-1) | ~self.goal_is_frozen
         inf = torch.full_like(in_place, float("inf"))
         self.aligned_dist = torch.where(no_distance, inf, aligned["max"])
+        if self.surface_layered:
+            self.layered_dist = torch.where(no_distance, inf, layered["max"])
         self.in_place_dist = torch.where(no_distance, inf, in_place)
         self.aligned_yaw = aligned["yaw"]
 
@@ -484,6 +512,8 @@ class ClothTask:
             frozen = self.goal_is_frozen
             n_frozen = frozen.float().sum().clamp(min=1.0)
             self.extras["aligned_dist_mean"] = float(torch.where(frozen, self.aligned_dist, 0.0).sum() / n_frozen)
+            if self.surface_layered:
+                self.extras["layered_dist_mean"] = float(torch.where(frozen, self.layered_dist, 0.0).sum() / n_frozen)
             self.extras["in_place_dist_mean"] = float(torch.where(frozen, self.in_place_dist, 0.0).sum() / n_frozen)
             self.extras["fold_designated_rate"] = float(self.designated_folded.float().mean())
         return reward

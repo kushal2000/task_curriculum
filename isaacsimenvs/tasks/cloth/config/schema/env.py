@@ -204,6 +204,12 @@ class SurfaceSuccessCfg:
     """Evenly spaced start yaws of the alignment, besides the two major-axis ones."""
     icp_iters: int = MISSING
     """ICP rounds from each start yaw."""
+    layered: bool = MISSING
+    """Compare each ply only with the goal's same ply (``mdp/surface_layered.py``): the sheet's half on
+    top with the goal's top ply, the half underneath with its bottom ply, after the same placement.
+    Without it a top ply misaligned inside the bottom ply's outline still passes (its uncovered goal
+    points match the bottom ply a ply gap below). Needs a half-fold goal (the stage-1 fold or
+    ``fold_pool.goal_task.mode: half_fold``) and an odd ``cloth.resolution``."""
 
 
 @configclass
@@ -440,3 +446,5 @@ class ClothEnvCfg(DirectRLEnvCfg):
         defaults, before task.yaml, recipes or the command line). ``ClothEnv`` calls it."""
         self.cloth.check()
         self.termination.check()
+        if self.termination.success == "surface" and self.termination.surface.layered and self.cloth.resolution % 2 != 1:
+            raise ValueError(f"termination.surface.layered needs an odd cloth.resolution (a crease row), got {self.cloth.resolution}")
