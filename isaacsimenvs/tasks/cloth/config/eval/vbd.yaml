@@ -1,142 +1,124 @@
-# The VBD evaluation's world: every setting of experiments/eval.sh's `vbd` cell (eval.py --protocol).
-#
-# One yardstick for every fold policy: the policy's training recipe (frictions, hand sysid, DR) is not
-# applied; a point-cloud student brings only its own cloud. Every value is written out, so the
-# evaluation does not move when task.yaml does. Layers: task.yaml -> this file -> eval.sh EXTRA_ARGS.
-# eval/fabric/<name>.yaml (`base: ../vbd`, eval.sh FABRIC=) swaps in a measured fabric.
-#
-# Not set here:
-#   by the policy   obs, action, reward
-#   pinned          scripts/evaluation/protocol.py: DR neutral, no reset noise, sheet at the table centre
-#   rand            the reset noise below, DR neutral (a student: its own DR, apply_student_env)
-#   rollout         experiments/eval.sh: 900 steps, first episode per env, mean action, SAPG coef 0, seeds 1 2
+# The VBD evaluation world (experiments/eval.sh `vbd` cell, eval.py --protocol).
+# Same for every policy: the policy's training recipe is not applied. Every value is written out,
+# so changing task.yaml does not change the evaluation. Fabrics: eval/fabric/<name>.yaml (FABRIC=).
+# pinned / rand starts: isaacsimenvs/scripts/evaluation/protocol.py.
 #
 # History
-#   2026-11-23  the cell's values before this file (task.yaml + eval.sh), unchanged
-#   2026-11-23  origin/cloth-physics' sheet: thickness 16 -> 8 mm, full-surface contact, checkerboard
-#               mesh, robot step 1/720 -> 1/1440 s (substeps 6 x 2 -> 12 x 1; cloth step stays 1/1440 s)
+#   2026-11-23  first version: the old eval cell's values, unchanged
+#   2026-11-23  origin/cloth-physics' sheet: 8 mm, full-surface contact, checkerboard mesh, robot 1440 Hz
 #
-# YAML 1.1: a float with an exponent needs a dot and a signed exponent (1.0e-5), or it is a string.
+# YAML 1.1: write exponent floats as 1.0e-5, or they are read as strings.
 task: Isaacsimenvs-Cloth-Direct-v0
 
 env:
   scene:
-    num_envs: 32
+    num_envs: 32                         # parallel envs
 
   # ---------------------------------------------------------------------------- robot
-  hand_sysid: true                       # the identified right Wuji (robots.with_sysid)
-  robot_root_pos: [0.0, 0.51, 0.20]
-  robot_self_collision: false            # on is far slower under MJWarp
-  robot_self_collision_scope: all
-  use_gravcomp: true
-  # assets.*_friction stays task.yaml's: with every cloth_*_friction set below it only acts hand-table.
+  hand_sysid: true                       # identified Wuji hand dynamics
+  robot_root_pos: [0.0, 0.51, 0.20]      # robot base position
+  robot_self_collision: false            # finger-finger contact (on: far slower)
+  robot_self_collision_scope: all        # which links self-collide
+  use_gravcomp: true                     # gravity compensation on the arm
   assets:
-    robot_urdf: assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf
-    table_urdf: assets/urdf/table_narrow.urdf
+    robot_urdf: assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf   # Flexiv + right Wuji
+    table_urdf: assets/urdf/table_narrow.urdf                            # table model
 
   # ---------------------------------------------------------------------------- time
-  # policy 1/60 s -> robot 1/1440 s -> cloth 1/1440 s. The hand and the cloth exchange pose / force
-  # once per robot step. The keys are aliases (tasks/recipes.py SIM_ALIASES).
   sim:
-    dt: 0.00833333333                    # 1/120 s
+    dt: 0.00833333333                    # 120 Hz
     gravity: [0.0, 0.0, -9.81]
-    decimation: 2                        # policy step = 2 dt
-    robot_substeps: 12                   # newton.num_substeps: robot step = dt / 12
-    cloth_substeps: 1                    # cloth.substeps: cloth step = robot step / 1
-    vbd_iterations: 12                   # per cloth step (SIM1 lift2)
-  episode_length_s: 10.0                 # 600 policy steps
+    decimation: 2                        # policy 60 Hz
+    robot_substeps: 12                   # robot (MJWarp) 1440 Hz
+    cloth_substeps: 1                    # cloth (VBD) 1440 Hz
+    vbd_iterations: 12                   # VBD solver iterations per step
+  episode_length_s: 10.0                 # episode length
 
   # ---------------------------------------------------------------------------- the sheet
-  # Material (SIM1 Table 2) and friction describe the fabric; a fabric file replaces the material
-  # except tri_kd, and cloth_table_friction. The rest is the task and the simulation, fixed.
   cloth:
-    # material
-    density: 2.0                         # kg/m^2
-    tri_ke: 1.0e+2                       # stretch (Lame mu)
-    tri_ka: 1.0e+2                       # area (Lame lambda)
-    tri_kd: 1.5e-6                       # stretch damping; kept by every fabric (none measured)
-    edge_ke: 8.0e-4                      # bending
+    # material (SIM1); a fabric file replaces these except tri_kd
+    density: 2.0                         # mass per area [kg/m^2]
+    tri_ke: 1.0e+2                       # stretch stiffness
+    tri_ka: 1.0e+2                       # area stiffness
+    tri_kd: 1.5e-6                       # stretch damping
+    edge_ke: 8.0e-4                      # bending stiffness
     edge_kd: 1.0e-3                      # bending damping
-    plastic_yield_curvature: 0.0         # [1/m] 0 = elastic: every fold springs back
+    plastic_yield_curvature: 0.0         # bending plasticity (0 = elastic, springs back)
 
-    # friction of each cloth contact, as applied (backends/vbd/friction.py). The values
-    # sqrt(0.25 x assets friction) gave before 2026-11-23; fabrics measure only cloth-table (slide onset).
-    cloth_cloth_friction: 0.25           # folded flap on the lower half
-    cloth_table_friction: 0.35355339
-    cloth_fingertip_friction: 0.61237244 # the 5 distal links
-    cloth_robot_friction: 0.35355339     # palm and other phalanges
+    # friction per contact pair
+    cloth_cloth_friction: 0.25           # cloth on cloth
+    cloth_table_friction: 0.35355339     # cloth on table
+    cloth_fingertip_friction: 0.61237244 # cloth on fingertips
+    cloth_robot_friction: 0.35355339     # cloth on palm / other phalanges
 
-    # the task (ClothCfg, shared with the rigid pool)
-    size: 0.10                           # square side [m]
-    fold_axis: x                         # +x half folds onto -x; the only axis policies know
-    start_height: 0.20                   # above reset.table_reset_z: a 5 cm drop onto the table
-    reset_offset_xy: [0.0, 0.0]          # sheet centre shift, for sheets > 10 cm
-    table_half_thickness: 0.150          # table root to collision surface (measured); the start-height
-                                         # guard and the point cloud's table height
-    keypoint_tolerance: 0.015            # success: every keypoint within 1.5 cm of its target ...
-    max_folded_footprint: 0.65           # ... and the sheet's extent along the fold axis <= 0.65 size,
-                                         # held termination.success_steps
-    nan_policy: reset                    # a non-finite env is reset and counts as not folded
+    # task
+    size: 0.10                           # sheet side [m]
+    fold_axis: x                         # fold direction
+    start_height: 0.20                   # spawn height above table_reset_z
+    reset_offset_xy: [0.0, 0.0]          # spawn xy shift
+    table_half_thickness: 0.150          # table root to top surface
+    keypoint_tolerance: 0.015            # success: keypoints within 1.5 cm
+    max_folded_footprint: 0.65           # success: folded extent <= 0.65 size
+    nan_policy: reset                    # NaN env: reset, counts as failure
 
-    # discretisation: 7 x 7 particles (16.7 mm apart), 72 triangles
-    resolution: 7
-    mesh_diagonals: alternate            # checkerboard cell cuts: no handedness, so no twist on springback
-    thickness: 0.008                     # particle diameter: a contact size, not the fabric's; also
-                                         # observed (object_scales z = thickness / object_base_size)
+    # mesh
+    resolution: 7                        # 7 x 7 particles
+    mesh_diagonals: alternate            # triangle cut: checkerboard
+    thickness: 0.008                     # particle diameter; also observed (object_scales)
 
-    # cloth <-> rigid contact
-    soft_contact_ke: 5.0e+2              # stiffness; per contact averaged with the shape's 2.5e3
-    soft_contact_kd: 5.0e-3
-    rigid_avbd_beta: 5.0e+5              # AVBD ramp of that stiffness (not SIM1; 0 = off)
-    rigid_contact_k_start: 1.0e+2        # the ramp's start; inert when rigid_avbd_beta is 0
-    full_surface_contact: true           # edges and faces too, not only particles (rigid meshes get SDFs)
+    # cloth-rigid contact
+    soft_contact_ke: 5.0e+2              # contact stiffness
+    soft_contact_kd: 5.0e-3              # contact damping
+    rigid_avbd_beta: 5.0e+5              # AVBD stiffness ramp rate
+    rigid_contact_k_start: 1.0e+2        # AVBD ramp start stiffness
+    full_surface_contact: true           # edges and faces, not only particles
 
-    # cloth <-> cloth contact
-    enable_self_contact: true            # off: the folded flap passes through the lower half
-    self_contact_radius: 0.002           # ply gap; also the fold targets' lift
-    self_contact_margin: 0.003           # >= radius
-    self_contact_detection_interval: -1  # once per cloth step
-    conservative_bound_relaxation: 0.42  # SIM1 (Newton default 0.85)
+    # cloth-cloth contact
+    enable_self_contact: true            # cloth self-collision
+    self_contact_radius: 0.002           # gap between layers
+    self_contact_margin: 0.003           # detection distance
+    self_contact_detection_interval: -1  # detect every step
+    conservative_bound_relaxation: 0.42  # per-iteration move limit
 
-    # MJWarp <-> VBD coupling
-    proxy_mode: staggered                # the hand's end-of-step pose
-    proxy_links: hand                    # palm and every phalanx (tips: distal only)
-    proxy_table: true                    # required: without it the sheet falls through the table
-    mass_scale: 1.0                      # required: lower values destabilise the robot
-    collide_interval: 1                  # proxy contacts refreshed every pass
-    coupler_iterations: 1                # one exchange per robot step (more was worse on the cable)
-    proxy_relaxation: 1.0                # feedback under-relaxation; 1.0 = off, so the two below are unused
-    proxy_relaxation_mode: fixed
-    proxy_relaxation_min: 0.1
+    # robot-cloth coupling
+    proxy_mode: staggered                # hand pose used: end of step
+    proxy_links: hand                    # coupled links: palm + all phalanges
+    proxy_table: true                    # table also coupled
+    mass_scale: 1.0                      # proxy mass scale
+    collide_interval: 1                  # contact refresh interval
+    coupler_iterations: 1                # robot-cloth exchanges per step
+    proxy_relaxation: 1.0                # force feedback relaxation (1.0 = off)
+    proxy_relaxation_mode: fixed         # relaxation schedule
+    proxy_relaxation_min: 0.1            # relaxation lower bound
 
-  # ---------------------------------------------------------------------------- MJWarp (the robot)
+  # ---------------------------------------------------------------------------- MJWarp
   newton:
-    collision_decimation: 0              # robot collision detection once per dt
-    solver: newton
-    integrator: implicitfast
-    iterations: 100
-    ls_iterations: 15
-    ccd_iterations: 35
-    update_data_interval: 2
-    cone: elliptic
-    impratio: 10.0
-    condim: 6
-    use_mujoco_contacts: false
-    njmax: 32768
+    collision_decimation: 0              # robot collision every step
+    solver: newton                       # MJWarp constraint solver
+    integrator: implicitfast             # time integrator
+    iterations: 100                      # solver iterations
+    ls_iterations: 15                    # line-search iterations
+    ccd_iterations: 35                   # convex collision iterations
+    update_data_interval: 2              # data refresh interval
+    cone: elliptic                       # friction cone
+    impratio: 10.0                       # friction vs normal impedance
+    condim: 6                            # contact dims (sliding + torsion + rolling)
+    use_mujoco_contacts: false           # Newton collision, not MuJoCo's
+    njmax: 32768                         # constraint buffer size
 
-  # ---------------------------------------------------------------------------- the start
-  # As written for rand; pinned zeroes the noise and centres the sheet.
+  # ---------------------------------------------------------------------------- start
+  # rand uses these; pinned zeroes the noise and centres the sheet
   reset:
-    table_reset_z: 0.38
-    table_reset_z_range: 0.01
-    table_object_z_offset: 0.25
-    reset_position_noise_x: 0.1
-    reset_position_noise_y: 0.1
-    reset_position_noise_z: 0.02
-    fixed_start_pose: null
-    reset_dof_pos_random_interval_arm: 0.1
-    reset_dof_pos_random_interval_fingers: 0.1
-    reset_dof_vel_random_interval: 0.5
+    table_reset_z: 0.38                  # table height
+    table_reset_z_range: 0.01            # table height noise
+    table_object_z_offset: 0.25          # object height above table
+    reset_position_noise_x: 0.1          # sheet x noise
+    reset_position_noise_y: 0.1          # sheet y noise
+    reset_position_noise_z: 0.02         # sheet z noise
+    fixed_start_pose: null               # fixed sheet pose (null: off)
+    reset_dof_pos_random_interval_arm: 0.1       # arm joint noise
+    reset_dof_pos_random_interval_fingers: 0.1   # finger joint noise
+    reset_dof_vel_random_interval: 0.5           # joint velocity noise
 
   termination:
-    success_steps: 10                    # the fold held 10 policy steps
+    success_steps: 10                    # fold held 10 policy steps

@@ -23,7 +23,7 @@ def set_present(section, **values) -> None:
 def disable_randomization(cfg) -> None:
     """Turn off every observation (proprio, keypoints, point cloud) / action / robot DR and reset-noise
     source, and pin the object's start pose. The cloth task's sheet-physics DR (``domain_randomization.cloth``) stays as the run
-    configured it; ``experiments/eval.sh`` pins it for its pinned protocol.
+    configured it (the rigid plates' DR; the VBD sheet has none).
 
     Domain randomisation is *on* by default in ``PlayEnvCfg`` because that is the
     training regime. For evaluation it has to be off: obs/action delays, object-state noise and
