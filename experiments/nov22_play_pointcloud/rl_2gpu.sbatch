@@ -15,6 +15,8 @@
 # reads 64 camera points of the tool (robot points dropped) + 64 goal points.
 #   NAME=<name> [TASK=<task id>] [WANDB_PROJECT=<project>] [VIEWER=0] sbatch experiments/nov22_play_pointcloud/rl_scratch.sbatch [overrides]
 # Writes debug_outputs/train_logs/nov/<date>_<NAME>_<job>/ (slurm log, nn/ checkpoints, wandb).
+# RESUME_JOB=<job id>: resume that run from its newest checkpoint (latest_ckpt.py), for chaining past the time limit:
+#   RESUME_JOB=123 sbatch --dependency=afterany:123 ... <the same overrides, minus --pc_init_*/--pc_actor_freeze_epochs>
 # VIEWER=0: no interactive-viewer capture (a resumed run died in its wandb.log of the viewer page, 2026-11-23).
 set -uo pipefail
 NAME="${NAME:-0_play_pc_scratch_${SLURM_JOB_ID:-local}}"; RUN_NAME="${NAME#0_}"
@@ -30,7 +32,14 @@ export TMPDIR="/tmp/${USER}_${SLURM_JOB_ID:-local}"; mkdir -p "$TMPDIR"
 echo "[play_pc] host=$(hostname -s) job=${SLURM_JOB_ID:-local} commit=$(git rev-parse --short HEAD) dirty=$(test -n "$(git status --porcelain --untracked-files=no)" && echo YES || echo no)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 export OMP_NUM_THREADS=12      # the node's threads split over the two ranks
+RESUME=()
+if [ -n "${RESUME_JOB:-}" ]; then
+    CK=$(.venv/isaacsim/bin/python experiments/nov22_play_pointcloud/latest_ckpt.py "$RESUME_JOB") || exit 1
+    echo "[play_pc] resuming job $RESUME_JOB from $CK"; RESUME=(--checkpoint "$CK" --checkpoint_load_mode resume)
+    TOL=$(WANDB_PROJECT="${WANDB_PROJECT:-play_pc}" .venv/isaacsim/bin/python experiments/nov22_play_pointcloud/latest_ckpt.py "$RESUME_JOB" --tolerance)
+    [ -n "$TOL" ] && { echo "[play_pc] success tolerance resumes at $TOL"; RESUME+=(env.termination.success_tolerance="$TOL"); }
+fi
 exec .venv/isaacsim/bin/torchrun --standalone --nnodes=1 --nproc_per_node=2 -m isaacsimenvs.scripts.training.train --distributed \
     --task "${TASK:-Isaacsimenvs-PlayFlexivWujiRightHumanLikePC-Direct-v0}" --agent rl_games_sapg_cfg_entry_point --headless \
     $([ "${VIEWER:-1}" = 1 ] && echo --capture_viewer) --wandb_activate --wandb_project "${WANDB_PROJECT:-play_pc}" --wandb_name "$NAME" \
-    env.scene.num_envs="${ENVS:-24576}" agent.params.seed="${SEED:-1}" agent.params.config.name="$NAME" hydra.run.dir="$RUN_DIR" "$@"
+    env.scene.num_envs="${ENVS:-24576}" agent.params.seed="${SEED:-1}" agent.params.config.name="$NAME" hydra.run.dir="$RUN_DIR" ${RESUME[@]+"${RESUME[@]}"} "$@"
