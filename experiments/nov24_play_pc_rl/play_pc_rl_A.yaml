@@ -7,12 +7,13 @@
 #   one PointNet per cloud (32-64-128, compiled), bare xyz, the Play student's proprioception.
 # Camera errors: version C without the extrinsics (cameras calibrated): depth noise 1-4 mm, 0-30% drops,
 # the cloud 0-6 steps late; proprioception 0-3, actions 0-2 (rigidcloth_pc_rl).
-# Critic: no keypoint field; the robot / task state plus three clean 8 x 8 grids of the sheet surface
-# (the sheet, the goal carried on its stationary half, the frozen goal; obs.pointcloud.critic_grid_side).
+# Critic: no keypoint field; the robot / task state plus three clean 7 x 7 grids of the sheet surface
+# (the particles of the sheet, of the goal carried on its stationary half, of the frozen goal; obs.pointcloud.critic_grid_side).
 # A fresh critic: run with --pc_actor_freeze_epochs 50 (the actor is not updated while it warms up).
-# Success: termination.success surface -- after the best in-plane placement, the sheet's surface and
-# the frozen goal's are within 0.1 x the sheet's side of each other, both ways (mdp/surface_match.py):
-# any half fold counts, wherever it was made. The fold progress reward stays the designated fold error.
+# Success: termination.success surface, layered (task.yaml default) -- after the best in-plane placement,
+# the sheet's top half matches the goal's top ply and its bottom half the bottom ply, within 0.1 x the
+# sheet's side (mdp/surface_layered.py), held 10 policy steps. Any half fold counts, wherever it was made.
+# The fold progress reward stays the designated fold error.
 #
 #   cluster/submit.sh experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
 #       --experiment experiments/nov24_play_pc_rl/play_pc_rl_A.yaml \
@@ -22,7 +23,7 @@ base: experiments/nov17_pointcloud_rl/rigidcloth_pc_dagger_rl.yaml
 
 env:
   scene:
-    num_envs: 7680
+    num_envs: 24576                # 14.5 s/epoch, 74 GB GPU, 83 GB host (speed run 314228)
   obs:
     state_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot, palm_vel,
                  fingertip_pos_rel_palm, lifted_object, progress, successes, reward]
@@ -38,12 +39,13 @@ env:
       split_goal: true
       pointnet_widths: [32, 64, 128]
       compile_pointnet: true
-      critic_grid_side: 8
+      critic_grid_side: 7             # the sheet's own 7 x 7 particle grid (a finer grid only interpolates it)
   fold_pool:
     goal_task:
       mode: half_fold
   termination:
     success: surface
+    success_steps: 10              # the fold held 10 policy steps, as the evaluations
   domain_randomization:
     pointcloud:
       cam_pos_noise: [0.0, 0.0, 0.0]
@@ -53,7 +55,8 @@ env:
 agent:
   params:
     config:
-      minibatch_size: 3840
+      max_epochs: 3000
+      minibatch_size: 24576
       central_value_config:
-        minibatch_size: 3840
-      expl_coef_block_size: 1280     # num_envs / 6 SAPG blocks
+        minibatch_size: 24576
+      expl_coef_block_size: 4096     # num_envs / 6 SAPG blocks

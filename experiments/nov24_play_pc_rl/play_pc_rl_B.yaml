@@ -1,6 +1,7 @@
 # play_pc_rl_B (2026-11-24): play_pc_rl_A with 256 live cloth points, from 2048 candidates a step (768
 # candidates leave at most ~760 visible points on a flat sheet and far fewer under the hand; 2048 keeps
-# the 256 slots filled). The goal cloud stays 64 points.
+# the 256 slots filled). The goal cloud stays 64 points. 18432 envs: at 24576 the 256-point PointNet
+# peaks at 94.7 GB of the 96 GB GPU (speed run 314229).
 base: experiments/nov24_play_pc_rl/play_pc_rl_A.yaml
 
 env:
@@ -8,3 +9,13 @@ env:
     pointcloud:
       n_points: 256
       n_cloth_cand: 2048
+  scene:
+    num_envs: 18432
+
+agent:
+  params:
+    config:
+      minibatch_size: 18432
+      central_value_config:
+        minibatch_size: 18432
+      expl_coef_block_size: 3072     # num_envs / 6 SAPG blocks
