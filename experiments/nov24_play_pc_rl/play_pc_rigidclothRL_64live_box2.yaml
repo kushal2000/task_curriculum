@@ -1,0 +1,14 @@
+# play_pc_rigidclothRL_64live_box2 (2026-11-24): play_pc_rl_A (64 live cloth points) on the half fold
+# only -- the fold pool holds box2-mid (2 plates) instead of the 7 shapes. Everything else is
+# play_pc_rl_A's: same Play student init, sigma, actor freeze, critic grids, success.
+#
+#   cluster/submit.sh --mem=90G --time=1-12:00:00 env RUN_TAG=play_pc_rigidclothRL_64live_box2 \
+#       experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
+#       --experiment experiments/nov24_play_pc_rl/play_pc_rigidclothRL_64live_box2.yaml \
+#       --pc_init_student pretrained_policy/play_pc_real_dagger/play_pc_real_dagger_it5400_fp16.pth \
+#       --pc_init_sigma pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth --pc_actor_freeze_epochs 50
+base: experiments/nov24_play_pc_rl/play_pc_rl_A.yaml
+
+env:
+  fold_pool:
+    shapes: [box2-mid]
