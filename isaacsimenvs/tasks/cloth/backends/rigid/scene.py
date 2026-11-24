@@ -78,15 +78,15 @@ def _articulation_cls(b):
     return _SubsetArticulation
 
 
-def _spawn_shape(b, s: int, shape, usd_dir: Path, park_local):
-    """Write one USD per distinct (size, slab) of shape ``s`` and point each env's prim at its own.
+def _spawn_shape(b, s: int, shape, usd_dir: Path, park_local, layer):
+    """Write one USD per distinct (size, slab) of shape ``s`` and point each env's prim at its own,
+    in ``layer`` (``usd.bulk_edit_layer``; the prims are on the stage when that closes).
 
     Exact physics at every size: ``fold_shapes.sized(name, size, thickness)`` is the shape itself at
     that size, so mass, inertia, hinge and seam anchors all come out of the same construction as
     the nominal sheet. Returns ``None``: the prims exist, nothing is left for a spawner to do.
     """
     from pxr import Gf, Sdf
-    from isaaclab.sim.utils import get_current_stage
 
     r, pc = b.cfg.rigid_cloth, b.cfg.physx_chain
     m = contacts.contact_margin(b)
@@ -111,19 +111,17 @@ def _spawn_shape(b, s: int, shape, usd_dir: Path, park_local):
             raise RuntimeError(f"[fold_pool] {path} does not have exactly one articulation root")
         usd_of[(size, slab)] = str(path)
 
-    stage = get_current_stage()
     pos = Gf.Vec3d(*[float(v) for v in park_local])
-    with bulk_edit_layer(stage, f"pool{s}") as layer:
-        for i in envs:
-            key = (round(float(b.env_size_np[i]), 6), round(float(b.env_slab_np[i]), 6))
-            spec = Sdf.CreatePrimInLayer(layer, f"/World/envs/env_{i}/FoldPool{s}")
-            spec.specifier = Sdf.SpecifierDef
-            spec.typeName = "Xform"
-            spec.referenceList.Prepend(Sdf.Reference(usd_of[key]))
-            t = Sdf.AttributeSpec(spec, "xformOp:translate", Sdf.ValueTypeNames.Double3)
-            t.default = pos
-            o = Sdf.AttributeSpec(spec, "xformOpOrder", Sdf.ValueTypeNames.TokenArray)
-            o.default = ["xformOp:translate"]
+    for i in envs:
+        key = (round(float(b.env_size_np[i]), 6), round(float(b.env_slab_np[i]), 6))
+        spec = Sdf.CreatePrimInLayer(layer, f"/World/envs/env_{i}/FoldPool{s}")
+        spec.specifier = Sdf.SpecifierDef
+        spec.typeName = "Xform"
+        spec.referenceList.Prepend(Sdf.Reference(usd_of[key]))
+        t = Sdf.AttributeSpec(spec, "xformOp:translate", Sdf.ValueTypeNames.Double3)
+        t.default = pos
+        o = Sdf.AttributeSpec(spec, "xformOpOrder", Sdf.ValueTypeNames.TokenArray)
+        o.default = ["xformOp:translate"]
     print(f"[fold_pool] {shape.name}: in {len(envs)} envs, {len(keys)} sheet sizes, one USD each", flush=True)
     return None
 
@@ -159,11 +157,18 @@ def install_pool(b) -> None:
         dtype=torch.float32,
     )
     usd_dir = Path(tempfile.mkdtemp(prefix="fold_pool_"))
+    # Every shape's prims in ONE layer: each layer inserted into the stage recomposes all of it (7
+    # layers, one per shape, took ~100 s at 7680 envs).
+    from isaaclab.sim.utils import get_current_stage
+
+    with bulk_edit_layer(get_current_stage(), "pool") as layer:
+        for s, sh in enumerate(b.shapes):
+            _spawn_shape(b, s, sh, usd_dir, park[s], layer)
     arts = []
     for s, sh in enumerate(b.shapes):
         cfg = ArticulationCfg(
             prim_path=f"/World/envs/env_.*/FoldPool{s}",
-            spawn=_spawn_shape(b, s, sh, usd_dir, park[s]),
+            spawn=None,                 # the prims exist (_spawn_shape)
             # Every shape starts parked; the first reset puts the drawn one on the table.
             init_state=ArticulationCfg.InitialStateCfg(pos=tuple(float(v) for v in park[s])),
             actuators={

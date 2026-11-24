@@ -8,7 +8,6 @@ import torch
 
 from isaacsimenvs.tasks.cloth.backends.rigid.physx import (
     DEFAULT_MU,
-    bind_material_in_every_env,
     bind_materials,
     collider_paths,
     define_scene_material,
@@ -61,14 +60,17 @@ def bind_contact_materials(b) -> None:
     )
     define_scene_material(stage, tip, mu=r.fingertip_slat_friction, combine=pc.fingertip_friction_combine)
     n = b.num_envs
-    slats = 0
+    # Every shape's slats and the fingertips in ONE layer (bind_materials: a layer per call recomposes
+    # the stage; 8 calls took ~110 s at 7680 envs).
+    bindings = []
     for k, art in enumerate(b.arts):
         asset = art.cfg.prim_path.rsplit("/", 1)[-1]
         envs = b.pool_envs(k)
         rels = collider_paths(stage, f"/World/envs/env_{envs[0]}/{asset}")
         if not rels:
             raise RuntimeError(f"[physx] no collider under env_{envs[0]}/{asset}")
-        slats += bind_material_in_every_env(stage, n, asset, rels, slat, env_ids=envs)
+        bindings.extend((f"/World/envs/env_{int(i)}/{asset}/{rel}", slat) for i in envs for rel in rels)
+    slats = len(bindings)
     tips = tuple(b.robot_spec.fingertip_link_names)
     robot = b.robot.cfg.prim_path.rsplit("/", 1)[-1]
     rels = collider_paths(
@@ -77,7 +79,8 @@ def bind_contact_materials(b) -> None:
     )
     if not rels:
         raise RuntimeError(f"[physx] no fingertip collider ({tips}) under env_0/{robot}")
-    bind_material_in_every_env(stage, n, robot, rels, tip)
+    bindings.extend((f"/World/envs/env_{i}/{robot}/{rel}", tip) for i in range(n) for rel in rels)
+    bind_materials(stage, bindings, tag="bind_contacts")
     b.fingertip_colliders = len(rels)
     print(
         f"[physx] bound {slats} slat colliders to {slat} and {n * len(rels)} fingertip colliders "
