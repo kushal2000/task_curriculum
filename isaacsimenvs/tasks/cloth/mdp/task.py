@@ -4,13 +4,36 @@ back tensors; the backend writes what it draws.
 
 Reward::
 
-    reward = fingertip_approach + fold_progress + fold_bonus - arm_joint_speed - hand_joint_speed
+    reward = fingertip_approach + fold_progress + fold_bonus - arm_joint_speed - hand_joint_speed - slide
 
 * ``fingertip_approach``: pay for every fingertip getting closer to the sheet than it has been
   this episode (``distance_delta_rew_scale``), until the sheet is lifted;
 * ``fold_progress``: pay for every new best fold error this episode (``keypoint_rew_scale``);
 * ``fold_bonus``: ``reach_goal_bonus`` on the step the fold criterion is met;
-* the joint-speed penalties: L1 joint velocity, arm and hand (``*_actions_penalty_scale``).
+* the joint-speed penalties: L1 joint velocity, arm and hand (``*_actions_penalty_scale``);
+* ``slide``: the stationary half's in-plane travel this step, past a deadband and capped per step
+  (``slide_penalty_scale`` per metre, ``slide_deadband`` m/s, ``slide_step_cap`` m; 0 by default).
+
+**The fold criterion** (``termination.success``). ``fold_error``: the moved particles within
+``cloth.keypoint_tolerance`` of the designated goal and the footprint halved (look-alikes with
+``accept_lookalike``). ``surface``: the goal sheet is frozen where it is at ``surface.ref_step``;
+the sheet is folded when its surface is within ``surface.tolerance_frac`` x its side of the frozen goal's,
+both ways, after the best placement in the table plane (``mdp/surface_match.py``): any fold that
+looks like the goal counts, wherever it was made. ``termination.max_in_place_dist`` (``.inf`` by default)
+also requires the two-sided max distance to the frozen goal WITHOUT alignment below it: the in-place
+gate. With ``surface`` the old criterion is still reported (``fold_designated``), not acted on; the
+fold progress reward stays the designated fold error.
+
+**Drift** (logged). Once the sheet has landed (``termination.drift_settle_steps`` into the episode)
+the stationary half's grid points are latched as its anchor; ``drift`` is their mean in-plane (xy)
+distance from it, ``yaw`` their in-plane rotation about their centroid (least-squares 2-D fit,
+|rad|), both 0 before the latch. ``slide`` pays the same points' per-step travel, which the policy
+can sense, not the accumulated drift, which it cannot.
+
+**Gate curriculum.** ``termination.gate_curriculum.max_in_place_dist`` (a list; empty = off) replaces
+``max_in_place_dist`` and ``slide_penalty_scale`` by stages, stage ``k`` using entry ``k`` of each list.
+The stage advances when the gated fold rate over a window of ``window_episodes`` finished episodes
+reaches ``advance_rate``; ``start_stage`` restarts a resumed run where it stood.
 
 A non-finite or implausibly large reward (a diverging env) is zeroed and the env flagged for reset.
 
@@ -28,6 +51,7 @@ from __future__ import annotations
 
 import torch
 
+from . import surface_match
 from .fold import FoldGeometry
 from .geometry import quat
 from .robot import NUM_FINGERTIPS, RobotLayout
@@ -105,13 +129,91 @@ class ClothTask:
         self.termination_reasons: dict[str, torch.Tensor] = {}
         #: Fold error of a flat sheet: what a non-finite one counts as (set by the env at startup).
         self.flat_fold_err = 0.0
+        # Drift (module doc): the stationary half's latched xy anchor, its previous xy (the per-step
+        # travel), the latch, this step's travel, and the drift and yaw with their episode maxima.
+        n_stationary = int(self.geometry.stationary_idx.numel())
+        self.drift_anchor_xy = torch.zeros(n, n_stationary, 2, device=dev)
+        self.drift_prev_xy = torch.zeros(n, n_stationary, 2, device=dev)
+        self.drift_anchored = torch.zeros(n, dtype=torch.bool, device=dev)
+        self.slide_step = torch.zeros(n, device=dev)
+        self.drift = torch.zeros(n, device=dev)
+        self.drift_max = torch.zeros(n, device=dev)
+        self.yaw = torch.zeros(n, device=dev)
+        self.yaw_max = torch.zeros(n, device=dev)
+        # The surface criterion (module doc): the frozen goal sheet (world frame, particle grid) and
+        # this step's distances to it [m] -- after the best in-plane placement, and as it is.
+        self.surface = self.cfg.termination.success == "surface"
+        n_particles = int(self.geometry.layout.resolution) ** 2
+        self.frozen_goal_w = torch.zeros(n, n_particles, 3, device=dev)
+        self.goal_is_frozen = torch.zeros(n, dtype=torch.bool, device=dev)
+        self.aligned_dist = torch.full((n,), float("inf"), device=dev)
+        self.in_place_dist = torch.full((n,), float("inf"), device=dev)
+        self.aligned_yaw = torch.zeros(n, device=dev)
+        #: The old criterion (``fold_error``), reported for comparison when ``surface`` decides.
+        self.designated_folded = torch.zeros(n, dtype=torch.bool, device=dev)
+        # The gate curriculum (module doc): stage, and the current window's finished / folded episodes.
+        curriculum = self.cfg.termination.gate_curriculum
+        self.gate_stages = len(curriculum.max_in_place_dist)
+        self.gate_stage = min(int(curriculum.start_stage), max(self.gate_stages - 1, 0))
+        self.gate_window_episodes = 0
+        self.gate_window_folds = 0
+        self.gate_last_rate = 0.0
+
+    # ------------------------------------------------------------------ the in-place gate
+
+    def gate(self) -> tuple[float, float]:
+        """``(max_in_place_dist m, slide_penalty_scale)`` in force now."""
+        if self.gate_stages:
+            curriculum, stage = self.cfg.termination.gate_curriculum, self.gate_stage
+            return float(curriculum.max_in_place_dist[stage]), float(curriculum.slide_penalty_scale[stage])
+        return float(self.cfg.termination.max_in_place_dist), float(self.cfg.reward.slide_penalty_scale)
+
+    def _advance_gate(self, done: torch.Tensor, fold: torch.Tensor) -> None:
+        """Count this step's finished episodes; at a full window, advance the stage if folds reached the rate."""
+        if not self.gate_stages:
+            return
+        curriculum = self.cfg.termination.gate_curriculum
+        self.gate_window_episodes += int(done.sum())
+        self.gate_window_folds += int((done & fold).sum())
+        if self.gate_window_episodes >= int(curriculum.window_episodes):
+            self.gate_last_rate = self.gate_window_folds / self.gate_window_episodes
+            if self.gate_last_rate >= float(curriculum.advance_rate) and self.gate_stage < self.gate_stages - 1:
+                self.gate_stage += 1
+                max_in_place, slide_scale = self.gate()
+                print(f"[cloth] gate curriculum -> stage {self.gate_stage}: fold rate {self.gate_last_rate:.3f}; "
+                      f"in place < {max_in_place * 100:.1f} cm, slide {slide_scale:.0f}/m", flush=True)
+            self.gate_window_episodes = self.gate_window_folds = 0
+        max_in_place, slide_scale = self.gate()
+        self.extras["gate_stage"] = float(self.gate_stage)
+        self.extras["gate_max_in_place_dist"] = max_in_place
+        self.extras["gate_slide_penalty"] = slide_scale
+        self.extras["gate_window_rate"] = self.gate_last_rate
 
     # ------------------------------------------------------------------ geometry queries
 
     def derive(self, state: SimState) -> FoldView:
         return self.geometry.derive(state.points_w, state.points_vel_w)
 
+    def sheet_size(self) -> torch.Tensor:
+        """``(N,)`` each env's sheet side [m]."""
+        layout = self.geometry.layout
+        if layout.env_size is not None:
+            return layout.env_size.to(self.device).float()
+        return torch.full((self.num_envs,), float(layout.size), device=self.device)
+
     def is_folded(self, view: FoldView) -> torch.Tensor:
+        """The fold criterion (``termination.success``, module doc); the surface one reads the
+        distances ``_update_surface`` measured this step."""
+        if self.surface:
+            tolerance = float(self.cfg.termination.surface.tolerance_frac) * self.sheet_size()
+            folded = self.goal_is_frozen & (self.aligned_dist < tolerance)
+            max_in_place, _ = self.gate()
+            if max_in_place < float("inf"):
+                folded = folded & (self.in_place_dist < max_in_place)
+            return folded
+        return self.is_folded_designated(view)
+
+    def is_folded_designated(self, view: FoldView) -> torch.Tensor:
         """Both conditions: keypoints on target AND the footprint halved.
 
         With goal tasks (``fold_pool.goal_task``): ``any_fold`` needs only the fold error (the
@@ -189,6 +291,15 @@ class ClothTask:
         self.fold_hold[env_ids] = 0
         self.closest_fold_err[env_ids] = -1.0
         self.fold_bonus_mask[env_ids] = False
+        self.drift_anchored[env_ids] = False
+        self.slide_step[env_ids] = 0.0
+        self.drift[env_ids] = 0.0
+        self.drift_max[env_ids] = 0.0
+        self.yaw[env_ids] = 0.0
+        self.yaw_max[env_ids] = 0.0
+        self.goal_is_frozen[env_ids] = False
+        self.aligned_dist[env_ids] = float("inf")
+        self.in_place_dist[env_ids] = float("inf")
 
     def episode_start(self, episode_length_buf: torch.Tensor) -> torch.Tensor:
         """``(N,)`` bool: the episode's first step (delay lines flush on it)."""
@@ -220,9 +331,68 @@ class ClothTask:
         self.closest_keypoint_max_dist = ratchet_unset(self.closest_keypoint_max_dist, self.keypoints_max_dist)
         self.closest_fingertip_dist = ratchet_unset(self.closest_fingertip_dist, self.curr_fingertip_distances)
 
+    def _update_drift(self, view: FoldView, episode_length_buf: torch.Tensor) -> None:
+        """Latch the anchor once landed; this step's travel, the drift, the yaw and their maxima (module doc)."""
+        stationary_xy = view.points_w[:, self.geometry.stationary_idx, :2]
+        latch = ~self.drift_anchored & (episode_length_buf >= int(self.cfg.termination.drift_settle_steps))
+        self.drift_anchor_xy = torch.where(latch.view(-1, 1, 1), stationary_xy, self.drift_anchor_xy)
+        self.drift_prev_xy = torch.where(latch.view(-1, 1, 1), stationary_xy, self.drift_prev_xy)
+        self.drift_anchored |= latch
+        anchored = self.drift_anchored.float()
+        travel = (stationary_xy - self.drift_prev_xy).norm(dim=-1).mean(dim=-1) * anchored
+        drift = (stationary_xy - self.drift_anchor_xy).norm(dim=-1).mean(dim=-1) * anchored
+        # In-plane rotation: the angle that best maps the centred anchor onto the centred points.
+        anchor_c = self.drift_anchor_xy - self.drift_anchor_xy.mean(dim=1, keepdim=True)
+        now_c = stationary_xy - stationary_xy.mean(dim=1, keepdim=True)
+        cross = (anchor_c[..., 0] * now_c[..., 1] - anchor_c[..., 1] * now_c[..., 0]).sum(dim=-1)
+        dot = (anchor_c * now_c).sum(dim=(-1, -2))
+        yaw = torch.atan2(cross, dot).abs() * anchored
+        # A diverged sheet (reset this step anyway) neither pays nor poisons the maximum.
+        self.slide_step = torch.nan_to_num(travel, nan=0.0, posinf=0.0, neginf=0.0)
+        self.drift = torch.nan_to_num(drift, nan=0.0, posinf=0.0, neginf=0.0)
+        self.drift_max = torch.maximum(self.drift_max, self.drift)
+        self.yaw = torch.nan_to_num(yaw, nan=0.0, posinf=0.0, neginf=0.0)
+        self.yaw_max = torch.maximum(self.yaw_max, self.yaw)
+        self.drift_prev_xy = stationary_xy.clone()
+
+    def goal_now_w(self, view: FoldView) -> torch.Tensor:
+        """``(N, P, 3)`` world: the designated goal sheet carried on the stationary half's live pose
+        (what the fold progress reward measures against)."""
+        goal_now, _goal_rest = self.geometry.goal_sheet(view.points_w)
+        return goal_now
+
+    def goal_reference_w(self, view: FoldView) -> torch.Tensor:
+        """``(N, P, 3)`` world: the frozen goal sheet (``surface.ref_step``), or before it is frozen
+        the live one."""
+        return torch.where(self.goal_is_frozen.view(-1, 1, 1), self.frozen_goal_w, self.goal_now_w(view))
+
+    def _update_surface(self, view: FoldView, episode_length_buf: torch.Tensor) -> None:
+        """Freeze the goal sheet at ``surface.ref_step``; this step's aligned and in-place distances."""
+        surface_cfg = self.cfg.termination.surface
+        freeze_now = ~self.goal_is_frozen & (episode_length_buf >= int(surface_cfg.ref_step))
+        self.frozen_goal_w = torch.where(freeze_now.view(-1, 1, 1), self.goal_now_w(view), self.frozen_goal_w)
+        self.goal_is_frozen |= freeze_now
+
+        resolution = int(self.geometry.layout.resolution)
+        sheet = torch.nan_to_num(view.points_w, nan=0.0, posinf=0.0, neginf=0.0)
+        aligned = surface_match.aligned_distance(
+            sheet, self.frozen_goal_w, resolution, fine_side=int(surface_cfg.fine_side),
+            n_uniform_starts=int(surface_cfg.uniform_start_yaws), icp_iters=int(surface_cfg.icp_iters),
+        )
+        in_place = surface_match.in_place_distance(sheet, self.frozen_goal_w, resolution, fine_side=int(surface_cfg.fine_side))
+        # No distance before the goal is frozen, nor for a diverged sheet (reset this step anyway).
+        no_distance = ~torch.isfinite(view.points_w).all(dim=-1).all(dim=-1) | ~self.goal_is_frozen
+        inf = torch.full_like(in_place, float("inf"))
+        self.aligned_dist = torch.where(no_distance, inf, aligned["max"])
+        self.in_place_dist = torch.where(no_distance, inf, in_place)
+        self.aligned_yaw = aligned["yaw"]
+
     def compute_dones(self, state: SimState, view: FoldView, episode_length_buf, max_episode_length):
         """``(terminated, truncated)``; sets ``termination_reasons``, ``fold_bonus_mask`` and ``successes``."""
         self._update_hand_and_goal_metrics(state, view)
+        self._update_drift(view, episode_length_buf)
+        if self.surface:
+            self._update_surface(view, episode_length_buf)
 
         sheet_z = view.object_pos_w[:, 2] - self.env_origins[:, 2]
         fall = sheet_z < 0.1
@@ -240,6 +410,7 @@ class ClothTask:
         self.nonfinite_envs.zero_()
 
         truncated = episode_length_buf >= max_episode_length
+        self._advance_gate(fall | hand_far | fold | nonfinite | truncated, fold)
         self.termination_reasons = {
             "fall": fall,
             "hand_far": hand_far,
@@ -248,6 +419,10 @@ class ClothTask:
             "fold_held": fold_held,
             "nonfinite": nonfinite,
         }
+        if self.surface:
+            # The old criterion, reported for comparison (not acted on).
+            self.designated_folded = self.is_folded_designated(view)
+            self.termination_reasons["fold_designated"] = self.designated_folded
         return fall | hand_far | fold | nonfinite, truncated
 
     # ------------------------------------------------------------------ reward
@@ -283,7 +458,15 @@ class ClothTask:
 
         fold_bonus = self.fold_bonus_mask.float() * float(reward_cfg.reach_goal_bonus)
 
+        policy_dt = float(self.cfg.sim.dt) * int(self.cfg.decimation)
+        # Capped per step: a sheet thrown off the table must not outweigh the task.
+        slide = torch.clamp(self.slide_step - float(reward_cfg.slide_deadband) * policy_dt, 0.0, float(reward_cfg.slide_step_cap))
+        _, slide_scale = self.gate()
+        slide_penalty = -slide_scale * slide
+
         reward = fingertip_approach + fold_progress + fold_bonus + arm_penalty + hand_penalty
+        if slide_scale != 0.0:
+            reward = reward + slide_penalty
         reward = self._guard_reward(reward)
         self.reward_terms = {
             "fingertip_delta_rew": fingertip_approach,
@@ -291,10 +474,18 @@ class ClothTask:
             "bonus_rew": fold_bonus,
             "kuka_actions_penalty": arm_penalty,
             "hand_actions_penalty": hand_penalty,
+            "slide_penalty": slide_penalty,
             "total_reward": reward,
         }
         self.extras["fold_err_mean"] = float(fold_error.mean())
         self.extras["fold_rate"] = float(self.fold_bonus_mask.float().mean())
+        if self.surface:
+            # Means over the envs whose goal is frozen (the others have no distance yet).
+            frozen = self.goal_is_frozen
+            n_frozen = frozen.float().sum().clamp(min=1.0)
+            self.extras["aligned_dist_mean"] = float(torch.where(frozen, self.aligned_dist, 0.0).sum() / n_frozen)
+            self.extras["in_place_dist_mean"] = float(torch.where(frozen, self.in_place_dist, 0.0).sum() / n_frozen)
+            self.extras["fold_designated_rate"] = float(self.designated_folded.float().mean())
         return reward
 
     def _guard_reward(self, reward: torch.Tensor) -> torch.Tensor:

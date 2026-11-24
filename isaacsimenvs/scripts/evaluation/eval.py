@@ -116,12 +116,23 @@ def _plain(v):
     return v
 
 
+#: ``obs.pointcloud`` fields that change how fast the cloud is built, not what it is.
+SPEED_ONLY = ("chunk", "use_warp", "compile_pointnet")
+
+
 def _check_student_cloud(env_cfg, saved: dict) -> None:
     """The recipe's cloud must be the one the student was trained on (saved in its checkpoint):
-    another point count, camera or goal changes what its network reads."""
+    another point count, camera or goal changes what its network reads. A student trained on another
+    task (the point-cloud Play student: its ``env`` names that task, not a cloth cloud) is not checked:
+    the recipe defines its cloud."""
+    if "obs" not in saved:
+        print(f"[eval] student from {saved.get('task', 'another task')}: its cloud is the recipe's, not checked", flush=True)
+        return
     obs = saved["obs"]
     wrong = [f"object {env_cfg.obs.object!r} != {obs['object']!r}"] if env_cfg.obs.object != obs["object"] else []
     for k, v in obs["pointcloud"].items():
+        if k in SPEED_ONLY:
+            continue
         have = getattr(env_cfg.obs.pointcloud, k, "<missing>")
         if _plain(have) != _plain(v):
             wrong.append(f"pointcloud.{k} {have!r} != {v!r}")

@@ -93,8 +93,17 @@ class ObservationBuilder:
     def pointcloud_layout(self) -> dict:
         """The point-cloud policy vector ``[proprio | points (M x D) | mask (M)]``:
         ``{n_proprio, num_points, point_dim}``."""
-        return {"n_proprio": obs_dim(self.proprio_fields, self.robot.num_joints),
-                "num_points": self.pointcloud.num_points, "point_dim": self.pointcloud.point_dim}
+        out = {"n_proprio": obs_dim(self.proprio_fields, self.robot.num_joints),
+               "num_points": self.pointcloud.num_points, "point_dim": self.pointcloud.point_dim}
+        pc = self.cfg.obs.pointcloud
+        if bool(getattr(pc, "split_goal", False)):
+            # Two clouds, one PointNet each (pc_rl): the live group, then the goal group.
+            setup = self.pointcloud.setup
+            if setup.goal_mode not in ("goal_fixed", "goal_any") or setup.fk_points > 0:
+                raise ValueError("obs.pointcloud.split_goal needs goal goal_fixed / goal_any and no fk points")
+            out.update(split_goal=True, n_live=int(setup.n_points),
+                       widths=list(pc.pointnet_widths), compile=bool(pc.compile_pointnet))
+        return out
 
     def reset(self, env_ids: torch.Tensor) -> None:
         self.proprio.reset(env_ids)
@@ -148,7 +157,28 @@ class ObservationBuilder:
             state, view, episode_length_buf, start, self.dr.proprio_lag, self.env_origins, self.task.geometry.goal_sheet
         )
         policy = torch.cat((proprio, points.flatten(1), mask.to(points.dtype)), dim=1)
-        return {"policy": policy, "critic": critic.clamp(-clip, clip), "teacher": teacher}
+        critic = critic.clamp(-clip, clip)
+        grid_side = int(self.cfg.obs.pointcloud.critic_grid_side)
+        if grid_side > 0:
+            critic = torch.cat((critic, self._critic_grids(view, grid_side)), dim=1)
+        return {"policy": policy, "critic": critic, "teacher": teacher}
+
+    def _critic_grids(self, view: FoldView, grid_side: int) -> torch.Tensor:
+        """``(N, 3 * grid_side**2 * 3)``: three clean ``grid_side x grid_side`` sample grids of the sheet
+        surface, in the cloud's frame (``obs.pointcloud.critic_grid_side``): the sheet now, the
+        designated goal carried on its stationary half, the frozen goal. Sample ``i`` is the same spot
+        of the sheet in all three."""
+        from isaacsimenvs.tasks.cloth.mdp.surface_match import dense_grid
+
+        resolution = int(self.task.geometry.layout.resolution)
+        cloud = self.pointcloud.cloud
+        origins = self.env_origins.unsqueeze(1)
+        sheets_w = (view.points_w, self.task.goal_now_w(view), self.task.goal_reference_w(view))
+        in_cloud_frame = [
+            ((dense_grid(sheet_w, resolution, grid_side) - origins - cloud.centre) * float(cloud.cfg.scale)).flatten(1)
+            for sheet_w in sheets_w
+        ]
+        return torch.nan_to_num(torch.cat(in_cloud_frame, dim=1), nan=0.0, posinf=0.0, neginf=0.0)
 
     # ------------------------------------------------------------------ divergence guard
 

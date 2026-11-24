@@ -44,6 +44,10 @@ mkdir -p "$LOG_DIR"
 # Isaac Lab writes to $TMPDIR/isaaclab; a shared /tmp/isaaclab may belong to another user.
 export TMPDIR="${TMPDIR_BASE:-/tmp}/${USER}_${JOB}_${INDEX}"
 mkdir -p "$TMPDIR"
+# Warp's kernel cache per job too: jobs that compile the same kernel into a shared ~/.cache/warp at
+# the same time can read each other's half-written files (2026-11-24, visibility_warp: "No such file
+# ... .meta").
+export WARP_CACHE_PATH="${WARP_CACHE_PATH:-$TMPDIR/warp}"
 
 # One line of where and what: host, commit, uncommitted changes, GPU.
 provenance() {  # <log prefix>

@@ -15,7 +15,7 @@ class EnvCloudStudentPlayer:
 
     def __init__(self, inner, ckpt: dict, device) -> None:
         from isaacsimenvs.scripts.distillation.distill_pc import StudentInput
-        from isaacsimenvs.scripts.distillation.student import StudentNet
+        from isaacsimenvs.scripts.distillation.student import SplitStudentNet, StudentNet
 
         sin = StudentInput(inner)
         if sin.pc is None:
@@ -25,8 +25,11 @@ class EnvCloudStudentPlayer:
         #: The settings it was trained with (``student.student_env``): its cloud and DR.
         self.env = ckpt["env"]
         self.n, self.device = inner.num_envs, device
-        self.net = StudentNet(sin.n_proprio, int(inner.cfg.action_space), sin.point_dim, int(sin.aux_cols.numel()),
-                              **ckpt["net_args"]).to(device).eval()
+        # ``n_live`` in the net args: live and goal clouds, one PointNet each (the point-cloud Play student).
+        net_args = {k: v for k, v in ckpt["net_args"].items() if k != "compile"}
+        cls = SplitStudentNet if "n_live" in net_args else StudentNet
+        self.net = cls(sin.n_proprio, int(inner.cfg.action_space), sin.point_dim, int(sin.aux_cols.numel()),
+                       **net_args).to(device).eval()
         self.net.load_state_dict(ckpt["model"], strict=not ckpt.get("from_rl", False))
         self.amp = str(device).startswith("cuda")
         self.state = self.net.initial_state(self.n, device)

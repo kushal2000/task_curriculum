@@ -1,0 +1,10 @@
+# play_pc_rl_B (2026-11-24): play_pc_rl_A with 256 live cloth points, from 2048 candidates a step (768
+# candidates leave at most ~760 visible points on a flat sheet and far fewer under the hand; 2048 keeps
+# the 256 slots filled). The goal cloud stays 64 points.
+base: experiments/nov24_play_pc_rl/play_pc_rl_A.yaml
+
+env:
+  obs:
+    pointcloud:
+      n_points: 256
+      n_cloth_cand: 2048

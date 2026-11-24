@@ -20,7 +20,7 @@ from torch import nn
 
 __all__ = [
     "STUDENT_DR_GROUPS", "apply_student_env", "legacy_env_overrides", "split_columns", "student_env",
-    "PointNet", "TeacherNet", "StudentNet",
+    "PointNet", "TeacherNet", "StudentNet", "SplitStudentNet",
 ]
 
 #: The camera errors the 11-16 students called version C (``--noise``): ``config/dr/pointcloud.yaml``
@@ -170,17 +170,39 @@ class TeacherNet(_Core):
 class PointNet(nn.Module):
     """Per-point MLP -> masked max-pool -> linear. An env with no valid point gets a zero feature."""
 
-    def __init__(self, point_dim: int, widths=(64, 128, 256), out_dim: int = 64) -> None:
+    def __init__(self, point_dim: int, widths=(64, 128, 256), out_dim: int = 64, compile: bool = False) -> None:
         super().__init__()
         self.point_mlp = _mlp((point_dim, *widths))
         self.out = nn.Sequential(nn.Linear(widths[-1], out_dim), nn.LayerNorm(out_dim))
+        # ``compile``: torch.compile the per-point MLP + pool, which fuses its elementwise work (the eager
+        # version is memory-bound): 1.5x faster training at 197k x 64 points, same results. The pool is
+        # ``max(dim).values``, not ``amax``: torch 2.7's compiled amax backward is non-finite under
+        # fp16 / bf16 autocast (2026-11-23; with it no update survived GradScaler).
+        self._pooled_fn = torch.compile(self._pooled) if compile else self._pooled
+
+    # The per-point MLP's (B, M, W) activations are the network's whole memory cost: 24576 envs x 1024
+    # points x 256 channels is 12 GB in half precision for ONE layer. So the batch runs in chunks of
+    # ~2M points, and with gradients each chunk is checkpointed -- only its pooled (C, W) output is
+    # kept and the chunk is recomputed in the backward pass.
+
+    def _pooled(self, x: torch.Tensor) -> torch.Tensor:
+        return self.point_mlp(x).max(dim=1).values
 
     def forward(self, points: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         # An invalid slot is given a valid point of the same cloud: a duplicate does not change the
         # max-pool, and the (B, M, 3..7) input is far cheaper to mask than the (B, M, W) features.
         first = mask.to(torch.uint8).argmax(dim=1)
         fill = points[torch.arange(points.shape[0], device=points.device), first].unsqueeze(1)
-        f = self.point_mlp(torch.where(mask.unsqueeze(-1), points, fill)).amax(dim=1)          # (B, W)
+        x = torch.where(mask.unsqueeze(-1), points, fill)
+        chunk = max(1, (1 << 21) // max(int(x.shape[1]), 1))          # ~2M points a chunk, any cloud size
+        if x.shape[0] <= chunk:
+            f = self._pooled_fn(x)                                                               # (B, W)
+        elif torch.is_grad_enabled():
+            from torch.utils.checkpoint import checkpoint
+
+            f = torch.cat([checkpoint(self._pooled_fn, c, use_reentrant=False) for c in x.split(chunk)])
+        else:
+            f = torch.cat([self._pooled_fn(c) for c in x.split(chunk)])
         f = torch.where(mask.any(dim=1, keepdim=True), f, torch.zeros_like(f))
         return self.out(f)
 
@@ -188,14 +210,14 @@ class PointNet(nn.Module):
 class StudentNet(_Core):
     def __init__(
         self, n_proprio: int, num_actions: int, point_dim: int, aux_dim: int,
-        feat_dim: int = 64, use_rnn_state: bool = True,
+        feat_dim: int = 64, use_rnn_state: bool = True, widths=(64, 128, 256), compile: bool = False,
     ) -> None:
         super().__init__(n_proprio + feat_dim, num_actions)
         self.n_proprio, self.feat_dim, self.aux_dim = int(n_proprio), int(feat_dim), int(aux_dim)
         self.use_rnn_state = bool(use_rnn_state)
         self.register_buffer("mean", torch.zeros(n_proprio))
         self.register_buffer("var", torch.ones(n_proprio))
-        self.pointnet = PointNet(point_dim, out_dim=feat_dim)
+        self.pointnet = PointNet(point_dim, widths=tuple(widths), out_dim=feat_dim, compile=compile)
         self.aux = nn.Sequential(nn.Linear(self.rnn_units, 256), nn.ELU(), nn.Linear(256, aux_dim))
 
     def load_teacher(self, teacher: TeacherNet, proprio_cols) -> None:
@@ -239,3 +261,30 @@ class StudentNet(_Core):
             mus.append(mu)
             auxs.append(self.aux(h))
         return torch.stack(mus), torch.stack(auxs)
+
+
+class SplitStudentNet(StudentNet):
+    """``StudentNet`` with the cloud split in two, each with its own PointNet: the first ``n_live``
+    points (the cameras' live cloud) and the rest (the goal cloud). The two features are concatenated
+    after the proprioception: ``[proprio | f_live | f_goal]``. Separate weights, as the two clouds
+    differ in kind -- partial, noisy and delayed with the robot in it, against a clean whole surface."""
+
+    def __init__(
+        self, n_proprio: int, num_actions: int, point_dim: int, aux_dim: int, n_live: int,
+        feat_dim: int = 64, use_rnn_state: bool = True, widths=(64, 128, 256), compile: bool = False,
+    ) -> None:
+        _Core.__init__(self, n_proprio + 2 * feat_dim, num_actions)
+        self.n_proprio, self.feat_dim, self.aux_dim, self.n_live = int(n_proprio), int(feat_dim), int(aux_dim), int(n_live)
+        self.use_rnn_state = bool(use_rnn_state)
+        self.register_buffer("mean", torch.zeros(n_proprio))
+        self.register_buffer("var", torch.ones(n_proprio))
+        self.pointnet = PointNet(point_dim, widths=tuple(widths), out_dim=feat_dim, compile=compile)
+        self.goal_pointnet = PointNet(point_dim, widths=tuple(widths), out_dim=feat_dim, compile=compile)
+        self.aux = nn.Sequential(nn.Linear(self.rnn_units, 256), nn.ELU(), nn.Linear(256, aux_dim))
+
+    def encode(self, proprio: torch.Tensor, points: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        p = ((proprio - self.mean) / torch.sqrt(self.var + 1e-5)).clamp(-5.0, 5.0)
+        k = self.n_live
+        f_live = self.pointnet(points[:, :k], mask[:, :k]).to(p.dtype)
+        f_goal = self.goal_pointnet(points[:, k:], mask[:, k:]).to(p.dtype)
+        return torch.cat((p, f_live, f_goal), dim=-1)

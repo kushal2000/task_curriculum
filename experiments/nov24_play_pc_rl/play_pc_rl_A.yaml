@@ -1,0 +1,59 @@
+# play_pc_rl_A (2026-11-24): SAPG on the base fold pool straight from the point-cloud Play student
+# (Kushal's DAgger student, pretrained_policy/play_pc_real_dagger/play_pc_real_dagger_it5400_fp16.pth),
+# in the Play student's representation so every actor weight transfers (--pc_init_student):
+#   live cloud:  64 visible points of the cloth only (camera model: the robot occludes, its points
+#                dropped; Warp visibility), from 768 candidates a step
+#   goal cloud:  64 points of the folded goal sheet where it belongs (goal_fixed, frozen at step 12)
+#   one PointNet per cloud (32-64-128, compiled), bare xyz, the Play student's proprioception.
+# Camera errors: version C without the extrinsics (cameras calibrated): depth noise 1-4 mm, 0-30% drops,
+# the cloud 0-6 steps late; proprioception 0-3, actions 0-2 (rigidcloth_pc_rl).
+# Critic: no keypoint field; the robot / task state plus three clean 8 x 8 grids of the sheet surface
+# (the sheet, the goal carried on its stationary half, the frozen goal; obs.pointcloud.critic_grid_side).
+# A fresh critic: run with --pc_actor_freeze_epochs 50 (the actor is not updated while it warms up).
+# Success: termination.success surface -- after the best in-plane placement, the sheet's surface and
+# the frozen goal's are within 0.1 x the sheet's side of each other, both ways (mdp/surface_match.py):
+# any half fold counts, wherever it was made. The fold progress reward stays the designated fold error.
+#
+#   cluster/submit.sh experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
+#       --experiment experiments/nov24_play_pc_rl/play_pc_rl_A.yaml \
+#       --pc_init_student pretrained_policy/play_pc_real_dagger/play_pc_real_dagger_it5400_fp16.pth \
+#       --pc_init_sigma pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth --pc_actor_freeze_epochs 50
+base: experiments/nov17_pointcloud_rl/rigidcloth_pc_dagger_rl.yaml
+
+env:
+  scene:
+    num_envs: 7680
+  obs:
+    state_list: [joint_pos, joint_vel, prev_action_targets, palm_pos, palm_rot, palm_vel,
+                 fingertip_pos_rel_palm, lifted_object, progress, successes, reward]
+    pointcloud:
+      n_points: 64
+      n_cloth_cand: 768
+      manipuland_only: true
+      use_warp: true
+      goal: goal_fixed
+      ref_step: 12
+      n_ref: 64
+      labels: false
+      split_goal: true
+      pointnet_widths: [32, 64, 128]
+      compile_pointnet: true
+      critic_grid_side: 8
+  fold_pool:
+    goal_task:
+      mode: half_fold
+  termination:
+    success: surface
+  domain_randomization:
+    pointcloud:
+      cam_pos_noise: [0.0, 0.0, 0.0]
+      calib_xyz: [0.0, 0.0, 0.0]
+      calib_rot_deg: 0.0
+
+agent:
+  params:
+    config:
+      minibatch_size: 3840
+      central_value_config:
+        minibatch_size: 3840
+      expl_coef_block_size: 1280     # num_envs / 6 SAPG blocks

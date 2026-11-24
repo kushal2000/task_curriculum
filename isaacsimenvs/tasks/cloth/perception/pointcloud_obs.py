@@ -27,6 +27,8 @@ def point_cloud_setup(obs_pc, dr_pc) -> PointCloudSetup:
     return PointCloudSetup(
         n_points=int(obs_pc.n_points), goal_mode=str(obs_pc.goal), ref_step=int(obs_pc.ref_step),
         fk_points=int(obs_pc.fk_points), chunk=int(obs_pc.chunk), cameras=str(obs_pc.cameras),
+        manipuland_only=bool(obs_pc.manipuland_only), n_cloth_cand=int(obs_pc.n_cloth_cand),
+        use_warp=bool(obs_pc.use_warp), n_ref=int(obs_pc.n_ref), use_labels=bool(obs_pc.labels),
         # the camera errors
         cam_pos_noise=tuple(dr_pc.cam_pos_noise), calib_xyz=tuple(dr_pc.calib_xyz),
         calib_rot_deg=float(dr_pc.calib_rot_deg), depth_noise_std_range=tuple(dr_pc.depth_noise_std_range),
@@ -42,7 +44,8 @@ def point_cloud_setup(obs_pc, dr_pc) -> PointCloudSetup:
 
 def point_cloud_layout(obs_pc) -> tuple[int, int]:
     """``(num_points, point_dim)`` of the cloud ``obs.pointcloud`` describes (no simulator needed)."""
-    setup = PointCloudSetup(n_points=int(obs_pc.n_points), goal_mode=str(obs_pc.goal), fk_points=int(obs_pc.fk_points))
+    setup = PointCloudSetup(n_points=int(obs_pc.n_points), goal_mode=str(obs_pc.goal), fk_points=int(obs_pc.fk_points),
+                            n_ref=int(obs_pc.n_ref), use_labels=bool(obs_pc.labels))
     return setup.num_points, setup.point_dim
 
 
@@ -75,7 +78,8 @@ class PointCloudObservation:
         print(
             f"[pointcloud] {setup.n_points} live points from {setup.n_cloth_cand} cloth + {self.cloud.n_robot} robot "
             f"candidates ({len(surf['links'])} links), image {self.cloud.w}x{self.cloud.h}, goal {setup.goal_mode}, "
-            f"fk {setup.fk_points}, labels {self.cloud.labels or 'none'}, cloud delay 0-{setup.delay_max}, cameras {setup.cameras}",
+            f"fk {setup.fk_points}, labels {self.cloud.labels or 'none'}, cloud delay 0-{setup.delay_max}, cameras {setup.cameras}, "
+            f"{'cloth points only' if setup.manipuland_only else 'cloth + robot points'}, visibility {'warp' if setup.use_warp else 'torch'}",
             flush=True,
         )
 

@@ -263,3 +263,31 @@ def test_one_camera_goal_carries_the_calibration_error():
     goal = _xyz(cloud, points)[:, 1024:]
     off = goal.mean(dim=1)[:, :2] - CENTRE[:2]
     assert torch.allclose(off, cloud.calib_t[:, 0, :2], atol=0.012)
+
+
+def test_manipuland_only_keeps_cloth_points_and_robot_still_hides():
+    """``manipuland_only``: no robot point is kept, and the plate (robot) still hides the sheet below it."""
+    plate = _plate((0.0, 0.0, TABLE_Z + 0.10), 0.15)
+    pos, quat = _bodies(2)
+    step = torch.zeros(2, dtype=torch.long)
+    torch.manual_seed(1)                                   # the same cloth candidates in both clouds
+    scene = _make(plate=plate)
+    torch.manual_seed(2)
+    scene.observe(step, _grid(2), pos, quat)
+    torch.manual_seed(1)
+    cloud = _make(plate=plate, manipuland_only=True)
+    torch.manual_seed(2)
+    points, mask = cloud.observe(step, _grid(2), pos, quat)
+    z = _xyz(cloud, points)[..., 2]
+    assert mask.any() and (z[mask] < TABLE_Z + 0.05).all()                    # sheet points only
+    assert float(cloud.last_cloth_share.min()) == 1.0
+    # The same occlusion as the full cloud: the sheet is still seen only around the plate's rim.
+    assert torch.allclose(cloud.last_visible_frac, scene.last_visible_frac)
+    assert cloud.last_visible_frac.max() < 0.35
+
+
+def test_manipuland_only_count_is_capped_by_the_visible_candidates():
+    cloud = _make(manipuland_only=True, n_cloth_cand=300)
+    pos, quat = _bodies(2)
+    _, mask = cloud.observe(torch.zeros(2, dtype=torch.long), _grid(2), pos, quat)
+    assert mask.sum(dim=1).max() <= 300

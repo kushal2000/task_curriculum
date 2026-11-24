@@ -61,6 +61,12 @@ common:
       goal: none                         # none | label | goal_fixed | goal_any
       ref_step: 0
       fk_points: 0
+      manipuland_only: false             # true: cloth points only (the robot still occludes)
+      n_cloth_cand: 768                  # cloth candidates before the camera model
+      n_ref: 192                         # points of the goal group
+      labels: true                       # one-hot group labels (false: bare xyz)
+      split_goal: false                  # true: live and goal clouds, one PointNet each
+      critic_grid_side: 0                # G: the critic also reads 3 clean G x G grids (sheet, goal now, frozen goal)
 
   action:
     arm_moving_average: 0.1
@@ -76,6 +82,9 @@ common:
     kuka_actions_penalty_scale: 0.03
     hand_actions_penalty_scale: 0.003
     object_base_size: 0.04
+    slide_penalty_scale: 0.0             # per metre of stationary-half xy travel; 0: off
+    slide_deadband: 0.005                # m/s
+    slide_step_cap: 0.005                # m per policy step (0.3 m/s)
 
   reset:
     reset_position_noise_x: 0.1
@@ -91,6 +100,21 @@ common:
 
   termination:
     success_steps: 1
+    success: fold_error                  # fold_error | surface (mdp/surface_match.py)
+    surface:
+      ref_step: 12                       # the goal sheet frozen here (as the goal_fixed cloud)
+      tolerance_frac: 0.1                # aligned two-sided max < 0.1 x the sheet's side
+      fine_side: 13                      # particle grid interpolated to 13 x 13
+      uniform_start_yaws: 4              # alignment start yaws besides the two major-axis ones
+      icp_iters: 3
+    max_in_place_dist: .inf              # surface only: in-place gate, m to the frozen goal, not aligned
+    drift_settle_steps: 30               # 0.5 s: the stationary half's anchor (drift logs, slide penalty)
+    gate_curriculum:                     # empty lists: off
+      max_in_place_dist: []
+      slide_penalty_scale: []
+      advance_rate: 0.5
+      window_episodes: 50000
+      start_stage: 0
 
 
 rigid:

@@ -18,6 +18,11 @@ says what it belongs to. Built from the sim's state without rendering:
 * crop and count -- the box, then ``n_points`` candidates drawn with probability proportional to
   the surface area each stands for (uniform density over what is visible, like a voxel filter).
 
+``manipuland_only`` keeps only the sheet's points (the cloud after the cloth is segmented out): the
+robot is still drawn into the depth images, so it still hides the sheet behind it, but its own points
+are never kept. ``use_warp`` runs the visibility test as fused Warp kernels (``visibility_warp.py``,
+from the point-cloud Play task): the same test, rounding of depth ties aside, on the GPU only.
+
 Optional extra groups, each with its own label column (none of them when unused, so the plain
 cloud is ``xyz`` only):
   ``goal_mode="label"``       the cloth points of the first frame with moving / stationary labels,
@@ -31,7 +36,8 @@ cloud is ``xyz`` only):
   ``fk_points > 0``      points on the forearm and hand from forward kinematics (no camera error).
 
 Every point is ``(xyz - box centre) * scale`` (+ a one-hot label when there is more than one
-group). Torch only, unit-tested on CPU (tests/test_pointcloud.py). Metres, env frame. The env's
+group). Torch (Warp with ``use_warp``), unit-tested on CPU (tests/test_pointcloud.py; the kernels in
+tests/test_visibility_warp.py, GPU). Metres, env frame. The env's
 observation of it is ``perception/pointcloud_obs.py``.
 """
 
@@ -43,6 +49,13 @@ from dataclasses import dataclass
 import torch
 
 from isaacsimenvs.tasks.cloth.mdp.delay import DelayLine
+
+
+def visible_warp(*args, **kwargs):
+    """``visibility_warp.visible_warp``, imported on first use (Warp only when ``use_warp`` is on)."""
+    from isaacsimenvs.tasks.cloth.perception.visibility_warp import visible_warp as fn
+
+    return fn(*args, **kwargs)
 
 __all__ = ["CAMERA_SETS", "GOAL_MODES", "PointCloudSetup", "PointCloud", "look_at", "quat_rotate"]
 
@@ -65,11 +78,20 @@ class PointCloudSetup:
     n_points: int = 1024
     """Live points per step (the fixed output size; unused slots are masked)."""
     n_cloth_cand: int = 768
-    """Cloth candidates per step (also the cloth's share of the z-buffer occluders)."""
+    """Cloth candidates per step (also the cloth's share of the z-buffer occluders). With
+    ``manipuland_only`` the visible ones are all the cloud can hold: keep it well above ``n_points``."""
+    manipuland_only: bool = False
+    """Keep only the sheet's points (after segmentation); the robot still occludes (module doc)."""
+    use_warp: bool = False
+    """The visibility test as Warp kernels (CUDA only); with ``manipuland_only`` the robot is splatted
+    from its body poses inside the kernel and never built as points."""
     goal_mode: str = "none"
     """``none``, ``label`` (first-frame cloth cloud with moving / stationary labels), ``goal_fixed``
     or ``goal_any`` (a cloud of the folded goal sheet, in place / as a bare shape at any yaw)."""
     n_ref: int = 192
+    use_labels: bool = True
+    """One-hot group labels on every point when the cloud has more than one group. False: bare xyz (a
+    policy that reads the groups as separate clouds, each with its own encoder, needs no labels)."""
     ref_step: int = 0
     fk_points: int = 0
     """Forward-kinematics points on the forearm and hand (0: none)."""
@@ -143,7 +165,9 @@ class PointCloudSetup:
 
     @property
     def labels(self) -> tuple[str, ...]:
-        """The label columns; empty when the cloud has one group only."""
+        """The label columns; empty when the cloud has one group only (or ``use_labels`` is off)."""
+        if not self.use_labels:
+            return ()
         out = ["live"]
         if self.goal_mode == "label":
             out += ["ref_moving", "ref_stationary"]
@@ -223,6 +247,7 @@ class PointCloud:
         self.pool_off = torch.as_tensor(pool_off, dtype=torch.float32, device=dev)
         self.pool_w = torch.as_tensor(pool_w, dtype=torch.float32, device=dev)
         self.n_robot, self.n_cloth = int(self.pool_body.numel()), int(cfg.n_cloth_cand)
+        self.manipuland_only, self.use_warp = bool(cfg.manipuland_only), bool(cfg.use_warp)
         if cfg.fk_points > 0:
             if fk_idx is None or len(fk_idx) != cfg.fk_points:
                 raise ValueError(f"fk_points {cfg.fk_points} needs fk_idx of that length")
@@ -339,6 +364,8 @@ class PointCloud:
 
     def visible(self, pts: torch.Tensor, cams: torch.Tensor, rots: torch.Tensor) -> torch.Tensor:
         """``(n, 2, P)``: camera c sees the point (inside its image, nearest surface in its pixel)."""
+        if self.use_warp:
+            return visible_warp(pts, cams, rots, self.f, self.w, self.h, float(self.cfg.min_depth), float(self.cfg.depth_tol))
         n, p = pts.shape[0], pts.shape[1]
         w, h, f = self.w, self.h, self.f
         local = torch.matmul(pts.unsqueeze(1) - cams.unsqueeze(2), rots)                        # (n, 2, P, 3): R^T d
@@ -360,11 +387,20 @@ class PointCloud:
         c, dev = self.cfg, particles.device
         n, k = particles.shape[0], self.n_cloth
         cloth, moving, w_cloth = self.cloth_candidates(particles)
-        pts = torch.cat((cloth, self.robot_points(body_pos, body_quat)), dim=1)                # (n, P, 3)
         w_cloth = w_cloth * self.cloth_weight[sl].unsqueeze(1)
-        weight = torch.cat((w_cloth, self.pool_w.unsqueeze(0).expand(n, -1)), dim=1)
         cams = self.cams[sl]
-        vis = self.visible(pts, cams, self.rots[sl])
+        if self.manipuland_only and self.use_warp:
+            # The robot splatted into the depth images from its body poses inside the kernel: it
+            # occludes, but is never built as points or tested.
+            pts, weight = cloth, w_cloth
+            vis = visible_warp(cloth, cams, self.rots[sl], self.f, self.w, self.h, float(c.min_depth), float(c.depth_tol),
+                               body_pos=body_pos, body_quat=body_quat, pool_body=self.pool_body, pool_off=self.pool_off)
+        else:
+            pts = torch.cat((cloth, self.robot_points(body_pos, body_quat)), dim=1)            # (n, P, 3)
+            weight = torch.cat((w_cloth, self.pool_w.unsqueeze(0).expand(n, -1)), dim=1)
+            vis = self.visible(pts, cams, self.rots[sl])
+            if self.manipuland_only:        # the robot occluded the sheet above; its own points are not kept
+                vis[:, :, k:] = False
         if self.only_cam is not None:       # one camera: the other one sees nothing
             vis[:, 1 - self.only_cam] = False
         seen = vis[:, 0] | vis[:, 1]

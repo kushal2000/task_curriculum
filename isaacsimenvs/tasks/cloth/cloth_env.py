@@ -57,6 +57,8 @@ class ClothEnv(DirectRLEnv):
             m, d = point_cloud_layout(cfg.obs.pointcloud)
             cfg.observation_space = obs_dim([f for f in cfg.obs.obs_list if f not in OBJECT_FIELDS], n_joints) + m * d + m
         cfg.state_space = obs_dim(cfg.obs.state_list, n_joints)
+        if cfg.obs.object == "pointcloud" and int(cfg.obs.pointcloud.critic_grid_side) > 0:
+            cfg.state_space += 3 * 3 * int(cfg.obs.pointcloud.critic_grid_side) ** 2   # three clean grids (ObservationBuilder)
         self.backend = backend(cfg, self.robot_spec)
         with self.backend.construction_context():
             super().__init__(cfg, render_mode, **kwargs)  # builds the scene (_setup_scene)
@@ -210,6 +212,14 @@ class ClothEnv(DirectRLEnv):
         task = self.task
         final = {"successes": task.successes.float()}
         final.update({f"done_{name}": value.float() for name, value in task.termination_reasons.items()})
+        # Not `done_*` (the evaluation reads those as booleans). Copies: the reset that follows this
+        # step zeroes the task's own tensors before the extras are read.
+        final["stationary_drift"] = task.drift.clone()
+        final["stationary_drift_max"] = task.drift_max.clone()
+        final["stationary_yaw"] = task.yaw.clone()
+        if task.surface:
+            final["aligned_dist"] = task.aligned_dist.clamp(max=1.0)          # inf: no frozen goal yet
+            final["in_place_dist"] = task.in_place_dist.clamp(max=1.0)
         self.extras["episode_cumulative"] = task.reward_terms
         self.extras["episode_final"] = final
         self.extras["successes"] = task.prev_episode_successes.float()

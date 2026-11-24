@@ -25,7 +25,8 @@ from torch import nn
 
 from isaacsimenvs.scripts.distillation.student import legacy_env_overrides
 
-__all__ = ["register_network", "student_from_rl", "load_student_any", "write_student_env", "patch_gradient_step"]
+__all__ = ["register_network", "student_from_rl", "load_student_any", "write_student_env", "patch_gradient_step",
+           "patch_actor_freeze", "patch_epoch_summary", "net_args_from_layout"]
 
 FEAT_DIM = 64
 
@@ -67,6 +68,73 @@ def patch_gradient_step() -> None:
     A2CBase.trancate_gradients_and_step = step
 
 
+def patch_actor_freeze(epochs: int) -> None:
+    """Critic warm-up for a finetune from a distilled actor: for the first ``epochs`` epochs the actor's
+    optimizer step is skipped (its gradients computed and dropped: the policy stays the student) while
+    the central value network trains as usual; its learning rate is held at the configured one (the
+    adaptive schedule would raise it every minibatch on the zero KL). Without it the first PPO update,
+    with a fresh critic's advantages, moved a DAgger student by KL 67 at lr 1e-4 (2026-11-23).
+    Call after ``patch_gradient_step``."""
+    from rl_games.common.a2c_common import A2CBase
+
+    n = int(epochs)
+    if n <= 0 or getattr(A2CBase.trancate_gradients_and_step, "_freeze_patched", False):
+        return
+    step0, update_lr0 = A2CBase.trancate_gradients_and_step, A2CBase.update_lr
+
+    def frozen(self) -> bool:
+        if not hasattr(self, "_freeze_lr0"):
+            self._freeze_lr0 = float(self.last_lr)
+            print(f"[pc_rl] actor frozen for {n} epochs (critic warm-up), lr held at {self._freeze_lr0:g}", flush=True)
+        return int(self.epoch_num) <= n
+
+    def step(self):
+        if frozen(self):
+            self.optimizer.zero_grad(set_to_none=True)
+            return torch.ones(1, device=self.ppo_device)
+        return step0(self)
+
+    def update_lr(self, lr):
+        if frozen(self):
+            self.last_lr = self._freeze_lr0
+            lr = self._freeze_lr0
+        return update_lr0(self, lr)
+
+    step._pc_patched = getattr(step0, "_pc_patched", False)
+    step._freeze_patched = True
+    A2CBase.trancate_gradients_and_step = step
+    A2CBase.update_lr = update_lr
+
+
+def patch_epoch_summary() -> None:
+    """One stdout line per epoch: the actor's mean KL and loss and the central value network's loss
+    (``[pc_rl] epoch ...``). Tensorboard holds them too, but flushes only every 120 s: a short run (a
+    smoke test) ends with an empty event file."""
+    from rl_games.common.a2c_common import A2CBase, ContinuousA2CBase
+
+    if getattr(ContinuousA2CBase.train_epoch, "_summary_patched", False):
+        return
+    train_epoch0, train_cv0 = ContinuousA2CBase.train_epoch, A2CBase.train_central_value
+
+    def train_central_value(self):
+        self._last_cval_loss = train_cv0(self)
+        return self._last_cval_loss
+
+    def train_epoch(self):
+        out = train_epoch0(self)
+        if isinstance(out, tuple) and len(out) >= 9:
+            a_losses, kls = out[4], out[8]
+            mean = lambda xs: float(torch.stack([torch.as_tensor(x, dtype=torch.float32).mean() for x in xs]).mean()) if xs else float("nan")  # noqa: E731
+            cval = getattr(self, "_last_cval_loss", None)
+            print(f"[pc_rl] epoch {int(self.epoch_num)} kl {mean(kls):.5f} a_loss {mean(a_losses):.5f} "
+                  f"cval_loss {float(cval) if cval is not None else float('nan'):.5f} lr {float(self.last_lr):.3g}", flush=True)
+        return out
+
+    train_epoch._summary_patched = True
+    ContinuousA2CBase.train_epoch = train_epoch
+    A2CBase.train_central_value = train_central_value
+
+
 def register_network() -> None:
     from rl_games.algos_torch import model_builder
     from rl_games.algos_torch.network_builder import A2CBuilder
@@ -79,7 +147,11 @@ def register_network() -> None:
             def __init__(self, params, **kwargs):
                 pc = dict(params["pc"])
                 self_np, self_m, self_d = int(pc["n_proprio"]), int(pc["num_points"]), int(pc["point_dim"])
-                feat = int(pc.get("feat_dim", FEAT_DIM))
+                feat_one = int(pc.get("feat_dim", FEAT_DIM))
+                # ``n_live``: the cloud is two clouds (live | goal), each with its own PointNet
+                # (student.SplitStudentNet); the encoded feature is then [f_live | f_goal].
+                n_live = int(pc["n_live"]) if pc.get("split_goal") else 0
+                feat = 2 * feat_one if n_live else feat_one
                 full = flat_dim(self_np, self_m, self_d)
                 if int(kwargs["coef_id_idx"]) != full:
                     raise ValueError(f"obs has {kwargs['coef_id_idx']} columns, the point-cloud layout needs {full}")
@@ -88,7 +160,11 @@ def register_network() -> None:
                 kwargs["input_shape"] = (self_np + feat + 1,)
                 super().__init__(params, **kwargs)
                 self.n_proprio, self.n_pts, self.point_dim, self.feat_dim = self_np, self_m, self_d, feat
-                self.pointnet = PointNet(self_d, out_dim=feat)
+                self.n_live = n_live
+                widths = tuple(int(w) for w in pc.get("widths", (64, 128, 256)))
+                comp = bool(pc.get("compile", False))
+                self.pointnet = PointNet(self_d, widths=widths, out_dim=feat_one, compile=comp)
+                self.goal_pointnet = PointNet(self_d, widths=widths, out_dim=feat_one, compile=comp) if n_live else None
                 self.proprio_rms = RunningMeanStd((self_np,))
                 self.freeze_norm = bool(pc.get("freeze_norm", False))
                 if pc.get("init_student"):
@@ -117,6 +193,9 @@ def register_network() -> None:
                     self.actor_mlp.load_state_dict({k2[len("actor_mlp."):]: v for k2, v in state.items() if k2.startswith("actor_mlp.")})
                     self.mu.load_state_dict({k2[len("mu."):]: v for k2, v in state.items() if k2.startswith("mu.")})
                     self.pointnet.load_state_dict({k2[len("pointnet."):]: v for k2, v in state.items() if k2.startswith("pointnet.")})
+                    if self.goal_pointnet is not None:
+                        self.goal_pointnet.load_state_dict(
+                            {k2[len("goal_pointnet."):]: v for k2, v in state.items() if k2.startswith("goal_pointnet.")})
                 print(f"[pc_rl] actor <- student {path}", flush=True)
 
             def forward(self, obs_dict):
@@ -131,7 +210,12 @@ def register_network() -> None:
                 # Half precision for the per-point MLP in the rollout too (training already runs
                 # under autocast, and so do the evaluations).
                 with torch.autocast("cuda", dtype=torch.float16, enabled=obs.is_cuda):
-                    feat = self.pointnet(points, mask)
+                    if self.n_live:
+                        k = self.n_live
+                        feat = torch.cat((self.pointnet(points[:, :k], mask[:, :k]),
+                                          self.goal_pointnet(points[:, k:], mask[:, k:])), dim=1)
+                    else:
+                        feat = self.pointnet(points, mask)
                 feat = feat.to(proprio.dtype)
                 encoded = dict(obs_dict)
                 encoded["obs"] = torch.cat((proprio, feat, obs[:, n_p + m * d + m:]), dim=1)
@@ -160,8 +244,19 @@ def student_from_rl(model_state: dict, block: int = -1) -> dict:
     }
     for key, value in model_state.items():
         name = key[len(pre):] if key.startswith(pre) else ""
-        if name.startswith(("layer_norm.", "actor_mlp.", "mu.", "pointnet.")):
+        if name.startswith(("layer_norm.", "actor_mlp.", "mu.", "pointnet.", "goal_pointnet.")):
             out[name] = value.float()
+    return out
+
+
+def net_args_from_layout(layout: dict) -> dict:
+    """The ``StudentNet`` / ``SplitStudentNet`` arguments of the actor ``pointcloud_layout`` describes
+    (empty for the default network: one PointNet of widths 64-128-256)."""
+    out = {}
+    if layout.get("widths"):
+        out["widths"] = [int(w) for w in layout["widths"]]
+    if layout.get("split_goal"):
+        out["n_live"] = int(layout["n_live"])
     return out
 
 
@@ -184,6 +279,6 @@ def load_student_any(path: str) -> dict:
             if side.exists():
                 meta = json.loads(side.read_text())
                 env = meta["env"] if "env" in meta else legacy_env_overrides(meta["pc_args"])
-                return {"model": student_from_rl(ckpt["model"]), "env": env, "net_args": {},
+                return {"model": student_from_rl(ckpt["model"]), "env": env, "net_args": net_args_from_layout(meta.get("layout", {})),
                         "iter": ckpt.get("epoch"), "teacher": meta.get("teacher"), "from_rl": True}
     raise FileNotFoundError(f"no student_env.json (or pc_args.json) next to {path}")

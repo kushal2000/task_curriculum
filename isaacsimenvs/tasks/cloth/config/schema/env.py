@@ -25,6 +25,7 @@ __all__ = [
     "ClothDRCfg",
     "ClothEnvCfg",
     "DomainRandomizationCfg",
+    "GateCurriculumCfg",
     "KeypointsDRCfg",
     "ObsCfg",
     "PointCloudDRCfg",
@@ -33,6 +34,7 @@ __all__ = [
     "ResetCfg",
     "RobotDRCfg",
     "RewardCfg",
+    "SurfaceSuccessCfg",
     "TerminationCfg",
 ]
 
@@ -85,6 +87,32 @@ class PointCloudObsCfg:
     cameras: str = "ab"
     """The cameras the cloud comes from: ``ab`` (both), ``a`` (left_camera_nov7) or ``b``. With one
     camera the ``goal_fixed`` group carries that camera's calibration error."""
+    manipuland_only: bool = MISSING
+    """The live cloud keeps only the cloth's points, as after segmenting the cloth out; the robot
+    still hides the cloth behind it, but its own points are dropped. False: cloth, hand and arm."""
+    n_cloth_cand: int = MISSING
+    """Cloth candidates per step, before the camera model. With ``manipuland_only`` the visible ones
+    are all the live cloud can hold, so keep it well above ``n_points``."""
+    use_warp: bool = False
+    """The cameras' visibility test as Warp kernels (CUDA): speed only, the same cloud up to depth
+    ties; not checked against a student's recipe."""
+    n_ref: int = MISSING
+    """Points of the ``goal`` group (``label`` / ``goal_fixed`` / ``goal_any``)."""
+    labels: bool = MISSING
+    """One-hot group labels on the points when there is more than one group. False: bare xyz."""
+    split_goal: bool = MISSING
+    """The actor reads the live and the goal groups as two clouds, one PointNet each (pc_rl, as the
+    point-cloud Play student); needs ``goal`` goal_fixed / goal_any and no fk points."""
+    pointnet_widths: tuple[int, ...] = (64, 128, 256)
+    """The per-point MLP's widths (pc_rl's PointNet; one per cloud with ``split_goal``)."""
+    compile_pointnet: bool = False
+    """torch.compile the PointNets' per-point MLP + pool (speed only)."""
+    critic_grid_side: int = MISSING
+    """0: the critic reads ``state_list`` only. ``G``: it also reads three clean ``G x G`` sample grids
+    of the sheet surface, in the cloud's frame, in a fixed order (point ``i`` is the same spot of the
+    sheet in all three): the sheet now, the designated goal sheet carried on its stationary half
+    (the fold progress reward's goal) and the frozen goal sheet (``termination.surface.ref_step``).
+    Needs ``fold_pool.goal_task``."""
 
 
 @configclass
@@ -132,6 +160,14 @@ class RewardCfg:
     """L1 hand joint speed penalty."""
     object_base_size: float = MISSING
     """``object_scales`` is the sheet's bounding box divided by this."""
+    slide_penalty_scale: float = MISSING
+    """Paid per metre the stationary half's points travel in xy (their mean), once the sheet has
+    landed (``termination.drift_settle_steps``); 0 turns it off. Compare ``keypoint_rew_scale``."""
+    slide_deadband: float = MISSING
+    """Travel slower than this [m/s] is not penalised (contact jitter)."""
+    slide_step_cap: float = MISSING
+    """At most this travel [m] is paid per policy step: a sheet thrown off the table would otherwise
+    cost more than a fold pays."""
 
 
 @configclass
@@ -154,11 +190,69 @@ class ResetCfg:
 
 
 @configclass
+class SurfaceSuccessCfg:
+    """The surface fold criterion (``termination.success: surface``; ``mdp/surface_match.py``)."""
+
+    ref_step: int = MISSING
+    """The goal sheet is frozen where it is at this episode step (the sheet spawns above the table
+    and lands by step ~12): the same step as the policy's ``goal_fixed`` cloud."""
+    tolerance_frac: float = MISSING
+    """Folded when the aligned two-sided max distance is below this fraction of the sheet's side."""
+    fine_side: int = MISSING
+    """The distance is measured on the particle grid interpolated to ``fine_side x fine_side`` points."""
+    uniform_start_yaws: int = MISSING
+    """Evenly spaced start yaws of the alignment, besides the two major-axis ones."""
+    icp_iters: int = MISSING
+    """ICP rounds from each start yaw."""
+
+
+@configclass
+class GateCurriculumCfg:
+    """The in-place gate tightened by stages (``ClothTask`` module doc). Entry ``k`` of each list is
+    stage ``k``; empty lists: off (the fixed ``termination.max_in_place_dist`` and
+    ``reward.slide_penalty_scale`` apply)."""
+
+    max_in_place_dist: list[float] = MISSING
+    """Per stage, as ``termination.max_in_place_dist`` [m]."""
+    slide_penalty_scale: list[float] = MISSING
+    """Per stage, as ``reward.slide_penalty_scale`` [per m]."""
+    advance_rate: float = MISSING
+    """Next stage once this share of a window's finished episodes ended on a (gated) fold."""
+    window_episodes: int = MISSING
+    """Finished episodes per window (over all envs)."""
+    start_stage: int = MISSING
+    """Stage at startup: a resumed run passes the stage it reached (logged as ``gate_stage``)."""
+
+
+@configclass
 class TerminationCfg:
     """See ``ClothTask.compute_dones``. The episode length is ``episode_length_s``."""
 
     success_steps: int = MISSING
     """Steps the fold criterion must hold before the episode ends on it and the bonus pays."""
+    success: str = MISSING
+    """The fold criterion. ``fold_error``: the moved particles within ``cloth.keypoint_tolerance`` of
+    the designated goal and the footprint halved (look-alikes with ``accept_lookalike``).
+    ``surface``: the sheet's surface within ``surface.tolerance_frac`` of its side of the goal sheet's
+    surface, both ways, after the best in-plane placement -- any fold that looks like the goal
+    (needs ``fold_pool.goal_task``)."""
+    surface: SurfaceSuccessCfg = SurfaceSuccessCfg()
+    max_in_place_dist: float = MISSING
+    """``success: surface`` only: a fold also needs the two-sided max distance to the frozen goal,
+    NOT aligned, below this [m] (the in-place gate); ``.inf``: off."""
+    drift_settle_steps: int = MISSING
+    """Policy steps into the episode at which the stationary half's anchor is latched; its drift and
+    yaw (logged) and the slide penalty start there."""
+    gate_curriculum: GateCurriculumCfg = GateCurriculumCfg()
+
+    def check(self) -> None:
+        if self.success not in ("fold_error", "surface"):
+            raise ValueError(f"termination.success must be fold_error or surface, got {self.success!r}")
+        gc = self.gate_curriculum
+        if len(gc.max_in_place_dist) != len(gc.slide_penalty_scale):
+            raise ValueError("termination.gate_curriculum: max_in_place_dist and slide_penalty_scale need one length")
+        if (len(gc.max_in_place_dist) or float(self.max_in_place_dist) < float("inf")) and self.success != "surface":
+            raise ValueError("termination.max_in_place_dist / gate_curriculum need success: surface")
 
 
 @configclass
@@ -345,3 +439,4 @@ class ClothEnvCfg(DirectRLEnvCfg):
         """The config as a whole, after every override (a configclass's ``__post_init__`` runs on the
         defaults, before task.yaml, recipes or the command line). ``ClothEnv`` calls it."""
         self.cloth.check()
+        self.termination.check()

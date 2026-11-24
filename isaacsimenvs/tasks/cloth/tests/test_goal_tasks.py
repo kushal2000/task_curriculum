@@ -87,7 +87,7 @@ def _geometry(gt: GoalTasks, scale: torch.Tensor) -> FoldGeometry:
 
 
 def _task(geometry: FoldGeometry):
-    """Just what ``ClothTask.is_folded`` reads."""
+    """Just what ``ClothTask.is_folded_designated`` reads."""
     cloth = SimpleNamespace(keypoint_tolerance=TOL, max_folded_footprint=0.75)
     return SimpleNamespace(cfg=SimpleNamespace(cloth=cloth), geometry=geometry)
 
@@ -115,13 +115,13 @@ def test_any_fold_view():
     off = torch.einsum("nij,nkj->nki", rot, geo.keypoint_offsets)
     assert torch.allclose(start.keypoints_w - start.keypoints_w.mean(dim=1, keepdim=True), off, atol=1e-5)
     assert float(start.designated_error.min()) > 0.02
-    assert not bool(ClothTask.is_folded(_task(geo), start).any())
+    assert not bool(ClothTask.is_folded_designated(_task(geo), start).any())
 
     gt.read_hinge_abs = lambda: gt.m_q[gt.task, 0]               # the sheet sits in its goal state
     goal = geo.derive(place(gt.p_goal), torch.zeros(t, RES * RES, 3))
     assert float(goal.fold_error.max()) < 1e-5
     assert float((goal.keypoints_w - goal.targets_w).norm(dim=-1).max()) < 1e-5
-    assert bool(ClothTask.is_folded(_task(geo), goal).all())
+    assert bool(ClothTask.is_folded_designated(_task(geo), goal).all())
     # The goal attitude: the fold's rotation on the live frame takes the start offsets onto the goal's.
     want = goal.targets_w - goal.targets_w.mean(dim=1, keepdim=True)
     got = torch.einsum("nij,nkj->nki", geo.goal_rotation(goal.frame_r), geo.keypoint_offsets)
@@ -141,9 +141,9 @@ def test_half_fold_lookalike():
     other = geo.derive(gt.m_goal[t2, 1] * s3, torch.zeros(n, RES * RES, 3))
     assert float(other.designated_error.min()) > 0.02            # not the designated half fold
     assert float(other.lookalike_error.max()) < 1e-5
-    assert bool(ClothTask.is_folded(_task(geo), other).all())
+    assert bool(ClothTask.is_folded_designated(_task(geo), other).all())
     # the designated half fold itself: the stage-1 construction, keypoints on the +x half's corners
     gt.read_hinge_abs = lambda: gt.m_q[gt.task, 0]
     own = geo.derive(gt.p_goal[t2] * s3, torch.zeros(n, RES * RES, 3))
     assert float(own.designated_error.max()) < 1e-5
-    assert bool(ClothTask.is_folded(_task(geo), own).all())
+    assert bool(ClothTask.is_folded_designated(_task(geo), own).all())
