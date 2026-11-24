@@ -15,7 +15,7 @@ import torch
 
 from .feature import Feature
 from .fold_pool import FoldPool
-from .overlays import GoalGhost, Keypoints
+from .overlays import GoalGhost, Keypoints, SurfaceGoal
 from .point_cloud import PointCloud
 from .policies import Players
 from .scene import NewtonScene, PhysxScene
@@ -73,6 +73,8 @@ class LiveViewer:
         self.features: list[Feature] = [f for f in (self.pool, Keypoints(self)) if f is not None]
         if rigid and str(inner.cfg.fold_pool.goal_task.mode) != "off":
             self.features.append(GoalGhost(self))
+        if getattr(inner.task, "surface", False):
+            self.features.append(SurfaceGoal(self))
         if not rigid:
             from .vbd import ClothSheet, Pierce
 

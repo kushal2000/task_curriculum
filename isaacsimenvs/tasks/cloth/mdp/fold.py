@@ -164,6 +164,10 @@ class FoldGeometry:
 
         mv_folded_rest = folded_rest(self.moving_idx)
         kp_folded_rest = folded_rest(self.keypoint_idx)
+        # The whole sheet after the stage-1 fold (the goal sheet without goal tasks, ``goal_sheet``):
+        # the moving half folded, the stationary half and the crease line where they lie.
+        sheet_folded_rest = rest.clone()
+        sheet_folded_rest[self.moving_idx] = mv_folded_rest
         st_rest = rest[self.stationary_idx]
         st_rest_centroid = st_rest.mean(dim=0)
         st_rest_centred = st_rest - st_rest_centroid
@@ -175,8 +179,10 @@ class FoldGeometry:
             corner_rest_offsets = corner_rest_offsets.unsqueeze(0) * s3
             mv_folded_rest = mv_folded_rest.unsqueeze(0) * s3
             kp_folded_rest = kp_folded_rest.unsqueeze(0) * s3
+            sheet_folded_rest = sheet_folded_rest.unsqueeze(0) * s3
             st_rest_centroid = st_rest_centroid.unsqueeze(0) * s3[:, 0]
             st_rest_centred = st_rest_centred.unsqueeze(0) * s3
+        self.sheet_folded_rest = sheet_folded_rest
         self.mv_folded_rest = mv_folded_rest
         self.kp_folded_rest = kp_folded_rest
         self.st_rest_centroid = st_rest_centroid
@@ -350,10 +356,22 @@ class FoldGeometry:
     def goal_sheet(self, points_w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """For a goal point cloud: ``(goal sheet now (N, P, 3) world, goal sheet in its own frame
         (N, P, 3), flat at z = 0)`` of each env's designated goal, at each env's size. The first is
-        the goal state carried on the live pose of the part the fold leaves in place."""
+        the goal state carried on the live pose of the part the fold leaves in place.
+
+        Without goal tasks (VBD, or the pool with ``goal_task.mode off``): the stage-1 half fold --
+        the moving half folded onto the stationary one, carried on the stationary half's live frame,
+        the targets' own construction. It is the goal ``half_fold`` goal tasks give the flat sheet
+        (``mdp/geometry/fold_states.task_arrays(only_half=True)``) up to the folded ply's height."""
+        if self.goal_tasks is None:
+            frame_r, frame_c = self.stationary_frame(points_w)
+            goal_now_w = self.folded_w(frame_r, frame_c, self.sheet_folded_rest)
+            goal_own_frame = self.sheet_folded_rest
+            if not self.per_env:
+                goal_own_frame = goal_own_frame.unsqueeze(0).expand(points_w.shape[0], -1, -1)
+            return goal_now_w, goal_own_frame
         g = self._active_goal_tasks()
         if g is None:
-            raise ValueError("a goal point cloud needs fold_pool.goal_task.mode half_fold or any_fold")
+            raise ValueError("the goal tasks have not drawn a task yet")
         s3 = self._scale3()
         goal, _ = g.goal_particles(g.task, s3, points_w)
         return goal, g.p_goal[g.task] * s3

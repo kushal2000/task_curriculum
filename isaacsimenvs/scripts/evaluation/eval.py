@@ -62,6 +62,8 @@ REASONS = (
     "fold",
     "fold_held",
     "nonfinite",
+    # With ``termination.success: surface``: the old keypoint criterion, recorded, not acted on.
+    "fold_designated",
 )
 
 # iiwa14 fully extended plus the hand. An object above this is not being held -- it has been
@@ -88,9 +90,7 @@ def _summarise(goals: list[int], lengths: list[int]) -> dict:
     }
 
 
-#: Exit code of a combination that cannot be evaluated (experiments/eval.sh skips it).
-NOT_APPLICABLE = 3
-#: Point-cloud goal groups that need fold_pool.goal_task (obs.pointcloud.goal).
+#: Point-cloud goal groups (obs.pointcloud.goal): the student is shown the folded goal sheet.
 GOAL_CLOUDS = ("goal_fixed", "goal_any")
 
 
@@ -140,13 +140,25 @@ def _check_student_cloud(env_cfg, saved: dict) -> None:
         raise ValueError("the recipe's point cloud is not the student's: " + "; ".join(wrong))
 
 
-def _exit_if_not_applicable(env_cfg) -> None:
-    """A goal point cloud exists on the rigid fold pool only (``fold_pool.goal_task``), not on VBD."""
+def _goal_student_success(env_cfg) -> None:
+    """In an evaluation world (``--protocol``) a goal point-cloud student is scored as it was trained
+    to reach its goal: ``termination.success: surface`` -- the sheet and the goal sheet frozen with its
+    goal cloud (``ref_step``) within ``surface.tolerance_frac`` x the side of each other, both ways,
+    after the best in-plane placement; the keypoint criterion is recorded (``fold_designated``).
+    Every other policy keeps the world's criterion. Without goal tasks (VBD) the goal sheet is the
+    stage-1 half fold (``FoldGeometry.goal_sheet``)."""
     obs = getattr(env_cfg, "obs", None)
-    if (getattr(obs, "object", None) == "pointcloud" and obs.pointcloud.goal in GOAL_CLOUDS
-            and getattr(env_cfg, "fold_pool", None) is None):
-        print("[episodes] NOT APPLICABLE: a goal point cloud needs the rigid fold pool", flush=True)
-        os._exit(NOT_APPLICABLE)
+    if getattr(obs, "object", None) != "pointcloud" or obs.pointcloud.goal not in GOAL_CLOUDS:
+        return
+    term = env_cfg.termination
+    term.success = "surface"
+    term.surface.ref_step = int(obs.pointcloud.ref_step)
+    print(
+        f"[episodes] goal point-cloud student ({obs.pointcloud.goal}): success surface, "
+        f"tolerance {float(term.surface.tolerance_frac)} x side, goal frozen at step {term.surface.ref_step}, "
+        f"in-place gate {float(term.max_in_place_dist)}",
+        flush=True,
+    )
 
 
 def main() -> None:
@@ -313,9 +325,9 @@ def main() -> None:
                 # No policy recipe (an evaluation world, --protocol): the student's cloud from its
                 # checkpoint; its DR only with --randomize.
                 apply_student_env(env_cfg, student["env"], with_dr=args_cli.randomize)
+                _goal_student_success(env_cfg)
             else:
                 _check_student_cloud(env_cfg, student["env"])
-        _exit_if_not_applicable(env_cfg)
 
         env = gym.make(args_cli.task, cfg=env_cfg)
         inner = env.unwrapped
@@ -367,6 +379,12 @@ def main() -> None:
         _has_fold = hasattr(inner, "fold_error") and hasattr(inner, "footprint_ratio")
         best_fold_err = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
         best_footprint = torch.full((num_envs,), float("inf"), device=device) if _has_fold else None
+        # The surface criterion's distances (``termination.success: surface``), best over the episode.
+        surface_success = bool(getattr(task, "surface", False))
+        best_aligned_dist = torch.full((num_envs,), float("inf"), device=device) if surface_success else None
+        best_in_place_dist = torch.full((num_envs,), float("inf"), device=device) if surface_success else None
+        surface_layered = surface_success and bool(task.surface_layered)
+        best_layered_dist = torch.full((num_envs,), float("inf"), device=device) if surface_layered else None
         reason = {name: torch.zeros(num_envs, dtype=torch.bool, device=device) for name in REASONS}
         # Any OTHER `done_<name>` the env publishes, per env -- e.g. the fold pool's
         # `shape_<shape>` / `fold_<shape>`, which is what splits a result by shape. Discovered from
@@ -420,6 +438,17 @@ def main() -> None:
                   fp = inner.footprint_ratio()
                   best_footprint = torch.where(
                       scoring, torch.minimum(best_footprint, fp), best_footprint
+                  )
+              if surface_success:
+                  best_aligned_dist = torch.where(
+                      scoring, torch.minimum(best_aligned_dist, task.aligned_dist), best_aligned_dist
+                  )
+                  best_in_place_dist = torch.where(
+                      scoring, torch.minimum(best_in_place_dist, task.in_place_dist), best_in_place_dist
+                  )
+              if surface_layered:
+                  best_layered_dist = torch.where(
+                      scoring, torch.minimum(best_layered_dist, task.layered_dist), best_layered_dist
                   )
 
               done = (terminated.bool() | truncated.bool()) & scoring
@@ -557,6 +586,26 @@ def main() -> None:
                 "envs_within_footprint": int(
                     (fp < float(inner.cfg.cloth.max_folded_footprint)).sum()
                 ),
+            }
+        if surface_success:
+            surface_cfg = inner.cfg.termination.surface
+            surface_tolerance_m = task.surface_tolerance().cpu()
+            aligned_dist, in_place_dist = best_aligned_dist.cpu(), best_in_place_dist.cpu()
+            # The distance the criterion holds below the tolerance: the layered one, or the unlabelled one.
+            criterion_dist = best_layered_dist.cpu() if surface_layered else aligned_dist
+            result["surface"] = {
+                "tolerance_frac": float(surface_cfg.tolerance_frac),
+                "ref_step": int(surface_cfg.ref_step),
+                "layered": surface_layered,
+                "max_in_place_dist": float(inner.cfg.termination.max_in_place_dist),
+                "tolerance_m": [round(float(v), 4) for v in surface_tolerance_m],
+                # Best (minimum) over the episode, per env, as best_fold_err: the two-sided max distances
+                # to the frozen goal sheet -- after the in-plane placement unlabelled, and layered (each
+                # ply with its own ply; the criterion when "layered"), and without the placement.
+                "best_aligned_dist": [round(float(v), 4) for v in aligned_dist],
+                "best_layered_dist": [round(float(v), 4) for v in best_layered_dist.cpu()] if surface_layered else None,
+                "best_in_place_dist": [round(float(v), 4) for v in in_place_dist],
+                "envs_within_tolerance": int((criterion_dist < surface_tolerance_m).sum()),
             }
 
         summary = result["completed"]

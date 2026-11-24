@@ -27,7 +27,9 @@
 #   (chiffon silk cotton napkin big_napkin towel denim) for the vbd cells: --protocol fabric/<name>.yaml,
 #   vbd.yaml with that fabric's material and cloth-table friction. The target is named vbd-<name> in
 #   the output (matrix_summary.py reads only plain vbd).
-#   A goal point-cloud student has no VBD cell: eval.py exits 3 and the cell is skipped.
+#   A goal point-cloud student (goal_fixed / goal_any) on VBD: the goal is the stage-1 half fold and it is
+#   scored by termination.success surface (0.1 x side, two-sided, aligned; no in-place gate); the
+#   1.5 cm keypoint criterion is recorded as fold_designated. Every other policy: the 1.5 cm criterion.
 # RECIPE (default auto): the policy's training recipe, for the rigid cells. auto = run.json (train.py,
 #   since 2026-11-22) / args.json (distill_pc) next to the checkpoint, with the training's env overrides.
 #   Older checkpoints: name it (a list line's third column, or RECIPE=).

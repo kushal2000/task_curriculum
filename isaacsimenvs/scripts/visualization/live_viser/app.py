@@ -73,10 +73,11 @@ def _reset_starts(env_cfg, randomize: bool) -> dict[str, dict]:
 
 def _student_cloud(env_cfg, checkpoint: str, recipe: str | None, randomize: bool) -> None:
     """If the starting policy is a student, its point cloud as ``eval.py`` sets it: with a recipe, the
-    recipe's (checked against the student's); without one, the student's own, its DR only at rand.
+    recipe's (checked against the student's); without one, the student's own, its DR only at rand, and
+    a goal point-cloud student scored by the surface criterion.
     Students in the menu with another cloud cannot be loaded."""
     from isaacsimenvs.scripts.distillation.student import apply_student_env
-    from isaacsimenvs.scripts.evaluation.eval import _check_student_cloud
+    from isaacsimenvs.scripts.evaluation.eval import _check_student_cloud, _goal_student_success
 
     student = student_checkpoint(checkpoint)
     if student is None:
@@ -85,6 +86,7 @@ def _student_cloud(env_cfg, checkpoint: str, recipe: str | None, randomize: bool
         apply_student_env(env_cfg, student["env"], with_dr=randomize)
     else:
         _check_student_cloud(env_cfg, student["env"])
+        _goal_student_success(env_cfg)
 
 
 def main() -> None:

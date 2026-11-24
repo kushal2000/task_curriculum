@@ -6,6 +6,8 @@
 # History
 #   2026-11-23  first version: the old eval cell's values, unchanged
 #   2026-11-23  origin/cloth-physics' sheet: 8 mm, full-surface contact, checkerboard mesh, robot 1440 Hz
+#   2026-11-24  surface criterion settings written out (goal point-cloud students; others unchanged);
+#               layered: each ply matched with its own goal ply
 #
 # YAML 1.1: write exponent floats as 1.0e-5, or they are read as strings.
 task: Isaacsimenvs-Cloth-Direct-v0
@@ -122,3 +124,15 @@ env:
 
   termination:
     success_steps: 10                    # fold held 10 policy steps
+    success: fold_error                  # 1.5 cm keypoints; eval.py: surface for a goal point-cloud student
+    surface:                             # the surface criterion (mdp/surface_match.py)
+      ref_step: 12                       # goal sheet frozen here; eval.py sets the student's cloud ref_step
+      tolerance_frac: 0.1                # aligned two-sided max < 0.1 x side (1.0 cm on this sheet)
+      fine_side: 13                      # particle grid interpolated to 13 x 13
+      uniform_start_yaws: 4              # alignment start yaws besides the two major-axis ones
+      icp_iters: 3                       # ICP rounds per start yaw
+      layered: true                      # each ply vs the goal's same ply (mdp/surface_layered.py)
+    max_in_place_dist: .inf              # no in-place gate (in_place_dist only recorded)
+    gate_curriculum:                     # off
+      max_in_place_dist: []
+      slide_penalty_scale: []
