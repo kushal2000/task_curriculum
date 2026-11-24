@@ -167,12 +167,18 @@ class TeacherNet(_Core):
         return mu.clamp(-1.0, 1.0), state
 
 
+#: Activations of the widest per-point layer in one PointNet chunk (PointNet.forward): 4M points at
+#: width 256, 8M at 128.
+CHUNK_ACTIVATIONS = 1 << 30
+
+
 class PointNet(nn.Module):
     """Per-point MLP -> masked max-pool -> linear. An env with no valid point gets a zero feature."""
 
     def __init__(self, point_dim: int, widths=(64, 128, 256), out_dim: int = 64, compile: bool = False) -> None:
         super().__init__()
         self.point_mlp = _mlp((point_dim, *widths))
+        self.max_width = max(int(w) for w in widths)
         self.out = nn.Sequential(nn.Linear(widths[-1], out_dim), nn.LayerNorm(out_dim))
         # ``compile``: torch.compile the per-point MLP + pool, which fuses its elementwise work (the eager
         # version is memory-bound): 1.5x faster training at 197k x 64 points, same results. The pool is
@@ -181,9 +187,10 @@ class PointNet(nn.Module):
         self._pooled_fn = torch.compile(self._pooled) if compile else self._pooled
 
     # The per-point MLP's (B, M, W) activations are the network's whole memory cost: 24576 envs x 1024
-    # points x 256 channels is 12 GB in half precision for ONE layer. So the batch runs in chunks of
-    # ~2M points, and with gradients each chunk is checkpointed -- only its pooled (C, W) output is
-    # kept and the chunk is recomputed in the backward pass.
+    # points x 256 channels is 12 GB in half precision for ONE layer. So a batch over CHUNK_ACTIVATIONS
+    # runs in chunks, and with gradients each chunk is checkpointed -- only its pooled (C, W) output is
+    # kept and the chunk is recomputed in the backward pass (the forward twice: a 32-64-128 net on
+    # 24576 x 256 points updates in 19 ms as one chunk, 5.4 GB, against 25 ms in checkpointed chunks).
 
     def _pooled(self, x: torch.Tensor) -> torch.Tensor:
         return self.point_mlp(x).max(dim=1).values
@@ -194,7 +201,7 @@ class PointNet(nn.Module):
         first = mask.to(torch.uint8).argmax(dim=1)
         fill = points[torch.arange(points.shape[0], device=points.device), first].unsqueeze(1)
         x = torch.where(mask.unsqueeze(-1), points, fill)
-        chunk = max(1, (1 << 21) // max(int(x.shape[1]), 1))          # ~2M points a chunk, any cloud size
+        chunk = max(1, CHUNK_ACTIVATIONS // self.max_width // max(int(x.shape[1]), 1))
         if x.shape[0] <= chunk:
             f = self._pooled_fn(x)                                                               # (B, W)
         elif torch.is_grad_enabled():

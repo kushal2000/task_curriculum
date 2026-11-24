@@ -220,6 +220,16 @@ def _small_rotation(angles: torch.Tensor) -> torch.Tensor:
     return rz @ ry @ rx
 
 
+def _bilinear(grid: torch.Tensor, r: int, uv: torch.Tensor) -> torch.Tensor:
+    """``(n, k, 3)``: the ``(n, r*r, 3)`` grid (row-major) at grid coordinates ``uv`` ``(n, k, 2)``."""
+    i0 = uv.floor().clamp(max=r - 2).long()
+    f = uv - i0
+    fx, fy = f[..., 0:1], f[..., 1:2]
+    base = (i0[..., 0] * r + i0[..., 1]).unsqueeze(-1).expand(-1, -1, 3)
+    return (torch.gather(grid, 1, base) * ((1 - fx) * (1 - fy)) + torch.gather(grid, 1, base + r) * (fx * (1 - fy))
+            + torch.gather(grid, 1, base + 1) * ((1 - fx) * fy) + torch.gather(grid, 1, base + r + 1) * (fx * fy))
+
+
 def _uniform(lo_hi, shape, device) -> torch.Tensor:
     lo, hi = float(lo_hi[0]), float(lo_hi[1])
     return lo + (hi - lo) * torch.rand(shape, device=device)
@@ -270,6 +280,8 @@ class PointCloud:
         self.rots = self._rotations(self.cams)
         self.calib_r = torch.eye(3, device=dev).repeat(n, 2, 1, 1)
         self.calib_t = torch.zeros(n, 2, 3, device=dev)
+        #: False: calibrated cameras, the per-camera rigid error is the identity and is not applied.
+        self.has_calib = float(cfg.calib_rot_deg) != 0.0 or any(float(v) != 0.0 for v in cfg.calib_xyz)
         self.depth_std = torch.zeros(n, device=dev)
         self.drop_p = torch.zeros(n, device=dev)
         self.lag = torch.zeros(n, dtype=torch.long, device=dev)
@@ -340,19 +352,10 @@ class PointCloud:
         """``(pts (n, K, 3), moving (n, K), weight (n, K))``: uniform samples on each sheet."""
         n, r, k = particles.shape[0], self.r, self.n_cloth
         uv = torch.rand(n, k, 2, device=particles.device) * (r - 1)
-        i0 = uv.floor().clamp(max=r - 2).long()
-        f = uv - i0
-        base = i0[..., 0] * r + i0[..., 1]
-        idx = torch.stack((base, base + r, base + 1, base + r + 1), dim=-1)
-        wgt = torch.stack(
-            ((1 - f[..., 0]) * (1 - f[..., 1]), f[..., 0] * (1 - f[..., 1]), (1 - f[..., 0]) * f[..., 1], f[..., 0] * f[..., 1]),
-            dim=-1,
-        )
-        corners = torch.gather(particles, 1, idx.view(n, -1, 1).expand(-1, -1, 3)).view(n, k, 4, 3)
         grid = particles.view(n, r, r, 3)
         e1, e2 = grid[:, 1:, :-1] - grid[:, :-1, :-1], grid[:, :-1, 1:] - grid[:, :-1, :-1]
         area = torch.linalg.norm(torch.cross(e1, e2, dim=-1), dim=-1).sum(dim=(1, 2))           # (n,)
-        return (corners * wgt.unsqueeze(-1)).sum(dim=2), uv[..., 0] > self.mid, (area / k).unsqueeze(1).expand(-1, k)
+        return _bilinear(particles, r, uv), uv[..., 0] > self.mid, (area / k).unsqueeze(1).expand(-1, k)
 
     def robot_points(self, body_pos: torch.Tensor, body_quat: torch.Tensor, idx: torch.Tensor | None = None) -> torch.Tensor:
         """``(n, P, 3)`` robot surface samples (``idx``: a subset of the pool) in the env frame."""
@@ -394,7 +397,8 @@ class PointCloud:
             # occludes, but is never built as points or tested.
             pts, weight = cloth, w_cloth
             vis = visible_warp(cloth, cams, self.rots[sl], self.f, self.w, self.h, float(c.min_depth), float(c.depth_tol),
-                               body_pos=body_pos, body_quat=body_quat, pool_body=self.pool_body, pool_off=self.pool_off)
+                               body_pos=body_pos, body_quat=body_quat, pool_body=self.pool_body, pool_off=self.pool_off,
+                               hull=particles)        # the candidates are interpolated between the particles
         else:
             pts = torch.cat((cloth, self.robot_points(body_pos, body_quat)), dim=1)            # (n, P, 3)
             weight = torch.cat((w_cloth, self.pool_w.unsqueeze(0).expand(n, -1)), dim=1)
@@ -411,7 +415,8 @@ class PointCloud:
         pick = use_b.unsqueeze(-1)
         ray = torch.nn.functional.normalize(pts - torch.where(pick, cams[:, 1:2], cams[:, 0:1]), dim=-1)
         pts = pts + ray * (torch.randn(seen.shape, device=dev) * self.depth_std[sl].unsqueeze(1)).unsqueeze(-1)
-        pts = torch.where(pick, self._calibration_error(pts, 1, sl), self._calibration_error(pts, 0, sl))
+        if self.has_calib:
+            pts = torch.where(pick, self._calibration_error(pts, 1, sl), self._calibration_error(pts, 0, sl))
         ok = seen & (torch.rand(seen.shape, device=dev) >= self.drop_p[sl].unsqueeze(1))
         ok = ok & ((pts >= self.box_lo) & (pts <= self.box_hi)).all(dim=-1) & torch.isfinite(pts).all(dim=-1)
         if self.drops_near_table:
@@ -474,17 +479,7 @@ class PointCloud:
     def _sample_sheet(self, grid: torch.Tensor, k: int) -> torch.Tensor:
         """``(n, k, 3)`` uniform samples on a sheet given as its particle grid ``(n, R*R, 3)``."""
         n, r = grid.shape[0], self.r
-        uv = torch.rand(n, k, 2, device=grid.device) * (r - 1)
-        i0 = uv.floor().clamp(max=r - 2).long()
-        f = uv - i0
-        base = i0[..., 0] * r + i0[..., 1]
-        idx = torch.stack((base, base + r, base + 1, base + r + 1), dim=-1)
-        wgt = torch.stack(
-            ((1 - f[..., 0]) * (1 - f[..., 1]), f[..., 0] * (1 - f[..., 1]), (1 - f[..., 0]) * f[..., 1], f[..., 0] * f[..., 1]),
-            dim=-1,
-        )
-        corners = torch.gather(grid, 1, idx.view(n, -1, 1).expand(-1, -1, 3)).view(n, k, 4, 3)
-        return (corners * wgt.unsqueeze(-1)).sum(dim=2)
+        return _bilinear(grid, r, torch.rand(n, k, 2, device=grid.device) * (r - 1))
 
     def observe(self, step, particles, body_pos, body_quat, fk_pos=None, fk_quat=None, goal_now=None, goal_rest=None):
         """``(points (N, M, point_dim), mask (N, M))``.
@@ -504,7 +499,8 @@ class PointCloud:
             for lo in range(0, n, int(c.chunk))
         ]
         xyz, mask, cam, is_cloth = (torch.cat([p[i] for p in parts], dim=0) for i in range(4))
-        cl_pts, cl_ok, cl_moving = (torch.cat([p[4][i] for p in parts], dim=0) for i in range(3))
+        if c.goal_mode == "label":          # the candidates themselves: only the label group reads them
+            cl_pts, cl_ok, cl_moving = (torch.cat([p[4][i] for p in parts], dim=0) for i in range(3))
         self.last_count = mask.float().sum(dim=1)
         self.last_cloth_share = (is_cloth & mask).float().sum(dim=1) / self.last_count.clamp(min=1.0)
 
