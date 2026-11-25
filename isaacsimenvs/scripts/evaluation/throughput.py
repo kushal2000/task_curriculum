@@ -58,6 +58,11 @@ def main() -> None:
     )
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument(
+        "--progress", type=Path, default=None,
+        help="Append one line per step (synchronised wall time) to this file. Stdout and stderr are both "
+        "captured until the timed loop ends, so a slow scene is otherwise indistinguishable from a hung one.",
+    )
+    parser.add_argument(
         "--checkpoint", default=str(PRETRAINED_CHECKPOINT)
     )
     parser.add_argument(
@@ -65,6 +70,15 @@ def main() -> None:
     )
     args_cli, hydra_args = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + hydra_args
+
+    # Kit is required by a PhysX task and absent from the Newton venv: boot it when it exists, as
+    # `training/train.py` does (AppLauncher raises ImportError exactly when there is no Isaac Sim).
+    try:
+        from isaaclab.app import AppLauncher
+
+        app = AppLauncher(headless=True).app  # noqa: F841 - must stay alive for the run
+    except ImportError as exc:
+        print(f"[tput] running kit-less (no Isaac Sim runtime): {exc}", flush=True)
 
     import torch
 
@@ -92,7 +106,8 @@ def main() -> None:
                 print(f"[tput] rank {local_rank} bound to {dev}", flush=True)
 
         env_cfg.scene.num_envs = args_cli.num_envs
-        env_cfg.assets.num_assets_per_type = args_cli.num_assets_per_type
+        if hasattr(getattr(env_cfg, "assets", None), "num_assets_per_type"):  # Play's tool pool; not the cloth tasks
+            env_cfg.assets.num_assets_per_type = args_cli.num_assets_per_type
         disable_randomization(env_cfg)
         use_single_object_variant()
 
@@ -137,9 +152,18 @@ def main() -> None:
         zeros = torch.zeros((inner.num_envs, int(inner.cfg.action_space)), device=device)
         obs, _ = env.reset()
 
+        progress = open(args_cli.progress, "a", buffering=1) if args_cli.progress else None
+        step_count = [0, time.perf_counter()]
+
         def step_once(obs):
             action = player.get_action(obs["policy"], deterministic=True) if player else zeros
             obs, *_ = env.step(action.to(device) if player else action)
+            if progress is not None:
+                torch.cuda.synchronize()
+                now = time.perf_counter()
+                step_count[0] += 1
+                progress.write(f"step {step_count[0]} {1e3 * (now - step_count[1]):.1f} ms\n")
+                step_count[1] = now
             return obs
 
         # Warp kernel compilation, CUDA graph capture and allocator growth all land in the first
