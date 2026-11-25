@@ -415,8 +415,13 @@ class ClothTask:
         self.in_place_dist = torch.where(no_distance, inf, in_place)
         self.aligned_yaw = aligned["yaw"]
 
-    def compute_dones(self, state: SimState, view: FoldView, episode_length_buf, max_episode_length):
-        """``(terminated, truncated)``; sets ``termination_reasons``, ``fold_bonus_mask`` and ``successes``."""
+    def compute_dones(
+        self, state: SimState, view: FoldView, episode_length_buf, max_episode_length, finger_penetrated=None
+    ):
+        """``(terminated, truncated)``; sets ``termination_reasons``, ``fold_bonus_mask`` and ``successes``.
+        ``finger_penetrated`` (N,) bool or None: envs with a finger too deep inside the sheet
+        (``termination.max_finger_penetration``); they end this step as a failure, and no fold counts
+        for them, even one entered on this step."""
         self._update_hand_and_goal_metrics(state, view)
         self._update_drift(view, episode_length_buf)
         if self.surface:
@@ -430,6 +435,9 @@ class ClothTask:
         self.fold_hold = torch.where(folded, self.fold_hold + 1, torch.zeros_like(self.fold_hold))
         fold = self.fold_hold >= int(self.cfg.termination.success_steps)
         fold_held = self.fold_hold >= HELD_FOLD_STEPS
+        if finger_penetrated is not None:
+            fold = fold & ~finger_penetrated
+            fold_held = fold_held & ~finger_penetrated
         self.fold_bonus_mask.copy_(fold)
         self.successes += fold.long()
 
@@ -438,7 +446,10 @@ class ClothTask:
         self.nonfinite_envs.zero_()
 
         truncated = episode_length_buf >= max_episode_length
-        self._advance_gate(fall | hand_far | fold | nonfinite | truncated, fold)
+        failed = fall | hand_far | nonfinite
+        if finger_penetrated is not None:
+            failed = failed | finger_penetrated
+        self._advance_gate(failed | fold | truncated, fold)
         self.termination_reasons = {
             "fall": fall,
             "hand_far": hand_far,
@@ -447,11 +458,13 @@ class ClothTask:
             "fold_held": fold_held,
             "nonfinite": nonfinite,
         }
+        if finger_penetrated is not None:
+            self.termination_reasons["finger_penetration"] = finger_penetrated
         if self.surface:
             # The old criterion, reported for comparison (not acted on).
             self.designated_folded = self.is_folded_designated(view)
             self.termination_reasons["fold_designated"] = self.designated_folded
-        return fall | hand_far | fold | nonfinite, truncated
+        return failed | fold, truncated
 
     # ------------------------------------------------------------------ reward
 

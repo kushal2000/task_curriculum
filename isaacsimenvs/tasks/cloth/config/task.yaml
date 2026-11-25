@@ -101,6 +101,7 @@ common:
   termination:
     success_steps: 1
     success: fold_error                  # fold_error | surface (mdp/surface_match.py)
+    max_finger_penetration: 0.0          # > 0: a finger deeper than this inside a plate ends the episode as a failure (rigid only)
     surface:
       ref_step: 12                       # the goal sheet frozen here (as the goal_fixed cloud)
       tolerance_frac: 0.1                # aligned two-sided max < 0.1 x the sheet's side
@@ -143,6 +144,7 @@ rigid:
     joint_armature: 1.0e-5               # replaced on PhysX by physx_chain.hinge_armature
     joint_damping: 0.05
     joint_stiffness: 0.0
+    joint_yield_deg: 0.0                 # hinge plasticity; 0 = elastic
     slat_friction: 0.3535533905932738             # sqrt(0.25 x 0.5): the VBD cloth against the table
     fingertip_slat_friction: 0.6123724356957945   # sqrt(0.25 x 1.5): the VBD cloth against a fingertip
     contact_margin: 0.007                # 16 mm cloth / 2 - 2 mm plate / 2: a fingertip meets the plate where it meets the cloth
@@ -155,6 +157,7 @@ rigid:
     friction_buckets: 16
     friction_seed: 0
     contact_offset_margin: 0.002
+    contact_offset_follows_rest: false   # true: contact offset = each env's drawn rest offset + 2 mm
     solver_position_iterations: 8
     solver_velocity_iterations: 0
     hinge_armature: 1.0e-3

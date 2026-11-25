@@ -25,6 +25,8 @@ from isaacsimenvs.tasks.cloth.backends.base import ClothBackend, reset_yaw
 from isaacsimenvs.tasks.cloth.backends.rigid import checks, contacts
 from isaacsimenvs.tasks.cloth.backends.rigid import scene as pool_scene
 from isaacsimenvs.tasks.cloth.backends.rigid.physx import DEFAULT_MU, size_gpu_buffers
+from isaacsimenvs.tasks.cloth.backends.rigid.penetration import FingerPenetration, author_contact_report, finger_link_names
+from isaacsimenvs.tasks.cloth.backends.rigid.plasticity import HingePlasticity
 from isaacsimenvs.tasks.cloth.backends.rigid.randomization import PlateRandomization
 from isaacsimenvs.tasks.cloth.config.schema.rigid_cloth import CLOTH_FOLD_LIFT, RigidClothEnvCfg
 from isaacsimenvs.tasks.cloth.mdp.geometry import fold_shapes as fs
@@ -98,12 +100,18 @@ class RigidBackend(ClothBackend):
         #: Set by :meth:`start`: until then resets keep the shape the startup proofs left in place.
         self.started = False
         self.physics_dr: PlateRandomization | None = None
+        self.plasticity: HingePlasticity | None = None
+        self.penetration: FingerPenetration | None = None
+        self._finger_link_names: list[str] | None = None
 
     # ------------------------------------------------------------------ construction
 
     def build_scene(self, scene, sim) -> None:
         super().build_scene(scene, sim)  # ends with install_sheet
         contacts.bind_contact_materials(self)
+        if float(self.cfg.termination.max_finger_penetration) > 0.0:
+            self._finger_link_names = finger_link_names(self)
+            author_contact_report(self, self._finger_link_names)
 
     def install_sheet(self) -> None:
         pool_scene.install_pool(self)
@@ -119,6 +127,9 @@ class RigidBackend(ClothBackend):
         else:
             print("[rigid_cloth] WARNING placement verification SKIPPED (RC_SKIP_VERIFY=1)", flush=True)
         self.physics_dr = PlateRandomization(self)
+        self.plasticity = HingePlasticity(self)
+        if self._finger_link_names is not None:
+            self.penetration = FingerPenetration(self, self._finger_link_names)
         self.shape_weights = self.shape_weights.to(self.device)
         pool_scene.init_start_folds(self)
         if self.goal_tasks is not None:
@@ -193,9 +204,20 @@ class RigidBackend(ClothBackend):
     def end_reset(self, env_ids: torch.Tensor) -> None:
         if self.physics_dr is not None:
             self.physics_dr.draw(env_ids)
+        if self.plasticity is not None:
+            self.plasticity.reset(env_ids)
+        if self.penetration is not None:
+            self.penetration.reset(env_ids)
 
     def pre_physics_step(self) -> None:
         self.pool.park()
+        if self.plasticity is not None:
+            self.plasticity.step()
+
+    measures_finger_penetration = True
+
+    def finger_penetration(self) -> torch.Tensor:
+        return self.penetration.read()
 
     # ------------------------------------------------------------------ the pool's articulations
 
@@ -241,3 +263,6 @@ class RigidBackend(ClothBackend):
         final["fold_steps"] = entered.float() * length
         final["fold_flat_start"] = flat_fold.float()
         final["fold_steps_flat_start"] = flat_fold.float() * length
+        if self.penetration is not None:
+            # A copy: the reset that follows zeroes the running maximum before the extras are read.
+            final["finger_penetration_max_mm"] = 1e3 * self.penetration.episode_max.clone()

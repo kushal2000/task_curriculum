@@ -1,0 +1,51 @@
+# plate2: the half fold (config/designs/plate2.yaml, box2-mid's geometry) on 1 mm plates, with the
+# sheet's physics drawn per env over the ranges below. Everything else is the base recipe's
+# (Flexiv + right Wuji, HAND2_DRIVE hand, no obs / action / robot DR, 3052 epochs).
+#
+#   experiments/submit.sh experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
+#       --experiment experiments/nov25_better_rigidcloth/plate2/plate2.yaml \
+#       --checkpoint <Play prior .pth> --checkpoint_load_mode weights \
+#       agent.params.config.name=0_plate2
+#
+# Sheet material -> hinge (FoldShape.hinge_material_factor): hinge = material x plates x
+# crease length / side across the fold, = 2 x material for box2 at every size (the sheet is square):
+#   bending rigidity B 1e-6 .. 1e-3 N m      -> hinge stiffness 2e-6 .. 2e-3 N m/rad (log-uniform)
+#   bending viscosity C 1e-3 .. 1e-2 N m s   -> hinge damping 2e-3 .. 2e-2 N m s/rad (log-uniform)
+#
+#   quantity              range              where                                         drawn
+#   areal density         1 - 10 kg/m^2      density 1 x mass_scale [1, 10] (uniform)      per episode
+#   hinge stiffness (2B)  2e-6 - 2e-3        hinge_stiffness, log-uniform                  per episode
+#   hinge damping (2C)    2e-3 - 2e-2        joint_damping 2e-3 x hinge_damping_scale      per episode
+#                                            [1, 10] (log-uniform)
+#   yield angle           20 - 45 deg        hinge_yield_deg (uniform)                     per episode
+#   rest offset           0 - 10 mm          contact_margin 5 mm + offset [-5, +5] mm      per episode
+#   contact offset        rest offset + 2 mm contact_offset_follows_rest, margin 2 mm      with the rest offset
+#   plate thickness       1 mm               fold_pool.thickness_range                     fixed
+#   sheet size            10 - 30 cm square  fold_pool.size_range (uniform, 1 mm steps)    per env, once
+base: rigid_cloth_right_wuji
+
+env:
+  rigid_cloth:
+    density: 1.0                       # x mass_scale -> 1-10 kg/m^2 (10-90 g .. 0.1-0.9 kg per sheet)
+    joint_damping: 2.0e-3              # x hinge_damping_scale -> 2e-3 .. 2e-2
+    contact_margin: 0.005              # +- contact_margin_offset -> 0-10 mm
+  physx_chain:
+    contact_offset_margin: 0.002
+    contact_offset_follows_rest: true
+  fold_pool:
+    shapes: [plate2]
+    size_range: [0.10, 0.30]
+    park_spacing: 0.5                  # > sqrt(2) x 0.30 (fold_pool.check)
+    thickness_range: [0.001, 0.001]
+  # A finger more than 0.5 mm inside a plate (past the whole contact shell, half-way into the 1 mm
+  # slab) ends the episode as a failure (backends/rigid/penetration.py).
+  termination:
+    max_finger_penetration: 0.0005
+  domain_randomization:
+    cloth:
+      mass_scale: [1.0, 10.0]
+      hinge_stiffness: [2.0e-6, 2.0e-3]
+      hinge_stiffness_log: true
+      hinge_damping_scale: [1.0, 10.0]
+      hinge_yield_deg: [20.0, 45.0]
+      contact_margin_offset: [-0.005, 0.005]

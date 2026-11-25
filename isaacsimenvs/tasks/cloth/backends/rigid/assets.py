@@ -27,6 +27,7 @@ the pool's bodies and hinges up unchanged, and the ``seam_`` prefix keeps loop j
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 
 import numpy as np
@@ -76,12 +77,52 @@ def _principal(inertia: np.ndarray):
     )
 
 
+def _is_rectangle(polygon) -> bool:
+    """An axis-aligned rectangle: four corners on two x and two y values."""
+    return len(polygon) == 4 and len({round(p[0], 9) for p in polygon}) == 2 and len({round(p[1], 9) for p in polygon}) == 2
+
+
+#: PhysX GPU convex cooking rejects a slab whose longest side / thickness reaches 100 (measured
+#: 2026-11-24: 99.5 cooks, 100 fails; rest / contact offsets and minThickness do not change it). The
+#: CPU fallback ("failed to cook GPU-compatible mesh") then collides with NOTHING in the GPU pipeline.
+GPU_HULL_MAX_RATIO = 99.0
+_warned_too_oblong: set[tuple[float, float]] = set()
+
+
 def _prism(stage, path: str, polygon, thickness: float, color):
-    """A closed slab mesh: the polygon at +-thickness/2, outward-facing."""
+    """A closed slab: the polygon at +-thickness/2, outward-facing. A convex-hull mesh, or a box
+    primitive (no cooking) for a rectangle too oblong for the GPU hull (``GPU_HULL_MAX_RATIO``) or
+    when ``RC_PLATE_BOX=1``.
+
+    Any other plate too oblong for the GPU hull (a triangle, a pentagon: 2flaps+hinge) is cooked
+    THICKER -- at ``longest side / (GPU_HULL_MAX_RATIO / 2)`` -- and scaled back to ``thickness`` in z
+    by the mesh's own scale op, which PhysX applies to the cooked hull at run time (``PxMeshScale``).
+    ``RC_PLATE_HULL_SCALE=0`` turns that off (the plate then collides with nothing, as before)."""
     from pxr import Gf, UsdGeom, UsdPhysics, Vt
 
     n = len(polygon)
     h = 0.5 * thickness
+    longest_side = max(max(p[axis] for p in polygon) - min(p[axis] for p in polygon) for axis in (0, 1))
+    too_oblong = longest_side / thickness >= GPU_HULL_MAX_RATIO
+    is_rectangle = _is_rectangle(polygon)
+    hull_scaled = too_oblong and not is_rectangle and os.environ.get("RC_PLATE_HULL_SCALE", "1") == "1"
+    if hull_scaled:
+        h = 0.5 * longest_side / (0.5 * GPU_HULL_MAX_RATIO)   # cooked at ratio 49.5, scaled to the slab below
+    elif too_oblong and not is_rectangle and (round(longest_side, 6), thickness) not in _warned_too_oblong:
+        _warned_too_oblong.add((round(longest_side, 6), thickness))
+        print(f"[rigid_cloth] WARNING {path}: plate {longest_side * 1e3:.1f} mm across at {thickness * 1e3:g} mm "
+              f"thick (ratio {longest_side / thickness:.0f} >= {GPU_HULL_MAX_RATIO:g}) will not cook for the GPU "
+              "and will collide with nothing", flush=True)
+    if is_rectangle and (too_oblong or os.environ.get("RC_PLATE_BOX", "0") == "1"):
+        # A box primitive: no cooking, so no aspect-ratio limit (RC_PLATE_BOX=1 forces it on every rectangle).
+        xs, ys = [p[0] for p in polygon], [p[1] for p in polygon]
+        cube = UsdGeom.Cube.Define(stage, path)
+        cube.CreateSizeAttr(1.0)
+        cube.AddTranslateOp().Set(Gf.Vec3d(0.5 * (min(xs) + max(xs)), 0.5 * (min(ys) + max(ys)), 0.0))
+        cube.AddScaleOp().Set(Gf.Vec3f(max(xs) - min(xs), max(ys) - min(ys), thickness))
+        cube.CreateDisplayColorAttr(Vt.Vec3fArray([Gf.Vec3f(*color)]))
+        UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+        return cube
     pts = [Gf.Vec3f(x, y, -h) for x, y in polygon] + [Gf.Vec3f(x, y, h) for x, y in polygon]
     counts = [n, n] + [4] * n
     idx = list(reversed(range(n))) + [n + k for k in range(n)]  # bottom faces -z, top faces +z
@@ -98,6 +139,8 @@ def _prism(stage, path: str, polygon, thickness: float, color):
     UsdPhysics.MeshCollisionAPI.Apply(mesh.GetPrim()).CreateApproximationAttr(
         UsdPhysics.Tokens.convexHull
     )
+    if hull_scaled:
+        mesh.AddScaleOp().Set(Gf.Vec3f(1.0, 1.0, float(thickness / (2.0 * h))))
     return mesh
 
 

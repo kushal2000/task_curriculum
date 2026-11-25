@@ -69,6 +69,12 @@ class PhysxChainCfg:
     this [m]. PhysX starts generating contacts at the contact offset and holds them at the rest
     offset, so this is how early a contact is seen, not where the surface is."""
 
+    contact_offset_follows_rest: bool = MISSING
+    """With the rest offset drawn per episode (``domain_randomization.cloth.contact_margin_offset``):
+    true writes each env's contact offset as ITS rest offset + ``contact_offset_margin``; false keeps
+    one contact offset for the run, above the largest rest offset DR can draw
+    (``contacts.contact_offset``)."""
+
     solver_position_iterations: int = MISSING
     """Each plate articulation's TGS position iterations. 8, as the robot's."""
 
@@ -172,6 +178,13 @@ class RigidClothCfg:
     (``edge_ke = 8.0e-4``, and measurements said the response saturates by 0.05), so a limp chain is
     the closer match until someone runs the cantilever test on both."""
 
+    joint_yield_deg: float = MISSING
+    """Hinge yield angle [deg]; 0 = elastic. A hinge bent further than this from its rest angle
+    drags the rest angle along, so the spring (``joint_stiffness``) returns at most
+    ``stiffness x yield`` and a fold let go rests at ``180 - yield`` deg or closer
+    (``backends/rigid/plasticity.py``; the VBD sheet's ``plastic_yield_curvature`` on one hinge).
+    Needs a hinge spring to mean anything."""
+
     slat_friction: float = MISSING
     """Friction a plate feels against the table and the robot links. task.yaml's 0.354 is the VBD
     cloth's effective value against the table, ``sqrt(0.25 * 0.5)`` -- Newton's VBD mixes a
@@ -199,7 +212,7 @@ class RigidClothCfg:
             raise ValueError(f"joint_armature must be >= 0, got {self.joint_armature}")
         if self.joint_stiffness < 0.0:
             raise ValueError(f"joint_stiffness must be >= 0, got {self.joint_stiffness}")
-        for name in ("slat_friction", "fingertip_slat_friction", "contact_margin"):
+        for name in ("joint_yield_deg", "slat_friction", "fingertip_slat_friction", "contact_margin"):
             if getattr(self, name) < 0.0:
                 raise ValueError(f"rigid_cloth.{name} must be >= 0, got {getattr(self, name)}")
 

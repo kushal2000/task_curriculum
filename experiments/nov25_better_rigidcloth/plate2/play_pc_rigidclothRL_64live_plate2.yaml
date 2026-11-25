@@ -1,0 +1,35 @@
+# play_pc_rigidclothRL_64live_plate2 (2026-11-25): play_pc_rigidclothRL_64live_box2 (the Play point-cloud
+# student, 64 live cloth points, the half fold only) on plate2, with plate2.yaml's material ranges and
+# the finger-penetration termination. The env block below is plate2.yaml's (a recipe has one base);
+# everything else is play_pc_rl_A's: same student init, sigma, actor freeze, critic grids, success.
+#
+#   cluster/submit.sh --mem=90G --time=1-12:00:00 env RUN_TAG=play_pc_rigidclothRL_64live_plate2 \
+#       experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
+#       --experiment experiments/nov25_better_rigidcloth/plate2/play_pc_rigidclothRL_64live_plate2.yaml \
+#       --pc_init_student pretrained_policy/play_pc_real_dagger/play_pc_real_dagger_it5400_fp16.pth \
+#       --pc_init_sigma pretrained_policy/flexiv_right_wuji/nov8_dr_friction_0p5.pth --pc_actor_freeze_epochs 50
+base: experiments/nov24_play_pc_rl/play_pc_rigidclothRL_64live_box2.yaml
+
+env:
+  rigid_cloth:
+    density: 1.0                       # x mass_scale -> 1-10 kg/m^2
+    joint_damping: 2.0e-3              # x hinge_damping_scale -> 2e-3 .. 2e-2 N m s/rad
+    contact_margin: 0.005              # +- contact_margin_offset -> rest offset 0-10 mm
+  physx_chain:
+    contact_offset_margin: 0.002
+    contact_offset_follows_rest: true  # contact offset = rest offset + 2 mm, per env
+  fold_pool:
+    shapes: [plate2]
+    size_range: [0.10, 0.30]
+    park_spacing: 0.5                  # > sqrt(2) x 0.30 (fold_pool.check)
+    thickness_range: [0.001, 0.001]
+  termination:
+    max_finger_penetration: 0.0005     # a finger 0.5 mm into the slab ends the episode as a failure
+  domain_randomization:
+    cloth:
+      mass_scale: [1.0, 10.0]
+      hinge_stiffness: [2.0e-6, 2.0e-3]  # 2 x bending rigidity 1e-6 .. 1e-3 N m
+      hinge_stiffness_log: true
+      hinge_damping_scale: [1.0, 10.0]
+      hinge_yield_deg: [20.0, 45.0]
+      contact_margin_offset: [-0.005, 0.005]

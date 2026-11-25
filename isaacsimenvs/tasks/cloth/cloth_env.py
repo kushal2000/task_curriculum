@@ -60,6 +60,8 @@ class ClothEnv(DirectRLEnv):
         if cfg.obs.object == "pointcloud" and int(cfg.obs.pointcloud.critic_grid_side) > 0:
             cfg.state_space += 3 * 3 * int(cfg.obs.pointcloud.critic_grid_side) ** 2   # three clean grids (ObservationBuilder)
         self.backend = backend(cfg, self.robot_spec)
+        if float(cfg.termination.max_finger_penetration) > 0.0 and not self.backend.measures_finger_penetration:
+            raise ValueError(f"termination.max_finger_penetration: {backend.__name__} cannot measure finger penetration")
         with self.backend.construction_context():
             super().__init__(cfg, render_mode, **kwargs)  # builds the scene (_setup_scene)
         self._check_env_order()
@@ -166,7 +168,11 @@ class ClothEnv(DirectRLEnv):
         state = self.sim_state()
         view = self.task.derive(state)
         self._step_state = (state, view)
-        dones = self.task.compute_dones(state, view, self.episode_length_buf, self.max_episode_length)
+        max_penetration = float(self.cfg.termination.max_finger_penetration)
+        finger_penetrated = self.backend.finger_penetration() > max_penetration if max_penetration > 0.0 else None
+        dones = self.task.compute_dones(
+            state, view, self.episode_length_buf, self.max_episode_length, finger_penetrated=finger_penetrated
+        )
         self.backend.add_termination_reasons(self.task.termination_reasons)
         return dones
 

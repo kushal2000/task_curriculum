@@ -250,8 +250,15 @@ class TerminationCfg:
     """Policy steps into the episode at which the stationary half's anchor is latched; its drift and
     yaw (logged) and the slide penalty start there."""
     gate_curriculum: GateCurriculumCfg = GateCurriculumCfg()
+    max_finger_penetration: float = MISSING
+    """End the episode as a failure once a finger link is deeper than this inside a plate [m]
+    (reason ``finger_penetration``; a fold entered on that step does not count); 0 = off. Measured
+    past the plate's contact shell, into the slab itself (``backends/rigid/penetration.py``). Rigid
+    backend only."""
 
     def check(self) -> None:
+        if float(self.max_finger_penetration) < 0.0:
+            raise ValueError(f"termination.max_finger_penetration must be >= 0, got {self.max_finger_penetration}")
         if self.success not in ("fold_error", "surface"):
             raise ValueError(f"termination.success must be fold_error or surface, got {self.success!r}")
         gc = self.gate_curriculum
@@ -376,6 +383,10 @@ class ClothDRCfg:
     """Hinge spring [N m / rad]; ``(0, 0)`` keeps the hinge actuator velocity-only. For scale: a 10 g
     plate's weight at 25 mm is 2.5e-3 N m, and 5e-4 N m/rad returns 0.8e-3 N m at a 90 deg bend --
     a third of that, so still a limp sheet."""
+    hinge_stiffness_log: bool = False
+    """Draw ``hinge_stiffness`` log-uniform instead of uniform (both ends must then be > 0)."""
+    hinge_yield_deg: tuple[float, float] = (0.0, 0.0)
+    """Hinge yield angle [deg], uniform per episode; ``(0, 0)`` keeps ``rigid_cloth.joint_yield_deg``."""
     mass_scale: tuple[float, float] = (1.0, 1.0)
     """Factor on every plate's mass and inertia together (the mass distribution keeps its shape)."""
     contact_margin_offset: tuple[float, float] = (0.0, 0.0)

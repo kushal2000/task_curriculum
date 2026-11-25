@@ -107,6 +107,13 @@ class ClothBackend:
     def pre_physics_step(self) -> None:
         """Once per policy step, after the action is processed."""
 
+    #: Whether :meth:`finger_penetration` is implemented (``termination.max_finger_penetration``).
+    measures_finger_penetration = False
+
+    def finger_penetration(self) -> torch.Tensor:
+        """(N,) how deep the deepest finger link is inside the sheet this step [m]."""
+        raise NotImplementedError
+
     # ------------------------------------------------------------------ logging
 
     def add_termination_reasons(self, reasons: dict[str, torch.Tensor]) -> None:

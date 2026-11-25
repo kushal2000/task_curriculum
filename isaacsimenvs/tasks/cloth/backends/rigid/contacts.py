@@ -28,9 +28,16 @@ def contact_offset(b) -> float:
     offset that tracked each draw would have to be rewritten before or after the rest offset
     depending on the direction of the change. It only sets how early a contact is generated,
     not where the surface rests.
+
+    With ``physx_chain.contact_offset_follows_rest`` this is only the value the USD is built with:
+    ``rigid_cloth.contact_margin`` + the margin, and ``PlateRandomization`` rewrites each env's
+    contact offset with its rest offset.
     """
+    pc = b.cfg.physx_chain
+    if pc.contact_offset_follows_rest:
+        return contact_margin(b) + float(pc.contact_offset_margin)
     top = float(b.cfg.domain_randomization.cloth.contact_margin_offset[1])
-    return contact_margin(b) + max(top, 0.0) + float(b.cfg.physx_chain.contact_offset_margin)
+    return contact_margin(b) + max(top, 0.0) + float(pc.contact_offset_margin)
 
 
 # ---------------------------------------------------------------------------- binding (before the simulator)
