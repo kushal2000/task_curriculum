@@ -9,6 +9,7 @@ import math
 
 import torch
 
+from isaacsimenvs.tasks.cloth.backends.rigid import assets as fsa
 from isaacsimenvs.tasks.cloth.backends.rigid import contacts
 
 __all__ = ["PlateRandomization"]
@@ -37,6 +38,27 @@ class PlateRandomization:
         rd = b.cfg.domain_randomization.cloth
         if rd.hinge_stiffness_log and min(float(v) for v in rd.hinge_stiffness) <= 0.0:
             raise ValueError(f"hinge_stiffness_log needs hinge_stiffness > 0 at both ends, got {tuple(rd.hinge_stiffness)}")
+        # Per articulation, per joint: material -> hinge factor (1 unless hinge_from_material).
+        self.material = bool(rd.hinge_from_material)
+        self.hinge_factor = []
+        for sh, art in zip(b.shapes, b.arts):
+            factors = []
+            for name in art.joint_names:
+                if not name.startswith(fsa.JOINT_PREFIX):
+                    raise ValueError(f"[rigid_cloth] {sh.name}: unexpected joint {name!r} on a pool articulation")
+                child = name[len(fsa.JOINT_PREFIX):]
+                factors.append(sh.hinge_material_factor(child) if self.material else 1.0)
+            self.hinge_factor.append(torch.tensor(factors, device=b.device, dtype=torch.float32))
+        if self.material:
+            print(
+                "[rigid_cloth] hinge_from_material: hinge = material x factor per hinge; "
+                + "; ".join(
+                    f"{sh.name} " + ", ".join(f"{n.removeprefix(fsa.JOINT_PREFIX)} x{float(f):.2f}"
+                                              for n, f in zip(art.joint_names, fac))
+                    for sh, art, fac in zip(b.shapes, b.arts, self.hinge_factor)
+                ),
+                flush=True,
+            )
         self.contact_offset_follows_rest = bool(b.cfg.physx_chain.contact_offset_follows_rest)
         self.contact_offset_margin = float(b.cfg.physx_chain.contact_offset_margin)
         if self.contact_offset_follows_rest and self.contact_offset_margin <= 0.0:
@@ -48,7 +70,8 @@ class PlateRandomization:
         ]
         if varies:
             print(
-                f"[rigid_cloth] physics DR per env at every reset: hinge damping x"
+                f"[rigid_cloth] physics DR per env at every reset"
+                f"{' (hinge terms are the MATERIAL: bending viscosity / rigidity)' if self.material else ''}: hinge damping x"
                 f"{tuple(rd.hinge_damping_scale)} (log), hinge stiffness {tuple(rd.hinge_stiffness)} "
                 f"N m/rad{' (log)' if rd.hinge_stiffness_log else ''}, contact margin {self.contact_margin * 1e3:.1f}"
                 f"{rd.contact_margin_offset[0] * 1e3:+.1f}..{rd.contact_margin_offset[1] * 1e3:+.1f} mm"
@@ -110,24 +133,26 @@ class PlateRandomization:
                 contact[instances] = new_contact
                 view.set_contact_offsets(contact, l_cpu)
             self.sample["contact_margin"][ids] = margin
-        if varies(rd.hinge_damping_scale):
+        # With hinge_from_material every hinge is written even when a range is a point: its factor
+        # still has to be applied.
+        if varies(rd.hinge_damping_scale) or self.material:
             lo, hi = math.log(float(rd.hinge_damping_scale[0])), math.log(float(rd.hinge_damping_scale[1]))
             damp = float(r.joint_damping) * torch.exp(torch.empty(n, device=b.device).uniform_(lo, hi))
-            for art, (keep, local, _l) in zip(arts, rows):
+            for art, fac, (keep, local, _l) in zip(arts, self.hinge_factor, rows):
                 if local.numel():
                     d = sel(damp, keep)
-                    art.write_joint_damping_to_sim(d.unsqueeze(1).expand(-1, art.num_joints), env_ids=local)
+                    art.write_joint_damping_to_sim(d.unsqueeze(1) * fac.unsqueeze(0), env_ids=local)
             self.sample["hinge_damping"][ids] = damp
-        if varies(rd.hinge_stiffness):
+        if varies(rd.hinge_stiffness) or (self.material and float(rd.hinge_stiffness[1]) > 0.0):
             if rd.hinge_stiffness_log:
                 log_lo, log_hi = (math.log(float(v)) for v in rd.hinge_stiffness)
                 stiff = torch.exp(torch.empty(n, device=b.device).uniform_(log_lo, log_hi))
             else:
                 stiff = uni(rd.hinge_stiffness)
-            for art, (keep, local, _l) in zip(arts, rows):
+            for art, fac, (keep, local, _l) in zip(arts, self.hinge_factor, rows):
                 if local.numel():
                     k_ = sel(stiff, keep)
-                    art.write_joint_stiffness_to_sim(k_.unsqueeze(1).expand(-1, art.num_joints), env_ids=local)
+                    art.write_joint_stiffness_to_sim(k_.unsqueeze(1) * fac.unsqueeze(0), env_ids=local)
             self.sample["hinge_stiffness"][ids] = stiff
         if varies(rd.mass_scale):
             scale = uni(rd.mass_scale)

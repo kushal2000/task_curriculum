@@ -43,7 +43,7 @@ def test_bodies_joints_and_mass(imported):
     assert hinges == sorted(fsa.JOINT_PREFIX + h.child for h in sh.hinges)
     assert m.body_count == len(sh.plates)
     assert m.articulation_count == 1
-    assert abs(float(m.body_mass.numpy().sum()) - 0.020) < 1e-9
+    assert abs(float(m.body_mass.numpy().sum()) - 0.020) < 1e-8  # float32 masses: 1 ulp at 0.02 is 1.9e-9
 
 
 def test_seams_are_loop_joints_outside_the_articulation(imported):

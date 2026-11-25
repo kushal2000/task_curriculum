@@ -19,6 +19,14 @@ L = 0.05
 #: Loaded at import time too, because the fold list parametrises a test.
 _POOL = load_module("isaacsimenvs/tasks/cloth/mdp/geometry/fold_shapes.py", "fold_shapes").POOL
 
+#: The 2vert+hinge group (designs/2vert+hinge/): box4-mid's strips with the outer creases on a 5 x 5
+#: grid, half fold only, one diagram for the whole folder.
+VERT = {f"2vert_hinge-L{a}-R{b}" for a in (20, 35, 50, 65, 80) for b in (20, 35, 50, 65, 80)}
+
+#: The 2flaps+hinge group (designs/2flaps+hinge/, make_2flaps_hinge.py): the half fold + one random
+#: crease in each half, 32 seeded variants, one diagram for the whole folder.
+FLAPS = {f"2flaps_hinge_{i:02d}" for i in range(32)}
+
 
 @pytest.fixture(scope="module")
 def pool(fold_shapes):
@@ -40,7 +48,7 @@ def _path(shape, stages, n=41):
 def test_pool_names(pool):
     assert set(pool) == {
         "box2-mid", "box2diag4-mid", "box2x8-mid", "cross4-mid", "corners8-mid", "box4-mid", "star8-mid", "plate2"
-    }
+    } | VERT | FLAPS
 
 
 def _footprint(sh, ang):
@@ -222,16 +230,29 @@ def test_start_pose_counts(pool):
     assert counts == {
         "box2-mid": 0, "box2diag4-mid": 3, "box2x8-mid": 8, "cross4-mid": 1,
         "corners8-mid": 19, "box4-mid": 3, "star8-mid": 3, "plate2": 0,
-    }
+    } | {n: 0 for n in VERT} | {n: 3 for n in FLAPS}  # left flap, right flap, both
     assert "half: bottom up + corner sw" not in pool["corners8-mid"].start_poses()
 
 
 def test_designs_are_the_pool(fold_shapes):
-    """One YAML per pool shape, named after its file."""
-    paths = sorted(fold_shapes.DESIGN_DIR.glob("*.yaml"))
+    """One YAML per pool shape, named after its file; a group subfolder has one diagram for the folder."""
+    paths = sorted(fold_shapes.DESIGN_DIR.rglob("*.yaml"))
     assert {p.stem for p in paths} == set(fold_shapes.POOL)
     assert set(fold_shapes.POOL) == {
         "box2-mid", "box2diag4-mid", "box2x8-mid", "cross4-mid", "corners8-mid", "box4-mid", "star8-mid", "plate2",
-    }
+    } | VERT | FLAPS
     for p in paths:
+        if p.parent != fold_shapes.DESIGN_DIR:  # a group folder: one diagram named after the folder
+            p = p.parent / f"{p.parent.name}.yaml"
         assert p.with_suffix(".png").exists(), f"{p.name}: render its diagram (render_fold_designs.py)"
+
+
+def test_hinge_material_factor(fold_shapes, pool):
+    """Material -> hinge: crease length / centroid distance across the crease (size-free)."""
+    f = lambda name, child: pool[name].hinge_material_factor(child)  # noqa: E731
+    assert f("box2-mid", "right") == pytest.approx(2.0)
+    assert [f("box4-mid", c) for c in ("s1", "s3", "s4")] == pytest.approx([4.0, 4.0, 4.0])
+    assert [f("2vert_hinge-L20-R20", c) for c in ("s1", "s3", "s4")] == pytest.approx([4.0, 10.0, 4.0])
+    assert f("2vert_hinge-L80-R80", "s3") == pytest.approx(2.5)
+    small = fold_shapes.sized("2vert_hinge-L35-R65", 0.13, 0.001)
+    assert small.hinge_material_factor("s3") == pytest.approx(f("2vert_hinge-L35-R65", "s3"))

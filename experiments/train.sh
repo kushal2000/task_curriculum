@@ -18,7 +18,7 @@
 #   PRIORS="a b c"   one --checkpoint per array index (index k starts from the k-th), e.g. seed-wise finetunes
 #   SMOKE=1          a 5-epoch smoke at 192 envs (overrides the recipe's size)
 #   WANDB=0          no wandb (default on, off with SMOKE=1). Project $WANDB_PROJECT (default task_curriculum);
-#                    group = the study, i.e. the recipe's folder experiments/<study>/ ($WANDB_GROUP overrides;
+#                    group = the study, i.e. the recipe's top folder experiments/<study>/ ($WANDB_GROUP overrides;
 #                    "misc" for a recipe outside experiments/ or none); tags kind, recipe, RUN_TAG, seed, job.
 #                    The best and last checkpoints are uploaded at the end as artifact ckpt-<name>.
 #   VIEWER=0         no interactive HTML rollouts (default: one episode every 500 epochs and at epoch 0, on wandb)
@@ -77,7 +77,7 @@ fi
 WANDB="${WANDB:-1}"
 if [ "$WANDB" = 1 ]; then
     case "$EXPERIMENT" in
-        *experiments/*/*) STUDY="$(basename "$(dirname "$EXPERIMENT")")" ;;
+        *experiments/*/*) STUDY="${EXPERIMENT##*experiments/}"; STUDY="${STUDY%%/*}" ;;  # top folder: experiments/<study>/[sub/]x.yaml
         *)                STUDY=misc ;;
     esac
     RECIPE="$(basename "${EXPERIMENT:-none}" .yaml)"

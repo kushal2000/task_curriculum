@@ -1,0 +1,31 @@
+# 2flaps_hinge_31: half fold + one random crease in each half (left cut, right diag), 1 mm plates
+#
+# One of the 32 2flaps+hinge variants (diagram: 2flaps+hinge.png in this folder, numbered row by
+# row), written by isaacsimenvs/scripts/visualization/rigid_cloth/make_2flaps_hinge.py (seed 0).
+# Each half has one crease, drawn independently of the other half; it meets the centre crease only
+# at its ends (0, +-1), so the plates form a chain l_out - l_in - r_in - r_out and need no seam.
+# The target is the half fold; the flap folds give folded starts. The sheet size is set per env by
+# the recipe (fold_pool.size_range); `size` here is nominal.
+# Coordinates are in units of L = size / 2 (the sheet frame is [-1, 1]^2, +z up); fold angles in
+# degrees, +180 = a full fold up and over onto the parent. Schema: fold_shapes.load_design.
+name: 2flaps_hinge_31
+label: 2flaps+hinge 31, left cut / right diag crease (4 plates)
+size: 0.1
+thickness: 0.001
+hinge: mid
+plates:  # first = root (the stationary piece); CCW polygons
+  l_in:  [[0, 1], [-0.44, 1], [-1, -0.74], [-1, -1], [0, -1]]
+  l_out: [[-0.44, 1], [-1, 1], [-1, -0.74]]
+  r_in:  [[0, -1], [1, 1], [0, 1]]
+  r_out: [[0, -1], [1, -1], [1, 1]]
+hinges:  # child: [parent, line start, line end]
+  l_out: [l_in, [-0.44, 1], [-1, -0.74]]
+  r_in:  [l_in, [0, -1], [0, 1]]
+  r_out: [r_in, [0, -1], [1, 1]]
+seams: []
+folds:  # name: [stage, ...]; a stage turns its hinges together
+  "half: right over left": [{r_in: 180}]
+  "left flap": [{l_out: 180}]
+  "right flap": [{r_out: 180}]
+  "both flaps": [{l_out: 180, r_out: 180}]
+grasp: {plate: r_out, xy: [1, -1], inset: [-1, 1]}  # viewer pinch point: xy * L + inset * 6 mm

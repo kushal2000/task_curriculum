@@ -65,6 +65,8 @@ __all__ = [
     "DESIGN_DIR",
     "load_design",
     "load_pool",
+    "design_paths",
+    "design_path",
     "sized",
     "POOL",
     "shape",
@@ -224,6 +226,26 @@ class FoldShape:
 
     def joint_range(self) -> tuple[float, float]:
         return (-math.pi, math.pi) if self.hinge == "mid" else (0.0, math.pi)
+
+    def hinge_material_factor(self, child: str) -> float:
+        """Sheet material -> this hinge: hinge stiffness = bending rigidity [N m] x factor, hinge
+        damping = bending viscosity [N m s] x factor (``domain_randomization.cloth.hinge_from_material``).
+
+        factor = crease length / distance across the crease between the centroids of the two plates
+        it joins: the strip of cloth the hinge stands in for. box2: 2; four equal strips: 4 on every
+        hinge. A ratio of lengths, so the same at every sheet size.
+        """
+        h = self.hinge_of(child)
+        a = np.asarray(h.a, dtype=float)
+        d = np.asarray(h.b, dtype=float) - a
+        length = float(np.linalg.norm(d))
+        d /= length
+
+        def across(plate: str) -> float:
+            c = self.plate(plate).centroid - a
+            return abs(float(c[0] * d[1] - c[1] * d[0]))
+
+        return length / (across(h.child) + across(h.parent))
 
     # --- kinematics
 
@@ -482,22 +504,37 @@ def load_design(path: str | Path, size: float | None = None, thickness: float | 
     )
 
 
-def load_pool(design_dir: str | Path = DESIGN_DIR) -> dict[str, FoldShape]:
-    """Every design in ``design_dir``, keyed by name."""
-    out = {}
-    for path in sorted(Path(design_dir).glob("*.yaml")):
-        s = load_design(path)
-        out[s.name] = s
+def design_paths(design_dir: str | Path = DESIGN_DIR) -> dict[str, Path]:
+    """Every design YAML under ``design_dir``, keyed by shape name. A family of variants (e.g. the
+    ``2vert+hinge/`` group) lives in a subfolder of its own, with one diagram for the folder."""
+    out: dict[str, Path] = {}
+    for path in sorted(Path(design_dir).rglob("*.yaml")):
+        name = yaml.safe_load(path.read_text())["name"]
+        if name in out:
+            raise ValueError(f"fold shape {name!r} is defined twice: {out[name]} and {path}")
+        out[name] = path
     return out
 
 
-#: Every pool shape, loaded from ``DESIGN_DIR`` (the seven of the flat7 recipes).
-POOL: dict[str, FoldShape] = load_pool()
+def load_pool(design_dir: str | Path = DESIGN_DIR) -> dict[str, FoldShape]:
+    """Every design under ``design_dir`` (subfolders included), keyed by name."""
+    return {name: load_design(path) for name, path in design_paths(design_dir).items()}
+
+
+_DESIGN_PATHS: dict[str, Path] = design_paths()
+#: Every pool shape, loaded from ``DESIGN_DIR`` and its group subfolders.
+POOL: dict[str, FoldShape] = {name: load_design(path) for name, path in _DESIGN_PATHS.items()}
 
 def sized(name: str, size: float, thickness: float) -> FoldShape:
     """Pool shape ``name`` at another sheet size and plate thickness (same design, scaled)."""
     shape(name)  # unknown names fail with the known list
-    return load_design(DESIGN_DIR / f"{name}.yaml", size=size, thickness=thickness)
+    return load_design(design_path(name), size=size, thickness=thickness)
+
+
+def design_path(name: str) -> Path:
+    """The YAML of pool shape ``name``."""
+    shape(name)  # unknown names fail with the known list
+    return _DESIGN_PATHS[name]
 
 
 def shape(name: str) -> FoldShape:

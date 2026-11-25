@@ -1,0 +1,46 @@
+# 2flaps_hinge: plate2's recipe on the 32 2flaps+hinge shapes (config/designs/2flaps+hinge/: the half
+# fold + one random crease in each half, drawn independently, seeded; 1 mm plates; written by
+# isaacsimenvs/scripts/visualization/rigid_cloth/make_2flaps_hinge.py).
+#
+#   experiments/submit.sh experiments/train.sh --task Isaacsimenvs-RigidCloth-Direct-v0 \
+#       --experiment experiments/nov25_better_rigidcloth/2flaps_hinge/2flaps_hinge.yaml \
+#       --checkpoint <Play prior .pth> --checkpoint_load_mode weights \
+#       agent.params.config.name=0_2flaps_hinge
+#
+# Each env holds only its own shape (one_shape_per_env, round-robin: 768 envs per shape at 24576)
+# and only the 32 shapes are in the pool -- the list replaces plate2's, it does not add to it.
+#
+# The sheet's MATERIAL is drawn, not the hinge (domain_randomization.cloth.hinge_from_material):
+# each hinge gets material x its own factor = crease length / centroid distance across the crease
+# (FoldShape.hinge_material_factor): x2.2 .. x4.1 on the centre crease, x1.3 .. x4.0 on the flap
+# creases. Every crease of every shape is then the same cloth.
+#
+#   quantity              range              where                                         drawn
+#   areal density         1 - 10 kg/m^2      density 1 x mass_scale [1, 10] (uniform)      per episode
+#   bending rigidity B    1e-6 - 1e-3 N m    hinge_stiffness, log-uniform, x factor        per episode
+#   bending viscosity C   1e-3 - 1e-2 N m s  joint_damping 1e-3 x hinge_damping_scale      per episode
+#                                            [1, 10] (log-uniform), x factor
+#   yield angle           20 - 45 deg        hinge_yield_deg (uniform)                     per episode
+#   rest offset           0 - 10 mm          contact_margin 5 mm + offset [-5, +5] mm      per episode
+#   contact offset        rest offset + 2 mm contact_offset_follows_rest, margin 2 mm      with the rest offset
+#   plate thickness       1 mm               fold_pool.thickness_range                     fixed
+#   sheet size            10 - 30 cm square  fold_pool.size_range (uniform, 1 mm steps)    per env, once
+# All but the two hinge rows come from plate2.yaml unchanged.
+base: experiments/nov25_better_rigidcloth/plate2/plate2.yaml
+
+env:
+  fold_pool:
+    shapes: [
+      2flaps_hinge_00, 2flaps_hinge_01, 2flaps_hinge_02, 2flaps_hinge_03, 2flaps_hinge_04, 2flaps_hinge_05, 2flaps_hinge_06, 2flaps_hinge_07,
+      2flaps_hinge_08, 2flaps_hinge_09, 2flaps_hinge_10, 2flaps_hinge_11, 2flaps_hinge_12, 2flaps_hinge_13, 2flaps_hinge_14, 2flaps_hinge_15,
+      2flaps_hinge_16, 2flaps_hinge_17, 2flaps_hinge_18, 2flaps_hinge_19, 2flaps_hinge_20, 2flaps_hinge_21, 2flaps_hinge_22, 2flaps_hinge_23,
+      2flaps_hinge_24, 2flaps_hinge_25, 2flaps_hinge_26, 2flaps_hinge_27, 2flaps_hinge_28, 2flaps_hinge_29, 2flaps_hinge_30, 2flaps_hinge_31
+    ]
+    one_shape_per_env: true
+  rigid_cloth:
+    joint_damping: 1.0e-3              # bending viscosity C; x hinge_damping_scale -> 1e-3 .. 1e-2
+  domain_randomization:
+    cloth:
+      hinge_from_material: true
+      hinge_stiffness: [1.0e-6, 1.0e-3]  # bending rigidity B [N m] (hinge_stiffness_log from plate2)
+      hinge_damping_scale: [1.0, 10.0]

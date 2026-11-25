@@ -1,0 +1,27 @@
+# 2vert_hinge-L80-R35: four vertical strips, centre crease + outer creases at x = -0.8 L, 0.35 L, 1 mm plates
+#
+# One of the 25 2vert+hinge variants (diagram: 2vert+hinge.png in this folder, rows = left crease -0.2 .. -0.8,
+# columns = right crease 0.2 .. 0.8, steps of 0.15). box4-mid's layout with the two outer creases
+# moved: rooted next to the centre crease, so the half fold is one hinge and the outer strips ride
+# along flat. Only the half fold is listed: training starts flat and folds the half. The sheet size
+# is set per env by the recipe (fold_pool.size_range); `size` here is nominal.
+# Coordinates are in units of L = size / 2 (the sheet frame is [-1, 1]^2, +z up); fold angles in
+# degrees, +180 = a full fold up and over onto the parent. Schema: fold_shapes.load_design.
+name: 2vert_hinge-L80-R35
+label: 2vert+hinge, outer creases at -0.8 / 0.35 (4 plates)
+size: 0.1
+thickness: 0.001
+hinge: mid
+plates:  # first = root (the stationary piece); CCW polygons
+  s2: [[-0.8, -1], [0, -1], [0, 1], [-0.8, 1]]
+  s1: [[-1, -1], [-0.8, -1], [-0.8, 1], [-1, 1]]
+  s3: [[0, -1], [0.35, -1], [0.35, 1], [0, 1]]
+  s4: [[0.35, -1], [1, -1], [1, 1], [0.35, 1]]
+hinges:  # child: [parent, line start, line end]
+  s1: [s2, [-0.8, -1], [-0.8, 1]]
+  s3: [s2, [0, -1], [0, 1]]
+  s4: [s3, [0.35, -1], [0.35, 1]]
+seams: []
+folds:  # name: [stage, ...]; a stage turns its hinges together
+  "half: right over left": [{s3: 180}]
+grasp: {plate: s4, xy: [1, 0], inset: [-1, 0]}  # viewer pinch point: xy * L + inset * 6 mm

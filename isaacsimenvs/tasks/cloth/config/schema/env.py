@@ -385,6 +385,12 @@ class ClothDRCfg:
     a third of that, so still a limp sheet."""
     hinge_stiffness_log: bool = False
     """Draw ``hinge_stiffness`` log-uniform instead of uniform (both ends must then be > 0)."""
+    hinge_from_material: bool = False
+    """Draw the sheet's MATERIAL, not the hinge: ``hinge_stiffness`` is then the bending rigidity
+    [N m] and ``rigid_cloth.joint_damping`` x ``hinge_damping_scale`` the bending viscosity [N m s],
+    one draw per env, and each hinge gets them x its own ``FoldShape.hinge_material_factor``
+    (crease length / centroid distance across the crease: box2 2, four equal strips 4). Every
+    crease of every shape is then the same cloth. Off: every hinge gets the drawn values as they are."""
     hinge_yield_deg: tuple[float, float] = (0.0, 0.0)
     """Hinge yield angle [deg], uniform per episode; ``(0, 0)`` keeps ``rigid_cloth.joint_yield_deg``."""
     mass_scale: tuple[float, float] = (1.0, 1.0)
