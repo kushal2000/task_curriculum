@@ -210,12 +210,16 @@ vbd:
     proxy_relaxation: 1.0
     proxy_relaxation_mode: fixed
     proxy_relaxation_min: 0.1
-    substeps: 1                          # 1/120 / 12 / 1 = 1/1440 s
+    substeps: 2                          # 1/120 / 6 / 2 = 1/1440 s (12/1 from 11-19 to 11-26)
     vbd_iterations: 12
 
   # --- MJWarp (the robot)
   newton:
-    num_substeps: 12
+    # 6 (with cloth substeps 2; cloth dt stays 1/1440 s). 12/1 from 11-19 to 11-26: 6/2 blew up then, but that was
+    # Newton's hidden robot-contact kd ~50 and friction_epsilon 0.01. With kd 0.5 + eps 0.1, 6/2 zero-shot (real hand, denim,
+    # 3 seeds): 0 NaN envs, max link force 34 N, uncommanded thumb jumps 2.1 vs 3.1 per episode; ~25% faster. Costs
+    # zero-shot folds 17 vs 29 and falls 21 vs 12 of 96 (finetune not yet compared). Old contact at 6/2 still blows up.
+    num_substeps: 6
     collision_decimation: 0
     solver: newton
     integrator: implicitfast
