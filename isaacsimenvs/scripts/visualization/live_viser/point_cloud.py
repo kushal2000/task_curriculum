@@ -58,14 +58,14 @@ class PointCloud(Feature):
         with gui.add_folder("Point cloud (student policies)"):
             self.g_colour = gui.add_dropdown("colour points by", ["label", "camera (A cyan, B magenta, none grey)"])
             self.g_show = {
-                "live": gui.add_checkbox("live points: cloth, hand, arm (white)", True),
+                "live": gui.add_checkbox("live points: cloth, hand, arm (white)", False),
                 "fk": gui.add_checkbox("forward-kinematics points: forearm, hand (black)", True),
-                "ref": gui.add_checkbox("goal / first-frame cloud (pink moving, blue stationary)", True),
+                "ref": gui.add_checkbox("goal / first-frame cloud (pink moving, blue stationary)", False),
             }
             self.g_aux = gui.add_checkbox("aux head: keypoints (magenta), goal (teal), lines to truth", False)
             self.g_cams = gui.add_checkbox("cameras", True)
             self.g_true = gui.add_checkbox("true sheet particles (grey)", False)
-            self.g_opacity = gui.add_slider("true sheet opacity", 0.05, 1.0, 0.05, 0.4)
+            self.g_opacity = gui.add_slider("true sheet opacity", 0.05, 1.0, 0.05, 1.0)
             self.g_size = gui.add_slider("point size [mm]", 1.0, 10.0, 0.5, 4.0)
         with gui.add_folder("Point-cloud noise (a change resets all envs)"):
             setup = self.obs.setup
@@ -130,7 +130,7 @@ class PointCloud(Feature):
             return
         pc, o, inner = self.cloud, self.v.origins[w], self.v.inner
         xyz = pc.last_xyz[w].detach().float().cpu().numpy()  # env frame
-        label = np.array(pc.labels or ("live",))[pc.last_label[w].cpu().numpy()]
+        label = np.array(pc.labels or ("live", "goal"))[pc.last_label[w].cpu().numpy()]
         cam = pc.last_cam[w].cpu().numpy()
         ok = pc.last_mask[w].cpu().numpy() & np.isfinite(xyz).all(axis=1)
         if self.g_colour.value == "label":

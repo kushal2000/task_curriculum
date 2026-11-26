@@ -1,0 +1,6 @@
+s_base
+s_solref02 FLEX_SOLREF=0.02
+s_arm1e3 FLEX_ARMATURE=0.001
+s_arm1e2 FLEX_ARMATURE=0.01
+s_iter300 env.newton.iterations=300
+s_solref02_arm1e3 FLEX_SOLREF=0.02 FLEX_ARMATURE=0.001

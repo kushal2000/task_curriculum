@@ -21,7 +21,8 @@ from pathlib import Path
 
 import yaml
 
-__all__ = ["TASK_YAML", "apply_values", "missing_fields", "rigid_cloth_env_cfg", "task_values", "vbd_cloth_env_cfg"]
+__all__ = ["TASK_YAML", "apply_values", "missing_fields", "rigid_cloth_env_cfg", "rigid_newton_cloth_env_cfg",
+           "rigid_ovphysx_cloth_env_cfg", "task_values", "vbd_cloth_env_cfg"]
 
 TASK_YAML = Path(__file__).resolve().parent / "task.yaml"
 BACKENDS = ("rigid", "vbd")
@@ -139,3 +140,49 @@ def vbd_cloth_env_cfg():
     from .schema.vbd import VbdClothEnvCfg
 
     return _task_cfg(VbdClothEnvCfg(), "vbd")
+
+
+def rigid_newton_cloth_env_cfg():
+    """``RigidNewtonClothEnvCfg``: the PhysX pool's values (``common`` + ``rigid``, without its PhysX
+    solver block) plus the VBD world's Newton solver block and gravity compensation. The gym entry
+    point of Isaacsimenvs-RigidClothNewton-Direct-v0 (robot and plates on MJWarp)."""
+    from .schema.rigid_newton import RigidNewtonClothEnvCfg
+
+    data = yaml.safe_load(TASK_YAML.read_text()) or {}
+    rigid = dict(data.get("rigid") or {})
+    sim = {k: v for k, v in (rigid.pop("sim", None) or {}).items() if k != "physx"}
+    if sim:
+        rigid["sim"] = sim
+    values = _merge(data.get("common") or {}, rigid)
+    vbd = data.get("vbd") or {}
+    values["newton"] = vbd["newton"]
+    values["use_gravcomp"] = True
+    cfg = RigidNewtonClothEnvCfg()
+    apply_values(cfg, values)
+    missing = missing_fields(cfg)
+    if missing:
+        raise ValueError(f"{TASK_YAML} (rigid on Newton) gives no value for: {', '.join(missing)}")
+    return cfg
+
+
+def rigid_ovphysx_cloth_env_cfg():
+    """``RigidOvPhysxClothEnvCfg``: the PhysX pool's values (``common`` + ``rigid``) on kit-less Isaac
+    Lab 3 + ovphysx. Isaac Lab 3's ``SimulationCfg`` has no ``physx`` block, so the rigid section's
+    ``sim.physx`` goes to ``physx_scene`` (Isaac Lab 2.3's PhysxCfg fields and defaults), which the
+    backend authors on the PhysicsScene prim. The gym entry point of Isaacsimenvs-RigidClothOvPhysx-Direct-v0."""
+    from .schema.rigid_ovphysx import RigidOvPhysxClothEnvCfg
+
+    data = yaml.safe_load(TASK_YAML.read_text()) or {}
+    rigid = dict(data.get("rigid") or {})
+    sim = dict(rigid.pop("sim", None) or {})
+    physx = sim.pop("physx", None) or {}
+    if sim:
+        rigid["sim"] = sim
+    values = _merge(data.get("common") or {}, rigid)
+    values["physx_scene"] = physx
+    cfg = RigidOvPhysxClothEnvCfg()
+    apply_values(cfg, values)
+    missing = missing_fields(cfg)
+    if missing:
+        raise ValueError(f"{TASK_YAML} (rigid on ovphysx) gives no value for: {', '.join(missing)}")
+    return cfg

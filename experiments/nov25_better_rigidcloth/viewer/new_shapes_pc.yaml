@@ -1,0 +1,33 @@
+# Viewer recipe: play_pc_rl_A's point cloud (64 live / 64 goal points, its camera / delay DR) on ALL the
+# new shapes (plate2, 25 2vert+hinge, 32 2flaps+hinge) with their new cloth DR. The DR is plate2's
+# (through play_pc_rigidclothRL_64live_plate2) with the 2vert / 2flaps material draw; plate2 itself has
+# factor 2, so it gets the same ranges as in plate2.yaml.
+base: experiments/nov25_better_rigidcloth/plate2/play_pc_rigidclothRL_64live_plate2.yaml
+
+env:
+  fold_pool:
+    shapes: [
+      plate2, 2vert_hinge-L20-R20, 2vert_hinge-L20-R35, 2vert_hinge-L20-R50,
+      2vert_hinge-L20-R65, 2vert_hinge-L20-R80, 2vert_hinge-L35-R20, 2vert_hinge-L35-R35,
+      2vert_hinge-L35-R50, 2vert_hinge-L35-R65, 2vert_hinge-L35-R80, 2vert_hinge-L50-R20,
+      2vert_hinge-L50-R35, 2vert_hinge-L50-R50, 2vert_hinge-L50-R65, 2vert_hinge-L50-R80,
+      2vert_hinge-L65-R20, 2vert_hinge-L65-R35, 2vert_hinge-L65-R50, 2vert_hinge-L65-R65,
+      2vert_hinge-L65-R80, 2vert_hinge-L80-R20, 2vert_hinge-L80-R35, 2vert_hinge-L80-R50,
+      2vert_hinge-L80-R65, 2vert_hinge-L80-R80, 2flaps_hinge_00, 2flaps_hinge_01,
+      2flaps_hinge_02, 2flaps_hinge_03, 2flaps_hinge_04, 2flaps_hinge_05,
+      2flaps_hinge_06, 2flaps_hinge_07, 2flaps_hinge_08, 2flaps_hinge_09,
+      2flaps_hinge_10, 2flaps_hinge_11, 2flaps_hinge_12, 2flaps_hinge_13,
+      2flaps_hinge_14, 2flaps_hinge_15, 2flaps_hinge_16, 2flaps_hinge_17,
+      2flaps_hinge_18, 2flaps_hinge_19, 2flaps_hinge_20, 2flaps_hinge_21,
+      2flaps_hinge_22, 2flaps_hinge_23, 2flaps_hinge_24, 2flaps_hinge_25,
+      2flaps_hinge_26, 2flaps_hinge_27, 2flaps_hinge_28, 2flaps_hinge_29,
+      2flaps_hinge_30, 2flaps_hinge_31
+    ]
+    one_shape_per_env: true
+  rigid_cloth:
+    joint_damping: 1.0e-3              # bending viscosity C
+  domain_randomization:
+    cloth:
+      hinge_from_material: true
+      hinge_stiffness: [1.0e-6, 1.0e-3]
+      hinge_damping_scale: [1.0, 10.0]

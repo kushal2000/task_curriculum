@@ -82,6 +82,11 @@ def hydra_task_config_with_yaml(
             run.json, ``training_run.resolved_recipe``), or ``None``.
     """
 
+    _RECIPE_ALIASES = {
+        "Isaacsimenvs-RigidClothNewton-Direct-v0": ("Isaacsimenvs-RigidCloth-Direct-v0",),
+        "Isaacsimenvs-RigidClothOvPhysx-Direct-v0": ("Isaacsimenvs-RigidCloth-Direct-v0",),
+    }
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -95,7 +100,9 @@ def hydra_task_config_with_yaml(
             )
             exp = (experiment if isinstance(experiment, dict) else load_recipe(experiment)) if experiment else {}
             if exp:
-                if exp.get("task", short_name) != short_name:
+                # The Newton plate pool runs the PhysX pool's recipes unchanged (same configuration).
+                same = {short_name, *_RECIPE_ALIASES.get(short_name, ())}
+                if exp.get("task", short_name) not in same:
                     raise ValueError(f"experiment {experiment!r} is for {exp['task']}, not {short_name}")
                 _set_null_fields(env_cfg, exp.get("env") or {})
                 env_cfg.from_dict(exp.get("env") or {})

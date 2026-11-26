@@ -6,9 +6,7 @@ import numpy as np
 import torch
 
 from .feature import Feature
-
-MOVING_RGB = (242, 77, 26)       # the half that folds over
-STATIONARY_RGB = (250, 199, 38)  # the half it folds onto
+from .pretty import MOVING_RGB, STATIONARY_RGB, SmoothSheet
 PIERCE_RGB = (255, 0, 0)
 
 
@@ -35,12 +33,23 @@ class ClothSheet(Feature):
             t = tri[(owner[tri] == w).all(axis=1)] - int(pidx[0])
             in_moving = np.isin(t, moving).sum(axis=1) >= 2
             self.by_world[w] = (torch.as_tensor(pidx, device=viewer.device), t[in_moving], t[~in_moving])
+        geom = viewer.inner.task.geometry
+        res = int(round(len(self.by_world[0][0]) ** 0.5))
+        self.smooth = SmoothSheet(res, geom.moving_idx.cpu().numpy(), geom.stationary_idx.cpu().numpy())
+
+    def scene_gui(self) -> None:
+        self.show_smooth = self.v.server.gui.add_checkbox("cloth: smooth surface (off: the particle mesh)", True)
 
     def draw(self, w: int) -> None:
         import warp as wp
 
         pidx, t_mv, t_st = self.by_world[w]
         pts = wp.to_torch(_state().particle_q)[pidx].cpu().numpy() - self.v.origins[w]
+        if getattr(self, "show_smooth", None) is not None and self.show_smooth.value:
+            surf = self.smooth.surface(pts)
+            for half, rgb in (("moving", MOVING_RGB), ("stationary", STATIONARY_RGB)):
+                self.mesh(f"cloth_{half}", surf, self.smooth.faces[half], rgb, opacity=self.v.object_opacity())
+            return
         for name, t, rgb in (("cloth_moving", t_mv, MOVING_RGB), ("cloth_stationary", t_st, STATIONARY_RGB)):
             if len(t):
                 self.mesh(name, pts, t, rgb, opacity=self.v.object_opacity())

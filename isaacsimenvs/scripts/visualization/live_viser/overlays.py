@@ -26,7 +26,7 @@ class Keypoints(Feature):
     """The sheet's keypoints (orange) and their fold targets (green): the fold error is their distance."""
 
     def scene_gui(self) -> None:
-        self.show = self.v.server.gui.add_checkbox("keypoints (orange) / fold targets (green)", True)
+        self.show = self.v.server.gui.add_checkbox("keypoints (orange) / fold targets (green)", False)
 
     def draw(self, w: int) -> None:
         if not self.show.value:

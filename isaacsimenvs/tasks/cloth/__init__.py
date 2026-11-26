@@ -2,6 +2,9 @@
 
     Isaacsimenvs-Cloth-Direct-v0       VBD cloth sheet, Newton (``.venv_isaaclab3``)
     Isaacsimenvs-RigidCloth-Direct-v0  fold-shape pool of hinged plates, PhysX (``.venv_isaacsim``)
+    Isaacsimenvs-RigidClothNewton-Direct-v0  the same pool, robot and plates on MJWarp (``.venv_isaaclab3``)
+    Isaacsimenvs-RigidClothOvPhysx-Direct-v0  the same pool on PhysX, kit-less Isaac Lab 3 + ovphysx
+                                              (``.venv/isaaclab3_ovphysx``)
 
 Both run the Flexiv + right Wuji as the real robot is set up. Their configuration is ``config/``
 (the fields in ``config/schema/``, the values in ``config/task.yaml``). Start with ``README.md``.
@@ -17,6 +20,8 @@ from isaacsimenvs import CLOTH_CONFIG_DIR, PLAY_CONFIG_DIR
 _TASKS = {
     "Cloth": ("vbd", "config:vbd_cloth_env_cfg"),
     "RigidCloth": ("rigid", "config:rigid_cloth_env_cfg"),
+    "RigidClothNewton": ("rigid_newton", "config:rigid_newton_cloth_env_cfg"),
+    "RigidClothOvPhysx": ("rigid_ovphysx", "config:rigid_ovphysx_cloth_env_cfg"),
 }
 
 
@@ -27,8 +32,12 @@ def make_env(cfg, render_mode: str | None = None, *, backend: str, **kwargs):
         from .backends.vbd.backend import VbdBackend as Backend
     elif backend == "rigid":
         from .backends.rigid.backend import RigidBackend as Backend
+    elif backend == "rigid_newton":
+        from .backends.rigid_newton.backend import NewtonRigidBackend as Backend
+    elif backend == "rigid_ovphysx":
+        from .backends.rigid_ovphysx.backend import OvPhysxRigidBackend as Backend
     else:
-        raise ValueError(f"unknown cloth backend {backend!r}; expected rigid or vbd")
+        raise ValueError(f"unknown cloth backend {backend!r}; expected rigid, rigid_newton, rigid_ovphysx or vbd")
     from .cloth_env import ClothEnv
 
     return ClothEnv(cfg, render_mode, backend=Backend, **kwargs)

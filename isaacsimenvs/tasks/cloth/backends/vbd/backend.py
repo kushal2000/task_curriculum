@@ -11,6 +11,10 @@ The sheet is authored as a flat ``UsdGeom.Mesh`` grid before the environments ar
 
 from __future__ import annotations
 
+import os
+
+import numpy as np
+
 import re
 from contextlib import ExitStack, contextmanager
 from unittest.mock import patch
@@ -21,7 +25,7 @@ import torch
 from isaaclab.utils.math import quat_from_matrix
 
 from isaacsimenvs.tasks.cloth.backends.base import ClothBackend, reset_yaw
-from isaacsimenvs.tasks.cloth.backends.vbd import friction, plasticity
+from isaacsimenvs.tasks.cloth.backends.vbd import flex, friction, plasticity
 from isaacsimenvs.tasks.cloth.backends.vbd.newton_setup import (
     install_post_construction_patches,
     install_pre_construction_patches,
@@ -46,9 +50,12 @@ class VbdBackend(ClothBackend):
         super().__init__(cfg, robot_spec)
         # The sheet-physics DR is the rigid plates'; the VBD sheet has nothing it could act on.
         neutral = vars(ClothDRCfg())
+        def _norm(v):  # ranges as float tuples; flags (hinge_from_material, hinge_stiffness_log) as they are
+            return tuple(float(x) for x in v) if isinstance(v, (list, tuple)) else v
+
         moved = {
-            name: list(v) for name, v in vars(cfg.domain_randomization.cloth).items()
-            if tuple(float(x) for x in v) != tuple(float(x) for x in neutral[name])
+            name: v for name, v in vars(cfg.domain_randomization.cloth).items()
+            if _norm(v) != _norm(neutral[name])
         }
         if moved:
             raise NotImplementedError(f"domain_randomization.cloth is the rigid plates' DR; on VBD keep it neutral, got {moved}")
@@ -58,7 +65,24 @@ class VbdBackend(ClothBackend):
         physics_cfg = build_physics(cfg.cloth, cfg.newton, int(cfg.scene.num_envs), robot_spec)
         # The proxied body selectors, while they are still regexes (the coupler resolves them to ids).
         self._proxy_bodies = [str(b) for proxy in physics_cfg.solver_cfg.proxies for b in proxy.bodies]
+        if flex.enabled() and os.environ.get("FLEX_CPU", "0") == "1":
+            # The robot (and the flex sheet in it) on MuJoCo-C instead of MuJoCo Warp.
+            for entry in physics_cfg.solver_cfg.entries:
+                if entry.name == "rigid":
+                    entry.solver_cfg.use_mujoco_cpu = True
+                    # Per-env resets reach MuJoCo-C only through the per-step Newton -> MuJoCo sync.
+                    entry.solver_cfg.update_data_interval = 1
+            flex.allow_cpu_entry()
         install_pre_construction_patches(cfg, physics_cfg=physics_cfg)
+        # Experiment (VBD_FLEX=1): the sheet as a MuJoCo flex in the robot's MJWarp solve (vbd/flex.py).
+        self._flex = None
+        if flex.enabled():
+            if not cfg.newton.use_mujoco_contacts:
+                raise ValueError("VBD_FLEX=1 needs env.newton.use_mujoco_contacts=true (flex contacts are MuJoCo's)")
+            if cfg.cloth.use_cuda_graph or cfg.cloth.plastic_yield_curvature > 0:
+                raise ValueError("VBD_FLEX=1: keep cloth.use_cuda_graph false and plasticity off")
+            self._flex = flex.FlexSheet(self)
+            self._flex.install_step()
 
     @contextmanager
     def construction_context(self):
@@ -66,6 +90,8 @@ class VbdBackend(ClothBackend):
 
         # The cloth solver's own copy of the shapes' mu, when a cloth.cloth_*_friction is set.
         with friction.construction_hooks(self.cfg.cloth), ExitStack() as stack:
+            if self._flex is not None:
+                stack.enter_context(self._flex.injection())
             if self.cfg.cloth.full_surface_contact:
                 stack.enter_context(self._proxy_mesh_sdfs())
             if self.cfg.cloth.plastic_yield_curvature > 0:
@@ -125,14 +151,57 @@ class VbdBackend(ClothBackend):
             env[(hinges[:, 0] < 0) | (hinges[:, 1] < 0)] = -1
             self._edge_env = torch.as_tensor(env, dtype=torch.long, device=str(model.device))
 
+    def _install_crease_stiffness(self, model, coupled_solver) -> None:
+        """Experiment hook: a sheet that bends like the training's hinged plates. Every bending edge's
+        stiffness is multiplied by ``VBD_STIFF_FACTOR`` except the hinges lying on the fold's crease line
+        (both hinge endpoints at the sheet midline along ``cloth.fold_axis``), which get
+        ``VBD_CREASE_FACTOR`` (default 1). Off unless ``VBD_STIFF_FACTOR`` is set."""
+        import os
+
+        stiff = os.environ.get("VBD_STIFF_FACTOR")
+        if not stiff or model is None:
+            return
+        stiff, crease_f = float(stiff), float(os.environ.get("VBD_CREASE_FACTOR", "1"))
+        import newton
+
+        ax = "xyz".index(str(self.cfg.cloth.fold_axis))
+        rest = np.asarray(self.rest_local)
+        per = rest.shape[0]
+        on_crease_local = np.abs(rest[:, ax]) < 1e-6
+        ei = model.edge_indices.numpy()
+        pw = model.particle_world.numpy()
+        first = {}
+        for i, w in enumerate(pw):
+            first.setdefault(int(w), i)
+        loc = np.array([i - first[int(w)] for i, w in enumerate(pw)])
+        ok = (loc >= 0) & (loc < per)
+        a, b = ei[:, 2], ei[:, 3]
+        crease = ok[a] & ok[b] & on_crease_local[np.clip(loc[a], 0, per - 1)] & on_crease_local[np.clip(loc[b], 0, per - 1)]
+        interior = (ei[:, 0] >= 0) & (ei[:, 1] >= 0)
+        targets = [model.edge_bending_properties]
+        for e in getattr(coupled_solver, "_entries", {}).values():
+            if isinstance(e.solver, newton.solvers.SolverVBD):
+                v = getattr(e.view, "edge_bending_properties", None)
+                if v is not None and v.ptr != model.edge_bending_properties.ptr:
+                    targets.append(v)
+        for arr in targets:
+            bp = arr.numpy()
+            bp[:, 0] = np.where(crease, bp[:, 0] * crease_f, bp[:, 0] * stiff)
+            arr.assign(bp)
+        print(f"[cloth] crease stiffness: {int((crease & interior).sum())} crease hinges x{crease_f:g}, "
+              f"{int((~crease & interior).sum())} other hinges x{stiff:g} (axis {'xyz'[ax]}; {len(targets)} array(s))", flush=True)
+
     def finish_setup(self) -> None:
         from isaaclab_newton.physics import NewtonManager
 
         c = self.cfg.cloth
+        if self._flex is not None:
+            self._flex.bind(NewtonManager._model, NewtonManager._solver)
         # Normally installed at graph capture (construction_context); here if nothing captured.
         self._install_plasticity(NewtonManager._model, NewtonManager._solver)
         # Before install_post_construction_patches: its notify_solver refreshes the model views,
         # which is when the cloth's copy is re-written from the final shape frictions.
+        self._install_crease_stiffness(NewtonManager._model, NewtonManager._solver)
         tips = self.robot_spec.fingertip_link_names
         friction.install(NewtonManager._solver, c, tips)
         install_post_construction_patches(self)
@@ -191,6 +260,8 @@ class VbdBackend(ClothBackend):
         target = rotated + centre.unsqueeze(1)
         self.cloth.write_nodal_pos_to_sim_index(target, env_ids)
         self.cloth.write_nodal_velocity_to_sim_index(torch.zeros_like(target), env_ids)
+        if self._flex is not None:
+            self._flex.write(env_ids, target)
 
     def observed_goal_quat(self, rot: torch.Tensor) -> torch.Tensor:
         """``isaaclab.utils.math.quat_from_matrix``, unpatched: under Isaac Lab 3.0 it returns

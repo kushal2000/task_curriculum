@@ -11,6 +11,8 @@ import time
 from collections import Counter
 
 import numpy as np
+
+from .pretty import TABLE_RGB
 import torch
 
 from .feature import Feature
@@ -56,7 +58,7 @@ class LiveViewer:
         self.scene = PhysxScene(inner) if rigid else NewtonScene(inner)
 
         # Set from the GUI thread, acted on by the loop.
-        self.playing, self.step_once, self.speed, self.deterministic = True, False, 1.0, True
+        self.playing, self.step_once, self.speed, self.deterministic = True, False, 1.0, False
         self.world = 0                 # the env the GUI shows
         self.policy_name = policy
         self.reset_all = self.reset_one = False
@@ -98,17 +100,47 @@ class LiveViewer:
     # ------------------------------------------------------------------ GUI
     def _gui(self) -> None:
         gui, inner = self.server.gui, self.inner
+        from .pretty import load_visuals
+
+        self.visuals = load_visuals()
+        try:
+            self.server.scene.configure_environment_map("studio", environment_intensity=0.35)
+            self.server.scene.enable_default_lights(True, cast_shadow=True)
+        except Exception:  # noqa: BLE001 - cosmetics only
+            pass
+        self.g_toggle = gui.add_button("Pause")
         with gui.add_folder("Scene"):
             g_env = gui.add_dropdown("show env", [self.env_label(w) for w in range(self.n_env)])
             g_start = gui.add_dropdown("start pose", list(self.reset_starts))
             g_tol = gui.add_slider("fold tolerance [mm]", 5.0, 60.0, 0.5, float(inner.cfg.cloth.keypoint_tolerance) * 1e3)
             g_reset = gui.add_button("reset this env")
             g_reset_all = gui.add_button("reset all envs")
+            self.g_collision = gui.add_checkbox("robot: collision shapes (off: visual meshes)", not self.visuals)
+
+            @self.g_collision.on_update
+            def _(_e):
+                for h in getattr(self, "collision_handles", []):
+                    h.visible = bool(self.g_collision.value)
             for f in self.features:
                 f.scene_gui()
+        with gui.add_folder("Custom start"):
+            rs = inner.cfg.reset
+            g_cx = gui.add_slider("sheet x offset [cm]", -15.0, 15.0, 0.5, 0.0)
+            g_cy = gui.add_slider("sheet y offset [cm]", -15.0, 15.0, 0.5, 0.0)
+            g_yaw = gui.add_slider("sheet heading [deg]", -180.0, 180.0, 5.0, 0.0)
+            g_apply = gui.add_button("use this start (resets all envs)")
+        with gui.add_folder("Physics (restart)"):
+            c = inner.cfg.cloth
+            g_size = gui.add_slider("cloth size [cm]", 6.0, 30.0, 1.0, float(c.size) * 100)
+            g_res = gui.add_slider("cloth grid", 5, 25, 2, int(c.resolution))
+            g_thick = gui.add_slider("particle thickness [mm] (2 x radius)", 4.0, 24.0, 1.0, float(c.thickness) * 1000)
+            g_iters = gui.add_slider("coupler iterations", 1, 6, 1, int(c.coupler_iterations))
+            g_rmode = gui.add_dropdown("relaxation mode", ("fixed", "aitken"), initial_value=str(c.proxy_relaxation_mode))
+            g_relax = gui.add_slider("relaxation (1 = none)", 0.05, 1.0, 0.05, float(c.proxy_relaxation))
+            g_restart = gui.add_button("restart viewer with these")
         with gui.add_folder("Policy"):
             self.g_pol = g_pol = gui.add_dropdown("policy", list(self.players.menu), initial_value=self.policy_name)
-            g_det = gui.add_checkbox("deterministic actions", True)
+            g_det = gui.add_checkbox("deterministic actions", False)
             self.g_play = gui.add_checkbox("playing", True)
             g_step = gui.add_button("single step")
             g_speed = gui.add_slider("speed (x real time; 4 = as fast as possible)", 0.1, 4.0, 0.1, 1.0)
@@ -130,12 +162,46 @@ class LiveViewer:
             for k, v in self.reset_starts[g_start.value].items():  # read by the env at every reset
                 setattr(inner.cfg.reset, k, v)
 
+        @g_apply.on_click
+        def _(_e):
+            # A fixed start, no reset noise. The task decodes a reset quaternion with its components
+            # reordered (backends/base.py reset_yaw): heading t is written as (sin t/2, cos t/2, 0, 0).
+            import math
+
+            t = math.radians(float(g_yaw.value))
+            table_xy = getattr(rs, "table_reset_xy", (0.0, 0.0))
+            for k in ("reset_position_noise_x", "reset_position_noise_y", "reset_position_noise_z", "table_reset_z_range"):
+                setattr(rs, k, 0.0)
+            rs.fixed_start_pose = (table_xy[0] + float(g_cx.value) / 100, table_xy[1] + float(g_cy.value) / 100,
+                                   rs.table_reset_z + rs.table_object_z_offset, math.sin(t / 2), math.cos(t / 2), 0.0, 0.0)
+            self.reset_all = True
+
+        @g_restart.on_click
+        def _(_e):
+            import os, sys
+            new = {"env.cloth.size": f"{float(g_size.value) / 100:.3f}", "env.cloth.resolution": str(int(g_res.value)),
+                   "env.cloth.thickness": f"{float(g_thick.value) / 1000:.4f}",
+                   "env.cloth.coupler_iterations": str(int(g_iters.value)),
+                   "env.cloth.proxy_relaxation_mode": str(g_rmode.value),
+                   "env.cloth.proxy_relaxation": f"{float(g_relax.value):.3f}"}
+            argv = [a for a in sys.orig_argv if a.split("=", 1)[0] not in new]
+            argv += [f"{k}={v}" for k, v in new.items()]
+            self.g_msg.content = "restarting with the new sheet ... reload the page in ~2 min"
+            print(f"[live] restart: {' '.join(argv)}", flush=True)
+            self.server.stop()
+            os.execv(sys.executable, argv)
+
         g_tol.on_update(lambda _e: setattr(inner.cfg.cloth, "keypoint_tolerance", float(g_tol.value) * 1e-3))
         g_reset.on_click(lambda _e: setattr(self, "reset_one", True))
         g_reset_all.on_click(lambda _e: setattr(self, "reset_all", True))
         g_pol.on_update(lambda _e: setattr(self, "policy_name", g_pol.value))
         g_det.on_update(lambda _e: setattr(self, "deterministic", bool(g_det.value)))
-        self.g_play.on_update(lambda _e: setattr(self, "playing", bool(self.g_play.value)))
+        def _sync_play(_e):
+            self.playing = bool(self.g_play.value)
+            self.g_toggle.label = "Pause" if self.playing else "Play"
+
+        self.g_play.on_update(_sync_play)
+        self.g_toggle.on_click(lambda _e: setattr(self.g_play, "value", not bool(self.g_play.value)))
         g_step.on_click(lambda _e: setattr(self, "step_once", True))
         g_speed.on_update(lambda _e: setattr(self, "speed", float(g_speed.value)))
         self.server.on_client_connect(self._start_view)
@@ -162,14 +228,27 @@ class LiveViewer:
         keys = sorted({s.key for s in shapes if s.key is not None}, key=str)
         names = {k: f"/w/b{i}" for i, k in enumerate(keys)}
         self.frames = {k: self.server.scene.add_frame(names[k], show_axes=False) for k in keys}
+        self.server.scene.add_frame("/w/static", show_axes=False)
         opacity = self.object_opacity()
+        link_of = {}  # body key -> its link name (the robot's)
+        self.collision_handles = []
         for i, s in enumerate(shapes):
             moving = s.key is not None
-            self.server.scene.add_mesh_simple(
-                f"{names[s.key] if moving else '/w/static'}/s{i}", s.verts, s.faces, color=s.rgb,
+            if s.kind == "robot" and moving:
+                link_of[s.key] = s.label.rsplit("/", 1)[-1]
+            h = self.server.scene.add_mesh_simple(
+                f"{names[s.key] if moving else '/w/static'}/s{i}", s.verts, s.faces,
+                color=TABLE_RGB if s.kind == "table" else s.rgb,
                 position=s.pos if moving else s.pos - self.origins[w], wxyz=s.wxyz,
                 side="double" if moving and s.kind != "robot" else "front",
                 opacity=opacity if s.kind == "object" else None)
+            if s.kind == "robot":
+                self.collision_handles.append(h)
+                h.visible = bool(self.g_collision.value) or not self.visuals
+        by_link = {v: k for k, v in link_of.items()}
+        for j, (link, verts, faces, rgb) in enumerate(self.visuals):
+            if link in by_link:
+                self.server.scene.add_mesh_simple(f"{names[by_link[link]]}/v{j}", verts, faces, color=rgb)
 
     def _draw(self) -> None:
         w = self.drawn

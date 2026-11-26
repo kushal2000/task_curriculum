@@ -1,0 +1,17 @@
+add_SIZE|experiments/nov24_play_pc_rl/play_pc_rl_A.yaml|old|448|env.fold_pool.size_range=[0.10,0.30] env.fold_pool.park_spacing=0.5
+add_THK|experiments/nov24_play_pc_rl/play_pc_rl_A.yaml|old|448|env.fold_pool.thickness_range=[0.001,0.001]
+add_DEN|experiments/nov24_play_pc_rl/play_pc_rl_A.yaml|old|448|env.rigid_cloth.density=1.0 env.domain_randomization.cloth.mass_scale=[1.0,10.0]
+add_HNG|experiments/nov24_play_pc_rl/play_pc_rl_A.yaml|old|448|env.rigid_cloth.joint_damping=0.001 env.domain_randomization.cloth.hinge_from_material=true env.domain_randomization.cloth.hinge_stiffness=[1.0e-6,1.0e-3] env.domain_randomization.cloth.hinge_stiffness_log=true env.domain_randomization.cloth.hinge_damping_scale=[1.0,10.0]
+add_PLS|experiments/nov24_play_pc_rl/play_pc_rl_A.yaml|old|448|env.domain_randomization.cloth.hinge_yield_deg=[20.0,45.0]
+add_OFS|experiments/nov24_play_pc_rl/play_pc_rl_A.yaml|old|448|env.rigid_cloth.contact_margin=0.005 env.domain_randomization.cloth.contact_margin_offset=[-0.005,0.005] env.physx_chain.contact_offset_follows_rest=true
+add_PEN|experiments/nov24_play_pc_rl/play_pc_rl_A.yaml|old|448|env.termination.max_finger_penetration=0.0005
+add_ALLDR|experiments/nov25_better_rigidcloth/viewer/new_shapes_pc.yaml|old|448|
+newshapes_oldDR|experiments/nov24_play_pc_rl/play_pc_rl_A.yaml|new|464|
+full_new|experiments/nov25_better_rigidcloth/viewer/new_shapes_pc.yaml|new|464|
+rm_SIZE|experiments/nov25_better_rigidcloth/viewer/new_shapes_pc.yaml|new|464|env.fold_pool.size_range=[0.10,0.20]
+rm_THK|experiments/nov25_better_rigidcloth/viewer/new_shapes_pc.yaml|new|464|env.fold_pool.thickness_range=[0.002,0.002]
+rm_DEN|experiments/nov25_better_rigidcloth/viewer/new_shapes_pc.yaml|new|464|env.rigid_cloth.density=2.0 env.domain_randomization.cloth.mass_scale=[1.0,1.0]
+rm_HNG|experiments/nov25_better_rigidcloth/viewer/new_shapes_pc.yaml|new|464|env.rigid_cloth.joint_damping=0.05 env.domain_randomization.cloth.hinge_from_material=false env.domain_randomization.cloth.hinge_stiffness=[0.0,0.0] env.domain_randomization.cloth.hinge_stiffness_log=false env.domain_randomization.cloth.hinge_damping_scale=[1.0,1.0]
+rm_PLS|experiments/nov25_better_rigidcloth/viewer/new_shapes_pc.yaml|new|464|env.domain_randomization.cloth.hinge_yield_deg=[0.0,0.0]
+rm_OFS|experiments/nov25_better_rigidcloth/viewer/new_shapes_pc.yaml|new|464|env.rigid_cloth.contact_margin=0.007 env.domain_randomization.cloth.contact_margin_offset=[-0.003,0.003] env.physx_chain.contact_offset_follows_rest=false
+rm_PEN|experiments/nov25_better_rigidcloth/viewer/new_shapes_pc.yaml|new|464|env.termination.max_finger_penetration=0.0

@@ -150,6 +150,10 @@ def _goal_student_success(env_cfg) -> None:
     obs = getattr(env_cfg, "obs", None)
     if getattr(obs, "object", None) != "pointcloud" or obs.pointcloud.goal not in GOAL_CLOUDS:
         return
+    if os.environ.get("EVAL_SUCCESS") == "keypoint":  # experiment: score by the world's keypoint fold criterion
+        print("[episodes] goal point-cloud student, EVAL_SUCCESS=keypoint: keeping the world's criterion "
+              f"({env_cfg.termination.success})", flush=True)
+        return
     term = env_cfg.termination
     term.success = "surface"
     term.surface.ref_step = int(obs.pointcloud.ref_step)
@@ -385,6 +389,25 @@ def main() -> None:
         best_in_place_dist = torch.full((num_envs,), float("inf"), device=device) if surface_success else None
         surface_layered = surface_success and bool(task.surface_layered)
         best_layered_dist = torch.full((num_envs,), float("inf"), device=device) if surface_layered else None
+        # Layering (cloth only): the moving half's height above the stationary half where they overlap in xy,
+        # median over the overlapping particles. A fold whose flap went THROUGH the bottom ply is negative.
+        # Read each step; at an episode's end the previous step's value is kept (the env resets on done).
+        _geom = getattr(task, "geometry", None) if task is not None else None
+        _layer = _has_fold and _geom is not None and hasattr(_geom, "moving_idx") and hasattr(inner, "fold_view")
+        gap_prev = torch.full((num_envs,), float("nan"), device=device) if _layer else None
+        final_gap = torch.full((num_envs,), float("nan"), device=device) if _layer else None
+
+        def _layer_gap() -> torch.Tensor:
+            pts = inner.fold_view().points_w
+            mv, st = pts[:, _geom.moving_idx], pts[:, _geom.stationary_idx]
+            dxy = torch.cdist(mv[..., :2], st[..., :2])  # (N, Pm, Ps)
+            dmin, j = dxy.min(dim=2)
+            dz = mv[..., 2] - torch.gather(st[..., 2], 1, j)
+            spacing = float(inner.cfg.cloth.size) / (int(inner.cfg.cloth.resolution) - 1)
+            near = dmin < 0.6 * spacing
+            dz = torch.where(near, dz, torch.full_like(dz, float("nan")))
+            return torch.nanmedian(dz, dim=1).values
+
         reason = {name: torch.zeros(num_envs, dtype=torch.bool, device=device) for name in REASONS}
         # Any OTHER `done_<name>` the env publishes, per env -- e.g. the fold pool's
         # `shape_<shape>` / `fold_<shape>`, which is what splits a result by shape. Discovered from
@@ -452,6 +475,9 @@ def main() -> None:
                   )
 
               done = (terminated.bool() | truncated.bool()) & scoring
+              if _layer:
+                  final_gap = torch.where(done, gap_prev, final_gap)
+                  gap_prev = _layer_gap()
               if bool(done.any()):
                   idx = done.nonzero(as_tuple=True)[0]
                   final = extras["episode_final"]
@@ -567,6 +593,16 @@ def main() -> None:
             # The fold pool's per-env sheet side [m], fixed for the run.
             result["per_env_sheet_size"] = [round(float(v), 4) for v in inner.backend.env_size.cpu()]
 
+        if _layer:
+            fg = final_gap.cpu()
+            ok = ~(fg < -0.002)  # NaN (no overlap) is not a through-fold
+            succ = goals.cpu() > 0
+            result["layering"] = {
+                "final_gap_median_mm": [round(float(v) * 1000, 1) for v in fg],
+                "successes": int(succ.sum()),
+                "successes_flap_on_top": int((succ & ok).sum()),
+                "successes_flap_through": int((succ & ~ok).sum()),
+            }
         if best_fold_err is not None:
             fe = best_fold_err.cpu()
             fp = best_footprint.cpu()
