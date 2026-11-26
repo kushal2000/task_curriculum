@@ -1777,3 +1777,178 @@ def install_pose_write_conversion(env) -> list[str]:
         asset._simtoolreal_write_quat = True
         wrapped.append(name)
     return wrapped
+
+
+# ============================================================================
+# Thumb-only cloth contact stiffness (diagnostic, 2026-11-24)
+# ============================================================================
+#
+# VBD's body-particle contact stiffness is the arithmetic mean of the scalar soft_contact_ke and
+# the touching shape's ``shape_material_ke`` (``init_body_particle_contacts``), read live every
+# step from the cloth solver's model. In the coupled solver that model is a copy-on-write
+# ``ModelView``, so overriding ``shape_material_ke`` on the cloth view changes the cloth's contact
+# with those shapes and nothing in MuJoCo, which converted the shared array into solref at build.
+
+
+
+def _set_view_array(view, name: str, values, like) -> None:
+    """Give the ModelView ``name`` = ``values``. The first time it becomes an override (a new array);
+    after that the override is written IN PLACE, so a CUDA graph captured since keeps seeing it."""
+    import warp as wp
+
+    if name in view.overrides:
+        view.overrides[name].assign(wp.array(values, dtype=like.dtype, device=like.device))
+    else:
+        setattr(view, name, wp.array(values, dtype=like.dtype, device=like.device))
+
+
+def _robot_shapes(model, body_pattern: str) -> list[int]:
+    import re
+
+    labels = list(model.body_label)
+    shape_body = model.shape_body.numpy()
+    pat = re.compile(body_pattern)
+    return [s for s, b in enumerate(shape_body) if b >= 0 and pat.search(str(labels[int(b)]))]
+
+
+def _cloth_view(mgr, what: str, *, required: bool):
+    solver = getattr(mgr, "_solver", None)
+    if solver is None or not hasattr(solver, "view"):
+        if required:
+            raise RuntimeError(f"{what} needs the coupled MJWarp + VBD solver (solver.view('cloth'))")
+        return None
+    return solver.view("cloth")
+
+
+def _apply_thumb_contact_ke(cloth_cfg, mgr, *, required: bool = True, body_pattern: str = r"(^|/)r_thumb_") -> int:
+    target = float(getattr(cloth_cfg, "thumb_contact_ke", 0.0) or 0.0)
+    if target <= 0.0:
+        return 0
+    particle_ke = float(cloth_cfg.soft_contact_ke)
+    shape_ke_value = 2.0 * target - particle_ke
+    if shape_ke_value < 0.0:
+        raise ValueError(
+            f"thumb_contact_ke {target} is below soft_contact_ke / 2 = {particle_ke / 2}: the averaged "
+            "contact cannot be made that soft through the thumb's shape ke alone"
+        )
+    view = _cloth_view(mgr, "thumb_contact_ke", required=required)
+    if view is None:
+        return 0
+    model = mgr.get_model()
+    hit = _robot_shapes(model, body_pattern)
+    if not hit:
+        raise RuntimeError(f"thumb_contact_ke: no shape on a body matching {body_pattern!r}")
+    ke = view.shape_material_ke.numpy().copy()
+    before = sorted({round(float(ke[s]), 3) for s in hit})
+    ke[hit] = shape_ke_value
+    _set_view_array(view, "shape_material_ke", ke, model.shape_material_ke)
+    shared = sorted({round(float(v), 3) for v in model.shape_material_ke.numpy()[hit]})
+    print(
+        f"[thumb_contact_ke] {len(hit)} thumb shapes: cloth-view shape ke {before} -> {shape_ke_value:g} "
+        f"(effective {0.5 * (particle_ke + shape_ke_value):g} N/m; MuJoCo's shared ke stays {shared})",
+        flush=True,
+    )
+    return len(hit)
+
+
+def _apply_robot_contact_ke(cloth_cfg, mgr, *, required: bool = True, body_pattern: str = r"/Robot/") -> int:
+    target = float(getattr(cloth_cfg, "robot_contact_ke", 0.0) or 0.0)
+    if target <= 0.0:
+        return 0
+    particle_ke = float(cloth_cfg.soft_contact_ke)
+    shape_ke_value = 2.0 * target - particle_ke
+    if shape_ke_value < 0.0:
+        raise ValueError(f"robot_contact_ke {target} is below soft_contact_ke / 2 = {particle_ke / 2}")
+    view = _cloth_view(mgr, "robot_contact_ke", required=required)
+    if view is None:
+        return 0
+    model = mgr.get_model()
+    hit = _robot_shapes(model, body_pattern)
+    if not hit:
+        raise RuntimeError(f"robot_contact_ke: no shape on a body matching {body_pattern!r}")
+    ke = view.shape_material_ke.numpy().copy()
+    before = sorted({round(float(ke[s]), 3) for s in hit})
+    ke[hit] = shape_ke_value
+    _set_view_array(view, "shape_material_ke", ke, model.shape_material_ke)
+    print(
+        f"[robot_contact_ke] {len(hit)} robot shapes: cloth-view shape ke {before} -> {shape_ke_value:g} "
+        f"(effective {0.5 * (particle_ke + shape_ke_value):g} N/m)",
+        flush=True,
+    )
+    return len(hit)
+
+
+def _apply_robot_contact_kd(cloth_cfg, mgr, *, required: bool = True, body_pattern: str = r"/Robot/") -> int:
+    target = float(getattr(cloth_cfg, "robot_contact_kd", -1.0))
+    if target < 0.0:
+        return 0
+    particle_kd = float(cloth_cfg.soft_contact_kd)
+    shape_kd_value = 2.0 * target - particle_kd
+    if shape_kd_value < 0.0:
+        raise ValueError(f"robot_contact_kd {target} is below soft_contact_kd / 2 = {particle_kd / 2}")
+    view = _cloth_view(mgr, "robot_contact_kd", required=required)
+    if view is None:
+        return 0
+    model = mgr.get_model()
+    hit = _robot_shapes(model, body_pattern)
+    if not hit:
+        raise RuntimeError(f"robot_contact_kd: no shape on a body matching {body_pattern!r}")
+    kd = view.shape_material_kd.numpy().copy()
+    before = sorted({round(float(kd[s]), 4) for s in hit})
+    kd[hit] = shape_kd_value
+    _set_view_array(view, "shape_material_kd", kd, model.shape_material_kd)
+    print(
+        f"[robot_contact_kd] {len(hit)} robot shapes: cloth-view shape kd {before} -> {shape_kd_value:g} "
+        f"(effective {0.5 * (particle_kd + shape_kd_value):g} N s/m)",
+        flush=True,
+    )
+    return len(hit)
+
+
+def apply_thumb_contact_ke(env) -> int:
+    """Set the effective cloth contact ke on the thumb's shapes (``cloth.thumb_contact_ke``)."""
+    return _apply_thumb_contact_ke(env.cfg.cloth, env.sim.physics_manager)
+
+
+def apply_robot_contact_ke(env) -> int:
+    """Set the effective cloth contact ke on every robot shape (``cloth.robot_contact_ke``), in the
+    cloth solver's ModelView only. Apply before :func:`apply_thumb_contact_ke` so the thumb value wins."""
+    return _apply_robot_contact_ke(env.cfg.cloth, env.sim.physics_manager)
+
+
+def apply_robot_contact_kd(env) -> int:
+    """Set the effective cloth contact damping on every robot shape (``cloth.robot_contact_kd``), in the
+    cloth solver's ModelView only. Same averaging as :func:`apply_thumb_contact_ke`."""
+    return _apply_robot_contact_kd(env.cfg.cloth, env.sim.physics_manager)
+
+
+_OVERRIDE_CAPTURE_FLAG = "_cloth_contact_overrides_before_capture"
+
+
+def install_contact_overrides_before_capture(cfg) -> None:
+    """Apply the cloth-view contact overrides right BEFORE Newton captures its CUDA graph.
+
+    ``NewtonManager.start_simulation`` captures the graph before the env's post-construction patches
+    run. A ModelView override is a new array, and a graph replays the arrays it captured, so an override
+    made afterwards would be ignored whenever ``cloth.use_cuda_graph`` is on (the live viewer). Applying
+    here makes the graph capture the override arrays; the post-construction call then writes into them
+    in place (:func:`_set_view_array`). Re-capturing after the fact is not an option: the VBD
+    ModelView reads arrays back to the host during capture (CUDA error 906)."""
+    from isaaclab_newton.physics import NewtonManager
+
+    if getattr(NewtonManager, _OVERRIDE_CAPTURE_FLAG, False):
+        setattr(NewtonManager, _OVERRIDE_CAPTURE_FLAG + "_cfg", cfg)
+        return
+    original = NewtonManager.__dict__["_capture_or_defer_graph"].__func__
+
+    def _capture(cls):
+        c = getattr(NewtonManager, _OVERRIDE_CAPTURE_FLAG + "_cfg", None)
+        if c is not None and getattr(c, "cloth", None) is not None:
+            _apply_robot_contact_kd(c.cloth, cls, required=False)
+            _apply_robot_contact_ke(c.cloth, cls, required=False)
+            _apply_thumb_contact_ke(c.cloth, cls, required=False)
+        return original(cls)
+
+    NewtonManager._capture_or_defer_graph = classmethod(_capture)
+    setattr(NewtonManager, _OVERRIDE_CAPTURE_FLAG, True)
+    setattr(NewtonManager, _OVERRIDE_CAPTURE_FLAG + "_cfg", cfg)

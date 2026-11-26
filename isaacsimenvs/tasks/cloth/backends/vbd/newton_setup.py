@@ -20,7 +20,7 @@ from isaacsimenvs.robots import FLEXIV_WUJI_RIGHT
 __all__ = ["install_post_construction_patches", "install_pre_construction_patches"]
 
 
-def install_pre_construction_patches(cfg, *, physics_cfg) -> None:
+def install_pre_construction_patches(cfg, *, physics_cfg, robot_spec=None) -> None:
     """Everything that must be in place before ``_setup_scene`` runs. Idempotent.
 
     Order is not arbitrary and is easy to get subtly wrong:
@@ -90,8 +90,17 @@ def install_pre_construction_patches(cfg, *, physics_cfg) -> None:
         )
     patches.install_newton_gravcomp()
 
+    # Contact overrides into the cloth ModelView before the CUDA graph is captured (viewer).
+    patches.install_contact_overrides_before_capture(cfg)
+
+    # Alloy-ported contact guards (exit-speed cap, mass-based gains); no-ops unless configured.
+    from isaacsimenvs.tasks.cloth.backends.vbd.newton_support import contact_guards
+
+    contact_guards.install()
+    contact_guards.configure(cfg.cloth)
+
     patches.install_newton_condim(
-        int(cfg.newton.condim), tuple(FLEXIV_WUJI_RIGHT.fingertip_link_names)
+        int(cfg.newton.condim), tuple((robot_spec or FLEXIV_WUJI_RIGHT).fingertip_link_names)
     )
 
 
@@ -111,3 +120,7 @@ def install_post_construction_patches(env) -> None:
     # SolverMuJoCo caches joint gains and shape materials in its own mjModel at construction, and
     # Isaac Lab writes both after that point.
     patches.notify_solver(env)
+    # After notify_solver, and on the cloth entry's ModelView only: MuJoCo keeps the shared shape ke.
+    patches.apply_robot_contact_ke(env)  # before the thumb, so thumb_contact_ke wins on the thumb
+    patches.apply_thumb_contact_ke(env)
+    patches.apply_robot_contact_kd(env)

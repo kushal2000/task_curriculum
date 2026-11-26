@@ -1,0 +1,80 @@
+{
+ "Real Wuji: OLD physics (damping ~50, friction_epsilon 0.01, ramp from 100)": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.robot=flexiv_wuji_right",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=-1.0",
+   "env.cloth.friction_epsilon=0.01",
+   "env.cloth.rigid_contact_k_start=100.0",
+   "env.cloth.rigid_avbd_beta=500000.0"
+  ]
+ ],
+ "Real Wuji: NEW defaults (damping 0.5, friction_epsilon 0.1, ramp from 100)": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.robot=flexiv_wuji_right",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=0.5",
+   "env.cloth.friction_epsilon=0.1",
+   "env.cloth.rigid_contact_k_start=100.0",
+   "env.cloth.rigid_avbd_beta=500000.0"
+  ]
+ ],
+ "Real Wuji: new defaults + ramp from 500": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.robot=flexiv_wuji_right",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=0.5",
+   "env.cloth.friction_epsilon=0.1",
+   "env.cloth.rigid_contact_k_start=500.0",
+   "env.cloth.rigid_avbd_beta=500000.0"
+  ]
+ ],
+ "Real Wuji: new defaults + ramp from 1000": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.robot=flexiv_wuji_right",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=0.5",
+   "env.cloth.friction_epsilon=0.1",
+   "env.cloth.rigid_contact_k_start=1000.0",
+   "env.cloth.rigid_avbd_beta=500000.0"
+  ]
+ ],
+ "Real Wuji: new defaults + fixed stiffness (no ramp)": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.robot=flexiv_wuji_right",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=0.5",
+   "env.cloth.friction_epsilon=0.1",
+   "env.cloth.rigid_contact_k_start=100.0",
+   "env.cloth.rigid_avbd_beta=0.0"
+  ]
+ ],
+ "Kuka + Sharpa, OLD physics (own prior)": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=false",
+   "env.robot=kuka_sharpa",
+   "env.assets.robot_urdf=assets/urdf/kuka_sharpa_description/iiwa14_left_sharpa_adjusted_restricted.urdf",
+   "env.robot_root_pos=[0.0,0.8,0.0]",
+   "env.cloth.robot_contact_kd=-1.0",
+   "env.cloth.friction_epsilon=0.01",
+   "env.cloth.rigid_contact_k_start=100.0",
+   "env.cloth.rigid_avbd_beta=500000.0"
+  ]
+ ]
+}

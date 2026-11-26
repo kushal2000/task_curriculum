@@ -1,0 +1,82 @@
+{
+ "base: guards off (current physics)": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=0.5",
+   "env.cloth.friction_epsilon=0.1",
+   "env.cloth.rigid_contact_k_start=100.0",
+   "env.cloth.rigid_avbd_beta=500000.0",
+   "env.cloth.exit_speed_cap=0.0",
+   "env.cloth.exit_speed_measure=false",
+   "env.cloth.robot_contact_gains=material",
+   "env.cloth.contact_gain_safety=0.5"
+  ]
+ ],
+ "cap1: exit-speed cap 1 m/s (never triggers)": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=0.5",
+   "env.cloth.friction_epsilon=0.1",
+   "env.cloth.rigid_contact_k_start=100.0",
+   "env.cloth.rigid_avbd_beta=500000.0",
+   "env.cloth.exit_speed_cap=1.0",
+   "env.cloth.exit_speed_measure=false",
+   "env.cloth.robot_contact_gains=material",
+   "env.cloth.contact_gain_safety=0.5"
+  ]
+ ],
+ "cap0p25: exit-speed cap 0.25 m/s (fewer jumps)": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=0.5",
+   "env.cloth.friction_epsilon=0.1",
+   "env.cloth.rigid_contact_k_start=100.0",
+   "env.cloth.rigid_avbd_beta=500000.0",
+   "env.cloth.exit_speed_cap=0.25",
+   "env.cloth.exit_speed_measure=false",
+   "env.cloth.robot_contact_gains=material",
+   "env.cloth.contact_gain_safety=0.5"
+  ]
+ ],
+ "mass: mass-based contact gains (PIERCES)": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=0.5",
+   "env.cloth.friction_epsilon=0.1",
+   "env.cloth.rigid_contact_k_start=100.0",
+   "env.cloth.rigid_avbd_beta=500000.0",
+   "env.cloth.exit_speed_cap=0.0",
+   "env.cloth.exit_speed_measure=false",
+   "env.cloth.robot_contact_gains=mass",
+   "env.cloth.contact_gain_safety=0.5"
+  ]
+ ],
+ "mass_cap1: mass gains + cap 1 m/s": [
+  "Isaacsimenvs-Cloth-Direct-v0",
+  [
+   "env.hand_sysid=true",
+   "env.assets.robot_urdf=assets/flexiv_wuji/rizon4s_right_wuji_real_limits.urdf",
+   "env.robot_root_pos=[0.0,0.51,0.20]",
+   "env.cloth.robot_contact_kd=0.5",
+   "env.cloth.friction_epsilon=0.1",
+   "env.cloth.rigid_contact_k_start=100.0",
+   "env.cloth.rigid_avbd_beta=500000.0",
+   "env.cloth.exit_speed_cap=1.0",
+   "env.cloth.exit_speed_measure=false",
+   "env.cloth.robot_contact_gains=mass",
+   "env.cloth.contact_gain_safety=0.5"
+  ]
+ ]
+}

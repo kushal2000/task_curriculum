@@ -1,0 +1,13 @@
+{
+ "flat7RW_base (right Wuji, zero-shot)": [
+  "checkpoints/flat7RW_base.pth",
+  0.0,
+  [
+   "base: guards off (current physics)",
+   "cap1: exit-speed cap 1 m/s (never triggers)",
+   "cap0p25: exit-speed cap 0.25 m/s (fewer jumps)",
+   "mass: mass-based contact gains (PIERCES)",
+   "mass_cap1: mass gains + cap 1 m/s"
+  ]
+ ]
+}

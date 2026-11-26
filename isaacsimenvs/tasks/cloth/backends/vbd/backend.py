@@ -54,6 +54,7 @@ class VbdBackend(ClothBackend):
             cfg,
             # Coupled MJWarp (robot) + VBD (cloth), sized for this env count.
             physics_cfg=build_physics(cfg.cloth, cfg.newton, int(cfg.scene.num_envs), robot_spec),
+            robot_spec=robot_spec,
         )
 
     def construction_context(self):

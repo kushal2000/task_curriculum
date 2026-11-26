@@ -1280,7 +1280,8 @@ def main() -> None:
                 keep = [a for a in hydra_args if not a.startswith(task_keys)]
                 argv = [sys.executable, "-m", "isaacsimenvs.scripts.visualization.policies.live_viser", "--task", task,
                         "--policy", pol, "--num_envs", str(nenv), "--port", str(args.port),
-                        "--even_sizes", str(args.even_sizes), *(["--headless"] if physx else []),
+                        "--even_sizes", str(args.even_sizes), "--policy_config", str(args.policy_config),
+                        "--seed", str(args.seed), *(["--headless"] if physx else []),
                         *keep, *ov]
                 sys.stdout.flush()
                 os.execv(sys.executable, argv)

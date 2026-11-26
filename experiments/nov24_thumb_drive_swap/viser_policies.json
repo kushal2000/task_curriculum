@@ -1,0 +1,20 @@
+{
+ "flat7RW_base (right Wuji, zero-shot)": [
+  "checkpoints/flat7RW_base.pth",
+  0.0,
+  [
+   "Real Wuji: OLD physics (damping ~50, friction_epsilon 0.01, ramp from 100)",
+   "Real Wuji: NEW defaults (damping 0.5, friction_epsilon 0.1, ramp from 100)",
+   "Real Wuji: new defaults + ramp from 500",
+   "Real Wuji: new defaults + ramp from 1000",
+   "Real Wuji: new defaults + fixed stiffness (no ramp)"
+  ]
+ ],
+ "flat7DRABC (Kuka + Sharpa prior)": [
+  "checkpoints/last_0_pxpool_flat7DRABC_s1_175385_ep_3052_rew__1198.3557_.pth",
+  0.0,
+  [
+   "Kuka + Sharpa, OLD physics (own prior)"
+  ]
+ ]
+}

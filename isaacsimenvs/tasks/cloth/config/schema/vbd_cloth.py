@@ -61,6 +61,11 @@ class VbdClothCfg(ClothCfg):
     table_contact_mu: float = 0.0  # effective cloth/table coefficient; zero uses material product
     self_contact_mu: float = 0.0  # zero inherits soft_contact_mu
     friction_epsilon: float = 0.01
+    """VBD friction regularisation [m/s]: below this slip speed friction acts like a drag of ~mu f_n / eps.
+    SOLVER-WIDE: robot, table and self contact. task.yaml sets 0.1 since 2026-11-25
+    (experiments/nov24_thumb_drive_swap/friction_sweep.sh, real Wuji hand, robot_contact_kd 0.5): near-cloth
+    thumb jumps 71 vs 92, folds 28 vs 19 of 64, falls 4 vs 11; 0.03 was worse than 0.01 (134). The table /
+    self-contact side (slide onset, fold hold) has NOT been re-checked at 0.1."""
     full_surface_contact: bool = False
     full_surface_sdf_resolution: int = 0
 
@@ -214,6 +219,49 @@ class VbdClothCfg(ClothCfg):
 
     The per-contact value is the AVERAGE of this and the rigid shape's own material stiffness
     (`NewtonShapeCfg.ke`, 2.5e3), so the effective ceiling moves 5250 -> 1500."""
+
+    robot_contact_kd: float = -1.0
+    """The EFFECTIVE cloth-robot contact damping [N s/m] on every robot link (task.yaml: 0.5 since 2026-11-24).
+    The per-contact value is the mean of ``soft_contact_kd`` and the shape's material kd
+    (``NewtonShapeCfg.kd`` 100), so without this it is ~50, not ``soft_contact_kd``. < 0 = leave it at ~50.
+    Written as the robot shapes' kd in the cloth solver's ModelView only (MuJoCo keeps its own).
+
+    Why 0.5 (experiments/nov24_thumb_drive_swap, real Wuji hand, zero-shot flat7RW_base): at ~50 the cloth
+    feedback on the light Wuji thumb spikes to 3188 N / 155 N m and envs go non-finite; at 0.5 the peaks are
+    30 N / 1.4 N m with the same median and p95, uncommanded thumb jumps roughly halve and folds hold
+    (27 vs 22 of 64). 0.005 loses grip (12 folds, 16 falls); 5 has the fewest jumps but 15 folds, 12 falls."""
+    robot_contact_ke: float = 0.0
+    """The EFFECTIVE cloth-robot contact stiffness [N/m] on every robot link. 0 = unchanged (~1500: the
+    mean of ``soft_contact_ke`` and the shapes' material ke 2500, so lowering ``soft_contact_ke`` alone
+    barely moves it). Written as the robot shapes' ke in the cloth solver's ModelView only, like
+    ``robot_contact_kd``; MuJoCo keeps the shared value. It is also the AVBD ramp's ceiling. Minimum
+    ``soft_contact_ke`` / 2. ``thumb_contact_ke``, when set, overrides it on the thumb.
+
+    Added for experiments/nov26_contact_ratio: Newton's VBD tuning guide (docs/concepts/
+    simulation_tuning_vbd.rst, Newton 1.8) says to keep contact stiffness within about 10x of ``tri_ke``;
+    the ``_vbd_coarse`` presets sit at 44-175x against this effective value."""
+    thumb_contact_ke: float = 0.0
+    """Diagnostic (thumb-jump sweep, 2026-11-24): the EFFECTIVE cloth-thumb contact stiffness [N/m]
+    (the averaged per-contact value above, ~1500 everywhere by default). 0 = unchanged. Written as
+    the thumb shapes' material ke in the cloth solver's ModelView only (shape ke = 2 x this -
+    soft_contact_ke), so MuJoCo's thumb-table contact keeps the shared value. Minimum
+    soft_contact_ke / 2."""
+
+    exit_speed_cap: float = 0.0
+    """Diagnostic (Alloy port, 2026-11-25; ``newton_support/contact_guards.py``): cap [m/s] on the outward
+    speed a particle gets from resolving a body-contact depth it STARTED the step with (VBD's v = dx / dt
+    turns that depth into ~depth / dt). Split impulse: positions stay as solved, only that speed goes.
+    0 = off. Alloy's default 1.0."""
+    exit_speed_measure: bool = False
+    """Diagnostic: record each particle's body-contact exit kick speed (and any cuts) for the probe,
+    with or without the cap."""
+    robot_contact_gains: str = "material"
+    """Diagnostic (Alloy port, 2026-11-25): ``material`` = Newton's averaged material ke / kd (with
+    ``robot_contact_kd`` / ``thumb_contact_ke``); ``mass`` = per record on a dynamic (proxy) body of mass
+    m with n records this step: ke = min(averaged ke, s^2 m / (dt^2 n)), kd = s m / (dt n),
+    s = ``contact_gain_safety``. Overrides ``robot_contact_kd`` on those records."""
+    contact_gain_safety: float = 0.5
+    """s in ``robot_contact_gains: mass`` (Alloy's 0.5: damping ratio ~0.5 for the link alone)."""
 
     soft_contact_kd: float = MISSING
     """Body-particle contact damping [N*s/m]. SIM1 Table 2.

@@ -184,6 +184,14 @@ vbd:
     edge_ke: 8.0e-4
     edge_kd: 1.0e-3
     soft_contact_ke: 5.0e+2
+    friction_epsilon: 0.1                # VBD friction regularisation [m/s], solver-wide (robot, table, self contact); was 0.01
+    robot_contact_kd: 0.5                # effective cloth-robot contact kd [N s/m] on every robot link; < 0 = Newton's ~50
+    robot_contact_ke: 0.0                # effective cloth-robot contact ke [N/m] on every robot link, 0 = off (~1500)
+    thumb_contact_ke: 0.0                # diagnostic: effective cloth-thumb contact ke, 0 = off (~1500)
+    exit_speed_cap: 0.0                  # diagnostic (Alloy): cap on contact-exit kick speed [m/s], 0 = off
+    exit_speed_measure: false            # diagnostic: record exit kick speeds for the probe
+    robot_contact_gains: material        # diagnostic (Alloy): material | mass (per-record gains from link mass)
+    contact_gain_safety: 0.5             # s for robot_contact_gains: mass
     soft_contact_kd: 5.0e-3
     soft_contact_mu: 0.25
     rigid_contact_k_start: 1.0e+2
