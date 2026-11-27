@@ -69,12 +69,21 @@ def disable_randomization(cfg) -> None:
     # Over the table's centre (the Play task's right-hand setup moves the table; the cloth task's
     # reset has no table_reset_xy and keeps the origin).
     table_xy = getattr(rs, "table_reset_xy", (0.0, 0.0))
+    # The pinned heading: PINNED_YAW_DEG (default 180, the identity pose every result before 2026-11-27 used).
+    # The cloth backends decode a reset pose's heading with base.reset_yaw, which reads the quaternion's
+    # components reordered, so heading t is the pose (sin t/2, cos t/2, 0, 0) -- 180 deg is the identity.
+    # The fold is defined in the sheet's frame: 180 folds the sheet's -x world half (left to right from the
+    # robot, which stands at +y); 90 puts the moving half at +y, the robot's side (bottom to top).
+    import math
+    import os
+
+    yaw = math.radians(float(os.environ.get("PINNED_YAW_DEG", "180")))
     rs.fixed_start_pose = (
         table_xy[0],
         table_xy[1],
         rs.table_reset_z + rs.table_object_z_offset,
-        1.0,
-        0.0,
+        round(math.sin(yaw / 2.0), 9),
+        round(math.cos(yaw / 2.0), 9),
         0.0,
         0.0,
     )

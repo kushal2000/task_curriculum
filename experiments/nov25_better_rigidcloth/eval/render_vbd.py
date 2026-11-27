@@ -141,12 +141,18 @@ def main() -> None:
             img = viewer.get_frame().numpy()
             return img[..., :3].astype(np.uint8)
 
-        def label(img, e, step, err_mm, outcome=None):
+        tol_mm = 1000 * float(inner.task.surface_tolerance()[0]) if hasattr(inner.task, "surface_tolerance") else 10.0
+        best_h = {e: float("inf") for e in range(n)}
+
+        def label(img, e, step, err_mm, haus_mm=float("nan"), outcome=None):
+            """Two short lines: the setting, then step / Hausdorff (best) / outcome. Green once the best is a success."""
             im = Image.fromarray(img)
             d = ImageDraw.Draw(im)
-            d.rectangle((0, 0, im.width, 34), fill=(0, 0, 0))
-            d.text((10, 6), f"{args.label} | env {e} | step {step} | fold error {err_mm:5.1f} mm"
-                   + (f" | {outcome}" if outcome else ""), fill=(255, 255, 255), font=font)
+            d.rectangle((0, 0, im.width, 66), fill=(0, 0, 0))
+            d.text((10, 5), args.label, fill=(255, 255, 255), font=font)
+            ok = best_h[e] < tol_mm
+            d.text((10, 36), f"step {step} | Hausdorff {haus_mm:.0f} mm (best {best_h[e]:.0f})"
+                   + (f" | {outcome.replace('_', ' ')}" if outcome else ""), fill=(120, 230, 120) if ok else (220, 220, 220), font=font)
             return np.asarray(im)
 
         # --record: the drawable shapes of each env (collision geometry, body frame) once, and per step the
@@ -174,9 +180,9 @@ def main() -> None:
                             sh.rgb = (240, 150, 60)
                 rec[e] = {"shapes": shapes, "keys": keys, "pidx": torch.as_tensor(pidx, device=inner.device),
                           "tri_moving": t[in_moving], "tri_stationary": t[~in_moving],
-                          "body_q": [], "cloth": [], "err": []}
+                          "body_q": [], "cloth": [], "err": [], "haus": []}
 
-        def record_step(e: int, err_mm: float) -> None:
+        def record_step(e: int, err_mm: float, haus_mm: float = float("nan")) -> None:
             r = rec[e]
             q = wp.to_torch(state().body_q)[torch.as_tensor(r["keys"], device=inner.device)].cpu().numpy().copy()
             q[:, :3] -= origins[e]
@@ -185,6 +191,7 @@ def main() -> None:
                 else np.zeros((0, 3), np.float32)
             r["cloth"].append(pts.astype(np.float32))
             r["err"].append(err_mm)
+            r["haus"].append(haus_mm)
 
         def write_record(e: int, outcome: str) -> None:
             r = rec[e]
@@ -203,9 +210,10 @@ def main() -> None:
                 shape_faces=np.array([x.faces.astype(np.int32) for x in sh], dtype=object),
                 body_label=np.array([str(model.body_label[k]) for k in r["keys"]]),
                 body_q=np.stack(r["body_q"]), cloth=np.stack(r["cloth"]), fold_err_mm=np.array(r["err"]),
+                haus_mm=np.array(r["haus"]), sim="vbd", label=args.label,
                 tri_moving=r["tri_moving"], tri_stationary=r["tri_stationary"], env_origin=origins[e])
             print(f"[render_vbd] wrote {path} ({len(r['cloth'])} steps, {outcome})", flush=True)
-            for k in ("body_q", "cloth", "err"):
+            for k in ("body_q", "cloth", "err", "haus"):
                 r[k] = []
 
         obs, _ = env.reset()
@@ -213,18 +221,25 @@ def main() -> None:
         obs, *_ = env.step(torch.zeros((n, inner.cfg.action_space), device=inner.device))
         player.reset_rnn(torch.arange(n, device=inner.device))
         frames = {e: [] for e in range(n)}
+        last_raw = {}
         done = torch.zeros(n, dtype=torch.bool, device=inner.device)
         for step in range(args.max_steps):
             action = player.get_action(obs["policy"], deterministic=not args.stochastic)
             obs, _r, terminated, truncated, extras = env.step(action)
             ended = terminated.bool() | truncated.bool()
             err = inner.fold_error().cpu().numpy() * 1e3
+            haus = (inner.task.surface_dist.cpu().numpy() * 1e3 if hasattr(inner.task, "surface_dist")
+                    else np.full(n, np.nan))
             for e in (~done & ~ended).nonzero(as_tuple=True)[0].tolist():
                 if args.record:
-                    record_step(e, float(err[e]))
+                    record_step(e, float(err[e]), float(haus[e]))
+                if np.isfinite(haus[e]):
+                    best_h[e] = min(best_h[e], float(haus[e]))
                 if args.no_video:
                     continue
-                frames[e].append(label(frame_of(e), e, step + 1, float(err[e])))
+                raw = frame_of(e)
+                last_raw[e] = (raw, step + 1, float(err[e]), float(haus[e]))
+                frames[e].append(label(raw, e, step + 1, float(err[e]), float(haus[e])))
                 if step in (20, 120):
                     imageio.imwrite(out / f"peek_seed{args.seed}_env{e}_step{step}.png", frames[e][-1])
             fin = ended & ~done
@@ -236,8 +251,8 @@ def main() -> None:
                     if args.record:
                         write_record(e, outcome)
                     if frames[e]:
-                        last = frames[e][-1]
-                        frames[e] += [last] * fps
+                        raw, st_, er_, ha_ = last_raw[e]
+                        frames[e] += [label(raw, e, st_, er_, ha_, outcome)] * fps  # hold the end, with its outcome
                         path = out / f"vbd_seed{args.seed}_env{e}_{outcome}.mp4"
                         imageio.mimwrite(path, frames[e], fps=fps, quality=8, macro_block_size=8)
                         print(f"[render_vbd] wrote {path} ({len(frames[e])} frames, {outcome})", flush=True)

@@ -1,0 +1,8 @@
+# default.yaml with a grippier table: cloth-table friction 1.0 (default.yaml / the PhysX training: 0.354).
+# Everything else is default.yaml's (fingertip 0.612, cloth-cloth 0.25, cloth-robot 0.354). Tests whether the
+# default cloth's failures (sliding, pushed off the table) are table slip.
+base: default
+
+env:
+  cloth:
+    cloth_table_friction: 1.0          # cloth on table (default.yaml: 0.35355339)

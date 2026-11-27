@@ -605,6 +605,7 @@ def main() -> None:
             "success_tolerance": args_cli.success_tolerance,
             "keypoint_scale": getattr(inner.cfg.reward, "keypoint_scale", None),
             "randomization": bool(args_cli.randomize),
+            "pinned_yaw_deg": None if args_cli.randomize else float(os.environ.get("PINNED_YAW_DEG", "180")),
             "stochastic": bool(args_cli.stochastic),
             "skip_episodes": skip,
             "single_variant": bool(args_cli.single_variant),

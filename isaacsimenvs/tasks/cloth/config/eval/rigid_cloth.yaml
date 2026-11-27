@@ -1,0 +1,69 @@
+# The rigid-cloth evaluation world: the policies' own training world (hinged rigid plates on PhysX,
+# Isaac Lab 2.3, .venv/isaacsim) on the 10 cm half fold, with every plate-physics value written out, so a
+# change to task.yaml does not move it. Run with eval.py --experiment (the recipe carries the policies'
+# observation layout): experiments/nov27_controlled_evals/eval_pinned_rigid_cloth.sbatch. Pinned start and
+# no observation / action DR come from eval.py without --randomize (scripts/evaluation/protocol.py).
+#
+# The plate physics is task.yaml's (the policies' recipes set none): free hinges, NOT the 2vert / plate2
+# material hinges of experiments/nov25_better_rigidcloth (the live plate viewer's).
+#
+# History
+#   2026-11-27  first version: the play_pc_rigidclothRL_64live_box2 training world, box2-mid at 10 cm,
+#               the contact shell pinned at its 7 mm centre (training draws +-3 mm per episode)
+#
+# YAML 1.1: write exponent floats as 1.0e-5, or they are read as strings.
+base: experiments/nov24_play_pc_rl/play_pc_rigidclothRL_64live_box2.yaml
+
+env:
+  scene:
+    num_envs: 32                         # parallel envs, as the VBD evals
+
+  # ---------------------------------------------------------------------------- design
+  fold_pool:
+    shapes: [box2-mid]                   # two plates, one hinge along the middle
+    one_shape_per_env: false
+    size_range: [0.10, 0.10]             # 10 cm, as the VBD sheet (training: 10-20 cm per env)
+    thickness_range: [0.002, 0.002]      # 2 mm plate slab
+    init_fold_prob: 0.0                  # flat starts
+    goal_task:
+      mode: half_fold
+
+  # ---------------------------------------------------------------------------- plate physics
+  rigid_cloth:
+    density: 2.0                         # kg/m^2, as the VBD sheet's
+    joint_stiffness: 0.0                 # free hinges
+    joint_damping: 0.05
+    joint_armature: 1.0e-5               # replaced on PhysX by physx_chain.hinge_armature
+    joint_yield_deg: 0.0                 # no hinge plasticity
+    slat_friction: 0.3535533905932738    # plate-table, sqrt(0.25 x 0.5) = the VBD cloth-table
+    fingertip_slat_friction: 0.6123724356957945   # plate-fingertip, sqrt(0.25 x 1.5)
+    contact_margin: 0.007                # PhysX rest offset: a fingertip meets the plate at the 16 mm cloth's surface
+  physx_chain:
+    friction_model: priority
+    slat_friction_combine: min
+    fingertip_friction_combine: max
+    contact_offset_margin: 0.002         # contact offset = rest offset + 2 mm
+    contact_offset_follows_rest: false
+    solver_position_iterations: 8
+    solver_velocity_iterations: 0
+    hinge_armature: 1.0e-3
+  domain_randomization:
+    cloth:
+      contact_margin_offset: [0.0, 0.0]  # pinned (training: [-0.003, 0.003] per episode)
+
+  # ---------------------------------------------------------------------------- the sheet / success
+  cloth:
+    start_height: 0.20                   # 5 cm above the table top, as training and the VBD evals
+    keypoint_tolerance: 0.015            # recorded (fold_error); success is the Hausdorff criterion
+    nan_policy: reset
+  termination:
+    success: surface                     # Hausdorff distance to the goal configuration of the cloth
+    success_steps: 10                    # held 10 policy steps
+    surface:
+      ref_step: 12
+      tolerance_frac: 0.1                # < 1 cm on the 10 cm sheet
+      layered: true
+    max_in_place_dist: .inf              # no in-place gate, as the VBD evals
+    gate_curriculum:                     # off (the inplace policy trained with one)
+      max_in_place_dist: []
+      slide_penalty_scale: []
