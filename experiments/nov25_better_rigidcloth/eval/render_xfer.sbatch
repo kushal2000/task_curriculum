@@ -21,5 +21,5 @@ export TMPDIR=$TROOT/${USER}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}; export WARP
 cp -a .cache/warp_vbd/. "$WARP_CACHE_PATH/" 2>/dev/null
 echo "[render] $NAME: ${A[*]} env: $(env | grep -E '^(NEWTON_|RN_|VBD_)' | tr '\n' ' ')"
 .venv/isaaclab3/bin/python $PWD/experiments/nov25_better_rigidcloth/eval/render_vbd.py --checkpoint "$CKPT" --label "$LABEL" \
-  --num_envs 4 --seed 1 --randomize --record --max_steps 900 --out "$OUT" "${A[@]}" > "$OUT/log.txt" 2>&1
+  --num_envs 4 --seed 1 $([ -n "${PINNED:-}" ] || echo --randomize) --stochastic --record --max_steps 900 --out "$OUT" "${A[@]}" > "$OUT/log.txt" 2>&1
 ls "$OUT"/*.mp4 >/dev/null 2>&1 || { echo "[render] FAILED $NAME"; tail -n 20 "$OUT/log.txt"; exit 1; }

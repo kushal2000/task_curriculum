@@ -59,11 +59,11 @@ class PointCloud(Feature):
             self.g_colour = gui.add_dropdown("colour points by", ["label", "camera (A cyan, B magenta, none grey)"])
             self.g_show = {
                 "live": gui.add_checkbox("live points: cloth, hand, arm (white)", False),
-                "fk": gui.add_checkbox("forward-kinematics points: forearm, hand (black)", True),
+                "fk": gui.add_checkbox("forward-kinematics points: forearm, hand (black)", False),
                 "ref": gui.add_checkbox("goal / first-frame cloud (pink moving, blue stationary)", False),
             }
             self.g_aux = gui.add_checkbox("aux head: keypoints (magenta), goal (teal), lines to truth", False)
-            self.g_cams = gui.add_checkbox("cameras", True)
+            self.g_cams = gui.add_checkbox("cameras", False)
             self.g_true = gui.add_checkbox("true sheet particles (grey)", False)
             self.g_opacity = gui.add_slider("true sheet opacity", 0.05, 1.0, 0.05, 1.0)
             self.g_size = gui.add_slider("point size [mm]", 1.0, 10.0, 0.5, 4.0)

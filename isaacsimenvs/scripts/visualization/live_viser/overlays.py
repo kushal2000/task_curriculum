@@ -46,7 +46,7 @@ class GoalGhost(Feature):
         self._faces = None
 
     def scene_gui(self) -> None:
-        self.show = self.v.server.gui.add_checkbox("goal tasks: matched goal state (green ghost)", True)
+        self.show = self.v.server.gui.add_checkbox("goal tasks: matched goal state (green ghost)", False)
 
     def _info(self, w: int):
         geo = self.v.inner.task.geometry
@@ -92,7 +92,7 @@ class SurfaceGoal(Feature):
         self._faces = None
 
     def scene_gui(self) -> None:
-        self.show = self.v.server.gui.add_checkbox("surface criterion: frozen goal sheet (blue ghost)", True)
+        self.show = self.v.server.gui.add_checkbox("surface criterion: frozen goal sheet (blue ghost)", False)
 
     def draw(self, w: int) -> None:
         if not self.show.value:

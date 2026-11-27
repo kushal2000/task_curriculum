@@ -1,0 +1,15 @@
+# The VBD evaluation (vbd.yaml) with the 2026-11-26 tuning that stabilises the hand-cloth contact
+# (experiments/nov25_better_rigidcloth): the training hand, 16 mm particles, more grip, and three
+# Aitken-relaxed coupler iterations per step (the thumb moves 1.08x its command, against 1.60x with
+# one). The robot collides PhysX's convex hulls (NEWTON_PUSH_APPROXIMATION, on by default since 2026-11-27).
+base: vbd
+
+env:
+  hand_sysid: false                    # the training hand (plain drive)
+  cloth:
+    thickness: 0.016                   # 8 mm particle radius: the plates' contact height in training
+    cloth_table_friction: 0.7
+    cloth_fingertip_friction: 1.0
+    coupler_iterations: 3              # robot <-> cloth force exchanges per physics step
+    proxy_relaxation_mode: aitken      # adaptive relaxation across those exchanges
+    proxy_relaxation: 0.5              # its starting value each step (clamped to [proxy_relaxation_min, 1])

@@ -396,10 +396,34 @@ def main() -> None:
         _layer = _has_fold and _geom is not None and hasattr(_geom, "moving_idx") and hasattr(inner, "fold_view")
         gap_prev = torch.full((num_envs,), float("nan"), device=device) if _layer else None
         final_gap = torch.full((num_envs,), float("nan"), device=device) if _layer else None
+        # Which half the policy actually folded: the half whose surface turned over (its grid normal
+        # flipped). A policy may fold the "stationary" half onto the "moving" one -- the same fold,
+        # mirrored -- and then the layering is measured with the roles swapped.
+        flip_prev = torch.zeros(num_envs, dtype=torch.long, device=device) if _layer else None
+        final_flip = torch.zeros(num_envs, dtype=torch.long, device=device) if _layer else None
+        _rest_sign: list = []
 
         def _layer_gap() -> torch.Tensor:
+            nonlocal flip_prev
             pts = inner.fold_view().points_w
             mv, st = pts[:, _geom.moving_idx], pts[:, _geom.stationary_idx]
+            res = int(inner.cfg.cloth.resolution)
+            if pts.shape[1] == res * res:
+                g = pts.view(pts.shape[0], res, res, 3)
+                nz = torch.linalg.cross(g[:, 1:, :-1] - g[:, :-1, :-1], g[:, :-1, 1:] - g[:, :-1, :-1], dim=-1)[..., 2]
+                nz = nz.reshape(pts.shape[0], -1)  # one normal per grid cell, at its lower corner
+                cell = torch.arange(res * res, device=pts.device).view(res, res)[:-1, :-1].reshape(-1)
+                if not _rest_sign:  # the first call is at reset: the sheet lies flat, face up
+                    _rest_sign.append(torch.sign(nz.mean()).item() or 1.0)
+                up = nz * _rest_sign[0]
+                in_mv = torch.isin(cell, _geom.moving_idx)
+                in_st = torch.isin(cell, _geom.stationary_idx)
+                mv_flip = (up[:, in_mv] < 0).float().mean(1) > 0.5
+                st_flip = (up[:, in_st] < 0).float().mean(1) > 0.5
+                flip_prev = torch.where(st_flip & ~mv_flip, 2, torch.where(mv_flip & ~st_flip, 1, 0))
+                if mv.shape == st.shape:  # equal halves (the half folds); otherwise keep the roles
+                    swap = (flip_prev == 2)[:, None, None]
+                    mv, st = torch.where(swap, st, mv), torch.where(swap, mv, st)
             dxy = torch.cdist(mv[..., :2], st[..., :2])  # (N, Pm, Ps)
             dmin, j = dxy.min(dim=2)
             dz = mv[..., 2] - torch.gather(st[..., 2], 1, j)
@@ -437,6 +461,25 @@ def main() -> None:
                       f"err {float(inner.fold_error()[0]):.6f}",
                       flush=True,
                   )
+              if os.environ.get("EVAL_DUMP") and step % 5 == 0 and step <= 80:  # debug: the policy's inputs, backend vs backend
+                  def _cpu(x):
+                      if isinstance(x, dict):
+                          return {k: _cpu(v) for k, v in x.items()}
+                      return x.detach().cpu() if torch.is_tensor(x) else x
+                  _g = getattr(task, "geometry", None)
+                  _d = {"obs": _cpu(obs["policy"]), "action": action.detach().cpu(),
+                        "points_w": inner.fold_view().points_w.detach().cpu(),
+                        "origins": inner.scene.env_origins.detach().cpu(),
+                        "moving_idx": None if _g is None else _g.moving_idx.cpu(),
+                        "stationary_idx": None if _g is None else _g.stationary_idx.cpu()}
+                  for _k in ("pc_obs", "goal_pc", "pointcloud", "_goal_cloud"):
+                      for _o in (inner, task):
+                          if _o is not None and torch.is_tensor(getattr(_o, _k, None)):
+                              _d[_k] = getattr(_o, _k).detach().cpu()
+                  torch.save(_d, f"{os.environ['EVAL_DUMP']}_step{step}.pt")
+                  if step == 80:
+                      print("[eval] EVAL_DUMP done", flush=True)
+                      os._exit(0)
               obs, _rew, terminated, truncated, extras = env.step(action.to(device))
 
               # Only while the env is on its scored episode (its first, after --skip_episodes). An env
@@ -477,6 +520,7 @@ def main() -> None:
               done = (terminated.bool() | truncated.bool()) & scoring
               if _layer:
                   final_gap = torch.where(done, gap_prev, final_gap)
+                  final_flip = torch.where(done, flip_prev, final_flip)
                   gap_prev = _layer_gap()
               if bool(done.any()):
                   idx = done.nonzero(as_tuple=True)[0]
@@ -602,6 +646,10 @@ def main() -> None:
                 "successes": int(succ.sum()),
                 "successes_flap_on_top": int((succ & ok).sum()),
                 "successes_flap_through": int((succ & ~ok).sum()),
+                # which half turned over at the end: 1 the moving half, 2 the stationary half (a mirrored fold,
+                # its layering measured with the roles swapped), 0 neither / both / unknown
+                "final_flipped_half": [int(v) for v in final_flip.cpu()],
+                "successes_mirrored": int((succ & (final_flip.cpu() == 2)).sum()),
             }
         if best_fold_err is not None:
             fe = best_fold_err.cpu()
@@ -642,7 +690,14 @@ def main() -> None:
                 "best_layered_dist": [round(float(v), 4) for v in best_layered_dist.cpu()] if surface_layered else None,
                 "best_in_place_dist": [round(float(v), 4) for v in in_place_dist],
                 "envs_within_tolerance": int((criterion_dist < surface_tolerance_m).sum()),
+                # The continuous metric to chase: the criterion's distance, best per episode, summarised
+                # over envs [m] (the median is robust to a few blown-up episodes; inf = never scored).
+                "best_dist_median": round(float(criterion_dist.median()), 4),
+                "best_dist_mean": round(float(criterion_dist[torch.isfinite(criterion_dist)].mean()), 4)
+                if bool(torch.isfinite(criterion_dist).any()) else None,
             }
+            print(f"Hausdorff distance to the goal configuration of the cloth (aligned, layered): best per episode, median {1000 * float(criterion_dist.median()):.1f} mm, "
+                  f"{int((criterion_dist < surface_tolerance_m).sum())}/{num_envs} within tolerance", flush=True)
 
         summary = result["completed"]
         print("\n" + "=" * 72)

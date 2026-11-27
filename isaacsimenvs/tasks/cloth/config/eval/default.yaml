@@ -1,0 +1,15 @@
+# The default VBD transfer evaluation: vbd.yaml with stable.yaml's contact-stability settings, but the
+# frictions left at vbd.yaml's values, which match the PhysX training defaults (cloth-table 0.354,
+# cloth-fingertip 0.612). The zero-shot transfer results of 2026-11-27
+# (experiments/nov25_better_rigidcloth, outputs/vbd_transfer/cr4_default_*) were run with exactly these.
+# The robot collides PhysX's convex hulls (newton_support NEWTON_PUSH_APPROXIMATION, on by default).
+base: vbd
+
+env:
+  hand_sysid: false                    # the training hand (plain drive)
+  cloth:
+    thickness: 0.016                   # 8 mm particle radius: the plates' contact height in training
+    coupler_iterations: 3              # robot <-> cloth force exchanges per physics step
+    proxy_relaxation_mode: aitken      # adaptive relaxation across those exchanges
+    proxy_relaxation: 0.5              # its starting value each step (clamped to [proxy_relaxation_min, 1])
+    # frictions: vbd.yaml's (= the PhysX training defaults), not stable.yaml's 0.7 / 1.0

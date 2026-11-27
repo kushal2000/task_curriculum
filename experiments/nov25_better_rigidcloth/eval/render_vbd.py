@@ -34,6 +34,7 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--randomize", action="store_true")
     p.add_argument("--max_steps", type=int, default=900)
+    p.add_argument("--stochastic", action="store_true", help="sample actions (seeded by --seed) instead of the mean")
     p.add_argument("--width", type=int, default=960)
     p.add_argument("--height", type=int, default=720)
     p.add_argument("--out", default="outputs/vbd_renders")
@@ -208,12 +209,13 @@ def main() -> None:
                 r[k] = []
 
         obs, _ = env.reset()
+        torch.manual_seed(args.seed)  # the same action noise in every run of this seed
         obs, *_ = env.step(torch.zeros((n, inner.cfg.action_space), device=inner.device))
         player.reset_rnn(torch.arange(n, device=inner.device))
         frames = {e: [] for e in range(n)}
         done = torch.zeros(n, dtype=torch.bool, device=inner.device)
         for step in range(args.max_steps):
-            action = player.get_action(obs["policy"], deterministic=True)
+            action = player.get_action(obs["policy"], deterministic=not args.stochastic)
             obs, _r, terminated, truncated, extras = env.step(action)
             ended = terminated.bool() | truncated.bool()
             err = inner.fold_error().cpu().numpy() * 1e3
@@ -245,6 +247,9 @@ def main() -> None:
                 player.reset_rnn(ended.nonzero(as_tuple=True)[0])
             if bool(done.all()):
                 break
+        if args.record:  # episodes still running at --max_steps
+            for e in (~done).nonzero(as_tuple=True)[0].tolist():
+                write_record(e, "running")
         env.close()
 
     run()

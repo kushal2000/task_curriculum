@@ -30,6 +30,8 @@ def _parser() -> argparse.ArgumentParser:
                    help="rand: all domain randomisation on; pinned: off and the start pinned (default targets.START)")
     p.add_argument("--num_envs", type=int, default=6, help="rigid sheet: the sizes run evenly over the envs")
     p.add_argument("--port", type=int, default=8080)
+    p.add_argument("--protocol", default=None,
+                   help="vbd: the evaluation world's YAML (default eval/vbd.yaml; e.g. eval/fabric/denim.yaml, eval/stable.yaml)")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--policy_config", default="pretrained_policy/config.yaml")
     return p
@@ -97,6 +99,16 @@ def main() -> None:
     parser = _parser()
     AppLauncher.add_app_launcher_args(parser)
     args, extra = parser.parse_known_args()
+    # The command line of this run (a Physics-panel restart included), so a later relaunch can resume it:
+    #   python -m isaacsimenvs.scripts.visualization.live_viser --resume <port>
+    try:
+        import json as _json
+
+        last = ROOT / "outputs" / "renders" / f"live_viser_{args.port}_argv.json"
+        last.parent.mkdir(parents=True, exist_ok=True)
+        last.write_text(_json.dumps(sys.orig_argv))
+    except Exception:  # noqa: BLE001 - bookkeeping only
+        pass
     menu = load_menu(args.policies)
     policy = args.policy or next(iter(menu))
     if policy not in menu:
@@ -130,7 +142,7 @@ def main() -> None:
     from .policies import Players
     from .viewer import LiveViewer
 
-    protocol = targets.PROTOCOL.get(args.target) if recipe is None else None
+    protocol = (args.protocol or targets.PROTOCOL.get(args.target)) if recipe is None else None
     label = recipe["files"][0] if isinstance(recipe, dict) else recipe
     print(f"[live] {args.target} ({start}), recipe {label}, protocol {protocol}: {task} {' '.join(overrides)}",
           flush=True)
@@ -159,6 +171,8 @@ def main() -> None:
             env = gym.make(task, cfg=env_cfg)
         status.remove()
         players = Players(menu, env.unwrapped, args.policy_config)
+        _c = env.unwrapped.cfg.cloth  # the physics actually built, for the log
+        print("[live] physics: " + ", ".join(f"{k}={getattr(_c, k)}" for k in [k_ for k_ in ("thickness", "resolution", "size", "density", "tri_ke", "edge_ke", "plastic_yield_curvature", "cloth_table_friction", "cloth_fingertip_friction", "cloth_robot_friction", "cloth_cloth_friction", "vbd_iterations", "coupler_iterations", "proxy_relaxation_mode", "proxy_relaxation", "keypoint_tolerance") if hasattr(_c, k_)]) + f", hand_sysid={getattr(env.unwrapped.cfg, 'hand_sysid', None)}", flush=True)
         LiveViewer(server, env, target=f"{args.target} ({start})", players=players, policy=policy,
                    reset_starts=reset_starts).run()
 

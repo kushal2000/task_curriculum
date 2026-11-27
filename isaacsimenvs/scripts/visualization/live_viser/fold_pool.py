@@ -46,6 +46,10 @@ class FoldPool(Feature):
         carried = rb.pool.carried
         self.carried = None if carried is None or bool(carried.all()) else carried.cpu().numpy()
         self.choice = ["random"] * viewer.n_env
+        import os
+
+        if os.environ.get("LIVE_SHAPE") in self.names:  # the Design panel's new shape: every env runs it
+            self.choice = [os.environ["LIVE_SHAPE"]] * viewer.n_env
         drawn = rb.draw_episode
 
         def draw_episode(env_ids: torch.Tensor) -> None:

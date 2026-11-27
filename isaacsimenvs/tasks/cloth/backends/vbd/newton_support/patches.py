@@ -938,11 +938,11 @@ def push_collision_api_to_meshes(stage, root_path: str = "/World/envs") -> tuple
         # The parent's `physics:approximation` (convexHull on every robot collider). PhysX applies it
         # from the Xform; Newton reads it only on the mesh, so without this it collides the raw
         # triangle meshes -- up to 6.6 mm thinner than the hulls the policies trained against, with
-        # hollow fingertip shells. Experiment gate: NEWTON_PUSH_APPROXIMATION=1.
+        # hollow fingertip shells. On by default (2026-11-27); NEWTON_PUSH_APPROXIMATION=0 turns it off.
         import os
 
         approx_attr = prim.GetAttribute("physics:approximation")
-        approx = approx_attr.Get() if (approx_attr and os.environ.get("NEWTON_PUSH_APPROXIMATION", "0") == "1") else None
+        approx = approx_attr.Get() if (approx_attr and os.environ.get("NEWTON_PUSH_APPROXIMATION", "1") != "0") else None
 
         for mesh in descendant_meshes:
             if not mesh.HasAPI(UsdPhysics.CollisionAPI):
@@ -966,7 +966,7 @@ def push_collision_api_to_meshes(stage, root_path: str = "/World/envs") -> tuple
         fixed += 1
 
     import os
-    if os.environ.get("NEWTON_PUSH_APPROXIMATION", "0") == "1":
+    if os.environ.get("NEWTON_PUSH_APPROXIMATION", "1") != "0":
         print(f"[push_collision_api] carried physics:approximation down to {marked} meshes", flush=True)
     return (fixed, marked)
 
